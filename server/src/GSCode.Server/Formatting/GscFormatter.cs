@@ -623,9 +623,9 @@ public static class GscFormatter
             // rather than decremented: a brace closing here means the body was braced after all,
             // or the tracker is out of step, and dropping to zero is the safe direction.
             // A ';' inside a header's parentheses separates the clauses of a `for` rather than
-            // ending a statement. Treating it as a terminator tore down the header mid-flight, so
-            // the ')' never armed the body and `for ( … )` with an unbraced statement under it was
-            // left flat. Same root cause as the line-breaking rule in ShouldBreak.
+            // ending a statement. As a terminator it would tear down the header mid-flight, and the
+            // ')' would never arm the body of an unbraced `for ( … )`. Same root cause as the
+            // line-breaking rule in ShouldBreak.
             if ( kind == TokenKind.Semicolon && _expectingHeader && _headerParenDepth > 0 )
             {
                 return;

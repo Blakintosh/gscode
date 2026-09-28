@@ -18,7 +18,7 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
 {
     // Order MUST match GSCode.Parser.Extraction.SemanticTokenType's integer values: the protocol
     // identifies a type by its INDEX here, so this is an index map rather than a list of what gets
-    // sent. Comment, Keyword, String and Number are no longer emitted but keep their slots, since
+    // sent. Comment, Keyword, String and Number are not emitted but keep their slots, since
     // removing them would renumber every type after them.
     private static readonly SemanticTokensLegend s_legend = new()
     {
@@ -110,7 +110,7 @@ public sealed class SemanticTokensHandler : SemanticTokensHandlerBase
         // Checked before the push loop rather than inside it: the two producers above and the sort
         // are the cost, and a token set is pushed as a unit — half a file's colouring is worse than
         // none. Semantic tokens are requested on every keystroke and the client cancels the one it
-        // has superseded, so an abandoned request used to freshen and colour a whole file anyway.
+        // has superseded, so an unchecked abandoned request would freshen and colour a whole file.
         cancellationToken.ThrowIfCancellationRequested();
 
         foreach ( GscToken token in tokens )

@@ -75,10 +75,9 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         // Only worth re-indexing when a folder was added; a pure removal has nothing new.
         if ( request.Event.Added.Any() )
         {
-            // reloadSnapshot, not a separate ReloadRestoreSnapshot() call before this: both now
-            // happen under the indexer's own pass gate, so a startup pass already in flight can
-            // no longer have its snapshot swapped out from under it by this reload landing in the
-            // gap between the two calls.
+            // reloadSnapshot, not a separate ReloadRestoreSnapshot() call before this: both happen
+            // under the indexer's own pass gate, so a startup pass in flight cannot have its snapshot
+            // swapped out from under it in the gap between two calls.
             IndexOutcome outcome = await _indexer
                 .IndexAsync(
                     IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken,

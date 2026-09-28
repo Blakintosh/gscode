@@ -35,10 +35,9 @@ public static class TransportResolver
     /// <exception cref="TimeoutException">The other end did not accept the connection.</exception>
     public static async Task<ResolvedTransport> ResolveAsync(TransportOptions options, CancellationToken cancellationToken)
     {
-        // Counted rather than tested in precedence order. The old shape took the first option it
-        // recognised and ignored the rest in silence, so `--stdio --pipe foo` used the pipe and
-        // `--pipe a --socket 1` used the pipe — a server listening somewhere the caller did not ask
-        // for, which presents as the client waiting forever with no error anywhere.
+        // Counted rather than tested in precedence order: taking the first option recognised and
+        // ignoring the rest would make `--stdio --pipe foo` use the pipe — a server listening
+        // somewhere the caller did not ask for, which presents as a client waiting forever.
         int named = 0;
         if ( options.PipeName is not null )
         {
@@ -62,8 +61,8 @@ public static class TransportResolver
 
         if ( options.PipeName is not null )
         {
-            // Whitespace-aware, unlike the null check this replaced: `--pipe ""` reached
-            // NamedPipeClientStream and came back out as an ArgumentException from inside the BCL.
+            // Whitespace-aware: `--pipe ""` would reach NamedPipeClientStream and come back out as an
+            // ArgumentException from inside the BCL.
             if ( string.IsNullOrWhiteSpace(options.PipeName) )
             {
                 throw new ArgumentException("--pipe was given without a pipe name.", nameof(options));
@@ -77,8 +76,7 @@ public static class TransportResolver
             return await ConnectSocketAsync(options.SocketPort.Value, cancellationToken);
         }
 
-        // Both the explicit --stdio and the no-options default. The flag used to be declared and
-        // never read, so it worked only by falling through to here.
+        // Both the explicit --stdio and the no-options default.
         return new ResolvedTransport(
             Console.OpenStandardInput(), Console.OpenStandardOutput(), Owner: null, Description: "stdio");
     }

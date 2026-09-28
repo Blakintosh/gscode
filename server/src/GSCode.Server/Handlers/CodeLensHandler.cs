@@ -79,8 +79,8 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
 
             // METHODS. The loop above walks Extraction.Functions, which holds top-level functions
-            // only — a method lives on its class — so a class body carried no lenses at all and the
-            // class's own was the only one in it, which reads as lenses landing on the wrong lines.
+            // only — a method lives on its class — so without this a class body shows only the
+            // class's own lens.
             //
             // Keyed with the declaring class and no namespace, matching what extraction writes for a
             // declaration, so the count runs the same query the peek list does.

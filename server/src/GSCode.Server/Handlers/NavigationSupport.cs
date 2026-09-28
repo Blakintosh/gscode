@@ -41,8 +41,7 @@ public sealed record NavigationTarget(
 /// <see cref="NavigationTarget"/> is this plus the file's live analysis, and most handlers need
 /// both. The hierarchies do not: expanding a caller or a supertype asks the reference index and the
 /// class graph, which are record-level facts. Splitting the two is what lets those answers come
-/// from a file that is not OPEN — which is the normal case for a caller, and which the hierarchies
-/// used to report as "no incoming calls" because resolution required an open document.
+/// from a file that is not OPEN, which is the normal case for a caller.
 /// </summary>
 public sealed record SymbolQueryContext(
     string Path,
@@ -219,9 +218,8 @@ public sealed class NavigationSupport
     /// What the reference index knows about the symbol under a cursor — a function, class, macro,
     /// field, or one of the literal kinds — or <see cref="PositionHit.None"/> when nothing does.
     ///
-    /// The one entry point every position-based handler used to call <c>SymbolAtPosition.Resolve</c>
-    /// for directly — nine identical copies of one line, across hover, definition, references,
-    /// rename, prepare-rename, highlight, both hierarchies, and <c>gscode/builtinAt</c>. "Nothing
+    /// The one entry point every position-based handler calls — hover, definition, references,
+    /// rename, prepare-rename, highlight, both hierarchies and <c>gscode/builtinAt</c>. "Nothing
     /// does" is ALSO the answer for a
     /// LOCAL, since the index is keyed by <c>SymbolKey</c> and shared workspace-wide — every caller
     /// here falls through to <see cref="LocalOccurrencesAt"/> for that case, which is why the two
@@ -420,8 +418,8 @@ public sealed class NavigationSupport
 
         // A BUILTIN is not reachable under one key either, and for a different reason than a method:
         // it has no declaration, so extraction keys each call site by the scope it was written in.
-        // Asked under the asking file's own namespace, the query therefore used to return only the
-        // sites that happened to share it — usually just this file. DatabaseQueries has the rule and
+        // Asked under the asking file's own namespace alone, the query returns only the sites that
+        // share it — usually just this file. DatabaseQueries has the rule and
         // the reason; this is where the decision belongs, in the one query every reference-shaped
         // feature runs, so the list and the CodeLens count cannot disagree about it.
         if ( IsBuiltinCall(target, key) )

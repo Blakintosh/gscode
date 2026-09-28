@@ -45,11 +45,9 @@ internal sealed class LanguageServerDiagnosticsSink : IDiagnosticsSink
 /// scheduling and bind each answer to the request that asked for it.
 ///
 /// Everything addresses a document by its NORMALIZED path and this class turns that into a URI, so
-/// there is exactly one spelling per file on the wire. It used to be two: the sync handler
-/// published under the client's URI while the fan-out and the workspace publisher built one from
-/// the path, and <see cref="PathUtil.NormalizeAbsolute"/> lowercases on Windows. Two spellings are
-/// two independent marker sets in the client, so a file under a path with an uppercase letter in it
-/// showed every problem twice and close took back only one of the sets.
+/// there is exactly one spelling per file on the wire. Two — the client's URI and one built from a
+/// path <see cref="PathUtil.NormalizeAbsolute"/> lowercases on Windows — would be two independent
+/// marker sets in the client: every problem shown twice, and close taking back only one set.
 /// </summary>
 public sealed class DiagnosticsPublisher
 {

@@ -313,10 +313,8 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// Two things in one request want it, for different slices of the same answer:
     /// <see cref="DiagnosticsForFixes"/> keeps what lands on the request's LINE, and
     /// <see cref="AllUnusedImportDiagnostics"/> keeps the unused imports in the WHOLE document.
-    /// Both used to call <see cref="DocumentLinter.Analyze(OpenDocument, ParseResult, CancellationToken)"/> themselves, so an invoked "Quick
-    /// Fix..." with nothing in <c>Context.Diagnostics</c> ran twenty-six cross-file rules and a
-    /// whole-file flow pass TWICE over one unchanged document — and the second run could not even
-    /// disagree with the first, which is what makes sharing it safe rather than a trade.
+    /// Both need the same pass over the same unchanged document, so it runs once — safe rather than a
+    /// trade, since a second run could not disagree with the first.
     ///
     /// Lazy, because the common request asks for neither: an AUTOMATIC request (VS Code polling for
     /// the lightbulb on every cursor move) returns before either consumer runs, and must keep

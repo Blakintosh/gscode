@@ -41,11 +41,10 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// One flow-typing pass per document VERSION, not per request.
     ///
     /// The client sends one <c>inlayHint</c> request per visible range, so scrolling fires one per
-    /// frame — and each used to build a fresh <see cref="FlowTyper"/> and re-walk the whole file,
-    /// throwing away <c>FlowTyper.InferValues</c>'s OWN per-instance memoisation by discarding the
-    /// instance that held it. Keyed by <see cref="ParseResult"/> reference rather than path+version:
+    /// frame, and a fresh <see cref="FlowTyper"/> per request would re-walk the whole file each time.
+    /// Keyed by <see cref="ParseResult"/> reference rather than path+version:
     /// <c>AnalyzeIfStale</c> already guarantees an unchanged document hands back the SAME instance,
-    /// which is the fact the memoisation this replaces relied on too. A ConditionalWeakTable needs
+    /// the fact <c>FlowTyper.InferValues</c>'s own memoisation relies on too. A ConditionalWeakTable needs
     /// no eviction — an entry is collectible the moment nothing else holds its ParseResult, which is
     /// when the document closes or is next edited.
     /// </summary>
@@ -345,10 +344,9 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
             };
 
             // OVERLAPS, not "starts inside". A call's arguments can be on screen while its callee
-            // is a line or two above — every multi-line argument list at the top of the viewport is
-            // this — and testing the call's start dropped all of its labels until the user scrolled
-            // up far enough to bring the name itself into the window. Which labels come out is then
-            // decided per argument, against the position each label goes at.
+            // is a line or two above — every multi-line argument list at the top of the viewport —
+            // and testing the call's start would drop all of its labels until the name scrolled into
+            // view. Which labels come out is then decided per argument, against each label's position.
             if ( arguments.Length == 0 || !window.Overlaps(node.Range) )
             {
                 continue;
@@ -439,8 +437,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     ///
     /// The two indirect forms — <c>[[ ptr ]]( ... )</c> and <c>[[ obj ]]-&gt;method( ... )</c> — are
     /// answered from the flow pass rather than from the syntax, because the callee is a VALUE there
-    /// and the syntax names a local. Both were silent before: a pointer call is how most of a Black
-    /// Ops III script's dispatch is written, so that was the majority of calls in some files.
+    /// and the syntax names a local. A pointer call is how most of a Black Ops III script's dispatch
+    /// is written — the majority of calls in some files.
     /// </summary>
     private ImmutableArray<string> ResolveParameterNames(
         NavigationTarget target, ScriptTypes types, ExprNode node, ParameterMemo memo)
@@ -687,7 +685,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     ///
     /// Pruned as it descends rather than filtered afterwards. A request covers a screenful, the
     /// client sends one per visible range, and scrolling fires one per frame, so walking all of
-    /// <c>_zm.gsc</c> to keep twenty nodes was the whole of the walk's cost repeated per frame.
+    /// <c>_zm.gsc</c> to keep twenty nodes would be the whole of the walk's cost repeated per frame.
     /// A parser range spans everything the node contains, so a subtree that misses the window
     /// entirely holds no call that could hit it.
     ///

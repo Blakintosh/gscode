@@ -15,9 +15,8 @@ namespace GSCode.Server.Handlers;
 ///
 /// A thin thing on purpose — it holds no state and decides nothing. What it owns is the ARGUMENT
 /// LIST. <see cref="WorkspaceLints.Analyze"/> takes seven arguments, four of which are workspace
-/// singletons that never vary within a session, and it was called from two handlers that each
-/// injected all four for that one line and nothing else. Two copies of a seven-argument call is two
-/// places to update when the pipeline gains an input, and one of them is easy to miss.
+/// singletons that never vary within a session; two handlers call it, and each would otherwise
+/// inject all four for that one line and hold its own copy of a seven-argument call.
 /// </summary>
 public sealed class DocumentLinter
 {

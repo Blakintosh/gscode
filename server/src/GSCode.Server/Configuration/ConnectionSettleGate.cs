@@ -9,10 +9,8 @@ namespace GSCode.Server.Configuration;
 /// transport, and <c>OnStarted</c> itself does not reliably run late enough on its own to avoid
 /// it. Every notification the server sends UNPROMPTED this early —
 /// <c>gscode/serverReady</c>, the indexing progress family, and <c>gscode/gameMismatch</c> from a
-/// restored tab's own <c>didOpen</c> — therefore needs the same protection. This used to be
-/// private to indexing (<see cref="GSCode.Server.Handlers.IndexProgressNotifier"/> started its
-/// own <c>Task.Delay(500)</c>), which is exactly why <c>gscode/serverReady</c> went out
-/// unprotected: nothing else knew the gate existed.
+/// restored tab's own <c>didOpen</c> — therefore needs the same protection, which is why this gate is
+/// shared rather than private to one sender.
 ///
 /// Lazily started on first use rather than at construction — the clock should start counting from
 /// when the connection could plausibly start working, which nothing before the first send is
@@ -64,9 +62,9 @@ public sealed class ConnectionSettleGate
             return;
         }
 
-        // NOT ExecuteSynchronously, which is what this used to be. Task.Delay completes on a timer
-        // thread, so running the send inline there serialised a notification and wrote it to the
-        // pipe ahead of every other timer in the process.
+        // NOT ExecuteSynchronously: Task.Delay completes on a timer thread, so running the send
+        // inline there would serialise a notification and write it to the pipe ahead of every other
+        // timer in the process.
         _ = settled.ContinueWith(
             _ => Send(send),
             CancellationToken.None,

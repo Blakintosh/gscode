@@ -3,13 +3,10 @@ namespace GSCode.Server.Configuration;
 /// <summary>
 /// Owns the startup indexing task's cancellation and lets shutdown wait for it to actually stop.
 ///
-/// The task used to run detached: launched with <c>CancellationToken.None</c> inside a
-/// <c>Task.Run</c> that nothing held onto, so nothing could tell it to stop and nothing waited for
-/// it before <c>cacheHolder.CloseAsync()</c> ran on exit. A server closed during a cold index
-/// therefore raced its own cache close: in-flight <c>SqliteCache.Enqueue</c> calls landed on an
-/// already-completing write channel and were counted as dropped, so a cold shutdown silently left
-/// the next start's cache partial, and reported it wrong (as zero) besides, since nothing had told
-/// the cache the index it was serving was still running.
+/// Without it the task runs detached: nothing can tell it to stop and nothing waits for it before
+/// <c>cacheHolder.CloseAsync()</c> runs on exit, so a server closed during a cold index races its own
+/// cache close — in-flight <c>SqliteCache.Enqueue</c> calls land on a completing write channel, count
+/// as dropped, and leave the next start's cache partial and its report wrong.
 ///
 /// One instance covers the whole startup task — the index itself, the settle delay in front of
 /// its notifications, the cache drain after it, and the status notifier that follows — so a single

@@ -9,11 +9,10 @@ namespace GSCode.Server.Handlers;
 /// go-to-type-definition (what is it), go-to-implementation (which function answers this callback),
 /// call hierarchy (who calls that function) and type hierarchy (what does that class inherit).
 ///
-/// All four used to decline on a field, and it read as four unrelated omissions. It is one: a field
-/// is declared nowhere, so there was no symbol to hand any of them. <see cref="FieldBinding"/> is
-/// that symbol, recorded at extraction and carried in the record, and this is the one place a
-/// handler turns a field key into it — so the four cannot come to disagree about which write counts
-/// or which declaration it names.
+/// The four share one gap: a field is declared nowhere, so there is no symbol to hand any of them.
+/// <see cref="FieldBinding"/> is that symbol, recorded at extraction and carried in the record, and
+/// this is the one place a handler turns a field key into it, so the four cannot disagree about
+/// which write counts or which declaration it names.
 ///
 /// The cost is bounded by the field's WRITES, not by the workspace. The reference query is already
 /// indexed by key (<c>LanguageStore.FilesReferencing</c>), a write is a small fraction of a
@@ -21,9 +20,8 @@ namespace GSCode.Server.Handlers;
 ///
 /// Every entry point comes in two forms: one that runs the reference query and one that takes a
 /// set already fetched. Go-to-implementation needs the writes themselves as well as what they
-/// bind, and running the query a second time here meant one request paying the indexed lookup,
-/// the shadow rule and the include scoping twice — and, worse, answering from two sets that
-/// nothing guaranteed were the same.
+/// bind, and a second query would pay the indexed lookup, the shadow rule and the include scoping
+/// twice — and answer from two sets nothing guarantees are the same.
 /// </summary>
 internal static class FieldTargets
 {

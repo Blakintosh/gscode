@@ -34,8 +34,7 @@ Log.Information("GSCode {Version} language server starting", IndexReporting.Serv
 // repository's runtimeconfig template says. The template is baked into runtimeconfig.json at
 // PUBLISH time, so an extension running a bundle from before a template change runs the old
 // settings however recently the server project itself was rebuilt — and the difference between
-// Workstation and four-heap Server GC is a cold index of 2.2 s against 0.8 on bo3. That took a
-// while to spot from timings alone; it is one line to state.
+// Workstation and four-heap Server GC is a cold index of 2.2 s against 0.8 on bo3.
 Log.Information(
     "GC: {Mode}, {Heaps} heap(s), {Processors} processors",
     GCSettings.IsServerGC ? "server" : "workstation",
@@ -61,10 +60,9 @@ using ( CommandLine.Parser argumentParser = new(config => config.HelpWriter = nu
         })
         .WithNotParsed(errors =>
         {
-            // Anything unrecognised used to leave transportOptions at its defaults and fall through
-            // to the stdio branch, so a typo — or a flag a newer client passes to an older server —
-            // silently produced a stdio server while the client waited on a named pipe. Nothing was
-            // logged, and the symptom was a language server that never answered.
+            // Anything unrecognised is refused rather than left to fall through to stdio: a typo, or a
+            // flag a newer client passes to an older server, would otherwise produce a stdio server
+            // while the client waits on a named pipe, logging nothing.
             helpRequested = errors.Any(static error =>
                 error is HelpRequestedError or HelpVerbRequestedError or VersionRequestedError);
 
@@ -105,8 +103,8 @@ if ( !string.IsNullOrWhiteSpace(transportOptions.Game) )
 }
 
 // Wrapped, because everything below this line depends on it and nothing above it logs. An
-// exception escaping here used to reach the top level unlogged, past the flush at the end of the
-// file, so the one message explaining why the server did not start was the one message lost.
+// exception escaping here would reach the top level unlogged, past the flush at the end of the
+// file, losing the one message that explains why the server did not start.
 TransportResolver.ResolvedTransport transport;
 try
 {
@@ -138,7 +136,7 @@ IndexingLifetime indexingLifetime = new();
 // Shared by every notification the server sends unprompted early in the connection's life —
 // serverReady, the indexing family, a restored tab's gameMismatch — so exactly one clock decides
 // when the pipe has had a moment to settle, rather than each caller starting (or forgetting to
-// start) its own. See its own remarks for why that used to be indexing's alone.
+// start) its own.
 ConnectionSettleGate settleGate = new();
 
 // The OnStarted work: mode selection, opening the workspace cache, and — when indexing is not

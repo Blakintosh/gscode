@@ -137,11 +137,10 @@ public sealed class RenameHandler : RenameHandlerBase
     /// <summary>
     /// Whether the new name is one the scripts can actually carry for a symbol of this kind.
     ///
-    /// Nothing checked it. The name arrives from a text box and was written straight into every
-    /// reference range, so renaming a function to <c>my func</c> or <c>2fast</c> rewrote the whole
-    /// workspace into text that no longer lexes as one token — across as many files as the symbol
-    /// reaches, in one undo-less edit. <c>PrepareRenameHandler</c> cannot help: prepare runs before
-    /// the name is typed.
+    /// The name arrives from a text box and is written into every reference range, so renaming a
+    /// function to <c>my func</c> or <c>2fast</c> would rewrite the workspace into text that no longer
+    /// lexes as one token, across every file the symbol reaches. <c>PrepareRenameHandler</c> cannot
+    /// help: prepare runs before the name is typed.
     ///
     /// Two rules, because the renameable kinds are not all identifiers. A function, class, macro,
     /// field or local is one, judged by the LEXER's rule so this cannot drift from what would
@@ -182,9 +181,9 @@ public sealed class RenameHandler : RenameHandlerBase
     /// cannot: renaming <c>GetTime</c> or <c>.origin</c> would rewrite the call sites while the
     /// engine kept the old name, turning working code into code that silently resolves to nothing.
     ///
-    /// Restricting it to Function/Class/Macro was a cruder version of the same idea — it excluded
-    /// the engine, but took the scripts' own fields and literals with it, and a notify string is
-    /// exactly the kind of name worth renaming everywhere at once.
+    /// Restricting it to Function/Class/Macro would exclude the engine but take the scripts' own
+    /// fields and literals with it, and a notify string is exactly the kind of name worth renaming
+    /// everywhere at once.
     /// </summary>
     internal static bool IsRenameable(PositionHit hit, BuiltinApi builtins, ObjectFields objectFields)
     {

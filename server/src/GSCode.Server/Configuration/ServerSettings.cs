@@ -9,11 +9,10 @@ namespace GSCode.Server.Configuration;
 /// singleton — handlers read current values, writes happen on config pushes only.
 ///
 /// The VALUES live in an immutable snapshot swapped by one reference write, and that is the whole
-/// point of the indirection. Apply used to assign twenty-five properties one after another while
-/// every handler thread read them, so a reader could see a new Game beside an old RawPath — a
-/// configuration that was never sent. It also meant a payload that threw part-way through left the
-/// settings half-applied; now a failed Apply changes nothing at all, because the new snapshot is
-/// published only once it is complete.
+/// point of the indirection: assigned field by field while handler threads read them, a reader
+/// could see a new Game beside an old RawPath — a configuration that was never sent — and a payload
+/// throwing part-way would leave the settings half-applied. A failed Apply changes nothing at all,
+/// because the new snapshot is published only once it is complete.
 /// </summary>
 public sealed class ServerSettings
 {

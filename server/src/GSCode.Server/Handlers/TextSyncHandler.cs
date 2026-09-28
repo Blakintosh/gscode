@@ -60,8 +60,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     /// <summary>
     /// Coalesces concurrent analysis requests for one document into one running plus at most one
-    /// queued rerun — see <see cref="SingleFlightAnalysis"/>, which owns the per-path gate state
-    /// this used to keep directly.
+    /// queued rerun — see <see cref="SingleFlightAnalysis"/>, which owns the per-path gate state.
     /// </summary>
     private readonly SingleFlightAnalysis _singleFlight;
 
@@ -132,11 +131,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _workspaceDiagnostics.OnDocumentOpened(document.Path);
         _diagnostics.Remember(document.Path, request.TextDocument.Uri);
 
-        // Off the handler thread, not inline: a window's worth of restored tabs used to run N
-        // full parse-plus-lint passes back to back ON THIS THREAD, one per didOpen, contending
-        // with a cold index that is already using every other core for the same work. Nothing
-        // here needs to finish before the handler returns — analysis publishes its own
-        // diagnostics once it does, exactly like the debounced edit path already does.
+        // Off the handler thread, not inline: a window's worth of restored tabs would run N full
+        // parse-plus-lint passes back to back ON THIS THREAD, contending with a cold index already
+        // using every other core. Analysis publishes its own diagnostics once it finishes, exactly
+        // like the debounced edit path.
         ScheduleImmediateAnalysis(document);
         WarnIfGameLooksWrong(document);
         return Unit.Task;
@@ -159,11 +157,9 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
 
         // Once per session; Interlocked so two files opening at once cannot both prompt. Claimed
-        // eagerly rather than after the send completes — the send below is itself deferred until
-        // the connection has settled, so eager-claim-then-deferred-send is what stops two
-        // concurrent opens from both queuing a copy, not what caused the notification to go
-        // missing. That was the send itself landing in the drop window, which the settle gate
-        // fixes at its source.
+        // eagerly rather than after the send completes: the send below is itself deferred until the
+        // connection has settled, so claiming first is what stops two concurrent opens from both
+        // queuing a copy.
         if ( Interlocked.Exchange(ref _gameMismatchNotified, 1) != 0 )
         {
             return;
@@ -199,13 +195,11 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // Saves bypass the debounce: dependents and the cache (P5/P6) key off saved state.
         if ( _documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
-            // Scheduled like every other analysis rather than run right here. Two things were wrong
-            // with running it inline: it was a full parse and lint ON THE LSP HANDLER THREAD, the
-            // same cost didOpen was moved off; and it went around AnalysisGate, so a save landing
-            // while the debounced pass was still running gave one document two concurrent analyses
-            // — the exact pile-up the gate exists to prevent. Cancelling the pending analysis is
-            // now part of scheduling, and unlike the await it replaces it actually STOPS a run that
-            // is already past the debounce.
+            // Scheduled like every other analysis rather than run right here: inline it would be a
+            // full parse and lint ON THE LSP HANDLER THREAD, and it would go around AnalysisGate, so
+            // a save landing while the debounced pass was running would give one document two
+            // concurrent analyses. Cancelling the pending analysis is part of scheduling, and it
+            // actually STOPS a run that is already past the debounce.
             ScheduleImmediateAnalysis(document);
             RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
@@ -223,10 +217,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// other: the cache has to drop the copy it lexed before the save, and the documents whose
     /// parses expanded that copy have to be told, since not one character of THEIR text changed.
     ///
-    /// Without it, editing a macro's value and saving left every open dependent showing the old
-    /// value on hover until something was typed into it. The export signature does not cover this
-    /// case on its own: the header's record was committed from its buffer when the debounce fired,
-    /// so by the time the save arrives the signature has already moved and moves no further.
+    /// Without it, editing a macro's value and saving would leave every open dependent showing the
+    /// old value on hover until something was typed into it. The export signature does not cover
+    /// this case: the header's record was committed from its buffer when the debounce fired, so by
+    /// the time the save arrives the signature has already moved and moves no further.
     /// </summary>
     private void RefreshDependentsOfSavedHeader(OpenDocument document)
     {
@@ -395,17 +389,13 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// Folds the edited file's symbols back into the database, and schedules the fan-out that
     /// republishes what this edit changed for everyone else.
     ///
-    /// Without the commit, the reference index still held whatever the last INDEX pass saw, so
-    /// adding or removing a call left "N references" showing the old number until a reindex.
+    /// Without the commit the reference index would hold whatever the last INDEX pass saw, so adding
+    /// or removing a call would leave "N references" showing the old number until a reindex.
     ///
     /// The code-lens refresh the client needs on top of that is the fan-out's job rather than this
-    /// method's, which is why the name says nothing about lenses. It used to be sent from here,
-    /// once per analysis, undebounced: typing a function's
-    /// name changes the export signature on EVERY keystroke, so a client with lenses on re-requested
-    /// them for every visible document about four times a second — and one such request measured
-    /// 164 ms on the densest cod4 script (see HandlerCostTests). The refresher already coalesces
-    /// exactly this event, over exactly this trigger, and it also covers the on-disk-change case
-    /// this method could not see.
+    /// method's, which is why the name says nothing about lenses: the refresher coalesces exactly
+    /// this event, and sent per analysis it would re-request lenses about four times a second while
+    /// a function's name is typed.
     /// </summary>
     private void CommitAndScheduleDependents(OpenDocument document, ParseResult result)
     {

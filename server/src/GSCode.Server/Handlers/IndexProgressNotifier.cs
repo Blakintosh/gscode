@@ -29,8 +29,7 @@ public sealed record ServerStatusParams(double WorkingSetMegabytes);
 
 /// <summary>Payload for gscode/indexingComplete.</summary>
 /// <param name="WorkingSetMegabytes">
-/// What the server is holding, so the status-bar tooltip can show it. The number was previously
-/// only reachable by turning on a log level and reading past everything else.
+/// What the server is holding, so the status-bar tooltip can show it.
 /// </param>
 public sealed record IndexingCompleteParams(
     int FilesIndexed, int TotalFiles, long ElapsedMilliseconds, double WorkingSetMegabytes);
@@ -67,9 +66,8 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     /// Completes when the connection's output pump has settled enough for a notification to
     /// survive. Sending inside the initialize/initialized window drops them.
     ///
-    /// Indexing used to wait on this before it began, which spent the settling time doing nothing.
-    /// It is the NOTIFICATIONS that cannot go early, not the work, so the wait now lives here and
-    /// the indexer starts immediately.
+    /// It is the NOTIFICATIONS that cannot go early, not the work, so the wait lives here and the
+    /// indexer starts immediately.
     /// </summary>
     private Task _settled = Task.CompletedTask;
 
@@ -94,10 +92,8 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
 
     public void Started(int totalFiles)
     {
-        // The server's own channel, not the client's. This line used to be written by the
-        // extension host, which put the one message telling you indexing had begun in a different
-        // output channel from every other thing the language server says — including whatever you
-        // opened the channel to diagnose.
+        // The server's own channel, not the client's, so the message that indexing has begun sits
+        // with everything else the language server says.
         Log.Information("Indexing {Count} script file(s)…", totalFiles);
 
         // Remembered rather than sent, because indexing now starts before the pipe is ready.
@@ -144,9 +140,8 @@ public sealed class IndexProgressNotifier : IIndexProgressListener
     }
 
     /// <summary>
-    /// Per-file timing, at Verbose. There was previously nothing at all below Information, so
-    /// `gscode.serverLogLevel: verbose` produced byte-identical output to `info` — a setting whose
-    /// description promised detail and delivered none.
+    /// Per-file timing, at Verbose, so `gscode.serverLogLevel: verbose` delivers the detail its
+    /// description promises.
     ///
     /// Runs on the parallel indexing path, so it does no work when Verbose is off: Serilog's own
     /// level check short-circuits before the message template is rendered.

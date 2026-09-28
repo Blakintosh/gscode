@@ -38,7 +38,7 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
     /// Cancellation is checked per record for the same reason <see cref="CompletionHandler"/> checks
     /// it: the client sends one of these per keystroke in the symbol box and cancels the previous,
     /// and this walks EVERY record in both stores — thousands on a real install — with no index
-    /// narrowing it first. An abandoned query used to be walked to the end regardless.
+    /// narrowing it first.
     ///
     /// Per record rather than per symbol: a record's function list is short, and the walk is the
     /// cost, not the match.

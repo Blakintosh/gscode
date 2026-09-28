@@ -6,10 +6,8 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Keeps the status-bar tooltip's memory figure current.
 ///
-/// It was previously set once, from the <c>gscode/indexingComplete</c> payload, and then never
-/// again — so it showed whatever the server happened to be holding the instant indexing finished,
-/// which is both the least interesting moment to sample and the one guaranteed to be stale a
-/// minute later.
+/// Sampled continuously rather than once from the <c>gscode/indexingComplete</c> payload, which is
+/// the least interesting moment to sample and the one guaranteed to be stale a minute later.
 ///
 /// Sampling is cheap; SENDING is what costs, so a notification only goes out when the number has
 /// actually moved. An idle server settles and then produces no traffic at all, while a server

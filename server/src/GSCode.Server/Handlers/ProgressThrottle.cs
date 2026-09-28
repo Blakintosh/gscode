@@ -9,15 +9,13 @@ namespace GSCode.Server.Handlers;
 /// Both halves are needed because the reports come from inside the indexer's
 /// <c>Parallel.ForEachAsync</c>, on every worker thread at once.
 ///
-/// The throttle used to be a shared <see cref="Stopwatch"/> with a check followed by a
-/// <c>Restart</c>. A Stopwatch is not thread-safe and those two steps are not atomic, so several
-/// workers read the same "long enough ago" and all of them sent — the "at most one per interval"
-/// contract was not enforced at all. The claim is a compare-exchange instead: only the thread that
-/// writes the new timestamp gets the slot.
+/// The claim is a compare-exchange: only the thread that writes the new timestamp gets the slot. A
+/// shared <see cref="Stopwatch"/> checked and then restarted is not atomic, so several workers would
+/// read the same "long enough ago" and all send.
 ///
-/// The ordering half is the other symptom. A parallel walk reports out of ORDER, so a slower
-/// worker's older count could land after a faster one's and the status-bar counter visibly ran
-/// backwards — including after the final report.
+/// The ordering half: a parallel walk reports out of ORDER, so a slower worker's older count could
+/// land after a faster one's and run the status-bar counter backwards — including after the final
+/// report.
 /// </summary>
 internal sealed class ProgressThrottle
 {

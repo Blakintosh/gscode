@@ -16,7 +16,7 @@ internal static class IndexReporting
 {
     // Logs a formatted breakdown of what the index holds: per-language file counts with a
     // raw/mod/workspace split, plus total declared functions, classes, macros, and distinct
-    // namespaces — the richer signal the old server printed.
+    // namespaces.
     internal static void LogIndexBreakdown(ScriptDatabase database)
     {
         int gscRaw = 0;
@@ -149,12 +149,10 @@ internal static class IndexReporting
         report.AppendLine($"    committed       {committed,8:F1} MB");
         report.AppendLine($"    fragmented      {fragmented,8:F1} MB");
 
-        // WHERE the fragmentation is, which the total cannot say. This line used to read "(mostly
-        // large-object heap)" — a guess that nothing had ever measured, and the two are treated very
-        // differently by the collector: gen2 holes are compacted by an ordinary blocking collection,
-        // LOH holes are not compacted at all unless LargeObjectHeapCompactionMode asks for it.
-        // Knowing which one holds the bulk decides whether the fix is fewer big arrays or fewer
-        // long-lived small ones.
+        // WHERE the fragmentation is, which the total cannot say. The collector treats the two very
+        // differently: gen2 holes are compacted by an ordinary blocking collection, LOH holes not at
+        // all unless LargeObjectHeapCompactionMode asks for it. Knowing which one holds the bulk
+        // decides whether the fix is fewer big arrays or fewer long-lived small ones.
         AppendGenerations(report, info);
 
         report.Append($"    collections     gen0 {GC.CollectionCount(0):N0} · gen1 {GC.CollectionCount(1):N0} · gen2 {GC.CollectionCount(2):N0}");
@@ -194,9 +192,8 @@ internal static class IndexReporting
     // The server's version, as the build stamped it.
     //
     // Read from the assembly rather than written in the log string, so it cannot drift from what
-    // actually shipped — the three startup lines used to say "v2" indefinitely while the assembly
-    // claimed 1.0.0 and the extension said 2.0.0. The single source is <Version> in
-    // Directory.Build.props, which must match client/package.json since the two ship as one extension.
+    // actually shipped. The single source is <Version> in Directory.Build.props, which must match
+    // client/package.json since the two ship as one extension.
     internal static string ServerVersion()
     {
         System.Reflection.Assembly assembly = typeof(TransportOptions).Assembly;

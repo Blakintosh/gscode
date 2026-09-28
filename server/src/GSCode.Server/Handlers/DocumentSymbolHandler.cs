@@ -128,7 +128,7 @@ public sealed class DocumentSymbolHandler : DocumentSymbolHandlerBase
             {
                 // A loop's own counter is not a symbol anyone navigates to. Every `for` and
                 // `foreach` in the file would otherwise contribute an `i`, `key` or `value`,
-                // which is what made the outline look like it was listing the loops themselves.
+                // which would make the outline look like it lists the loops themselves.
                 if ( assignment.IsLoopVariable )
                 {
                     continue;

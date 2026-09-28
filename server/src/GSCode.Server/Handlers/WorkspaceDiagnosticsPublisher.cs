@@ -25,9 +25,8 @@ public enum DiagnosticsScope
 /// Publishes diagnostics for files that are NOT open, so a syntax error in a script you have not
 /// looked at still reaches the Problems panel.
 ///
-/// Until now <see cref="ScriptRecord.Diagnostics"/> was written on every index and never read:
-/// problems existed only for open documents, which meant a broken file stayed invisible until
-/// someone happened to open it.
+/// <see cref="ScriptRecord.Diagnostics"/> is written on every index; without this it would never be
+/// read, and a broken file would stay invisible until someone opened it.
 ///
 /// Open documents are deliberately left alone. <see cref="TextSyncHandler"/> owns those, and its
 /// set is RICHER than what a record carries — it adds the cross-file lints (unused #using,
@@ -53,11 +52,11 @@ public sealed class WorkspaceDiagnosticsPublisher
     /// client was never told.
     ///
     /// Keyed to the diagnostics array LAST SENT for each path, not just the path, so a refresh
-    /// sends only what changed. It used to resend every in-scope file on every refresh, and a
-    /// refresh follows every re-lint of an edit's closed dependents: re-linting three files in a
-    /// large workspace sent a notification for every file with a problem. A record's diagnostics
-    /// are replaced wholesale whenever they are recomputed, so a different array is the change
-    /// signal — compared by reference, which errs toward resending, never toward staleness.
+    /// sends only what changed — a refresh follows every re-lint of an edit's closed dependents,
+    /// and resending every in-scope file would send a notification for every file with a problem. A
+    /// record's diagnostics are replaced wholesale whenever they are recomputed, so a different
+    /// array is the change signal — compared by reference, which errs toward resending, never
+    /// toward staleness.
     /// </summary>
     private readonly Dictionary<string, ImmutableArray<Diagnostic>> _published = new(StringComparer.Ordinal);
 
@@ -191,11 +190,9 @@ public sealed class WorkspaceDiagnosticsPublisher
     /// Takes back what this publisher pushed for a file that has just been opened.
     ///
     /// The mirror of <see cref="OnDocumentClosed"/>, and needed for the same reason it is: the
-    /// sync handler owns open documents and publishes a richer set for them, but nothing removed
-    /// the set the index had already pushed. Both sets then stood — the client does not treat a
-    /// newer publish as replacing an older one unless it names the same document — so a file with
-    /// indexed problems showed them twice from the moment it was opened until the next
-    /// <see cref="Refresh"/> happened to prune it.
+    /// sync handler owns open documents and publishes a richer set for them, and the client does not
+    /// treat a newer publish as replacing an older one unless it names the same document, so the set
+    /// the index pushed would stand beside it and show every problem twice.
     /// </summary>
     public void OnDocumentOpened(string path)
     {

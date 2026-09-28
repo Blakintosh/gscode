@@ -148,12 +148,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         Dictionary<OutgoingSite, List<LspRange>> calls = new();
         foreach ( ReferenceEntry entry in self.Record.References )
         {
-            // !entry.FromMacro preserves what the collapsed kind used to do here. An expanded call
-            // is keyed to its INVOCATION range, so a macro used twice in one function would list the
-            // same outgoing edge at ranges that spell the macro's name, not the callee's.
+            // !entry.FromMacro: an expanded call is keyed to its INVOCATION range, so a macro used
+            // twice in one function would list the same outgoing edge at ranges that spell the
+            // macro's name, not the callee's.
             //
-            // A MethodCall is the `[[ x ]]->m()` arrow form, which is how one method calls another;
-            // leaving it out made a method's outgoing calls to its own class's methods invisible.
+            // A MethodCall is the `[[ x ]]->m()` arrow form, which is how one method calls another.
             bool isCall = entry.Kind == ReferenceKind.Call || entry.Kind == ReferenceKind.MethodCall;
             if ( isCall && !entry.FromMacro && entry.Key.Kind == SymbolKind.Function
                 && self.Function.FullRange.Contains(entry.Range.Start) )
@@ -300,9 +299,9 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             Uri = DocumentUri.FromFileSystemPath(record.Path),
             Range = nameRange,
             SelectionRange = nameRange,
-            // Everything the key needs has to survive the round trip through the client. The owner
-            // was once left out, so a method's item came back as a free function of the same name,
-            // which nothing calls: its incoming calls were always empty.
+            // Everything the key needs has to survive the round trip through the client: without the
+            // owner, a method's item comes back as a free function of the same name, which nothing
+            // calls.
             Data = JToken.FromObject(new { ns = key.Namespace ?? "", name = key.Name, owner = key.OwnerClass ?? "" }),
         };
     }

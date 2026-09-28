@@ -391,9 +391,8 @@ public sealed class HoverHandler : HoverHandlerBase
     ///
     /// <c>prof_begin</c>/<c>prof_end</c> are the Infinity Ward-line spelling of
     /// <c>profilestart</c>/<c>profilestop</c> and lex to the same token kinds, but the lookup is by
-    /// TEXT — so on CoD4, WaW, MW2 and BO1, where those are the spellings people actually write, the
-    /// profiler pair hovered blank while BO3's spelling worked. Resolving through the kind is what
-    /// keeps one doc serving both spellings.
+    /// TEXT; resolving through the kind is what keeps one doc serving both spellings, including on
+    /// CoD4, WaW, MW2 and BO1, where the Infinity Ward spelling is the one people write.
     /// </summary>
     private static string CanonicalKeywordName(Token token, ParseResult result)
     {

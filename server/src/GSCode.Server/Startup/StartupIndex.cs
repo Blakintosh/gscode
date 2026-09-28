@@ -78,19 +78,14 @@ internal sealed class StartupIndexRunner
 
         WorkspaceIndexer indexer = services.GetRequiredService<WorkspaceIndexer>();
 
-        // Opened regardless of indexing mode, not only inside the block below: a user running
-        // with workspaceIndexingMode=off still has a cache from a PREVIOUS session on disk,
-        // and gscode/clearCache used to answer "No workspace cache is open" for them — true
-        // of the indexer's own use of it, misleading about whether one exists to clear.
+        // Opened regardless of indexing mode, not only inside the block below: a user running with
+        // workspaceIndexingMode=off still has a cache from a PREVIOUS session on disk, and
+        // gscode/clearCache has to be able to clear it.
         //
-        // Timed, because this is where a warm start used to disappear. `LoadAll` is an
-        // ARGUMENT to UseCache, so it ran to completion before the stopwatch below was even
-        // started, and every warm figure on record was the index alone. It was reading and
-        // deserializing every cached record on this one thread while the parallel index it
-        // was feeding sat idle behind it — 1,509 ms on BO3 in front of a cold index that
-        // does the whole job in 390. Now it reads blobs only and the deserialize happens on
-        // the indexing threads, but the number stays in the log either way: an untimed
-        // stage is one that can regress without anybody noticing.
+        // Timed, because `LoadAll` is an ARGUMENT to UseCache and would otherwise run before the
+        // stopwatch below starts: an untimed stage is one that can regress without anybody noticing
+        // (serially deserializing every record here once cost 1,509 ms on BO3, in front of a cold
+        // index that does the whole job in 390).
         TimeSpan restoreElapsed = TimeSpan.Zero;
         if ( _settings.EnableWorkspaceCache )
         {
@@ -191,7 +186,7 @@ internal sealed class StartupIndexRunner
                         (DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds);
                     // A dropped cache write is not an error the user can act on, but it is the
                     // difference between the next start being warm and it silently re-analysing
-                    // part of the workspace. It used to be invisible.
+                    // part of the workspace, so it is logged.
                     if ( _cacheHolder.Current is SqliteCache activeCache && activeCache.DroppedWrites > 0 )
                     {
                         Log.Warning(
@@ -212,8 +207,7 @@ internal sealed class StartupIndexRunner
                     // GSC/CSC file rather than just open ones. Runs AFTER the index and BEFORE
                     // the diagnostics refresh below, so a closed file's Problems entry is
                     // upgraded before anything republishes it — see WorkspaceLintSweep and
-                    // PERF.md's 2026-09-15 entry for why this is affordable where
-                    // FOLLOWUPS.md's older estimate said it was not.
+                    // PERF.md's 2026-09-15 entry for why this is affordable.
                     if ( mode == IndexingMode.Full )
                     {
                         System.Diagnostics.Stopwatch lintStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -241,19 +235,14 @@ internal sealed class StartupIndexRunner
                     // diagnostics are meaningless for files still waiting to be analysed.
                     services.GetRequiredService<WorkspaceDiagnosticsPublisher>().Refresh();
 
-                    // That publisher deliberately skips OPEN documents, so on its own it leaves
-                    // the one file the user is actually looking at stale. A tab restored with the
-                    // window is opened during initialize, which is before this point, so its
-                    // didOpen linted it against a half-built index — and the lints gated on
-                    // HasCompletedIndex (5013/5014/5025/5026) stayed silent. The file looked clean
-                    // until it was closed and reopened, which is why starting on a DIFFERENT file
-                    // and switching to it appeared to fix the problem: that switch was the
-                    // didOpen. Same reasoning as an on-disk change: the world moved under every
-                    // open document and none of them owns the event, so all of them are
-                    // dependents. Costs a lint pass each, not a re-parse. The no-origin call below
-                    // is why the verbose log for this pass reads "after an on-disk change" even
-                    // though nothing on disk moved — Schedule("") means "no single caller", and
-                    // that is exactly this case too.
+                    // That publisher deliberately skips OPEN documents, so on its own it leaves the
+                    // file the user is looking at stale: a tab restored with the window is opened
+                    // during initialize, before this point, so its didOpen linted it against a
+                    // half-built index and the lints gated on HasCompletedIndex
+                    // (5013/5014/5025/5026) stayed silent. The world moved under every open document
+                    // and none of them owns the event, so all of them are dependents — a lint pass
+                    // each, not a re-parse. Schedule("") means "no single caller", which is why the
+                    // verbose log reads "after an on-disk change" though nothing on disk moved.
                     services.GetRequiredService<DependentDiagnosticsRefresher>().Schedule();
 
                     // Sampled before the monitor starts, so the number reflects the state
@@ -336,25 +325,21 @@ internal sealed class StartupIndexRunner
     // ordinary collections reclaim LOH memory without moving anything. Serving requests allocates
     // nothing like that, so anything left behind would simply persist.
     //
-    // It used to be gated on 32 MB of measured fragmentation, and that gate made sense while
-    // fragmentation was the whole problem — a warm start had none and skipped the pause. It stopped
-    // making sense once System.GC.ConserveMemory took fragmentation to roughly zero: the gate then read
-    // "nothing to do" while the large-object heap was still holding tens of megabytes of committed,
-    // unfragmented, unreturned space that no ordinary collection gives back.
+    // Not gated on measured fragmentation: with System.GC.ConserveMemory fragmentation is roughly
+    // zero while the large-object heap can still hold tens of megabytes of committed, unfragmented,
+    // unreturned space that no ordinary collection gives back.
     //
     // Fragmentation was never the thing worth measuring. What the user sees is committed memory, and
     // CompactOnce is the only thing that returns large-object pages to the OS. It runs once per index.
     //
-    // Its cost is a one-off pause, and the pause is NOT confined to this thread — the comment here
-    // said so for a while and it was wrong about who waits. Both collections below are
-    // `blocking: true` gen2s, which suspend every thread in the process, and the LSP connection is
-    // live by the time this runs (RunAsync returns as soon as the indexing task is launched). So a
-    // request arriving in that window waits for it: 1.8 s at 50,000 files, once, at the end of
-    // indexing (PERF.md, the scale section, which states this correctly).
+    // Its cost is a one-off pause, and the pause is NOT confined to this thread. Both collections
+    // below are `blocking: true` gen2s, which suspend every thread in the process, and the LSP
+    // connection is live by the time this runs (RunAsync returns as soon as the indexing task is
+    // launched). So a request arriving in that window waits for it: 1.8 s at 50,000 files, once, at
+    // the end of indexing (PERF.md, the scale section, which states this correctly).
     //
-    // It still earns its place — it returned 446 MB on bo1, and the fragmentation gate that used to
-    // suppress it was the bug. Deferring it to the first idle moment is a separate decision that
-    // needs its own measurement, and is not made here.
+    // It earns its place — it returned 446 MB on bo1. Deferring it to the first idle moment is a
+    // separate decision that needs its own measurement, and is not made here.
     private static void Compact()
     {
         System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;

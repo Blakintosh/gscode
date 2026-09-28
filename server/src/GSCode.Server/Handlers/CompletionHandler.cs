@@ -96,7 +96,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// check for the same reason. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst
     /// of keystrokes produces one analysis; completion answers the keystroke that asked, and a
     /// client that types through its own request cancels it and sends another. Without a check,
-    /// every superseded request was still built in full and its result thrown away by the client.
+    /// every superseded request is built in full and its result thrown away by the client.
     ///
     /// Two places, for two different costs. The first is the request that was cancelled before it
     /// was ever started, which is the common one under fast typing and costs nothing to skip. The
@@ -428,8 +428,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// The editor's own fuzzy score comes first and is not being overridden here; this decides what
     /// happens when it is a wash, which in statement scope is constantly, because the list is a
     /// median of 1,930 entries and up to 5,937 of which the great majority are engine builtins.
-    /// Without it the tie-break was the label alone, so typing a prefix of the variable two lines up
-    /// could put an engine function above it for no reason other than alphabetical order.
+    /// Without it the tie-break is the label alone, so typing a prefix of the variable two lines up
+    /// can put an engine function above it for no reason other than alphabetical order.
     ///
     /// The order is by DISTANCE from the cursor, which is the same principle the producers order on:
     /// a name bound in this function, then one bound in this file, then one that had to be imported,

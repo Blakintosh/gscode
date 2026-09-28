@@ -43,16 +43,13 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
 
         // The shared query, not a raw scan of this file's own Extraction.References: a method hit
         // is keyed by its OWNER at the cursor, and only MethodResolution.Canonicalize (inside the
-        // query) knows to widen that to the declaring class — the raw key comparison this replaced
-        // missed a highlight on an inherited method's call sites whenever the owner at the cursor
-        // was not the declaring class.
+        // query) widens that to the declaring class, so a raw key comparison misses an inherited
+        // method's call sites.
         //
-        // Asked for THIS FILE, not asked wide and filtered afterwards. A highlight is same-file by
-        // definition where find-references is workspace-wide, and this used to build every location
-        // in the workspace — 406,326 of them in bo3's sampled requests at 50,000 files (PERF.md,
-        // the scale section) — to keep the handful in the open document, on every cursor move. The
-        // narrowing is a parameter on the same query rather than a second one, so the key
-        // derivation, the method union, the scoping and the shadow rule are the same code.
+        // Asked for THIS FILE, not asked wide and filtered afterwards: asked wide it builds every
+        // location in the workspace — 406,326 in bo3's sampled requests at 50,000 files (PERF.md,
+        // the scale section) — on every cursor move. The narrowing is a parameter on the same query,
+        // so the key derivation, the method union, the scoping and the shadow rule are the same code.
         List<DocumentHighlight> highlights = [];
         foreach ( (ScriptRecord record, ReferenceEntry entry) in
             _support.FindReferencesInFile(target, hit.Key, hit.ReferenceKind) )

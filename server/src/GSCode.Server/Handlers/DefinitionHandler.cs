@@ -94,10 +94,9 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             }
         }
 
-        // A FIELD has no declaration, so it has no Definition entry and this used to return an
-        // empty list for every one of them — F12 on `level.craftable_shield_grab` did nothing at
-        // all. Its writes are what the question means: the places the name comes into existence
-        // and its value is decided. Usually several, which the protocol already allows for.
+        // A FIELD has no declaration, so it has no Definition entry. Its writes are what the question
+        // means: the places the name comes into existence and its value is decided. Usually several,
+        // which the protocol already allows for.
         //
         // BOTH write kinds. This question is "where is this field set", and `level.count += 1`
         // sets it. Only go-to-IMPLEMENTATION draws the narrower line, because it asks what the

@@ -15,11 +15,11 @@ namespace GSCode.Server.Handlers;
 ///
 /// The cross-file lints read their neighbours — whether a <c>#using</c> supplies a namespace,
 /// whether a called function exists, is private, or takes that many arguments — so a file's
-/// diagnostics can be invalidated by an edit in a different file. Nothing pushed them, so removing
-/// a <c>#namespace</c> left every caller squiggle-free until each was reopened, and adding the
-/// missing <c>#using</c> left the warning sitting there after it was fixed.
+/// diagnostics can be invalidated by an edit in a different file. Unpushed, removing a
+/// <c>#namespace</c> would leave every caller squiggle-free until each was reopened, and adding the
+/// missing <c>#using</c> would leave its warning in place after the fix.
 ///
-/// Code lenses already had this problem and solved it by asking the client to re-request
+/// Code lenses have the same problem and solve it by asking the client to re-request
 /// (<c>workspace/codeLens/refresh</c>). Diagnostics are server-PUSHED, so there is no equivalent
 /// to ask for: the server has to republish them itself.
 ///
@@ -40,20 +40,20 @@ namespace GSCode.Server.Handlers;
 /// unqualified call resolves by name across the whole workspace, so a narrow answer would be wrong
 /// rather than merely conservative.
 ///
-/// CLOSED files were exempt for the same reason their diagnostics stayed parse-level-only — see
-/// <c>ScriptDatabase.HasCompletedLintSweep</c> — until <c>workspaceIndexingMode: full</c> gave them
-/// cross-file diagnostics too. That case is narrow BY NAME rather than wide the way the open-tab
-/// scope is: <see cref="RefreshClosedDependentsAsync"/> uses <c>LanguageStore.FilesReferencing</c>
-/// on the origin's own declared functions, so a rename costs the files that mention the name
-/// rather than the workspace — affordable specifically because it does NOT try to be the open-tab
-/// scope's "every one, since there are few" answer at workspace scale.
+/// CLOSED files have cross-file diagnostics only under <c>workspaceIndexingMode: full</c> (see
+/// <c>ScriptDatabase.HasCompletedLintSweep</c>). That case is narrow BY NAME rather than wide the
+/// way the open-tab scope is: <see cref="RefreshClosedDependentsAsync"/> uses
+/// <c>LanguageStore.FilesReferencing</c> on the origin's own declared functions, so a rename costs
+/// the files that mention the name rather than the workspace — affordable specifically because it
+/// does NOT try to be the open-tab scope's "every one, since there are few" answer at workspace
+/// scale.
 ///
-/// It only fires for a caller-named origin path — an on-disk change
-/// with no single origin (a branch switch, most plausibly) does not attempt it, and neither does
-/// a class rename or a method edit (only top-level function declarations are covered so far). Both are stated gaps, not
-/// silent ones: the closed file involved keeps whatever cross-file diagnostics its last sweep or
-/// refresh gave it until the next full sweep, an edit that does reach it through
-/// <see cref="RefreshClosedDependentsAsync"/>, or <c>gscode.clearCacheAndReindex</c>.
+/// It only fires for a caller-named origin path — an on-disk change with no single origin (a branch
+/// switch, most plausibly) does not attempt it — and covers top-level function declarations only,
+/// not a class rename or a method edit. Both are stated gaps, not silent ones: the closed file
+/// involved keeps whatever cross-file diagnostics its last sweep or refresh gave it until the next
+/// full sweep, an edit that does reach it through <see cref="RefreshClosedDependentsAsync"/>, or
+/// <c>gscode.clearCacheAndReindex</c>.
 /// </summary>
 public sealed class DependentDiagnosticsRefresher
 {
@@ -79,11 +79,10 @@ public sealed class DependentDiagnosticsRefresher
     /// <summary>
     /// Every origin scheduled since the last pass ran, taken and cleared when it does.
     ///
-    /// One debounce, many origins. It used to be one origin and one token source, so a refresh
-    /// scheduled for file A was cancelled outright by one scheduled for file B a moment later and
-    /// A's dependents were never refreshed at all — a burst of edits across two files left the
-    /// first file's callers showing diagnostics computed against exports it no longer has. A token
-    /// source per origin would mean a timer per origin; accumulating costs one set.
+    /// One debounce, many origins. One origin and one token source would let a refresh scheduled for
+    /// file B cancel file A's outright, leaving A's callers showing diagnostics computed against
+    /// exports it no longer has. A token source per origin would mean a timer per origin;
+    /// accumulating costs one set.
     /// </summary>
     private readonly HashSet<string> _origins = new(StringComparer.Ordinal);
 
@@ -200,11 +199,9 @@ public sealed class DependentDiagnosticsRefresher
             _origins.Clear();
         }
 
-        // What this pass has not finished with. Cancellation after the take is the case the
-        // comment above did NOT cover: the set has already been cleared, so an origin abandoned
-        // mid-Refresh, or part-way down the loop below, was known to nobody. Nothing else
-        // re-lints a CLOSED dependent, so that file kept diagnostics computed against exports
-        // the origin no longer has until the next unrelated edit happened to name it.
+        // What this pass has not finished with. Cancellation after the take would otherwise lose it:
+        // the set has already been cleared, and nothing else re-lints a CLOSED dependent, which would
+        // keep diagnostics computed against exports the origin no longer has.
         HashSet<string> outstanding = new(origins, StringComparer.Ordinal);
 
         try
@@ -250,12 +247,10 @@ public sealed class DependentDiagnosticsRefresher
     /// Asks the client to re-request its code lenses, once per coalesced pass.
     ///
     /// A lens count depends on every file that references the symbol, which the client has no way
-    /// to know changed, so editing file A never re-requested the lenses shown in file B. It used to
-    /// be sent from <c>TextSyncHandler</c> per ANALYSIS and undebounced — typing a function's name
-    /// moves the export signature on every keystroke, so a client with lenses on re-requested them
-    /// about four times a second, and one such request measured 164 ms on the densest cod4 script
-    /// (<c>HandlerCostTests</c>). Here it rides the fan-out that already coalesces this exact
-    /// event, and it also covers the on-disk-change case, which the sync handler could not see.
+    /// to know changed. Once per coalesced pass rather than per analysis: typing a function's name
+    /// moves the export signature on every keystroke, and sent per analysis the refresh had a client
+    /// re-requesting about four times a second, at 164 ms on the densest cod4 script
+    /// (<c>HandlerCostTests</c>). Riding this fan-out also covers the on-disk-change case.
     /// </summary>
     private void RequestCodeLensRefresh()
     {

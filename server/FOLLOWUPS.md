@@ -593,8 +593,6 @@ shape rather than re-deriving it.
   key set through `CollectKeys`, which completion already uses, and resolving to records afterwards.
 - **`DatabaseQueries.FindReferences`** narrows the FILES by index and then scans each candidate
   file's entire reference list for the key. Affects references, rename, CodeLens and call hierarchy.
-- **`MethodResolution.FindReferencesForCall`** is asked before every ordinary function lookup and
-  answers nothing for a plain function; it builds a dictionary and copies it out to say so.
 - **`WorkspaceDiagnosticsPublisher.Refresh()`** walks every record in the database, and
   `DependentDiagnosticsRefresher` calls it after re-linting a handful of closed dependents. Off the
   request path and debounced, so not a keystroke cost — but the caller already knows which paths

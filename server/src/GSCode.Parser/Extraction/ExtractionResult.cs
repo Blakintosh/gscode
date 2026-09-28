@@ -25,7 +25,8 @@ public sealed record ExtractionResult(
     ImmutableArray<ClassSymbol> Classes,
     ImmutableArray<ReferenceEntry> References,
     ImmutableArray<Diagnostic> Diagnostics,
-    ImmutableArray<PathCallReference> PathCalls)
+    ImmutableArray<PathCallReference> PathCalls,
+    ImmutableArray<FieldBinding> FieldBindings)
 {
     /// <summary>
     /// The namespaces this file declares into — the SET question, as opposed to the positional one

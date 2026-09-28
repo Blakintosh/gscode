@@ -8,6 +8,7 @@ using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 
 namespace GSCode.Server.Handlers;
 
@@ -24,12 +25,15 @@ namespace GSCode.Server.Handlers;
 /// * a function pointer, recorded as <c>ScrValue.FunctionTarget</c> from <c>&amp;foo</c>, a bare
 ///   qualified name, or a dereference of another pointer.
 ///
-/// Everything else answers nothing, and the two absences are worth stating because they look like
-/// omissions and are not. An ENTITY has no declaration site at all: a <c>player</c> is an engine
-/// type described by the bundled object-field data and declared in no script, so there is nowhere
-/// to jump to. And a FIELD is not a local — <c>FlowTyper.TryGetValueAt</c> resolves through
-/// <c>AstSearch.TryFindLocalContext</c> — so <c>self.owner</c> gets nothing here even when the
-/// scripts only ever assign one kind of thing to it.
+/// A FIELD carries the same two identities and is answered the same way, but not from the flow
+/// pass: <c>FlowTyper.TryGetValueAt</c> resolves through <c>AstSearch.TryFindLocalContext</c>, so a
+/// field is invisible to it, and the writes that would answer are usually in another file
+/// altogether. <see cref="FieldTargets"/> reads them out of the index instead. The two questions
+/// are otherwise the same one, and the same two declaration lookups finish them.
+///
+/// An ENTITY still answers nothing, and that is worth stating because it looks like an omission
+/// and is not: a <c>player</c> is an engine type described by the bundled object-field data and
+/// declared in no script, so there is nowhere to jump to.
 /// </summary>
 public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
 {
@@ -61,17 +65,10 @@ public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
 
-        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
-        if ( !typer.TryGetValueAt(target.Result, request.Position.ToCore(), out ScrValue value) )
-        {
-            return Task.FromResult<LocationOrLocationLinks?>(null);
-        }
-
-        List<Location> locations = ClassDeclarations(target, value);
-        if ( locations.Count == 0 )
-        {
-            locations = FunctionDeclarations(target, value);
-        }
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
+        List<Location> locations = hit.Key.Kind == SymbolKind.Field
+            ? BoundDeclarations(target, hit.Key, cancellationToken)
+            : LocalDeclarations(target, request.Position.ToCore());
 
         if ( locations.Count == 0 )
         {
@@ -80,6 +77,63 @@ public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
 
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(locations.Select(location => new LocationOrLocationLink(location))));
+    }
+
+    /// <summary>
+    /// What the LOCAL under the cursor holds, from the flow pass — a class instance or a function
+    /// pointer, and nothing otherwise.
+    /// </summary>
+    private List<Location> LocalDeclarations(NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
+        if ( !typer.TryGetValueAt(target.Result, position, out ScrValue value) )
+        {
+            return [];
+        }
+
+        List<Location> locations = ClassDeclarations(target, value);
+        if ( locations.Count == 0 )
+        {
+            locations = FunctionDeclarations(target, value);
+        }
+
+        return locations;
+    }
+
+    /// <summary>
+    /// What the FIELD under the cursor holds, from the writes the index recorded for it.
+    ///
+    /// Classes first and functions only if there are none, matching the local path exactly: a
+    /// field written with both a <c>new Foo()</c> somewhere and an <c>&amp;bar</c> somewhere else
+    /// is a field the scripts use for two things, and answering with the instance is the same
+    /// choice the flow pass makes when a value could be read either way.
+    /// </summary>
+    private List<Location> BoundDeclarations(NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
+    {
+        List<Location> locations = [];
+
+        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Class, cancellationToken) )
+        {
+            foreach ( ResolvedClass resolved in FieldTargets.Classes(target, bound) )
+            {
+                locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Class.NameRange));
+            }
+        }
+
+        if ( locations.Count > 0 )
+        {
+            return locations;
+        }
+
+        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Function, cancellationToken) )
+        {
+            foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, bound) )
+            {
+                locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
+            }
+        }
+
+        return locations;
     }
 
     /// <summary>

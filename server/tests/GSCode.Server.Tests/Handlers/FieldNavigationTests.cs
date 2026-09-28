@@ -165,6 +165,73 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
+    private Task<LocationOrLocationLinks?> TypeDefinitionAtAsync(int line, int character)
+    {
+        return WithWorkspaceAsync(
+            (support, selector, path) =>
+            {
+                string api = Path.Combine(AppContext.BaseDirectory, "Api");
+                TypeDefinitionHandler handler = new(
+                    support, BuiltinApiSet.Load(api, GameProfile.BlackOps3), ObjectFields.Load(api), selector);
+
+                TypeDefinitionParams request = new()
+                {
+                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    Position = new Position(line, character),
+                };
+
+                return handler.Handle(request, CancellationToken.None);
+            });
+    }
+
+    private Task<LocationOrLocationLinks?> ImplementationAtAsync(int line, int character)
+    {
+        return WithWorkspaceAsync(
+            (support, selector, path) =>
+            {
+                ImplementationHandler handler = new(support, selector);
+                ImplementationParams request = new()
+                {
+                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    Position = new Position(line, character),
+                };
+
+                return handler.Handle(request, CancellationToken.None);
+            });
+    }
+
+    private Task<Container<CallHierarchyItem>?> CallHierarchyAtAsync(int line, int character)
+    {
+        return WithWorkspaceAsync(
+            (support, selector, path) =>
+            {
+                CallHierarchyHandler handler = new(support, selector);
+                CallHierarchyPrepareParams request = new()
+                {
+                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    Position = new Position(line, character),
+                };
+
+                return handler.Handle(request, CancellationToken.None);
+            });
+    }
+
+    private Task<Container<TypeHierarchyItem>?> TypeHierarchyAtAsync(int line, int character)
+    {
+        return WithWorkspaceAsync(
+            (support, selector, path) =>
+            {
+                TypeHierarchyHandler handler = new(support, selector);
+                TypeHierarchyPrepareParams request = new()
+                {
+                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    Position = new Position(line, character),
+                };
+
+                return handler.Handle(request, CancellationToken.None);
+            });
+    }
+
     private static List<Location> Locations(LocationOrLocationLinks? result)
     {
         Assert.NotNull(result);
@@ -222,5 +289,101 @@ public sealed class FieldNavigationTests : IDisposable
 
             Assert.Equal(expected, highlight.Kind);
         }
+    }
+
+    [Fact]
+    public async Task TypeDefinitionOnAFieldHoldingAnInstanceFindsItsClass()
+    {
+        // `level.scene = new cAwarenessScene()`. The class is declared in the OTHER file, which is
+        // the ordinary shape: a field is written where the subsystem is set up and read everywhere
+        // else.
+        LocationOrLocationLinks? result = await TypeDefinitionAtAsync(5, 10);
+
+        Location location = Assert.Single(Locations(result));
+        Assert.Contains("scene.gsc", location.Uri.GetFileSystemPath(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(7, location.Range.Start.Line);
+        Assert.Equal(6, location.Range.Start.Character);
+    }
+
+    [Fact]
+    public async Task TypeDefinitionOnACallbackFieldFindsTheFunction()
+    {
+        LocationOrLocationLinks? result = await TypeDefinitionAtAsync(6, 10);
+
+        Location location = Assert.Single(Locations(result));
+        Assert.Equal(8, location.Range.Start.Line);
+        Assert.Equal(9, location.Range.Start.Character);
+    }
+
+    [Fact]
+    public async Task TypeDefinitionOnAFieldHoldingANumberFindsNothing()
+    {
+        // A number is a type, not an identity. The request must decline rather than fall back to
+        // the write, which is what go-to-definition already answers with.
+        LocationOrLocationLinks? result = await TypeDefinitionAtAsync(4, 10);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ImplementationOnACallbackFieldFindsTheBoundFunction()
+    {
+        // The GSC dialect of an override: nothing in the syntax at `level.callback` names
+        // `on_damage`, and without this there is no way to reach it from a call site at all.
+        LocationOrLocationLinks? result = await ImplementationAtAsync(6, 10);
+
+        Location location = Assert.Single(Locations(result));
+        Assert.Equal(8, location.Range.Start.Line);
+        Assert.Equal(9, location.Range.Start.Character);
+    }
+
+    [Fact]
+    public async Task ImplementationOnAFieldHoldingAnInstanceFindsNothing()
+    {
+        // A class in a field has no implementations. Its methods are a different question, and
+        // go-to-type-definition is the request that asks it.
+        LocationOrLocationLinks? result = await ImplementationAtAsync(5, 10);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task CallHierarchyOnACallbackFieldAnchorsOnTheBoundFunction()
+    {
+        Container<CallHierarchyItem>? result = await CallHierarchyAtAsync(6, 10);
+
+        Assert.NotNull(result);
+        CallHierarchyItem item = Assert.Single(result!);
+        Assert.Equal("on_damage", item.Name);
+        Assert.Equal(8, item.SelectionRange.Start.Line);
+    }
+
+    [Fact]
+    public async Task CallHierarchyOnAFieldHoldingAnInstanceFindsNothing()
+    {
+        // A class is not callable, and neither is the field. Anchoring on its constructor would be
+        // an answer to a question nobody asked.
+        Container<CallHierarchyItem>? result = await CallHierarchyAtAsync(5, 10);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TypeHierarchyOnAFieldAnchorsOnTheClassItHolds()
+    {
+        Container<TypeHierarchyItem>? result = await TypeHierarchyAtAsync(5, 10);
+
+        Assert.NotNull(result);
+        TypeHierarchyItem item = Assert.Single(result!);
+        Assert.Equal("cAwarenessScene", item.Name);
+        Assert.Contains("scene.gsc", item.Uri.GetFileSystemPath(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TypeHierarchyOnACallbackFieldFindsNothing()
+    {
+        Container<TypeHierarchyItem>? result = await TypeHierarchyAtAsync(6, 10);
+
+        Assert.Null(result);
     }
 }

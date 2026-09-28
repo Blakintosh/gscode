@@ -380,6 +380,7 @@ public sealed class ScriptDatabase
             // another file's function without importing it.
             PathCallTargets = result.Extraction.PathCalls,
             References = result.Extraction.References,
+            FieldBindings = result.Extraction.FieldBindings,
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,
         };

@@ -28,6 +28,38 @@ public readonly record struct ParameterSymbol(string Name, bool ByRef, string De
 public readonly record struct AssignmentSymbol(
     string OwnerName, string Name, string KeyName, TextRange Range, bool IsLoopVariable = false);
 
+/// <summary>
+/// One <c>owner.field = &lt;something with an identity&gt;</c> write — what the scripts put IN a
+/// field, as opposed to <see cref="ReferenceKind.FieldWrite"/>, which is only where they put it.
+///
+/// GSC declares no types, so a field's meaning is whatever its writes give it. Two right-hand
+/// sides name one thing outright and nothing else does: <c>new Foo()</c>, which can only be that
+/// class, and a function reference — <c>&amp;foo</c>, <c>&amp;ns::foo</c> or a bare
+/// <c>ns::foo</c> — which can only be that function. They are the same two forms
+/// <c>FlowTyper</c> records as <c>ScrValue.InstanceClass</c> and <c>ScrValue.FunctionTarget</c>,
+/// recognised here SYNTACTICALLY so the answer survives in the index: a callback is assigned in one
+/// script and invoked in another, and re-typing the assigning file on every request would mean
+/// parsing files that are not open, on a request path, which the scale budget does not allow.
+///
+/// A callback field is the case this exists for. <c>level.callback = &amp;on_damage;</c> makes
+/// <c>on_damage</c> the implementation of <c>level.callback</c>, and a reader at the call site
+/// <c>level thread [[ level.callback ]]();</c> otherwise has nothing to follow.
+/// </summary>
+/// <param name="Field">
+/// The field being written, keyed exactly as its <see cref="ReferenceKind.FieldWrite"/> reference
+/// is, so the two are matched by key rather than by position.
+/// </param>
+/// <param name="Target">
+/// What it was bound to: a <see cref="SymbolKind.Class"/> for <c>new Foo()</c>, a
+/// <see cref="SymbolKind.Function"/> for a function reference. Keyed the same way the callee of an
+/// ordinary call is, so the same lookups resolve it.
+/// </param>
+/// <param name="Range">
+/// The FIELD name's range, not the target's — the binding is reported at the write, which is
+/// where a reader asking "what is in here" has their cursor.
+/// </param>
+public readonly record struct FieldBinding(SymbolKey Field, SymbolKey Target, TextRange Range);
+
 /// <summary>One declared function (top-level or class method).</summary>
 public sealed record FunctionSymbol
 {

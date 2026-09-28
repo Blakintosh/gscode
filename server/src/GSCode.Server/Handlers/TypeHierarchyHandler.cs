@@ -16,6 +16,11 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Class type hierarchy: supertypes walk `ClassSymbol.Parent`, subtypes are the classes
 /// whose parent is this class. Single inheritance keeps supertypes at most one per level.
+///
+/// A FIELD prepares on whatever class the scripts put in it — <c>level.scene = new
+/// cAwarenessScene()</c> anchors the hierarchy on <c>cAwarenessScene</c>. Only the anchoring step
+/// knows about fields; once an item exists the walk is the ordinary one, because what it walks is
+/// a class either way.
 /// </summary>
 public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 {
@@ -42,7 +47,27 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         }
 
         PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Class )
+        if ( hit.Kind != HitKind.Reference )
+        {
+            return Task.FromResult<Container<TypeHierarchyItem>?>(null);
+        }
+
+        if ( hit.Key.Kind == SymbolKind.Field )
+        {
+            List<TypeHierarchyItem> bound = [];
+            foreach ( SymbolKey held in FieldTargets.Of(_support, target, hit.Key, SymbolKind.Class, cancellationToken) )
+            {
+                foreach ( ResolvedClass resolved in FieldTargets.Classes(target, held) )
+                {
+                    bound.Add(MakeItem(resolved.Class, resolved.Record));
+                }
+            }
+
+            return Task.FromResult<Container<TypeHierarchyItem>?>(
+                bound.Count > 0 ? new Container<TypeHierarchyItem>(bound) : null);
+        }
+
+        if ( hit.Key.Kind != SymbolKind.Class )
         {
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);
         }

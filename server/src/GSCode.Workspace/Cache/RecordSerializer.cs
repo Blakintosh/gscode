@@ -182,6 +182,17 @@ public static class RecordSerializer
             writer.WriteBool(entry.FromMacro);
         }
 
+        writer.WriteVarUInt((uint)record.FieldBindings.Length);
+        foreach ( FieldBinding binding in record.FieldBindings )
+        {
+            writer.WriteString(binding.Field.Name);
+            writer.WriteString(binding.Target.Namespace);
+            writer.WriteString(binding.Target.Name);
+            writer.WriteVarUInt((uint)binding.Target.Kind);
+            writer.WriteString(binding.Target.OwnerClass);
+            writer.WriteRange(binding.Range);
+        }
+
         writer.WriteVarUInt((uint)record.Diagnostics.Length);
         foreach ( Diagnostic diagnostic in record.Diagnostics )
         {
@@ -272,6 +283,25 @@ public static class RecordSerializer
             references.Add(new ReferenceEntry(new SymbolKey(keyNamespace, keyName, keyKind, ownerClass), range, kind, fromMacro));
         }
 
+        // A field key is always (null namespace, Field kind, no owner) — see SymbolKey's own
+        // comment — so only its name goes on the wire.
+        int bindingCount = reader.ReadCount();
+        ImmutableArray<FieldBinding>.Builder bindings = ImmutableArray.CreateBuilder<FieldBinding>(bindingCount);
+        for ( int index = 0; index < bindingCount; index++ )
+        {
+            string fieldName = reader.ReadRequiredString();
+            string? targetNamespace = reader.ReadString();
+            string targetName = reader.ReadRequiredString();
+            SymbolKind targetKind = (SymbolKind)reader.ReadVarUInt();
+            string? targetOwner = reader.ReadString();
+            TextRange bindingRange = reader.ReadRange();
+
+            bindings.Add(new FieldBinding(
+                new SymbolKey(null, fieldName, SymbolKind.Field),
+                new SymbolKey(targetNamespace, targetName, targetKind, targetOwner),
+                bindingRange));
+        }
+
         int diagnosticCount = reader.ReadCount();
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>(diagnosticCount);
         for ( int index = 0; index < diagnosticCount; index++ )
@@ -295,6 +325,7 @@ public static class RecordSerializer
             Macros = macros.MoveToImmutable(),
             Dependencies = dependencies.MoveToImmutable(),
             PathCallTargets = targets.MoveToImmutable(),
+            FieldBindings = bindings.MoveToImmutable(),
             References = references.MoveToImmutable(),
             Diagnostics = diagnostics.MoveToImmutable(),
             IsDirty = isDirty,

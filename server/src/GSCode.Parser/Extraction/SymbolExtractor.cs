@@ -29,6 +29,7 @@ public sealed class SymbolExtractor
     private readonly ImmutableArray<ClassSymbol>.Builder _classes = ImmutableArray.CreateBuilder<ClassSymbol>();
     private readonly ImmutableArray<ReferenceEntry>.Builder _references = ImmutableArray.CreateBuilder<ReferenceEntry>();
     private readonly ImmutableArray<PathCallReference>.Builder _pathCalls = ImmutableArray.CreateBuilder<PathCallReference>();
+    private readonly ImmutableArray<FieldBinding>.Builder _fieldBindings = ImmutableArray.CreateBuilder<FieldBinding>();
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
     // Namespace state while walking (default = the file name stem).
@@ -103,7 +104,8 @@ public sealed class SymbolExtractor
             extractor._classes.ToImmutable(),
             extractor._references.ToImmutable(),
             extractor._diagnostics.ToImmutable(),
-            extractor._pathCalls.ToImmutable());
+            extractor._pathCalls.ToImmutable(),
+            extractor._fieldBindings.ToImmutable());
         PerfTracker.End();
 
         return built;
@@ -677,6 +679,14 @@ public sealed class SymbolExtractor
                 WalkExpression(assignment.Target, assignments);
                 _fieldWriteRange = enclosingWrite;
 
+                // Only a plain `=` binds. `level.callback += &foo` is not a thing anyone writes,
+                // and a compound assignment has no single assigned value — the same reason
+                // FlowTyper's own FieldWrite leaves its Value null for that form.
+                if ( assignment.Operator == TokenKind.Assign && assignment.Target is MemberNode bound )
+                {
+                    RecordFieldBinding(bound, assignment.Value);
+                }
+
                 WalkExpression(assignment.Value, assignments);
                 return;
             }
@@ -894,6 +904,32 @@ public sealed class SymbolExtractor
 
     private void RecordCalleeReference(ExprNode callee, ReferenceKind kind)
     {
+        if ( !TryCalleeKey(callee, out SymbolKey key, out PToken nameToken) )
+        {
+            return;
+        }
+
+        AddReference(key, nameToken, kind);
+
+        // The leading ::foo local form has an empty path and needs no file pinning.
+        if ( callee is PathQualifiedNode { Path.Length: > 0 } path )
+        {
+            _pathCalls.Add(new PathCallReference(path.Path, path.NameToken.Range));
+        }
+    }
+
+    /// <summary>
+    /// The key a callee expression names, and the token to anchor it at — false for a form that
+    /// names no function at all, such as a <c>[[ expr ]]</c> dereference.
+    ///
+    /// Split out of <see cref="RecordCalleeReference"/> so a FUNCTION REFERENCE bound to a field
+    /// keys identically to a call of the same name. A second copy of these three cases is how the
+    /// two would come to disagree about `sys::`, about an unqualified name inside a class, or about
+    /// the path form — and a binding that keys differently from the call simply resolves to
+    /// nothing, silently.
+    /// </summary>
+    private bool TryCalleeKey(ExprNode callee, out SymbolKey key, out PToken nameToken)
+    {
         switch ( callee )
         {
             case IdentifierNode identifier when identifier.Token.Kind == TokenKind.Identifier:
@@ -904,20 +940,24 @@ public sealed class SymbolExtractor
                 // target; the namespace remains available as a resolution-time fallback.
                 if ( _currentClass is not null )
                 {
-                    SymbolKey methodKey = new(
+                    key = new SymbolKey(
                         null, _names.InternLower(identifier.Token.Text), SymbolKind.Function, _currentClass);
 
-                    AddReference(methodKey, identifier.Token, kind);
-                    return;
+                    nameToken = identifier.Token;
+                    return true;
                 }
 
                 // Unqualified: keyed under the current namespace state (its primary
                 // resolution target; builtin fallback is a query-time concern). Under a merge
                 // dialect there is no namespace, so the key drops it and the call resolves to the
                 // matching definition wherever the merged scope pulled it in from.
-                SymbolKey key = new(FunctionKeyNamespace(_currentNamespace), _names.InternLower(identifier.Token.Text), SymbolKind.Function);
-                AddReference(key, identifier.Token, kind);
-                return;
+                key = new SymbolKey(
+                    FunctionKeyNamespace(_currentNamespace),
+                    _names.InternLower(identifier.Token.Text),
+                    SymbolKind.Function);
+
+                nameToken = identifier.Token;
+                return true;
             }
             case QualifiedNode qualified:
             {
@@ -925,28 +965,67 @@ public sealed class SymbolExtractor
                 string namespaceText = _names.InternLower(qualified.NamespaceToken.Text);
                 string? namespaceKey = namespaceText == "sys" ? null : namespaceText;
 
-                SymbolKey key = new(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
-                AddReference(key, qualified.NameToken, kind);
-                return;
+                key = new SymbolKey(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
+                nameToken = qualified.NameToken;
+                return true;
             }
             case PathQualifiedNode path:
             {
                 // maps\mp\_utility::foo — the Infinity Ward path form. #include MERGES the file's
                 // functions into this scope, so the call resolves by NAME; the path names the
                 // source file, not a namespace. Keyed like an unqualified call (null namespace) so
-                // it unions for find-references; the explicit path is kept alongside so
-                // go-to-definition can pin it to that one file.
-                SymbolKey key = new(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
-                AddReference(key, path.NameToken, kind);
+                // it unions for find-references; the explicit path is kept alongside (by the
+                // caller) so go-to-definition can pin it to that one file.
+                key = new SymbolKey(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
+                nameToken = path.NameToken;
+                return true;
+            }
+            default:
+                key = default;
+                nameToken = default;
+                return false;
+        }
+    }
 
-                // The leading ::foo local form has an empty path and needs no file pinning.
-                if ( path.Path.Length > 0 )
+    /// <summary>
+    /// Records what a <c>owner.field = …</c> write PUTS in the field, for the two right-hand sides
+    /// that name one thing outright. See <see cref="FieldBinding"/> for why only those two, and why
+    /// the recognition is syntactic rather than a typing pass.
+    /// </summary>
+    private void RecordFieldBinding(MemberNode target, ExprNode value)
+    {
+        SymbolKey field = new(null, _names.InternLower(target.NameToken.Text), SymbolKind.Field);
+
+        switch ( value )
+        {
+            case NewNode instance:
+                _fieldBindings.Add(new FieldBinding(
+                    field,
+                    new SymbolKey(null, _names.InternLower(instance.ClassToken.Text), SymbolKind.Class),
+                    target.NameToken.RootRange));
+                return;
+
+            // &foo, &ns::foo — an explicit function reference.
+            case PrefixNode { Operator: TokenKind.Ampersand } pointer:
+                if ( TryCalleeKey(pointer.Operand, out SymbolKey addressed, out _) )
                 {
-                    _pathCalls.Add(new PathCallReference(path.Path, path.NameToken.Range));
+                    _fieldBindings.Add(new FieldBinding(field, addressed, target.NameToken.RootRange));
                 }
 
                 return;
-            }
+
+            // A bare QUALIFIED name is a function reference too — `level.cb = ns::foo`. A bare
+            // UNQUALIFIED one deliberately is not: `level.cb = foo` reads a local, which is the
+            // same distinction FlowTyper draws when it decides what carries a FunctionTarget.
+            case QualifiedNode:
+            case PathQualifiedNode:
+                if ( TryCalleeKey(value, out SymbolKey named, out _) )
+                {
+                    _fieldBindings.Add(new FieldBinding(field, named, target.NameToken.RootRange));
+                }
+
+                return;
+
             default:
                 return;
         }

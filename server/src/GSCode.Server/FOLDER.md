@@ -227,8 +227,27 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   workspace can be in (`ClassCycleLint` reports it) rather than one the walk may assume away.
 - Whether the name IS a method is answered by `MethodResolution.ResolveCall`, not by the syntax at
   the cursor: a bare call inside the class writes no receiver.
-- Anything that is not a method returns null rather than the declaration. Falling back would
-  duplicate go-to-definition and hide the fact that the request did not apply.
+- A callback FIELD is the same question in GSC's other dialect for polymorphism: every function
+  bound to it (`level.callback = &on_damage`) is an implementation, read out of the index by
+  `FieldTargets`. Nothing in the syntax at the call site `level thread [[ level.callback ]]()`
+  names the function, and there is no class graph to walk, so this is the only way to reach it.
+- Anything else returns null rather than the declaration - a top-level function has no overrides,
+  and a field holding a CLASS has no implementations (its methods are go-to-type-definition's
+  question). Falling back would duplicate go-to-definition and hide the fact that the request did
+  not apply.
+
+## Handlers/FieldTargets.cs
+
+- What the scripts put IN a field, shared by the four requests that each ask a version of that:
+  type definition, implementation, and both hierarchies' prepare step. All four declined on a field
+  before, and it read as four unrelated omissions - it is one, since a field is declared nowhere and
+  there was no symbol to hand any of them.
+- Reads `ScriptRecord.FieldBindings`, recorded at extraction, so a callback bound in one script
+  answers in another without re-parsing that file on the request path. Cost is bounded by the
+  field's WRITES, not the workspace: the reference query is indexed by key, and only the files
+  holding a write are read.
+- Deduplicated by key, not by site: `level.callback = &on_damage` written in four game modes is one
+  implementation.
 
 ## Handlers/TypeDefinitionHandler.cs
 
@@ -236,10 +255,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   Two values carry an identity a declaration can be found for — `ScrValue.InstanceClass` (produced
   at one place, a `new Foo()`, and carried forward through the environment) and
   `ScrValue.FunctionTarget` (`&foo`, a bare qualified name, a pointer dereference).
-- What it deliberately does not answer, both of which look like omissions: an ENTITY has no
-  declaration site at all, being an engine type described by the object-field data and declared in
-  no script; and a FIELD is not a local, since `TryGetValueAt` resolves through
-  `AstSearch.TryFindLocalContext`.
+- A FIELD carries the same two identities, answered from `FieldTargets` rather than from the flow
+  pass: a field is invisible to `TryGetValueAt` (which resolves through
+  `AstSearch.TryFindLocalContext`), and the write that would answer is usually in another file.
+  Classes first, functions only if there are none - the same order the local path takes.
+- An ENTITY still answers nothing, which looks like an omission and is not: it is an engine type
+  described by the object-field data and declared in no script, so there is nowhere to jump to.
 
 ## Handlers/ReferencesHandler.cs
 
@@ -356,6 +377,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - prepare → the function at the cursor; incoming → callers (grouped by containing function);
   outgoing → the functions called inside the body. All from the reference index.
+- prepare on a callback FIELD anchors on the functions bound to it. A field is not callable; what
+  is callable is what was put in it, and `level thread [[ level.callback ]]()` is how a script
+  spells the indirect call whose target the hierarchy exists to trace. Only prepare knows about
+  fields - an item is a function either way.
 - Incoming and outgoing resolve their item through `ResolveForQuery`, so a caller or callee in a
   file the user does not have open still answers, and they read the item's own `DocumentUri` rather
   than round-tripping it through `new Uri(string)` — which throws `UriFormatException` on input
@@ -365,6 +390,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - prepare → the class at the cursor; supertypes → its parent (single inheritance);
   subtypes → classes whose parent is this class.
+- prepare on a FIELD anchors on the class the scripts put in it (`level.scene = new
+  cAwarenessScene()`). Only prepare knows about fields; the walk is the ordinary one, because what
+  it walks is a class either way.
 
 ## Handlers/InlayHintHandler.cs
 

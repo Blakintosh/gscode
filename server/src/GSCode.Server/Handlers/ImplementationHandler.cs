@@ -19,10 +19,19 @@ namespace GSCode.Server.Handlers;
 /// version, and go-to-definition — correctly — lands on the one the call resolves to statically.
 /// Which classes redefine it from there is what the class graph knows and the call site does not.
 ///
-/// Anything that is not a method returns nothing rather than falling back to the declaration. A
-/// top-level function has no overrides, and a handler that quietly answers a different question
-/// than the one asked is worse than one that declines: the editor already has go-to-definition
-/// bound beside this, and duplicating it there hides the fact that the feature did not apply.
+/// A callback FIELD asks the same question in the other dialect GSC has for polymorphism. Where a
+/// class method is overridden by a subclass, <c>level.callback = &amp;on_damage;</c> makes
+/// <c>on_damage</c> what the field actually runs, and a reader looking at
+/// <c>level thread [[ level.callback ]]();</c> has no other way to reach it — the arrow is not
+/// there, so there is no class graph to walk. Every function bound to the field answers, which is
+/// exactly the plural shape an override list already has.
+///
+/// Anything else returns nothing rather than falling back to the declaration. A top-level function
+/// has no overrides, a field bound to a class has no implementations (its class's methods are a
+/// different question, and go-to-type-definition is the request that asks it), and a handler that
+/// quietly answers a different question than the one asked is worse than one that declines: the
+/// editor already has go-to-definition bound beside this, and duplicating it there hides the fact
+/// that the feature did not apply.
 /// </summary>
 public sealed class ImplementationHandler : ImplementationHandlerBase
 {
@@ -59,7 +68,17 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
         }
 
         PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Function )
+        if ( hit.Kind != HitKind.Reference )
+        {
+            return Task.FromResult<LocationOrLocationLinks?>(null);
+        }
+
+        if ( hit.Key.Kind == SymbolKind.Field )
+        {
+            return Task.FromResult(Answer(BoundImplementations(target, hit.Key, cancellationToken)));
+        }
+
+        if ( hit.Key.Kind != SymbolKind.Function )
         {
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
@@ -87,13 +106,43 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
             CollectOverrides(target, function.OwnerClass.KeyName, function.Function.KeyName, implementations, emitted);
         }
 
-        if ( implementations.Count == 0 )
+        return Task.FromResult(Answer(implementations));
+    }
+
+    /// <summary>
+    /// The functions bound to a callback field, deduplicated by declaration — the same overlay
+    /// case <c>emitted</c> exists for above, reached here through two game modes binding one
+    /// handler rather than through a mod shadowing a raw file.
+    /// </summary>
+    private List<Location> BoundImplementations(
+        NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
+    {
+        List<Location> implementations = [];
+        HashSet<(string Path, Position At)> emitted = [];
+
+        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Function, cancellationToken) )
         {
-            return Task.FromResult<LocationOrLocationLinks?>(null);
+            foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, bound) )
+            {
+                if ( emitted.Add((resolved.DeclaringPath, resolved.Function.NameRange.Start)) )
+                {
+                    implementations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
+                }
+            }
         }
 
-        return Task.FromResult<LocationOrLocationLinks?>(
-            new LocationOrLocationLinks(implementations.Select(location => new LocationOrLocationLink(location))));
+        return implementations;
+    }
+
+    /// <summary>Null for an empty list — the protocol's way of saying the request did not apply.</summary>
+    private static LocationOrLocationLinks? Answer(List<Location> locations)
+    {
+        if ( locations.Count == 0 )
+        {
+            return null;
+        }
+
+        return new LocationOrLocationLinks(locations.Select(location => new LocationOrLocationLink(location)));
     }
 
     /// <summary>

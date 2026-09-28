@@ -19,6 +19,12 @@ namespace GSCode.Server.Handlers;
 /// Call hierarchy over the reference index: incoming calls are the callers of a function;
 /// outgoing calls are the functions a function body calls. The item's data carries the
 /// SymbolKey so the incoming/outgoing steps can resolve without re-reading the position.
+///
+/// A callback FIELD prepares on the functions bound to it — <c>level.callback = &amp;on_damage</c>
+/// anchors on <c>on_damage</c>. A field is not callable and never will be; what is callable is
+/// what was put in it, and <c>level thread [[ level.callback ]]();</c> is how a GSC script spells
+/// the indirect call whose target the hierarchy exists to trace. Only the anchoring step knows
+/// about fields: an item is a function either way, so incoming and outgoing are unchanged.
 /// </summary>
 public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
 {
@@ -45,7 +51,27 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Function )
+        if ( hit.Kind != HitKind.Reference )
+        {
+            return Task.FromResult<Container<CallHierarchyItem>?>(null);
+        }
+
+        if ( hit.Key.Kind == SymbolKind.Field )
+        {
+            List<CallHierarchyItem> bound = [];
+            foreach ( SymbolKey held in FieldTargets.Of(_support, target, hit.Key, SymbolKind.Function, cancellationToken) )
+            {
+                foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, held) )
+                {
+                    bound.Add(MakeItem(held, resolved.Record, resolved.Function.NameRange));
+                }
+            }
+
+            return Task.FromResult<Container<CallHierarchyItem>?>(
+                bound.Count > 0 ? new Container<CallHierarchyItem>(bound) : null);
+        }
+
+        if ( hit.Key.Kind != SymbolKind.Function )
         {
             return Task.FromResult<Container<CallHierarchyItem>?>(null);
         }

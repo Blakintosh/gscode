@@ -85,6 +85,20 @@ public sealed record ScriptRecord
     /// </summary>
     public ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargets { get; init; } = [];
     public ImmutableArray<ReferenceEntry> References { get; init; } = [];
+
+    /// <summary>
+    /// What this file's writes PUT in a field — <c>level.callback = &amp;on_damage</c> — where
+    /// <see cref="References"/> records only that a write happened.
+    ///
+    /// Lifted into the record for the same reason <see cref="PathCallTargets"/> is: a record keeps
+    /// no <c>ParseResult</c>, and the question is cross-file by nature. A callback is bound in one
+    /// script and invoked in another, and re-parsing the binding file to answer a request would
+    /// mean parsing files that are not open, on a request path.
+    ///
+    /// Usually empty, and never large: the two right-hand sides that qualify (see
+    /// <see cref="FieldBinding"/>) are rare next to the field writes themselves.
+    /// </summary>
+    public ImmutableArray<FieldBinding> FieldBindings { get; init; } = [];
     public ImmutableArray<Diagnostic> Diagnostics { get; init; } = [];
 
     /// <summary>True while the record reflects unsaved editor text (never persisted).</summary>

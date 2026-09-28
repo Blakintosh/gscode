@@ -95,6 +95,14 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     but excluded from literal completion, which measured and rejected two tempting textual
     substitutes (dropping anything with a space loses 54 real notify/endon events; dropping anything
     single-file-only removes 73% of literals and hides exactly the case completion is wanted for).
+  - `readonly record struct FieldBinding(Field, Target, Range)` — what a `owner.field = …` write
+    PUTS in the field, where `ReferenceKind.FieldWrite` records only where it happened. Two
+    right-hand sides name one thing outright and nothing else does: `new Foo()` and a function
+    reference (`&foo`, `&ns::foo`, a bare `ns::foo`) — the same two forms FlowTyper records as
+    `ScrValue.InstanceClass` and `ScrValue.FunctionTarget`. Recognised SYNTACTICALLY, so the answer
+    survives in the index: a callback is bound in one script and invoked in another, and re-typing
+    the binding file per request would mean parsing unopened files on a request path. A bare
+    UNQUALIFIED name is deliberately not a binding — `level.cb = foo` reads a local.
   - `AssignmentSymbol.IsLoopVariable` — whether this is a loop's own induction variable (a `for`
     counter, a `foreach` key/value). Still a real assignment for typing and completion; just not
     worth an outline entry, where every loop's `i`/`key`/`value` would drown the names that mean

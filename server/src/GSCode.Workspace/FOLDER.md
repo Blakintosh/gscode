@@ -16,8 +16,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `sealed record ScriptRecord` — the complete immutable knowledge about one file:
   path (the database key), language, ContextId ("raw"/"mod:x"/"workspace:f"),
   RelativePath (the overlay-shadowing identity), content hash, namespaces, functions,
-  classes, macros, dependencies, references, diagnostics, IsDirty (unsaved editor
+  classes, macros, dependencies, references, field bindings, diagnostics, IsDirty (unsaved editor
   state, never persisted). Closed files keep ONLY this record.
+- `FieldBindings` is lifted out of the parse for the same reason `PathCallTargets` is: a record
+  keeps no ParseResult, and the question is cross-file. A callback is bound in one script and
+  invoked in another, so answering "what runs when this field is called" by re-parsing the binding
+  file would mean parsing unopened files on a request path.
 
 ## Database/ClassGraph.cs
 
@@ -534,6 +538,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Cache/CacheSchema.cs
 
+- Format 7 added `ScriptRecord.FieldBindings` AND put `ReferenceKind.FieldWrite` in the middle of
+  the enum. The second half is why the bump was not optional: a kind goes on the wire as its
+  ordinal, so a format-6 blob would read each of its macro uses as a literal.
 - `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
   the meta keys, and the `meta`/`files`/`deps` table DDL. Either version mismatch (or a
   build-identity mismatch) wipes the cache; there are no migrations.

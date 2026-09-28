@@ -25,8 +25,12 @@ public static class CacheSchema
     /// of the macro, at a range that spells the macro's name.
     /// 6: gzipped JSON replaced by the binary layout in <see cref="RecordSerializer"/>. Nothing in a
     /// version-5 blob is readable by it.
+    /// 7: ScriptRecord gained FieldBindings, and ReferenceKind gained FieldWrite in the MIDDLE of
+    /// the enum. The second half is why this is not merely additive: the kind goes on the wire as
+    /// its ordinal, so every kind after FieldAccess shifted by one and a version-6 blob would
+    /// deserialize each of its macro uses as a literal and each literal as the next kind along.
     /// </remarks>
-    public const int RecordFormatVersion = 6;
+    public const int RecordFormatVersion = 7;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

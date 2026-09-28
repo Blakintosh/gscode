@@ -26,7 +26,7 @@ public class RecordSerializerTests
     /// CacheSchema.RecordFormatVersion, and then update this list.
     /// </summary>
     [Theory]
-    [InlineData(typeof(ScriptRecord), "ClassesContentHashContextIdDeclaredNamespacesDependenciesDiagnosticsFunctionsIsDirtyLanguageMacrosNamespacesPathPathCallTargetsReferencesRelativePath")]
+    [InlineData(typeof(ScriptRecord), "ClassesContentHashContextIdDeclaredNamespacesDependenciesDiagnosticsFieldBindingsFunctionsIsDirtyLanguageMacrosNamespacesPathPathCallTargetsReferencesRelativePath")]
     [InlineData(typeof(FunctionSymbol), "AssignmentsDocFullRangeHasVarargsIsAutoexecIsDevOnlyIsPrivateKeyNameNameNameRangeNamespaceOwnerClassKeyNameParametersSourceFile")]
     [InlineData(typeof(ClassSymbol), "ConstructorDestructorFullRangeHasConstructorHasDestructorKeyNameMembersMethodsNameNameRangeNamespaceParentKeyNameSourceFile")]
     [InlineData(typeof(ParameterSymbol), "ByRefDefaultValueTextName")]
@@ -36,6 +36,7 @@ public class RecordSerializerTests
     [InlineData(typeof(MacroRecord), "DocumentationIsFunctionLikeNameNameRangeParameters")]
     [InlineData(typeof(DependencyEdge), "IsInsertRangeRawPathResolvedPath")]
     [InlineData(typeof(PathCallReference), "NameRangePath")]
+    [InlineData(typeof(FieldBinding), "FieldRangeTarget")]
     [InlineData(typeof(ReferenceEntry), "FromMacroKeyKindRange")]
     [InlineData(typeof(SymbolKey), "KindNameNamespaceOwnerClass")]
     [InlineData(typeof(Diagnostic), "CodeMessageRangeRelatedInformationSeverityTags")]
@@ -186,6 +187,17 @@ public class RecordSerializerTests
             Macros = [new MacroRecord("MACRO", IsFunctionLike: true, ["x", "y"], Range(9), "doc")],
             Dependencies = [new DependencyEdge(@"scripts\a.gsh", @"c:\raw\scripts\a.gsh", IsInsert: true, Range(10))],
             PathCallTargets = [new PathCallReference(@"maps\mp\_utility", Range(11))],
+            FieldBindings =
+            [
+                new FieldBinding(
+                    new SymbolKey(null, "callback", SymbolKind.Field),
+                    new SymbolKey("ns", "on_damage", SymbolKind.Function),
+                    Range(15)),
+                new FieldBinding(
+                    new SymbolKey(null, "scene", SymbolKind.Field),
+                    new SymbolKey(null, "cawarenessscene", SymbolKind.Class),
+                    Range(16)),
+            ],
             References =
             [
                 new ReferenceEntry(new SymbolKey("ns", "dothing", SymbolKind.Function), Range(12), ReferenceKind.Call, FromMacro: true),

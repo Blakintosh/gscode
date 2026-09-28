@@ -133,7 +133,7 @@ public class ClassResolutionCorpusTests
         List<string> unexplained = [];
 
         foreach ( (LanguageStore store, ScriptLanguage language) in
-            (( LanguageStore, ScriptLanguage )[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
+            ((LanguageStore, ScriptLanguage)[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
         {
             foreach ( ScriptRecord record in store.AllRecords )
             {
@@ -224,7 +224,7 @@ public class ClassResolutionCorpusTests
         List<string> unexplained = [];
 
         foreach ( (LanguageStore store, ScriptLanguage language) in
-            (( LanguageStore, ScriptLanguage )[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
+            ((LanguageStore, ScriptLanguage)[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
         {
             HashSet<string> classNames = [.. store.Classes.AllClassNames()];
 

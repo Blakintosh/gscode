@@ -110,7 +110,7 @@ public class SupportedGamesHandlerTests
     {
         SupportedGamesResponse response = await AskAsync();
 
-        foreach (SupportedGame game in response.Games)
+        foreach ( SupportedGame game in response.Games )
         {
             GameProfile profile = GameProfile.ByName(game.Id)!;
             Assert.Contains(profile.ReleaseYear.ToString(), game.Label, StringComparison.Ordinal);

@@ -102,14 +102,14 @@ public class ScrValueTests
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.String));
 
         Assert.Equal(ScrTypeSet.Int | ScrTypeSet.String, joined.Types);
-        // ScrTypes.Join would have produced Unknown here, which a rewriter cannot act on.
+        // The coarse projection says Unknown here, which a rewriter cannot act on.
         Assert.Equal(ScrType.Unknown, joined.ToScrType());
     }
 
     [Fact]
     public void IntAndFloatDoNotWidenToFloat()
     {
-        // ScrTypes.Join widens this pair, which is right for a hover label and wrong for emitting
+        // The coarse projection widens this pair, which is right for a hover label and wrong for emitting
         // source: `1` and `1.0` are different text.
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Float));
 
@@ -377,9 +377,9 @@ public class ScrValueTests
     [Fact]
     public void AnIntFloatUnionProjectsToFloatBecauseTheCoarseLatticeWidened()
     {
-        // The one union ScrTypes.Join had an answer for. The projection has to reproduce it or a
-        // hover that reads "float" today would start reading nothing — while the value underneath
-        // still says int|float, which is what a rewriter needs.
+        // The one union the coarse projection answers. It has to, or a genuine int/float join would
+        // hover as nothing — while the value underneath still says int|float, which is what a rewriter
+        // needs.
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Float));
 
         Assert.Equal(ScrTypeSet.Number, joined.Types);

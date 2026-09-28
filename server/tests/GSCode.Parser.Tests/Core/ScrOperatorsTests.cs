@@ -181,7 +181,7 @@ public class ScrOperatorsTests
     [Fact]
     public void IntPlusFloatIsTheUnionRatherThanFloat()
     {
-        // ScrTypes.Join widens this pair. For emitting source the difference between `1` and `1.0`
+        // The coarse ScrType projection widens this pair. For emitting source the difference between `1` and `1.0`
         // is real, so the lattice keeps both possibilities rather than picking one.
         Assert.Equal(
             ScrTypeSet.Number,

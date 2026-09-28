@@ -55,30 +55,4 @@ public static class ScrTypes
     {
         return type is not ScrType.Unknown and not ScrType.Undefined;
     }
-
-    /// <summary>
-    /// Merges two types at a control-flow join: equal types survive; int+float widen to
-    /// float; anything else disagreeing collapses to Unknown (we never guess a union).
-    /// </summary>
-    public static ScrType Join(ScrType left, ScrType right)
-    {
-        if ( left == right )
-        {
-            return left;
-        }
-
-        if ( left == ScrType.Unknown || right == ScrType.Unknown )
-        {
-            return ScrType.Unknown;
-        }
-
-        bool numericPair = (left == ScrType.Int || left == ScrType.Float)
-            && (right == ScrType.Int || right == ScrType.Float);
-        if ( numericPair )
-        {
-            return ScrType.Float;
-        }
-
-        return ScrType.Unknown;
-    }
 }

@@ -139,9 +139,8 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   values and entity kinds; `ScrValue.ToScrType()` projects down to this at the public boundary a
   hover or hint reads from. A union that is not exactly one type projects to `Unknown` rather than
   guessing, which is the zero-false-positive rule this whole boundary exists to keep.
-- `static class ScrTypes` — lattice helpers: `DisplayName` (lowercase name for hints/hovers),
-  `IsKnown` (concrete and hint-worthy — excludes Unknown/Undefined), and `Join` (control-flow
-  merge: equal survives, int+float widen to float, any other disagreement collapses to Unknown).
+- `static class ScrTypes` — `DisplayName` (lowercase name for hints/hovers) and `IsKnown` (concrete
+  and hint-worthy — excludes Unknown/Undefined). Control-flow joins happen on `ScrValue`, below.
 
 ## Symbols/ScrValue.cs
 

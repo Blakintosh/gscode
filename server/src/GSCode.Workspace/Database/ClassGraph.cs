@@ -146,24 +146,8 @@ public sealed class ClassGraph
                 return [];
             }
 
-            HashSet<string> names = new(StringComparer.Ordinal);
-            foreach ( string path in paths )
-            {
-                if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
-                {
-                    continue;
-                }
-
-                foreach ( ClassSymbol classSymbol in classes )
-                {
-                    if ( string.Equals(classSymbol.ParentKeyName, classKeyName, StringComparison.Ordinal) )
-                    {
-                        names.Add(classSymbol.KeyName);
-                    }
-                }
-            }
-
-            return [.. names];
+            return ClassNamesIn(paths, classKeyName, static (classSymbol, parent) =>
+                string.Equals(classSymbol.ParentKeyName, parent, StringComparison.Ordinal));
         }
     }
 
@@ -182,28 +166,8 @@ public sealed class ClassGraph
                 return [];
             }
 
-            HashSet<string> names = new(StringComparer.Ordinal);
-            foreach ( string path in paths )
-            {
-                if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
-                {
-                    continue;
-                }
-
-                foreach ( ClassSymbol classSymbol in classes )
-                {
-                    foreach ( FunctionSymbol method in classSymbol.Methods )
-                    {
-                        if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
-                        {
-                            names.Add(classSymbol.KeyName);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return [.. names];
+            return ClassNamesIn(paths, methodKeyName, static (classSymbol, method) =>
+                DeclaresMethod(classSymbol, method));
         }
     }
 
@@ -253,5 +217,46 @@ public sealed class ClassGraph
         {
             index.Remove(key);
         }
+    }
+
+    /// <summary>
+    /// The distinct names of the classes in <paramref name="paths"/> that <paramref name="matches"/>
+    /// accepts. Deduplicated, because an overlay and the raw script it shadows declare the same
+    /// class. Called under <see cref="_gate"/>.
+    /// </summary>
+    private ImmutableArray<string> ClassNamesIn(
+        HashSet<string> paths, string key, Func<ClassSymbol, string, bool> matches)
+    {
+        HashSet<string> names = new(StringComparer.Ordinal);
+        foreach ( string path in paths )
+        {
+            if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
+            {
+                continue;
+            }
+
+            foreach ( ClassSymbol classSymbol in classes )
+            {
+                if ( matches(classSymbol, key) )
+                {
+                    names.Add(classSymbol.KeyName);
+                }
+            }
+        }
+
+        return [.. names];
+    }
+
+    private static bool DeclaresMethod(ClassSymbol classSymbol, string methodKeyName)
+    {
+        foreach ( FunctionSymbol method in classSymbol.Methods )
+        {
+            if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

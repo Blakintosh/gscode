@@ -32,9 +32,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   same reason: extraction keys a bare use by the class whose BODY it sits in, which for an
   inherited member is not the class holding the `var`.
 - `FindMemberReferences` canonicalizes DOWN to the declarer, then unions back UP across every
-  descendant. Both directions are needed - the declaration is on one class and the uses are keyed
-  by whichever class's body each sits in - and without the second, renaming a base's `var` rewrote
-  the declaration and left the subclasses spelling the old name.
+  descendant. Both directions are needed - the declaration is on one class and the uses are keyed by
+  whichever class's body each sits in - and without the second, renaming a base's `var` would
+  rewrite the declaration and leave the subclasses spelling the old name.
 - A use in a class whose ancestors are NOT all in the file is indexed too, on the strength of the
   class having an ancestor the parse cannot see: extraction records every bare name there as a
   member of that class. A genuine local recorded that way is inert, because the key carries its own
@@ -75,10 +75,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - The index list is written out ONCE, in the private `ApplyIndexes(path, previous, next,
   contributions)`. `Upsert` and `Remove` both call it — a removal is an upsert whose contribution is
   `Contributions.None` and whose next record is null, which is what each index's own diff already
-  means by an empty new set. Both used to name all nine indexes for themselves, so a tenth was two
-  edits and forgetting the removal half left a deleted file's keys in the index silently. The
-  `upsert.*` PerfTracker scopes therefore cover removals too; `PERF.md`'s table is unaffected,
-  since it measures cold-index thread-time and a cold index removes nothing.
+  means by an empty new set. One list, so an index added later cannot be updated on upsert and
+  forgotten on removal, which would leave a deleted file's keys in it silently.
 - `Contributions` is the private holder for what one record contributes to all nine, built by
   `Contributions.Of(record)` outside the gate — the shape that keeps the per-file hashing off it.
 - `VisibleDeclaredNames(prefix, contextId)` answers the auto-import producer: the declared function
@@ -98,9 +96,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `HasOverlayAt(path, context)`.
 - The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
   between two writers of the SAME file — read-previous and swap are separate steps — and two writers
-  of different files share nothing here, because each index below serialises its own dictionary.
-  One gate for the store serialised every index diff in the workspace against every other one and
-  made `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
+  of different files share nothing here, because each index below serialises its own dictionary. One
+  gate for the store would serialise every index diff against every other one; it made
+  `commit.upsert` 28.6% of CoD4's cold-index thread-time. See `PERF.md`.
 - `SetDiagnostics(path, expectedContentHash, diagnostics)` — for the `workspaceIndexingMode: full`
   lint sweep: swaps a record's diagnostics in place under the SAME per-path gate `Upsert` uses, but
   touches none of the four indexes, since a lint result changes what a record REPORTS, never what
@@ -146,22 +144,23 @@ lints, `Completion/` and `Typing/` the information surfaces.
   PATHS rather than records for the same reason: a record is swapped wholesale on every edit,
   so holding one would pin a stale version. Keyed on `FunctionSymbol.KeyName` and compared ordinally
   — exactly the comparison `LookupFunctions` performs, so the candidate set is identical.
-- It exists because `LookupFunctions` used to walk every record and every function in each (~30,000
-  symbols on BO3) once per CALL SITE, which made four lints 97% of the cross-file lint cost. It
-  narrows WHERE to look and decides nothing: visibility, namespace, privacy and overlay shadowing
-  all still apply after it. See `PERF.md`.
+- It saves `LookupFunctions` a walk of every record and every function (~30,000 symbols on BO3) per
+  CALL SITE, which made four lints 97% of the cross-file lint cost. It narrows WHERE to look and
+  decides nothing: visibility, namespace, privacy and overlay shadowing all still apply after it.
+  See `PERF.md`.
 - Kept three ways, all from one `KeysOf(record)`: by bare name; by `(namespace, name)`, which a
   namespaced lookup reads instead of the bare list (every bo3 system file declares `__init__`, so
-  `util::__init__` used to walk all of them); and the names with a DEV-ONLY declaration among the
-  file's functions and class methods, behind `MayBeDevOnly` — case-insensitive, so it can only
-  answer "maybe" too often, which is the safe direction for the prefilter `DevBlockCallLint` uses.
+  `util::__init__` would otherwise walk all of them); and the names with a DEV-ONLY declaration
+  among the file's functions and class methods, behind `MayBeDevOnly` — case-insensitive, so it can
+  only answer "maybe" too often, which is the safe direction for the prefilter `DevBlockCallLint`
+  uses.
 
 ## Database/NamespaceIndex.cs
 
-- `sealed class NamespaceIndex` — the namespace→declaring-files index, the third of the
-  inverted indexes and built for the same reason as the other two: a question that used to be
-  answered by walking the whole store is answered by a lookup. `FilesDeclaringInto` narrows the
-  candidate set for a namespace before anything reads a record.
+- `sealed class NamespaceIndex` — the namespace→declaring-files index, the third of the inverted
+  indexes and built for the same reason as the other two: a lookup instead of a walk of the whole
+  store. `FilesDeclaringInto` narrows the candidate set for a namespace before anything reads a
+  record.
 - Holds a plain `HashSet<string>` per namespace rather than sharing `PackedInvertedIndex<TKey>`
   with the other two, because a namespace is declared into by many files by nature, where a function
   name usually is not: the packing saves nothing here and the diff it needs is genuinely simpler.
@@ -218,7 +217,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `sealed class DirectiveIndex` — every record's directives, reversed two ways: by the path as
   written (`WrittenKey`) and, for insert edges, by the header the edge resolved to. It is what
   `DatabaseQueries.ScriptsInserting` (a changed header's dependents, through header-to-header
-  inserts) and `DependencyRewrite.PlanRename` read; both used to test every record's edges.
+  inserts) and `DependencyRewrite.PlanRename` read, instead of testing every record's edges.
 - `WrittenKey` folds separators, case, surrounding whitespace and leading backslashes, which makes
   it LOOSER than either caller's comparison — the watcher's `NormalizeScriptPath` equality and the
   planner's canonical form. The index only narrows where to look; both callers still run their own
@@ -230,20 +229,21 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `sealed class PathTreeIndex` — for each script-relative folder, the segments directly under it and
   whether each is a folder or a file, counted PER CONTEXT: what a folder lists depends on who asks,
   and a segment is listed when any context the asker can see holds a file under it. Path completion
-  inside `#using`/`#include`/`#insert` reads it; it used to rewrite every record's path per
-  keystroke. Folders and segments compare ignoring case, as that walk did; the spelling kept for a
-  segment is the first one indexed.
+  inside `#using`/`#include`/`#insert` reads it instead of rewriting every record's path per
+  keystroke. Folders and segments compare ignoring case; the spelling kept for a segment is the
+  first one indexed.
 - Built with `keepExtension: false` in each language store (the form `#using` names a script in)
   and `true` in the header store (`#insert` writes the `.gsh`).
 
 ## Database/VocabularyIndex.cs
 
 - `sealed class VocabularyIndex` — the workspace's distinct literals (by `SymbolKey`) and assigned
-  fields (by owner and name), each → the files using it, for literal and field completion. Both
-  lists used to walk every reference / assignment of every record per request; occurrences grow
-  with the workspace, distinct names barely do. A literal is indexed only when the old walk could
-  have offered it (a plain `ReferenceKind.Literal`, not from a macro body); the name-shape filter
-  stays at the query. Read through `LanguageStore.VisibleLiterals` / `VisibleFieldNames`.
+  fields (by owner and name), each → the files using it, for literal and field completion.
+  Occurrences grow with the workspace and distinct names barely do, so both lists read this rather
+  than every reference / assignment of every record per request. A literal is indexed only when
+  literal completion could offer it (a plain `ReferenceKind.Literal`, not from a macro body); the
+  name-shape filter stays at the query. Read through `LanguageStore.VisibleLiterals` /
+  `VisibleFieldNames`.
 
 ## Database/ScriptDatabase.cs
 
@@ -297,17 +297,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
   (+ `.size`; also from `VocabularyIndex`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
-- **File scope gets that same list.** It used to be keywords and snippets alone — a
-  `!insideFunction` return sat above every store query — so `REGISTER_SYSTEM`, written at column 0
-  in 477 of the shipped BO3 scripts, was never offered, nor was any macro, function or class. None
-  of those is a per-cursor fact; the macro table is per FILE and a function is in scope for the
-  file, so the return was hiding categories for no reason but the order they were added in. File
-  scope is also not declarations-only, which is why narrowing the list was not the fix instead: a
-  top-level macro invocation is a CALL, so it opens an expression there, and BO3 writes 510 function
-  pointers and 467 `undefined`s inside those argument lists. Hence both keyword lists at file scope.
-  What stays behind is what is not BOUND there: parameters and locals (nothing is bound outside a
-  declaration) and the engine globals (`self` at file scope is unwritable, and a global sorts in the
-  first tier, so it would head every list).
+- **File scope gets that same list.** None of the store's categories is a per-cursor fact — the
+  macro table is per FILE and a function is in scope for the file — and `REGISTER_SYSTEM` alone is
+  written at column 0 in 477 of the shipped BO3 scripts. File scope is also not declarations-only,
+  which is why narrowing the list was not the fix instead: a top-level macro invocation is a CALL,
+  so it opens an expression there, and BO3 writes 510 function pointers and 467 `undefined`s inside
+  those argument lists. Hence both keyword lists at file scope. What stays behind is what is not
+  BOUND there: parameters and locals (nothing is bound outside a declaration) and the engine globals
+  (`self` at file scope is unwritable, and a global sorts in the first tier, so it would head every
+  list).
 - Two punctuation rules are decided once above the dispatch, since each is a fact about the POSITION
   rather than about the list an arm produces. **File scope takes no terminator** —
   `IsStatementPosition` finds the previous function's `}` and answers true, which is right in a body
@@ -320,28 +318,28 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `CollectLocalScope(function, position, entries)` — the names bound INSIDE the function being
   edited, and the only per-function list here. Parameters, then the locals introduced by an
   assignment AT OR ABOVE the cursor; an owner (`self.count = 1`) makes it a field rather than a
-  local, the same exclusion `LocalDefinition` makes. Below the cursor is left out because nothing
-  is bound there yet and reading it earns a 5016 — the rule `vararg` is held to. These were
-  missing entirely, and the editor's own word-based suggestions covered for them until the
-  server's lists (a median of ~1,900 entries) began out-scoring those.
-- Macros come from `Preprocessed.Macros.All` WHOLE. That table is built per parse from the root
-  file plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it
-  to `SourceFile is null` kept the root file's own and dropped every constant a shared `.gsh`
-  exists to supply. A function-like macro takes the call punctuation a function does, since at the
-  use site it is a call; the detail names the defining header. Gated on `GameProfile.HasMacros`,
-  like every other category here is gated on the dialect: the preprocessor records a `#define`
-  whatever game is active, but only BO3 has a preprocessor, and in the IW line the one `#define`
-  per corpus is a commented-out block of C in `_hud.gsc`.
+  local, the same exclusion `LocalDefinition` makes. Below the cursor is left out because nothing is
+  bound there yet and reading it earns a 5016 — the rule `vararg` is held to. Without them the
+  server's lists (a median of ~1,900 entries) out-score the editor's own word-based suggestions that
+  would otherwise cover them.
+- Macros come from `Preprocessed.Macros.All` WHOLE. That table is built per parse from the root file
+  plus the headers it `#insert`s, so it already is "what this file can expand"; filtering it to
+  `SourceFile is null` would keep the root file's own and drop every constant a shared `.gsh` exists
+  to supply. A function-like macro takes the call punctuation a function does, since at the use site
+  it is a call; the detail names the defining header. Gated on `GameProfile.HasMacros`, like every
+  other category here is gated on the dialect: the preprocessor records a `#define` whatever game is
+  active, but only BO3 has a preprocessor, and in the IW line the one `#define` per corpus is a
+  commented-out block of C in `_hud.gsc`.
 - A `#` INSIDE a body has two readings and gets both: `GscKeywords.BodyDirectives`, plus the
-  `#"..."` literals where `GameProfile.HasHashStrings`. Reading it as a hash string alone lost the
-  `#if` family everywhere and left the three dialects without hash strings an empty list.
+  `#"..."` literals where `GameProfile.HasHashStrings`. Read as a hash string alone it would lose
+  the `#if` family everywhere and give the three dialects without hash strings an empty list.
 - An inline path (`maps\mp\_utility::foo`) is detected on `\` ONLY. `/` is division, and accepting
-  it classified `hp = maxhealth/2` as a path; the directives' own scan still normalises both,
+  it would classify `hp = maxhealth/2` as a path; the directives' own scan still normalises both,
   where there is no such collision.
-- Split across four files because one class of 1,891 lines hid the shape of the thing: `Complete`
-  is a dispatcher over ~10 contexts, and reading which context reaches which query meant scrolling
-  past every scanning helper in between. Same convention as `Parser.cs (+ .Declarations /
-  .Statements / .Expressions)`, and the same reason.
+- Split across four files because as one class it hides the shape of the thing: `Complete` is a
+  dispatcher over ~10 contexts, and reading which context reaches which query meant scrolling past
+  every scanning helper in between. Same convention as `Parser.cs (+ .Declarations / .Statements /
+  .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
     parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
     `PreviousSignificant`, `TryPrecacheContext`, `IsAddressOfPosition` and the rest. `EnclosingFunction` (which delegates to
@@ -437,42 +435,41 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Database/DatabaseQueries.cs
 
-- `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered
-  lookups that MERGE namespaces across contributing files and apply overlay shadowing
-  (same RelativePath: overlay beats raw); `FindReferences` returns visible (record, entry)
-  pairs for a key. Private functions follow NAMESPACE privacy, not file privacy — a
-  namespace can be split across files, so any file declaring it may call in; callers pass
-  their namespaces via `askingNamespaces` (`DeclaredNamespaces(result)` reads them from the
-  live parse result so unsaved edits count), and one that cannot falls back to same-file
-  visibility. `FindGshReferences` is the deliberate language-guard exception: a `.gsh` serves
-  both languages, so macros declared in headers live in the shared GSH store and are
-  unreachable from either LanguageStore; it reads the header store's reference index.
-  `ScriptsInserting(header)` is the GSC/CSC records a header's analysis decides — inserting it
-  directly or through other headers, or waiting on its path unresolved — read from the
-  `DirectiveIndex`es. `FindAllReferences` extends that exception to the
-  language stores themselves — a MACRO key is answered against BOTH worlds whoever asks, because a
-  header is inserted into `.gsc` and `.csc` alike and the asking file's language decides nothing
-  about where its uses are. Scoped to the asking store, a rename started in a `.gsc` left every
-  `.csc` use spelled the old way. Functions keep the isolation: a same-named function in the other
-  world is a different function.
+- `ResolvedFunction`/`ResolvedClass` + `static DatabaseQueries` — context-filtered lookups that
+  MERGE namespaces across contributing files and apply overlay shadowing (same RelativePath: overlay
+  beats raw); `FindReferences` returns visible (record, entry) pairs for a key. Private functions
+  follow NAMESPACE privacy, not file privacy — a namespace can be split across files, so any file
+  declaring it may call in; callers pass their namespaces via `askingNamespaces`
+  (`DeclaredNamespaces(result)` reads them from the live parse result so unsaved edits count), and
+  one that cannot falls back to same-file visibility. `FindGshReferences` is the deliberate
+  language-guard exception: a `.gsh` serves both languages, so macros declared in headers live in
+  the shared GSH store and are unreachable from either LanguageStore; it reads the header store's
+  reference index. `ScriptsInserting(header)` is the GSC/CSC records a header's analysis decides —
+  inserting it directly or through other headers, or waiting on its path unresolved — read from the
+  `DirectiveIndex`es. `FindAllReferences` extends that exception to the language stores themselves —
+  a MACRO key is answered against BOTH worlds whoever asks, because a header is inserted into `.gsc`
+  and `.csc` alike and the asking file's language decides nothing about where its uses are. Scoped
+  to the asking store, a rename started in a `.gsc` would leave every `.csc` use spelled the old
+  way. Functions keep the isolation: a same-named function in the other world is a different
+  function.
 - `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
   record — the `(namespace, name)` list when a namespace is given. It applies overlay shadowing PER
   RECORD inside the walk (a raw record is skipped when `HasOverlayAt` its path — `ApplyShadowing`'s
-  rule with a store, whose other half is implied), which is what lets `limit` stop the walk early:
-  a caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
-  passes 2. A bare name on a merge dialect has thousands of declarations at scale; building all of
-  them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the old two-pass rule
-  as a reference implementation. `IncludeClosure` walks the `#include` graph
-  TRANSITIVELY — the compiler flattens the chain, which the corpus settled — and reports whether the
-  walk saw everything, since a rule may only assert a name is out of scope against a complete one.
-  The direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
-  completion offering too little is harmless where an Error is not.
-  `FunctionInIncludeScope` is that scope's answer for ONE name, for signature help, which asks per
-  keystroke inside an argument list and was building every function the scope offers in order to read
-  one. It decides shadowing per record rather than over the set, which is sound HERE and not in
-  `ApplyShadowing`'s general case because the scope has already dropped every record the asker cannot
-  see — what is left of the set rule is then exactly what `HasOverlayAt` answers alone.
-  `IncludeScopeLookupTests` keeps the full list as the reference implementation.
+  rule with a store, whose other half is implied), which is what lets `limit` stop the walk early: a
+  caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
+  passes 2. A bare name on a merge dialect has thousands of declarations at scale, and building all
+  of them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the two-pass rule as
+  a reference implementation. `IncludeClosure` walks the `#include` graph TRANSITIVELY — the
+  compiler flattens the chain, which the corpus settled — and reports whether the walk saw
+  everything, since a rule may only assert a name is out of scope against a complete one. The
+  direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
+  completion offering too little is harmless where an Error is not. `FunctionInIncludeScope` is that
+  scope's answer for ONE name, for signature help, which asks per keystroke inside an argument list
+  and would otherwise build every function the scope offers to read one. It decides shadowing per
+  record rather than over the set, which is sound HERE and not in `ApplyShadowing`'s general case
+  because the scope has already dropped every record the asker cannot see — what is left of the set
+  rule is then exactly what `HasOverlayAt` answers alone. `IncludeScopeLookupTests` keeps the full
+  list as the reference implementation.
 - `LinkedScriptPaths(result, profile)` — the paths a file links against in whichever directive its
   dialect uses (`#using` where namespace-driven, `#include` where merging), and the ONE place that
   fork lives. Scoping callers want this rather than `ImportedScriptPaths`/`IncludedScriptPaths`,
@@ -494,13 +491,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `SameFileReferenceTests` pins the overlay cases stock corpora have none of, and
   `ReferenceScopeCorpusTests` proves the narrowed answer equals the filtered wide one over all 28,809
   declarations of a real bo3 and cod4 index.
-- `PreferIncludeScope` and `ScopeToIncludeGraph` narrow definitions and references to what the asking
-  file can reach, and neither is conditional on the dialect any more. A namespace does not pin a
-  file — the `mp` and `zm` copies of a script share one `#namespace` — so a namespace-driven key
-  still names several declarations and still has to be narrowed by the `#using` graph. `CanReach`
-  answers both families unchanged, a `#using` edge being a non-insert dependency edge exactly as an
-  `#include` is. Attribution matches on the whole KEY via `GameProfile.KeyNamespace`, so the
-  "declares it itself" shortcut cannot claim a same-named function from an unrelated namespace.
+- `PreferIncludeScope` and `ScopeToIncludeGraph` narrow definitions and references to what the
+  asking file can reach, on either dialect family. A namespace does not pin a file — the `mp` and
+  `zm` copies of a script share one `#namespace` — so a namespace-driven key still names several
+  declarations and still has to be narrowed by the `#using` graph. `CanReach` answers both families
+  unchanged, a `#using` edge being a non-insert dependency edge exactly as an `#include` is.
+  Attribution matches on the whole KEY via `GameProfile.KeyNamespace`, so the "declares it itself"
+  shortcut cannot claim a same-named function from an unrelated namespace.
 
 ## Database/MethodResolution.cs
 
@@ -568,12 +565,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Cache/ServerBuildIdentity.cs
 
-- `static ServerBuildIdentity.Compute(dataFilePaths, game)` — a SHA-256 fingerprint of the
-  active game + the engine assembly MVIDs + the bundled data-file hashes. Any rebuild that
-  could change analysis output changes this, invalidating the cache automatically. The game
-  is in the material explicitly: a record is dialect-specific, and restoring one game's into
-  another's session is undetectable downstream. It used to invalidate only because each game
-  bundles differently-named data files, which MW2 (no data at all) already broke.
+- `static ServerBuildIdentity.Compute(dataFilePaths, game)` — a SHA-256 fingerprint of the active
+  game + the engine assembly MVIDs + the bundled data-file hashes. Any rebuild that could change
+  analysis output changes this, invalidating the cache automatically. The game is in the material
+  explicitly: a record is dialect-specific, and restoring one game's into another's session is
+  undetectable downstream. Left to the bundled data files differing, MW2 (which ships none) would
+  share any other data-less game's identity.
 
 ## Cache/RecordSerializer.cs
 
@@ -613,18 +610,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
   before paying for it), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing), and
   `WaitForIdleAsync` (returns once every enqueued command has COMMITTED, not merely left the queue).
-- The channel used to be bounded at 4,096 with the writer doing the serializing: at 50,000 files it
-  refused 82% of writes and the next "warm" start re-analysed four files in five. Unbounded now, so
-  a backlog costs memory (the compressed blobs, until written) rather than data. `DroppedWrites`
-  now counts only writes after `DisposeAsync`.
+- The channel is unbounded, so a backlog costs memory (the compressed blobs, until written) rather
+  than data: bounded at 4,096 with the writer serializing, it refused 82% of writes at 50,000 files
+  and the next "warm" start re-analysed four files in five. `DroppedWrites` counts only writes after
+  `DisposeAsync`.
 - `WaitForIdleAsync` waits on ONE counter of outstanding commands, incremented before a command
-  reaches the channel and decremented only after its transaction commits. It used to test the
-  channel's `Count` against a flag the writer raised after taking a command, and the gap between
-  those two steps was observable: queue empty, flag not yet set, so a poll landing there reported
-  idle with a write still in flight and the caller read a database one commit behind.
-  `CacheRowPruningTests` failed on it at roughly one run in seven, and only under enough parallel
-  load to widen the gap. The channel is therefore no longer marked `SingleReader` for `Count`'s
-  sake — nothing reads `Count` now.
+  reaches the channel and decremented only after its transaction commits. The channel's `Count`
+  against a writer flag would leave a gap — queue empty, flag not yet set — where a poll reports
+  idle with a write in flight (`CacheRowPruningTests` caught that at about one run in seven under
+  load). Nothing reads `Count`.
 
 ## Indexing/WatchedFileUpdater.cs
 
@@ -721,21 +715,20 @@ lints, `Completion/` and `Typing/` the information surfaces.
   - `GetContext(absolutePath)` — classifies by prefix: mods\<name> → Mod, share\raw →
     Raw, else Workspace (matched folder, or the file's own directory). Mods/raw win over
     a workspace match, so opening the whole tools root needs no special-casing.
-  - `GetScriptRelativePath(absolutePath, context)` — the file's identity under its context's
-    root, the key an overlay shadows on. Both entry points NORMALIZE what they are given.
-    This one used to require it and returned `""` when it did not get it, which nothing
-    noticed: the empty string became `ScriptRecord.RelativePath`, every import match compared
-    against it and never fired, and the workspace behaved as though no file included anything.
-  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw]
-    · Workspace: [base, other folders, raw]; first existing file wins. Rooted paths,
-    drive letters, and ".." are rejected. Both slash styles accepted. Memoized by
-    `(context, relative path)`, MISS included: an uncached miss walks every root and is asked
-    about on every keystroke by two independent callers resolving the same directive list
-    (`FileImports` and `UsingNotFoundLint`) — measured as an exact 2x-by-caller, 4x-by-root-count
-    multiplier before this existed. `InvalidateResolutionCache()` clears it wholesale on any
-    watched create/delete (`WatchedFileUpdater.Apply`, both branches, regardless of language) —
-    coarse, but those events are user-paced, and a create can turn a cached miss into a hit just as
-    a delete can turn a cached hit into a miss.
+  - `GetScriptRelativePath(absolutePath, context)` — the file's identity under its context's root,
+    the key an overlay shadows on. Both entry points NORMALIZE what they are given. Unnormalized
+    input would come back `""` as `ScriptRecord.RelativePath`, and every import match downstream
+    would silently never fire.
+  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw] ·
+    Workspace: [base, other folders, raw]; first existing file wins. Rooted paths, drive letters,
+    and ".." are rejected. Both slash styles accepted. Memoized by `(context, relative path)`, MISS
+    included: an uncached miss walks every root and is asked about on every keystroke by two
+    independent callers resolving the same directive list (`FileImports` and `UsingNotFoundLint`) —
+    measured as an exact 2x-by-caller, 4x-by-root-count multiplier without the memo.
+    `InvalidateResolutionCache()` clears it wholesale on any watched create/delete
+    (`WatchedFileUpdater.Apply`, both branches, regardless of language) — coarse, but those events
+    are user-paced, and a create can turn a cached miss into a hit just as a delete can turn a
+    cached hit into a miss.
   - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
     folders, deduplicated (cold-start indexing input).
 
@@ -853,13 +846,12 @@ are out.
   curated in), MW2 ships no library and borrows CoD4's NAMES, and WaW and BO1 qualify for neither —
   with the gate lifted they report 204 and 387, mostly engine functions their own libraries lack.
 - `AmbiguousFunctionLint` (5007) — one name reachable as several distinct declarations.
-- `FileImports` — a file's import directives resolved ONCE, shared by the four lints that each used
-  to walk the directives, resolve every path, normalize and `store.TryGet` again. On a BO3 file that
-  was the same `#using` list resolved three times per keystroke. `Complete` carries the bail-out all
-  four share; `Usings` and `Includes` stay APART because no dialect has both and one list would let
-  the include rule judge a `#using`. `UsingNotFoundLint` deliberately does NOT share it — it asks
-  whether the target exists on DISK, which is what decides linking, while this also requires the
-  index to have reached it.
+- `FileImports` — a file's import directives resolved ONCE, shared by the four lints that need them,
+  since every resolve is a filesystem probe per root and this runs per keystroke. `Complete` carries
+  the bail-out the two import-existence rules (5000, 5026) keep; `Usings` and `Includes` stay APART
+  because no dialect has both and one list would let the include rule judge a `#using`.
+  `UsingNotFoundLint` deliberately does NOT share it — it asks whether the target exists on DISK,
+  which is what decides linking, while this also requires the index to have reached it.
 - `ImportGate` — the precondition several lints share: an unresolved `#insert` or `#using` makes the
   set of legal names unknowable, so a rule about to say "this matches nothing" stands down.
   `MacrosLost` is the header half and is NOT the caller's to name — all six ways the preprocessor
@@ -902,28 +894,27 @@ are out.
   parameters, loop bindings, `waittill` outputs, profile globals, file-scope constants, macro-supplied
   names, and the `...` parameter pack; reports 5024 instead when the pack is read in a function that
   does not declare `...`. An unresolved import stands the whole rule down.
-- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`. **Information**, not
-  a Hint: it carries no `Unnecessary` tag, so a Hint produced no visible output at all, and the
-  corpora afford the panel — 48 findings in 42 files across all five games.
+- `UnreachableCodeLint` (5015) — statements after a `return`/`break`/`continue`. **Information**,
+  not a Hint: it carries no `Unnecessary` tag, so a Hint would produce no visible output at all, and
+  the corpora afford the panel — 48 findings in 42 files across all five games.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
 - `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012's test is
   MARGINAL, not direct, and that is what stops a Hint manufacturing an Error: a file may include a
-  hub purely as a conduit, and judging the directive by what its TARGET declares called that unused,
-  offered "Remove", and the removal made 5026 fire. It is measured against what is CERTAINLY kept
-  rather than against the other candidates — otherwise two conduits each cover the other and both
-  are declared removable, which the bulk "remove all" action would then act on. 46 stock directives
-  across CoD4, MW2 and WaW were in that state.
-- `UnusedLocalLint` (5008) — a local assigned and never read. A **Hint** for the same reason 5020 is,
-  arrived at later: as Information it was the one rule of its kind that did reach the Problems panel,
-  and it put 4,711 entries there across the five games — 1,716 on MW2 alone — in code that ships and
-  works. The `Unnecessary` fade was always the useful half, and it is unchanged.
+  hub purely as a conduit, and judging the directive by what its TARGET declares would call that
+  unused, offer "Remove", and the removal would make 5026 fire. It is measured against what is
+  CERTAINLY kept rather than against the other candidates — otherwise two conduits each cover the
+  other and both are declared removable, which the bulk "remove all" action would then act on. 46
+  stock directives across CoD4, MW2 and WaW were in that state.
+- `UnusedLocalLint` (5008) — a local assigned and never read. A **Hint** for the same reason 5020
+  is: as Information it would put 4,711 entries in the Problems panel across the five games — 1,716
+  on MW2 alone — in code that ships and works. The `Unnecessary` fade is the useful half.
 - `UsingNotFoundLint` (5009) — an import naming no file, `#using` or `#include` alike. One code for
   both: no dialect has both spellings, and "Cannot find script" is the same sentence either way. The
-  `#include` half was the missing one, and it took 5026 with it — that rule stands down on an
-  unresolvable include, so a transposed letter switched off the merge dialects' only import Error
-  and said nothing about why.
+  `#include` half matters doubly: 5026 stands down on an unresolvable include, so without this a
+  transposed letter would switch off the merge dialects' only import Error and say nothing about
+  why.
 - `VoidResultLint` (5019) — keeping the result of a builtin that returns nothing. Only builtins:
   GSC declares no return type, so the same claim about a script function would be a guess.
 - `GameShapeDetector` — not a lint but the mismatch check behind it: reads a file's directives to
@@ -1063,15 +1054,15 @@ Bundled game data (copied to the build output) plus the loaders and doc renderer
   inferred until FlowTyper), `FindRadiantKey(name)` returns the map key. Source-gen JSON.
 - `DevOnlyBuiltins.cs` — the conservative fallback set for development-only engine functions;
   API entries can override it when the data carries an explicit `devOnly` value.
-- `MacroExpansionPreview.cs` — renders a readable, length-limited macro body for hover and
-  signature help, and substitutes call-site arguments token-by-token rather than by unsafe text
-  replacement. The body keeps the LINES it was written on — the backslashes are gone from it by
-  then, but each token still carries its own line — and indentation is rendered as ranked LEVELS
-  four spaces apart rather than as the author's columns, since a tab is one character in a range
-  and subtracting columns gave a tab-indented header a one-space step. One
-  argument scan serves both readers: `ArgumentsFollowing` gives hover the text, and
-  `ArgumentSpansFollowing` gives the macro inlay hints the trimmed `MacroArgumentSpan` offsets a
-  label is placed at. Nesting counts brackets as well as parentheses, and an unterminated list —
-  the normal state while typing — yields what has been written so far.
+- `MacroExpansionPreview.cs` — renders a readable, length-limited macro body for hover and signature
+  help, and substitutes call-site arguments token-by-token rather than by unsafe text replacement.
+  The body keeps the LINES it was written on — the backslashes are gone from it by then, but each
+  token still carries its own line — and indentation is rendered as ranked LEVELS four spaces apart
+  rather than as the author's columns, since a tab is one character in a range and subtracting
+  columns would give a tab-indented header a one-space step. One argument scan serves both readers:
+  `ArgumentsFollowing` gives hover the text, and `ArgumentSpansFollowing` gives the macro inlay
+  hints the trimmed `MacroArgumentSpan` offsets a label is placed at. Nesting counts brackets as
+  well as parentheses, and an unterminated list — the normal state while typing — yields what has
+  been written so far.
 - `StockScripts.cs` — loads the profile's raw-relative stock-script list and canonicalizes slash
   style and casing for the raw-file warning setting.

@@ -79,10 +79,13 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     enum until an expansion overwriting the kind left every `Kind == Call` rule blind to a call a
     macro produced. When `FromMacro` is set, `Range` is the INVOCATION site, not the callee.
     `IsFunctionCall` is the named call to a script function that five cross-file lints open on.
-    Three kinds worth knowing by name. `FieldWrite` is the field on the LEFT of an assignment,
-    split from `FieldAccess` because a field is DECLARED nowhere: nothing ever emits a `Definition`
-    for one, so go-to-definition answered every field with an empty list until its writes could be
-    told from its reads. Not folded into `Definition`, because every write is one and the surfaces
+    Four kinds worth knowing by name. `FieldWrite` is the field on the left of a plain `=`, and
+    `FieldUpdate` the same under a compound one (`+=`, `|=`). Both are split from `FieldAccess`
+    because a field is DECLARED nowhere: nothing ever emits a `Definition` for one, so
+    go-to-definition answered every field with an empty list until its writes could be told from
+    its reads. The two write kinds are split from EACH OTHER because go-to-implementation asks
+    what the field IS, and a compound assignment adjusts a value some plain one already decided -
+    a step rather than an answer. Go-to-definition and document highlight take both. Not folded into `Definition`, because every write is one and the surfaces
     that read a Definition as THE declaration (the CodeLens anchor, the hierarchies' anchoring step,
     `DeclaresKey`) would each have had to learn that a field's is plural. Both kinds carry the same
     key, so find-references, rename and the `FilesReferencing` index are unchanged.

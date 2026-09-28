@@ -64,10 +64,13 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
                 continue;
             }
 
-            // A field has no Definition entry — it is declared nowhere — so before FieldWrite
-            // existed every occurrence of `level.x` highlighted as a read, including the `= 1`
-            // that set it. The two kinds are the same question asked of two symbol kinds.
-            bool isWrite = entry.Kind == ReferenceKind.Definition || entry.Kind == ReferenceKind.FieldWrite;
+            // A field has no Definition entry — it is declared nowhere — so before the field-write
+            // kinds existed every occurrence of `level.x` highlighted as a read, including the
+            // `= 1` that set it. A compound update counts too: the editor colours `x += 1` as a
+            // write, and the distinction that separates the two kinds is go-to-implementation's,
+            // not this one's.
+            bool isWrite = entry.Kind == ReferenceKind.Definition
+                || DefinitionHandler.IsFieldWrite(entry.Kind);
 
             highlights.Add(new DocumentHighlight
             {

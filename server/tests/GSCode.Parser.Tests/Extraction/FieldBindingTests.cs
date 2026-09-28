@@ -78,15 +78,24 @@ public class FieldBindingTests
     }
 
     [Fact]
-    public void ACompoundAssignmentIsAWriteButBindsNothing()
+    public void ACompoundAssignmentIsAnUpdateRatherThanAWrite()
     {
+        // Still a write for everything that asks where the field is SET — go-to-definition and
+        // document highlight both take it. Separate so go-to-implementation can leave it out:
+        // `+= 1` adjusts a value some plain assignment already decided, so it is a step rather
+        // than an answer to "what is in this field".
         ParseResult result = Analyze(
             "function f()\n"
             + "{\n"
+            + "    level.count = 0;\n"
             + "    level.count += 1;\n"
+            + "    level.count |= 2;\n"
             + "}\n");
 
-        Assert.Equal(ReferenceKind.FieldWrite, Assert.Single(FieldReferences(result, "count")).Kind);
+        ImmutableArray<ReferenceEntry> references = FieldReferences(result, "count");
+        Assert.Equal(3, references.Length);
+        Assert.Single(references, entry => entry.Kind == ReferenceKind.FieldWrite);
+        Assert.Equal(2, references.Count(entry => entry.Kind == ReferenceKind.FieldUpdate));
         Assert.Empty(result.Extraction.FieldBindings);
     }
 

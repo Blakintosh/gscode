@@ -64,6 +64,10 @@ public sealed class SymbolExtractor
     // and reads `a` and `b`, and each of those reaches RecordFieldReference from the same walk.
     private TextRange? _fieldWriteRange;
 
+    // Which write it is: FieldWrite for a plain `=`, FieldUpdate for the compound family. Only
+    // meaningful while _fieldWriteRange is set, and moves with it.
+    private ReferenceKind _fieldWriteKind;
+
     private readonly GameProfile _profile;
 
     private SymbolExtractor(string rootFilePath, NameTable names, SourceText text, ImmutableArray<Token> rawTokens, GameProfile profile)
@@ -674,15 +678,20 @@ public sealed class SymbolExtractor
                 // Set across the TARGET walk only. The value is an ordinary expression — `level.a =
                 // level.b` writes `a` and reads `b` — and a nested assignment inside it brings its
                 // own target, so the previous range is restored rather than cleared.
+                bool plain = assignment.Operator == TokenKind.Assign;
+
                 TextRange? enclosingWrite = _fieldWriteRange;
+                ReferenceKind enclosingKind = _fieldWriteKind;
                 _fieldWriteRange = assignment.Target is MemberNode target ? target.NameToken.RootRange : null;
+                _fieldWriteKind = plain ? ReferenceKind.FieldWrite : ReferenceKind.FieldUpdate;
                 WalkExpression(assignment.Target, assignments);
                 _fieldWriteRange = enclosingWrite;
+                _fieldWriteKind = enclosingKind;
 
                 // Only a plain `=` binds. `level.callback += &foo` is not a thing anyone writes,
                 // and a compound assignment has no single assigned value — the same reason
                 // FlowTyper's own FieldWrite leaves its Value null for that form.
-                if ( assignment.Operator == TokenKind.Assign && assignment.Target is MemberNode bound )
+                if ( plain && assignment.Target is MemberNode bound )
                 {
                     RecordFieldBinding(bound, assignment.Value);
                 }
@@ -1032,18 +1041,19 @@ public sealed class SymbolExtractor
     }
 
     /// <summary>
-    /// One <c>obj.name</c> site, as a read unless an enclosing assignment is writing exactly this
-    /// name — see <see cref="_fieldWriteRange"/>.
+    /// One <c>obj.name</c> site: a read, a plain write, or a compound update, depending on whether
+    /// an enclosing assignment is writing exactly this name — see <see cref="_fieldWriteRange"/>
+    /// and <see cref="_fieldWriteKind"/>.
     ///
-    /// Both kinds carry the SAME key, which is what keeps find-references, rename and the
-    /// <c>FilesReferencing</c> index answering as they did: the kind separates a write from a read
-    /// without splitting the symbol they both name.
+    /// All three kinds carry the SAME key, which is what keeps find-references, rename and the
+    /// <c>FilesReferencing</c> index answering as they did: the kind separates how the site uses
+    /// the field without splitting the symbol they all name.
     /// </summary>
     private void RecordFieldReference(PToken nameToken)
     {
         SymbolKey key = new(null, _names.InternLower(nameToken.Text), SymbolKind.Field);
         ReferenceKind kind = _fieldWriteRange == nameToken.RootRange
-            ? ReferenceKind.FieldWrite
+            ? _fieldWriteKind
             : ReferenceKind.FieldAccess;
 
         AddReference(key, nameToken, kind);

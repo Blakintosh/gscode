@@ -539,8 +539,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Cache/CacheSchema.cs
 
 - Format 7 added `ScriptRecord.FieldBindings` AND put `ReferenceKind.FieldWrite` in the middle of
-  the enum. The second half is why the bump was not optional: a kind goes on the wire as its
-  ordinal, so a format-6 blob would read each of its macro uses as a literal.
+  the enum; format 8 put `FieldUpdate` beside it. Those halves are why neither bump was optional:
+  a kind goes on the wire as its ordinal, so an older blob reads every kind after the insertion
+  shifted by one - a format-6 blob would read each of its macro uses as a literal.
 - `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
   the meta keys, and the `meta`/`files`/`deps` table DDL. Either version mismatch (or a
   build-identity mismatch) wipes the cache; there are no migrations.

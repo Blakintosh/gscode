@@ -76,6 +76,8 @@ public sealed class FieldNavigationTests : IDisposable
     //   8,9    `on_damage`             — the function declaration
     //  13,17   `craftable_shield_grab` — a READ
     //  14,10   `craftable_shield_grab` — its second write
+    //  18,10   `craftable_shield_grab` — a compound UPDATE, which is a write but not an
+    //                                   implementation
     private const string FieldsSource =
         "#using scripts\\scene;\n"
         + "#namespace fields;\n"
@@ -92,6 +94,10 @@ public sealed class FieldNavigationTests : IDisposable
         + "{\n"
         + "    grab = level.craftable_shield_grab;\n"
         + "    level.craftable_shield_grab = 2;\n"
+        + "}\n"
+        + "function bump()\n"
+        + "{\n"
+        + "    level.craftable_shield_grab += 1;\n"
         + "}\n";
 
     /// <summary>
@@ -251,14 +257,15 @@ public sealed class FieldNavigationTests : IDisposable
     {
         // The whole gap in one assertion: F12 on `level.craftable_shield_grab` used to return an
         // empty list, because the handler kept only Definition entries and a field never produces
-        // one. Both writes answer, and the read the cursor is sitting on does not.
+        // one. Every write answers — the compound update at 18 included, since this request asks
+        // where the field is SET — and the read the cursor is sitting on does not.
         LocationOrLocationLinks? result = await DefinitionAtAsync(13, 17);
 
         List<Location> locations = Locations(result);
-        Assert.Equal(2, locations.Count);
+        Assert.Equal(3, locations.Count);
 
         List<int> lines = [.. locations.Select(static location => location.Range.Start.Line).Order()];
-        Assert.Equal([4, 14], lines);
+        Assert.Equal([4, 14, 18], lines);
         Assert.All(locations, static location => Assert.Equal(10, location.Range.Start.Character));
     }
 
@@ -269,7 +276,7 @@ public sealed class FieldNavigationTests : IDisposable
         // and it must not become a special case that answers nothing.
         LocationOrLocationLinks? result = await DefinitionAtAsync(4, 10);
 
-        Assert.Equal(2, Locations(result).Count);
+        Assert.Equal(3, Locations(result).Count);
     }
 
     [Fact]
@@ -279,10 +286,13 @@ public sealed class FieldNavigationTests : IDisposable
 
         Assert.NotNull(result);
         List<DocumentHighlight> highlights = [.. result!];
-        Assert.Equal(3, highlights.Count);
+        Assert.Equal(4, highlights.Count);
 
         foreach ( DocumentHighlight highlight in highlights )
         {
+            // 18 is `+= 1`, which an editor colours as a write like any other. The kind that
+            // separates it from a plain assignment is go-to-implementation's business, not this
+            // handler's.
             DocumentHighlightKind expected = highlight.Range.Start.Line == 13
                 ? DocumentHighlightKind.Read
                 : DocumentHighlightKind.Write;
@@ -326,25 +336,61 @@ public sealed class FieldNavigationTests : IDisposable
     }
 
     [Fact]
-    public async Task ImplementationOnACallbackFieldFindsTheBoundFunction()
+    public async Task ImplementationOnACallbackFieldFindsTheWriteAndTheBoundFunction()
     {
-        // The GSC dialect of an override: nothing in the syntax at `level.callback` names
-        // `on_damage`, and without this there is no way to reach it from a call site at all.
+        // Both halves. The declaration is the destination worth having — nothing in the syntax at
+        // `level.callback` names `on_damage` — and the assignment says WHICH write installed it,
+        // which is the other half of the answer once more than one game mode binds the field.
         LocationOrLocationLinks? result = await ImplementationAtAsync(6, 10);
 
-        Location location = Assert.Single(Locations(result));
-        Assert.Equal(8, location.Range.Start.Line);
-        Assert.Equal(9, location.Range.Start.Character);
+        List<int> lines = [.. Locations(result).Select(static location => location.Range.Start.Line).Order()];
+        Assert.Equal([6, 8], lines);
     }
 
     [Fact]
-    public async Task ImplementationOnAFieldHoldingAnInstanceFindsNothing()
+    public async Task ImplementationOnAFieldHoldingAnInstanceFindsItsAssignment()
     {
-        // A class in a field has no implementations. Its methods are a different question, and
-        // go-to-type-definition is the request that asks it.
+        // A class in a field contributes no second location — its methods are a different
+        // question, and go-to-type-definition is the request that asks it — but the assignment
+        // that put it there is still what the field IS.
         LocationOrLocationLinks? result = await ImplementationAtAsync(5, 10);
 
-        Assert.Null(result);
+        Location location = Assert.Single(Locations(result));
+        Assert.Equal(5, location.Range.Start.Line);
+        Assert.Equal(10, location.Range.Start.Character);
+    }
+
+    [Fact]
+    public async Task ImplementationOnAPlainDataFieldFindsItsAssignments()
+    {
+        // No function, no class, just a number — and the plain assignments are still the answer to
+        // "what is in this field".
+        LocationOrLocationLinks? result = await ImplementationAtAsync(13, 17);
+
+        List<int> lines = [.. Locations(result).Select(static location => location.Range.Start.Line).Order()];
+        Assert.Equal([4, 14], lines);
+    }
+
+    [Fact]
+    public async Task ImplementationSkipsACompoundUpdate()
+    {
+        // The line this request draws against go-to-definition, which lists 4, 14 AND 18.
+        // `level.craftable_shield_grab += 1` adjusts what line 4 decided; it does not decide
+        // anything itself, so it is a step rather than an answer.
+        LocationOrLocationLinks? result = await ImplementationAtAsync(13, 17);
+
+        Assert.DoesNotContain(Locations(result), static location => location.Range.Start.Line == 18);
+    }
+
+    [Fact]
+    public async Task ImplementationOnACompoundUpdateStillAnswersWithThePlainWrites()
+    {
+        // A cursor ON the `+=` asks about the same field. Excluding the update from the ANSWER is
+        // not the same as refusing to answer when the question is asked from there.
+        LocationOrLocationLinks? result = await ImplementationAtAsync(18, 10);
+
+        List<int> lines = [.. Locations(result).Select(static location => location.Range.Start.Line).Order()];
+        Assert.Equal([4, 14], lines);
     }
 
     [Fact]

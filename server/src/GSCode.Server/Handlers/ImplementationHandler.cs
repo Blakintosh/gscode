@@ -19,19 +19,27 @@ namespace GSCode.Server.Handlers;
 /// version, and go-to-definition — correctly — lands on the one the call resolves to statically.
 /// Which classes redefine it from there is what the class graph knows and the call site does not.
 ///
-/// A callback FIELD asks the same question in the other dialect GSC has for polymorphism. Where a
-/// class method is overridden by a subclass, <c>level.callback = &amp;on_damage;</c> makes
-/// <c>on_damage</c> what the field actually runs, and a reader looking at
-/// <c>level thread [[ level.callback ]]();</c> has no other way to reach it — the arrow is not
-/// there, so there is no class graph to walk. Every function bound to the field answers, which is
-/// exactly the plural shape an override list already has.
+/// A FIELD asks the same question in the other dialect GSC has for it. A field is declared
+/// nowhere and holds whatever its writes give it, so what a field IS, is its plain assignments:
+/// every <c>level.foo = …</c> in the workspace is one answer to "what is in here".
 ///
-/// Anything else returns nothing rather than falling back to the declaration. A top-level function
-/// has no overrides, a field bound to a class has no implementations (its class's methods are a
-/// different question, and go-to-type-definition is the request that asks it), and a handler that
-/// quietly answers a different question than the one asked is worse than one that declines: the
-/// editor already has go-to-definition bound beside this, and duplicating it there hides the fact
-/// that the feature did not apply.
+/// PLAIN assignments only. A compound update — <c>level.count += 1</c> — never establishes what
+/// the field is; it adjusts a value some plain assignment already decided, so listing it shows a
+/// reader a step rather than an answer. That is the line between this request and
+/// go-to-definition, which lists every write because it asks where the field is SET rather than
+/// what it is. Extraction draws the same line one layer down, as
+/// <see cref="ReferenceKind.FieldUpdate"/> explains.
+///
+/// A write that binds a FUNCTION answers twice: the assignment line and the function it names.
+/// <c>level.callback = &amp;on_damage;</c> is GSC's other spelling of an override — a reader at
+/// <c>level thread [[ level.callback ]]();</c> has no way to reach <c>on_damage</c> otherwise,
+/// since the arrow is absent and there is no class graph to walk — and the declaration is the
+/// destination worth having. The assignment comes too rather than instead, because which game
+/// mode installed the callback is the other half of the answer.
+///
+/// A top-level function still returns nothing rather than falling back to its own declaration:
+/// it has no overrides, the editor already has go-to-definition bound beside this, and answering
+/// a different question than the one asked hides the fact that the feature did not apply.
 /// </summary>
 public sealed class ImplementationHandler : ImplementationHandlerBase
 {
@@ -75,7 +83,7 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
 
         if ( hit.Key.Kind == SymbolKind.Field )
         {
-            return Task.FromResult(Answer(BoundImplementations(target, hit.Key, cancellationToken)));
+            return Task.FromResult(Answer(FieldImplementations(target, hit.Key, cancellationToken)));
         }
 
         if ( hit.Key.Kind != SymbolKind.Function )
@@ -110,16 +118,34 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
     }
 
     /// <summary>
-    /// The functions bound to a callback field, deduplicated by declaration — the same overlay
-    /// case <c>emitted</c> exists for above, reached here through two game modes binding one
-    /// handler rather than through a mod shadowing a raw file.
+    /// What a field IS: every plain assignment to it, plus the declaration of any function one of
+    /// them binds.
+    ///
+    /// Deduplicated by location through the same <c>emitted</c> set the override walk uses, and
+    /// for a wider set of reasons here — a mod overlay shadowing a raw file, as there, but also
+    /// two game modes binding one handler, which resolves to one declaration from two writes.
     /// </summary>
-    private List<Location> BoundImplementations(
+    private List<Location> FieldImplementations(
         NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
     {
         List<Location> implementations = [];
         HashSet<(string Path, Position At)> emitted = [];
 
+        // The assignments themselves. FieldWrite alone, so a compound update is left out — see
+        // the class comment.
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in
+            _support.FindAllReferences(target, field, ReferenceKind.FieldAccess) )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if ( entry.Kind == ReferenceKind.FieldWrite && emitted.Add((record.Path, entry.Range.Start)) )
+            {
+                implementations.Add(LspMapping.LocationAt(record.Path, entry.Range));
+            }
+        }
+
+        // And what any of them named. A function is reached in ONE hop this way; from the
+        // assignment line alone the reader would have to ask again.
         foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Function, cancellationToken) )
         {
             foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, bound) )

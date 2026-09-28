@@ -45,7 +45,8 @@ LSP types anywhere.
   (members/methods/ctor-dtor flags + parameter-rule diagnostics), #precache validation
   against PrecacheAssetTypes, the classified reference list (definitions, calls with
   unqualified-under-current-namespace and sys::→builtin keying, address-of, class uses,
-  field reads and writes, macro def/use, literal references with the case rules), and /@ @/ doc
+  field reads, plain writes and compound updates, macro def/use, literal references with the case
+  rules), and /@ @/ doc
   association by line adjacency. A `FileScopeConstantNode`'s value (IW dialects) is
   walked for references the same way; it has no owning function, so the AssignmentSymbol
   builder used is scratch and discarded.

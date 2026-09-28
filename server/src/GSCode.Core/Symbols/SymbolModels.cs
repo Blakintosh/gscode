@@ -244,11 +244,28 @@ public enum ReferenceKind
     /// learn that a field's is plural. A separate kind leaves all of them reading false as before
     /// and lets the two handlers that want writes ask for them.
     ///
-    /// A compound assignment reads before it writes; it is recorded as a write alone, matching how
-    /// an editor colours <c>x += 1</c> and how the typing layer's own <c>FieldWrite.Value</c> is
-    /// left null for that form.
+    /// A plain <c>=</c> only. A compound assignment is <see cref="FieldUpdate"/>.
     /// </summary>
     FieldWrite,
+
+    /// <summary>
+    /// A compound assignment to a field — <c>level.count += 1</c>, <c>self.flags |= x</c>, and the
+    /// rest of the read-modify-write family.
+    ///
+    /// Still a write, and every surface that asks "where is this field set" wants it:
+    /// go-to-definition lists it and document highlight colours it as a write, both alongside
+    /// <see cref="FieldWrite"/>.
+    ///
+    /// Separate because go-to-IMPLEMENTATION does not want it. An implementation is what the field
+    /// IS, and a compound assignment never establishes that — it adjusts a value some plain
+    /// assignment already decided, so a reader asking what is in the field is being shown a step
+    /// rather than an answer. The typing layer draws the same line for the same reason: its own
+    /// <c>FieldWrite.Value</c> is null for this form, because there is no single assigned value.
+    ///
+    /// A kind rather than a flag on <see cref="FieldWrite"/>, matching <see cref="MethodCall"/>:
+    /// the consumers switch on kind, and a flag is a thing each of them can forget to read.
+    /// </summary>
+    FieldUpdate,
 
     MacroUse,
     Literal,

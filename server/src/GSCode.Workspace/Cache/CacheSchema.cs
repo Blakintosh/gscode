@@ -29,8 +29,12 @@ public static class CacheSchema
     /// the enum. The second half is why this is not merely additive: the kind goes on the wire as
     /// its ordinal, so every kind after FieldAccess shifted by one and a version-6 blob would
     /// deserialize each of its macro uses as a literal and each literal as the next kind along.
+    /// 8: ReferenceKind gained FieldUpdate, again in the middle, so a format-7 blob reads every
+    /// kind after it shifted by one. Splitting the compound assignments out of FieldWrite is what
+    /// lets go-to-implementation mean "what the field IS" while go-to-definition keeps meaning
+    /// "everywhere it is set".
     /// </remarks>
-    public const int RecordFormatVersion = 7;
+    public const int RecordFormatVersion = 8;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

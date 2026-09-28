@@ -205,7 +205,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - Go-to-definition: functions/classes/macros via their Definition references across the
   visible context; #using/#insert paths jump to the resolved target file.
-- A FIELD is answered from its `FieldWrite` references instead, because a field is declared
+- A FIELD is answered from its write references instead (`FieldWrite` AND `FieldUpdate`, since
+  this asks where the field is SET and `level.count += 1` sets it), because a field is declared
   nowhere and so has no Definition entry anywhere - F12 on `level.craftable_shield_grab` returned
   an empty list. Its writes are what the question means for a name that comes into existence by
   being assigned to, and there are usually several, which the protocol already allows for.
@@ -227,14 +228,18 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   workspace can be in (`ClassCycleLint` reports it) rather than one the walk may assume away.
 - Whether the name IS a method is answered by `MethodResolution.ResolveCall`, not by the syntax at
   the cursor: a bare call inside the class writes no receiver.
-- A callback FIELD is the same question in GSC's other dialect for polymorphism: every function
-  bound to it (`level.callback = &on_damage`) is an implementation, read out of the index by
-  `FieldTargets`. Nothing in the syntax at the call site `level thread [[ level.callback ]]()`
-  names the function, and there is no class graph to walk, so this is the only way to reach it.
-- Anything else returns null rather than the declaration - a top-level function has no overrides,
-  and a field holding a CLASS has no implementations (its methods are go-to-type-definition's
-  question). Falling back would duplicate go-to-definition and hide the fact that the request did
-  not apply.
+- A FIELD is declared nowhere and holds whatever its writes give it, so what it IS, is its plain
+  assignments: every `level.foo = ...` in the workspace is one answer. PLAIN only - a `FieldUpdate`
+  is left out, which is the line between this request and go-to-definition (that one lists every
+  write, because it asks where the field is set rather than what it is).
+- A write that binds a FUNCTION answers twice: the assignment line and the declaration it names.
+  `level.callback = &on_damage` is GSC's other spelling of an override, nothing in the syntax at
+  `level thread [[ level.callback ]]()` names the function, and there is no class graph to walk -
+  so the declaration is the destination worth having, and the assignment says which write
+  installed it. A bound CLASS contributes no second location; its methods are
+  go-to-type-definition's question.
+- A top-level function still returns null rather than its own declaration: it has no overrides,
+  and falling back would duplicate go-to-definition and hide that the request did not apply.
 
 ## Handlers/FieldTargets.cs
 
@@ -273,9 +278,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/DocumentHighlightHandler.cs
 
-- Highlights every occurrence of the symbol under the cursor within the current file
-  (definition sites and field WRITES as Write, others as Read - a field has no Definition entry,
-  so before `FieldWrite` existed the `= 1` that set `level.x` highlighted as a read like any use). Goes through `NavigationSupport.FindReferencesInFile`
+- Highlights every occurrence of the symbol under the cursor within the current file (definition
+  sites and both field-write kinds as Write, others as Read - a field has no Definition entry, so
+  before those kinds existed the `= 1` that set `level.x` highlighted as a read like any use). A
+  compound update colours as a write too; the split between the two write kinds is
+  go-to-implementation's, not this handler's. Goes through `NavigationSupport.FindReferencesInFile`
   — the same shared query find-references and the CodeLens count use, ASKED for one file rather than
   asked wide and filtered — instead of a raw key comparison over this file's own
   `Extraction.References`. The raw comparison could not canonicalize a method key the way the shared

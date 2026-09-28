@@ -98,13 +98,15 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         // empty list for every one of them — F12 on `level.craftable_shield_grab` did nothing at
         // all. Its writes are what the question means: the places the name comes into existence
         // and its value is decided. Usually several, which the protocol already allows for.
-        ReferenceKind declaring = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field
-            ? ReferenceKind.FieldWrite
-            : ReferenceKind.Definition;
+        //
+        // BOTH write kinds. This question is "where is this field set", and `level.count += 1`
+        // sets it. Only go-to-IMPLEMENTATION draws the narrower line, because it asks what the
+        // field IS rather than where it is touched.
+        bool field = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field;
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
             [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
-                .Where(source => source.Entry.Kind == declaring)];
+                .Where(source => field ? IsFieldWrite(source.Entry.Kind) : source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
 
@@ -118,6 +120,12 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(definitions.Select(location => new LocationOrLocationLink(location))));
+    }
+
+    /// <summary>Either way a field is assigned to — a plain <c>=</c> or a compound update.</summary>
+    internal static bool IsFieldWrite(ReferenceKind kind)
+    {
+        return kind == ReferenceKind.FieldWrite || kind == ReferenceKind.FieldUpdate;
     }
 
     /// <summary>The parameter or assignment that introduced the local under the cursor, if any.</summary>

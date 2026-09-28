@@ -102,13 +102,15 @@ that shipped and works, or a false positive in ours. Zero is the expected answer
 ```bash
 cd client
 npm run compile          # tsc
-npm run lint             # 0 ERRORS is the bar; the naming-convention warnings are pre-existing
+npm run lint             # no output is the bar: 0 errors AND 0 warnings
 npm run bundle-server    # dotnet publish into client/service/
 ```
 
-The warning count is deliberately not written down. It said 26 while the real figure was 28, and
-nobody noticed because the bar it exists to express is the ERROR count. A number in a doc that
-nothing checks goes stale, and then a run that should have looked wrong looks fine.
+Every warning the linter used to report was one false positive: `naming-convention` flagging the
+quoted VS Code setting keys (`"format.maxBlankLines"`), which no casing could fix. The config now
+exempts names that require quotes, so a warning today is real. This section used to give the
+warning count instead - it said 26 while the real figure was 28, and nobody noticed. A count that
+is expected to be nonzero is a number nothing checks; zero is one anybody can.
 
 After `bundle-server`, check `client/service/Api/` holds all 23 data files. A stale bundle there
 once made CoD4 load BO3's builtins, which presented as every engine call being unknown.

@@ -297,7 +297,7 @@ which looks exactly like success and proves nothing. Two games is roughly two an
 anything under ten seconds did not happen.
 
 If the client changed: `npm run compile` and `npm run lint` in `client/`, where the bar is zero
-errors — the naming-convention warnings are pre-existing.
+errors and zero warnings.
 
 Report the gate as a table of what ran and what it said, including the durations. "Tests pass" is
 not a result anyone can check.

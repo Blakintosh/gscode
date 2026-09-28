@@ -150,12 +150,6 @@ public sealed class SourceText
         return Math.Min(offset, GetLineEnd(position.Line));
     }
 
-    /// <summary>Returns the offset where the given line begins.</summary>
-    public int GetLineStart(int line)
-    {
-        return _lineStarts[line];
-    }
-
     /// <summary>
     /// The offset just past a line's CONTENT — before its line break, not after it. The last line
     /// has no break to stop before, so its end is the document's end.

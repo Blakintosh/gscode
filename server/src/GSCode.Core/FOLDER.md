@@ -243,7 +243,6 @@ needs to know WHY a type is unknown.
     THAT LINE's end (before its line break), never past it — a huge `Character` from a stale or
     malformed edit range must not run into every line after it, since `DocumentStore` applies
     incremental edits at exactly these offsets.
-  - `GetLineStart(int line)` — offset where a line begins.
   - `Slice(start, length)` — allocation-free span view over the text.
   - `Text` / `Length` / `LineCount` — raw text and dimensions (LineCount is at least 1).
 

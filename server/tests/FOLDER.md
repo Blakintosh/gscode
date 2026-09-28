@@ -141,7 +141,9 @@ macro provenance · `SemanticTokenBuilderTests`, which pins what is deliberately
 strings and numbers all belong to the grammar) · `TripleSlashScriptDocTests` ScriptDoc on the pre-BO3
 games · `DialectResolutionTests` per-dialect symbol keys · `MacroBodyReferenceTests` a macro name
 inside another macro's `#define` body recorded as a `MacroUse` · `MacroGeneratedDeclarationTests` a
-declaration a macro produces anchored at the INVOCATION, not inside the `#define`.
+declaration a macro produces anchored at the INVOCATION, not inside the `#define` ·
+`FieldBindingTests` the two halves of a field write, WHERE (`FieldWrite`) and WHAT was put there
+(`FieldBinding`), including the right-hand sides that must record no binding at all.
 
 **Other.** `GameProfileTests` the profile registry — the 18-game lineage, which games are Supported
 and Verified, keyword sets, and every capability flag · `NameTableTests` interning ·
@@ -212,7 +214,9 @@ own keywords, global objects, snippets and DIRECTIVES — including the reported
 `#` at file scope under CoD4 returning exactly `#include` and `#using_animtree`, that `#animtree` is
 a body position in every game, and that a CoD4 file-scope list carries no macro rows for a
 preprocessor that game does not have · `MergeDialectScopeTests` what a merge dialect puts in scope:
-this file and its `#include`s, never every file sharing a name stem.
+this file and its `#include`s, never every file sharing a name stem ·
+`UnimportedFunctionCompletionTests` which functions auto-import offers and how each dialect family
+spells the call: qualified under `#using`, bare under `#include`.
 
 `LocalScopeCompletionTests` also holds the FILE-SCOPE cases: the macros an `#insert`ed header
 supplies offered outside a body, the functions in scope and the expression atoms a macro
@@ -396,7 +400,8 @@ tests, and nothing within a test: the corpus sweeps still parallelise their own 
 the lint pass once, asserted by array identity rather than by counting calls on a sealed type · `DependentDiagnosticsTests` debounced
 cross-file refreshes for other open documents, plus `ClosedDependentsOf` (the `full`-mode half): a
 closed file referencing the origin's function is named, the origin itself and an open caller are
-not · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed record's stored
+not · `ClosedDependentsDialectTests` the same on both dialect families, found under the key the
+references were indexed with rather than one rebuilt from the declaration · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed record's stored
 diagnostics gain the cross-file lints, an open document is skipped and left untouched, and
 `RelintClosedFilesAsync` upgrades only the file it was given · `CodeLensArgumentTests` the lens
 command payload, which must be primitives so no serializer can case-mangle it ·
@@ -416,7 +421,17 @@ FUNCTION · `ResolveForQueryTests` hierarchies for files not open · `NamespaceI
 add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
 `BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests`
 one assignment walk per version · `CompletionLabelDetailsTests`,
-`CompletionSortTextTests` · `InlayHintMacroTests`, `InlayHintTypeCacheTests` one flow pass per version.
+`CompletionSortTextTests` · `InlayHintMacroTests`, `InlayHintTypeCacheTests` one flow pass per version ·
+`InlayHintParameterTests` the on-by-default parameter-name family, as the user sees it ·
+`InlayHintMergeDialectTests` the same hints on a cross-file call under a merge dialect ·
+`FieldNavigationTests` navigation from a field, answered from its writes (definition) and from what
+a write binds (type definition, implementation, the hierarchies) · `ClassMemberNavigationTests` a
+class `var` read as a bare name inside the class body · `ImplementationAndTypeDefinitionTests`
+overriding subclasses and what a local holds, both declining rather than falling back to the
+declaration · `HoverDefinitionLinkTests` the definition link under a hover's signature, and none
+for a builtin · `AutoImportCompletionTests` the directive edit an unimported candidate carries ·
+`GenerateScriptDocTests` a generated ScriptDoc block reading back as documentation in both dialect
+forms.
 
 **Analysis ordering and publishing.** `AnalysisGateTests`, `SingleFlightAnalysisTests` one analysis
 in flight per document and none for a document nothing holds · `DiagnosticsPublishOrderTests` the

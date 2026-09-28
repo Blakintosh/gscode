@@ -563,7 +563,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   a kind goes on the wire as its ordinal, so an older blob reads every kind after the insertion
   shifted by one - a format-6 blob would read each of its macro uses as a literal.
 - `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
-  the meta keys, and the `meta`/`files`/`deps` table DDL. Either version mismatch (or a
+  the meta keys, and the `meta`/`files` table DDL. Either version mismatch (or a
   build-identity mismatch) wipes the cache; there are no migrations.
 
 ## Cache/ServerBuildIdentity.cs

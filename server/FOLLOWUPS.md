@@ -646,9 +646,6 @@ shape rather than re-deriving it.
   change — but **measure a cold-OS-cache, game-install-rooted workspace first**, and do not make it
   if the gap is not there: it is the most structural item here and the only one that touches indexing
   order.
-- **The `deps` table is dead.** Never written, never read; only `ApplyDelete` still touches it. It
-  stays so an existing database still opens, which is worth a schema-version decision rather than a
-  quiet removal.
 
 ---
 

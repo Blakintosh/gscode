@@ -9,7 +9,12 @@ namespace GSCode.Workspace.Cache;
 public static class CacheSchema
 {
     /// <summary>Bumped when the table DDL below changes.</summary>
-    public const int SchemaVersion = 1;
+    /// <remarks>
+    /// 2: the <c>deps</c> table is gone. Nothing had written or read it since the same edges moved
+    /// into the serialized record (<c>ScriptRecord.Dependencies</c>); the wipe a mismatch triggers
+    /// drops it from a version-1 file.
+    /// </remarks>
+    public const int SchemaVersion = 2;
 
     /// <summary>Bumped when the ScriptRecord blob serialization changes.</summary>
     /// <remarks>
@@ -57,14 +62,5 @@ public static class CacheSchema
             analysed_at  INTEGER NOT NULL,
             record       BLOB NOT NULL
         );
-
-        CREATE TABLE IF NOT EXISTS deps (
-            path     TEXT NOT NULL,
-            dep_path TEXT NOT NULL,
-            is_insert INTEGER NOT NULL,
-            PRIMARY KEY (path, dep_path)
-        );
-
-        CREATE INDEX IF NOT EXISTS ix_deps_dep ON deps(dep_path);
         """;
 }

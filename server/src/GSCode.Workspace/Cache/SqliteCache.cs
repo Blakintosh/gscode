@@ -144,7 +144,7 @@ public sealed class SqliteCache : IAsyncDisposable
 
         if ( !IsCurrent(connection, serverBuildIdentity) )
         {
-            Execute(connection, "DELETE FROM files; DELETE FROM deps; DELETE FROM meta;");
+            Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM meta;");
             WriteMeta(connection, serverBuildIdentity);
         }
 
@@ -359,9 +359,7 @@ public sealed class SqliteCache : IAsyncDisposable
     ///
     /// The two statements are built ONCE per batch and reused, with only their parameter values
     /// reassigned per record. Building them per record meant a fresh SqliteCommand, a fresh
-    /// parameter collection and seven boxed values every time, for every file of a cold index. That
-    /// is the same cost the <c>deps</c> write was removed for, noted below; it applied per edge
-    /// there and per file here.
+    /// parameter collection and seven boxed values every time, for every file of a cold index.
     /// </summary>
     private void ApplyBatch(List<WriteCommand> batch)
     {
@@ -418,7 +416,7 @@ public sealed class SqliteCache : IAsyncDisposable
     {
         SqliteCommand command = _connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "DELETE FROM files WHERE path = $path; DELETE FROM deps WHERE path = $path;";
+        command.CommandText = "DELETE FROM files WHERE path = $path;";
         command.Parameters.AddWithValue("$path", "");
         return command;
     }
@@ -433,13 +431,6 @@ public sealed class SqliteCache : IAsyncDisposable
         upsert.Parameters["$at"].Value = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         upsert.Parameters["$record"].Value = command.Blob;
         upsert.ExecuteNonQuery();
-
-        // The `deps` table is deliberately NOT written. Nothing reads it: the same dependency edges
-        // travel inside the serialized record (ScriptRecord.Dependencies), and that is what the
-        // indexer's phase two uses to find files whose headers changed. Writing it cost a DELETE
-        // plus one freshly-built SqliteCommand per edge per file — new command object, new parameter
-        // collection, SQL re-parsed each time — plus maintaining ix_deps_dep, for rows no query ever
-        // selected. The table stays in the schema so an existing database still opens.
     }
 
     private static void ApplyDelete(string path, SqliteCommand command)

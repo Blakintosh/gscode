@@ -32,20 +32,9 @@ namespace GSCode.Workspace.Analysis;
 public static class UnreachableCodeLint
 {
     /// <summary>
-    /// Finds every block in the file. Only <see cref="BlockNode"/> is interesting — the run of
-    /// statements after a terminator lives there and nowhere else — so everything else just
-    /// descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here.
-    ///
-    /// Statements NESTED inside a dev block are reached this way and their dead code is still
-    /// reported. What is not reported is the dev block's own run against a terminator before it,
-    /// which is <see cref="ReportAfterTerminator"/>'s business: <c>/# … #/</c> is compiled out of a
-    /// release build, so a debugging aid after a return is something the author put there knowingly
-    /// rather than a leftover.
-    /// </summary>
-    /// <summary>
     /// This rule's whole judgement about ONE node, with no descent of its own, so
     /// <see cref="NodeLintPass"/> can run it from the shared walk. Only ever called for a node that
-    /// is not an <c>ExprNode</c>, which is the same restriction the walk above applies.
+    /// is not an <c>ExprNode</c>.
     /// </summary>
     internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
@@ -55,11 +44,9 @@ public static class UnreachableCodeLint
         }
         else if ( node is CaseGroupNode caseGroup )
         {
-            // A case's own statement list, exactly like a block's — CaseGroupNode.Statements is a
-            // flat array rather than a nested BlockNode, since GSC's switch needs no braces per
-            // case, and that shape is why this needed its own branch rather than falling out of
-            // the BlockNode one above: nothing here was ever a BlockNode to begin with, so a
-            // `break;` followed by dead code in a case body was never reported.
+            // A case's own statement list, exactly like a block's. CaseGroupNode.Statements is a
+            // flat array rather than a nested BlockNode, since GSC's switch needs no braces per case,
+            // so the BlockNode branch never sees it.
             ReportAfterTerminator(caseGroup.Statements, diagnostics);
         }
     }

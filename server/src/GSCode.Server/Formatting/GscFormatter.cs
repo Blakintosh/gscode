@@ -728,7 +728,6 @@ public static class GscFormatter
         return newlinesBefore > 0;
     }
 
-    /// <summary>The intra-line separator between two adjacent tokens: a single space or nothing.</summary>
     /// <summary>
     /// Writes one line's indentation. Tabs are one character per level regardless of tab size,
     /// which is the point of using them; spaces multiply by the editor's width.
@@ -749,6 +748,7 @@ public static class GscFormatter
         output.Append(' ', levels * options.IndentWidth);
     }
 
+    /// <summary>The intra-line separator between two adjacent tokens: a single space or nothing.</summary>
     private static string Separator(
         TokenKind beforePrevious, TokenKind previous, TokenKind current, bool insideCallParen, FormatOptions options)
     {

@@ -400,14 +400,6 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
-    /// What may follow <c>[[receiver]]-&gt;</c>.
-    ///
-    /// <c>[[self]]-&gt;</c> inside a class offers that class's chain. Every other receiver offers
-    /// every visible class's methods, labelled with the class that declares each — the receiver's
-    /// type is not known, and 155 of the 159 arrow calls in the stock scripts are that shape, so the
-    /// wide list is the one that carries the feature.
-    /// </summary>
-    /// <summary>
     /// How much has to be typed before functions this file cannot call yet are offered.
     ///
     /// Not a comfort setting. Statement scope already returns a median of 1,930 entries, and the
@@ -458,6 +450,14 @@ public sealed partial class CompletionEngine
         }
     }
 
+    /// <summary>
+    /// What may follow <c>[[receiver]]-&gt;</c>.
+    ///
+    /// <c>[[self]]-&gt;</c> inside a class offers that class's chain. Every other receiver offers
+    /// every visible class's methods, labelled with the class that declares each — the receiver's
+    /// type is not known, and 155 of the 159 arrow calls in the stock scripts are that shape, so the
+    /// wide list is the one that carries the feature.
+    /// </summary>
     private ImmutableArray<CompletionEntry> ArrowMethodCompletions(
         ParseResult result, string contextId, string? receiverClass, string callSuffix, bool parameterHints)
     {

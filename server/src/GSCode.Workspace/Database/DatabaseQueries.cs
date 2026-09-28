@@ -1097,20 +1097,6 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
-    /// file's own, plus those in files it <c>#include</c>s DIRECTLY, all callable by bare name.
-    /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
-    /// to qualify with in the first place.
-    ///
-    /// Direct hops only, and deliberately narrower than the truth: the compiler flattens the chain
-    /// (see <see cref="IncludeClosure"/>), so a name reached through an included file's own includes
-    /// is legal here and goes unoffered. Completion errs toward offering too little — a name it
-    /// misses is still typable — whereas widening it would offer, from a single <c>#include</c> of
-    /// <c>maps\_utility</c>, everything CoD4's utility chain transitively reaches. The rule that must
-    /// be exactly right about scope is the one that reports an Error, and that one asks
-    /// <see cref="IncludeClosure"/>.
-    /// </summary>
-    /// <summary>
     /// The ONE function an <c>#include</c> scope gives a bare name, or null when it gives none.
     ///
     /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
@@ -1169,6 +1155,20 @@ public static class DatabaseQueries
         return null;
     }
 
+    /// <summary>
+    /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
+    /// file's own, plus those in files it <c>#include</c>s DIRECTLY, all callable by bare name.
+    /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
+    /// to qualify with in the first place.
+    ///
+    /// Direct hops only, and deliberately narrower than the truth: the compiler flattens the chain
+    /// (see <see cref="IncludeClosure"/>), so a name reached through an included file's own includes
+    /// is legal here and goes unoffered. Completion errs toward offering too little — a name it
+    /// misses is still typable — whereas widening it would offer, from a single <c>#include</c> of
+    /// <c>maps\_utility</c>, everything CoD4's utility chain transitively reaches. The rule that must
+    /// be exactly right about scope is the one that reports an Error, and that one asks
+    /// <see cref="IncludeClosure"/>.
+    /// </summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,
         string askingContextId,

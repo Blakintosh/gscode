@@ -137,7 +137,6 @@ public sealed class ServerSettings
         set { _current = _current with { CompletionLiterals = value }; }
     }
 
-    /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
     /// <summary>
     /// Whether completion offers functions from files this one has not imported, inserting the
     /// directive with them (the gscode.completion.autoImport setting).
@@ -148,6 +147,7 @@ public sealed class ServerSettings
         set { _current = _current with { CompletionAutoImport = value }; }
     }
 
+    /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
     public string CompletionFieldScope
     {
         get { return _current.CompletionFieldScope; }

@@ -452,27 +452,6 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
-    /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
-    /// specific file.
-    ///
-    /// Under a merge dialect a function has no namespace, so the key alone names every same-named
-    /// function in the workspace; what disambiguates it is the asking file, which can only reach
-    /// declarations it owns, imports or path-calls. Resolving from the asking document therefore
-    /// answers both callers correctly with one rule: a CodeLens sits on a declaration and resolves
-    /// to the file it is already in, while find-references on a call resolves to the declaration
-    /// that call actually reaches.
-    ///
-    /// A namespace-driven dialect needs the same rule for a smaller reason: the namespace is in the
-    /// key, but it does not pin a FILE. Both <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and
-    /// <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> declare <c>#namespace globallogic_utils</c>,
-    /// so without this a reference count on either merged both game modes' callers. The reachability
-    /// question is identical — a <c>#using</c> edge is a dependency edge like an <c>#include</c> — so
-    /// the same walk answers it.
-    ///
-    /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
-    /// recoverable and a confidently wrong narrow one is not.
-    /// </summary>
-    /// <summary>
     /// Whether this key names an engine function rather than a script one — the test that decides
     /// whether the reference query is asked about a KEY or about a NAME.
     ///
@@ -511,6 +490,27 @@ public sealed class NavigationSupport
             target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true).Length == 0;
     }
 
+    /// <summary>
+    /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
+    /// specific file.
+    ///
+    /// Under a merge dialect a function has no namespace, so the key alone names every same-named
+    /// function in the workspace; what disambiguates it is the asking file, which can only reach
+    /// declarations it owns, imports or path-calls. Resolving from the asking document therefore
+    /// answers both callers correctly with one rule: a CodeLens sits on a declaration and resolves
+    /// to the file it is already in, while find-references on a call resolves to the declaration
+    /// that call actually reaches.
+    ///
+    /// A namespace-driven dialect needs the same rule for a smaller reason: the namespace is in the
+    /// key, but it does not pin a FILE. Both <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and
+    /// <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> declare <c>#namespace globallogic_utils</c>,
+    /// so without this a reference count on either merged both game modes' callers. The reachability
+    /// question is identical — a <c>#using</c> edge is a dependency edge like an <c>#include</c> — so
+    /// the same walk answers it.
+    ///
+    /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
+    /// recoverable and a confidently wrong narrow one is not.
+    /// </summary>
     private string DeclaringFile(SymbolQueryContext target, SymbolKey key)
     {
         if ( key.Kind != SymbolKind.Function )

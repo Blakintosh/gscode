@@ -481,17 +481,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     }
 
     /// <summary>
-    /// The one SourceOrganizeImports action: every unused #using/#include on this file, in a
-    /// single edit. Offered whenever there is at least one — unlike the QuickFix bulk action above,
-    /// which only shows once there are two, because a lone unused import already has its own
-    /// per-line QuickFix and a "remove all 1" button next to it would be redundant there. Organize
-    /// Imports has no such neighbour: it is the one command a user reaches for regardless of count.
-    /// </summary>
-    /// <summary>
-    /// Builds the one Organize Imports action from an already-gathered set of unused-import
-    /// diagnostics. <c>internal</c> so a test can pin that it combines whatever it is GIVEN into
-    /// one edit with no scoping of its own — the file-wide-versus-current-line distinction lives
-    /// entirely in what <see cref="AllUnusedImportDiagnostics"/> gathers, not here.
+    /// The one SourceOrganizeImports action: every unused #using/#include it is GIVEN, in a single
+    /// edit, with no scoping of its own — the file-wide-versus-current-line distinction lives
+    /// entirely in what <see cref="AllUnusedImportDiagnostics"/> gathers (<c>internal</c> so a test
+    /// can pin that). Offered whenever there is at least one, unlike the QuickFix bulk action, which
+    /// needs two because a lone unused import already has its own per-line fix: Organize Imports is
+    /// the command a user reaches for regardless of count.
     /// </summary>
     internal static void AddOrganizeImportsAction(
         DocumentUri uri,
@@ -1236,9 +1231,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return BuildAction(title, uri, edits, diagnostics, CodeActionKind.QuickFix, preferred);
     }
 
-    /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
-    /// builds, generalised over the action's <see cref="CodeActionKind"/> — every quick fix in this
-    /// file is one, and <see cref="AddOrganizeImportsAction"/> is the one caller that is not.</summary>
     /// <summary>
     /// "Generate ScriptDoc block" on a function or method that has none.
     ///
@@ -1339,6 +1331,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return result.Text.Text[start..cursor];
     }
 
+    /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
+    /// builds, generalised over the action's <see cref="CodeActionKind"/> — every quick fix in this
+    /// file is one, and <see cref="AddOrganizeImportsAction"/> is the one caller that is not.</summary>
     private static CodeAction BuildAction(
         string title,
         DocumentUri uri,

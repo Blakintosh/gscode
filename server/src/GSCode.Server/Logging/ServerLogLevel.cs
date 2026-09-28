@@ -9,7 +9,7 @@ namespace GSCode.Server.Logging;
 public static class ServerLogLevel
 {
     // One past Fatal: no event can reach it, so the channel is truly silent.
-    private static readonly LogEventLevel s_silenced = LogEventLevel.Fatal + 1;
+    private const LogEventLevel Silenced = LogEventLevel.Fatal + 1;
 
     /// <summary>
     /// The level to run at while the server is starting up, given what the client asked for.
@@ -26,7 +26,7 @@ public static class ServerLogLevel
     /// </summary>
     public static LogEventLevel StartupFloor(LogEventLevel requested)
     {
-        if ( requested == s_silenced || requested < LogEventLevel.Information )
+        if ( requested == Silenced || requested < LogEventLevel.Information )
         {
             return requested;
         }
@@ -42,7 +42,7 @@ public static class ServerLogLevel
         switch ( settingValue?.ToLowerInvariant() )
         {
             case "off":
-                return s_silenced;
+                return Silenced;
             case "error":
                 return LogEventLevel.Error;
             case "warning":

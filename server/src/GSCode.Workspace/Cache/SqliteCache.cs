@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.Channels;
 using GSCode.Workspace.Database;
 using Microsoft.Data.Sqlite;
+using System.Globalization;
 
 namespace GSCode.Workspace.Cache;
 
@@ -184,7 +185,7 @@ public sealed class SqliteCache : IAsyncDisposable
             // Written as text by the upsert, since SQLite's INTEGER is signed and a content hash is
             // not. A row whose hash cannot be read is simply not offered for restore: it would fail
             // the freshness check anyway, and re-analysing one file is the cheap outcome.
-            if ( !ulong.TryParse(reader.GetString(1), out ulong contentHash) )
+            if ( !ulong.TryParse(reader.GetString(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong contentHash) )
             {
                 continue;
             }
@@ -428,7 +429,7 @@ public sealed class SqliteCache : IAsyncDisposable
         upsert.Parameters["$language"].Value = command.Language;
         upsert.Parameters["$context"].Value = command.ContextId;
         upsert.Parameters["$relative"].Value = command.RelativePath;
-        upsert.Parameters["$hash"].Value = command.ContentHash.ToString();
+        upsert.Parameters["$hash"].Value = command.ContentHash.ToString(CultureInfo.InvariantCulture);
         upsert.Parameters["$at"].Value = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         upsert.Parameters["$record"].Value = command.Blob;
         upsert.ExecuteNonQuery();
@@ -453,15 +454,15 @@ public sealed class SqliteCache : IAsyncDisposable
         string? format = ReadMeta(connection, CacheSchema.MetaRecordFormatVersion);
         string? identity = ReadMeta(connection, CacheSchema.MetaServerBuildIdentity);
 
-        return schema == CacheSchema.SchemaVersion.ToString()
-            && format == CacheSchema.RecordFormatVersion.ToString()
+        return schema == CacheSchema.SchemaVersion.ToString(CultureInfo.InvariantCulture)
+            && format == CacheSchema.RecordFormatVersion.ToString(CultureInfo.InvariantCulture)
             && identity == serverBuildIdentity;
     }
 
     private static void WriteMeta(SqliteConnection connection, string serverBuildIdentity)
     {
-        SetMeta(connection, CacheSchema.MetaSchemaVersion, CacheSchema.SchemaVersion.ToString());
-        SetMeta(connection, CacheSchema.MetaRecordFormatVersion, CacheSchema.RecordFormatVersion.ToString());
+        SetMeta(connection, CacheSchema.MetaSchemaVersion, CacheSchema.SchemaVersion.ToString(CultureInfo.InvariantCulture));
+        SetMeta(connection, CacheSchema.MetaRecordFormatVersion, CacheSchema.RecordFormatVersion.ToString(CultureInfo.InvariantCulture));
         SetMeta(connection, CacheSchema.MetaServerBuildIdentity, serverBuildIdentity);
     }
 

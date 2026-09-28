@@ -158,7 +158,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     private static IEnumerable<LspDiagnostic> DiagnosticsForFixes(
         CodeActionParams request, RequestLints lints, CancellationToken cancellationToken)
     {
-        if ( request.Context.Diagnostics.Count() > 0 )
+        if ( request.Context.Diagnostics.Any() )
         {
             return request.Context.Diagnostics;
         }

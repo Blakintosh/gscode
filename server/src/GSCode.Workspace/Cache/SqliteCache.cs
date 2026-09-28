@@ -1,8 +1,6 @@
-using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
-using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using Microsoft.Data.Sqlite;
 

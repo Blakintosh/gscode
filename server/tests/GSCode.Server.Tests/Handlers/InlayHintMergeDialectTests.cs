@@ -1,4 +1,3 @@
-using System.Threading;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;

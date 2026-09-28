@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using GSCode.Core;
-using GSCode.Core.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Server.Handlers;

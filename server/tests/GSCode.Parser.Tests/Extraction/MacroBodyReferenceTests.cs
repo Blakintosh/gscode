@@ -1,7 +1,6 @@
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using Xunit;
 

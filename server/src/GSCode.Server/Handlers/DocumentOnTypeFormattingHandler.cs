@@ -2,7 +2,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Documents;
 using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;

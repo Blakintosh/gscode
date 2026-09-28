@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GSCode.Workspace.Indexing;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Serilog;

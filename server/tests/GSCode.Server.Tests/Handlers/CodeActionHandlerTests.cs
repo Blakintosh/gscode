@@ -1,10 +1,8 @@
-using System.Collections.Generic;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
-using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using GSCode.Core.Diagnostics;

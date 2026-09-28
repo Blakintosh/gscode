@@ -1,7 +1,5 @@
-using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
-using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;

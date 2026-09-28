@@ -4,7 +4,6 @@ using GSCode.Core.Instrumentation;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
-using GSCode.Workspace.Api;
 using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;

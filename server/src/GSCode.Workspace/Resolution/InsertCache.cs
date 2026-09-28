@@ -1,7 +1,4 @@
 using System.Collections.Concurrent;
-using System.Collections.Immutable;
-using GSCode.Core.Text;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 
 namespace GSCode.Workspace.Resolution;

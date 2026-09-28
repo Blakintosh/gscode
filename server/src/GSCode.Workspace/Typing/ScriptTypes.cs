@@ -1,7 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Typing;

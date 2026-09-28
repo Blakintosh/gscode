@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
 using GSCode.Server.Handlers;

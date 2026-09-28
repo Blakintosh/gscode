@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Extraction;
 using GSCode.Parser.Preprocessing;
 using Xunit;

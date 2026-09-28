@@ -8,8 +8,6 @@ using GSCode.Parser.Extraction;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 

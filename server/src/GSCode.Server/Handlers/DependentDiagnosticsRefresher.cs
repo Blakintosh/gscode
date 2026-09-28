@@ -1,12 +1,9 @@
 using System.Collections.Immutable;
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Parser;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
 using GSCode.Server.Configuration;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;

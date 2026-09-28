@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;

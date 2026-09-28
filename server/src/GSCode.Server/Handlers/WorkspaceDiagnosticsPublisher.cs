@@ -4,7 +4,6 @@ using GSCode.Core.Paths;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
 
 namespace GSCode.Server.Handlers;

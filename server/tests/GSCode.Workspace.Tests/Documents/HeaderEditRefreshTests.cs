@@ -1,4 +1,3 @@
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Parser;

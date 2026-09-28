@@ -1,5 +1,4 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;

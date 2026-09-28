@@ -1,7 +1,6 @@
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
-using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;

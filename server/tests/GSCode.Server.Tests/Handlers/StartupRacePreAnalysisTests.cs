@@ -1,5 +1,4 @@
 using GSCode.Core;
-using GSCode.Core.Text;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;

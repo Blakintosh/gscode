@@ -5,7 +5,6 @@ using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
-using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;
 using Xunit;

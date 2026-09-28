@@ -1,4 +1,3 @@
-using System.Linq;
 using GSCode.Core;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;

@@ -1,5 +1,4 @@
 using GSCode.Core;
-using GSCode.Parser;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;

@@ -7,7 +7,6 @@ using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;

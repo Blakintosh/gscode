@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;

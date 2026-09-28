@@ -7,7 +7,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Typing;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;

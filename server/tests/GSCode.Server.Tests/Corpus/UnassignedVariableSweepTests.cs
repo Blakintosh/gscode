@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using Xunit;

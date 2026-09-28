@@ -22,10 +22,8 @@ public static class ServerBuildIdentity
     /// game, so restoring one game's records into another's session is wrong in a way nothing
     /// downstream can detect — the records look entirely valid and simply describe another language.
     ///
-    /// A game change did already invalidate before this was explicit, but only as a SIDE EFFECT of
-    /// each game bundling differently-named data files. That is not a property worth resting on:
-    /// MW2 ships no data at all, so its material was the assembly MVIDs alone, and a second
-    /// data-less game added later would have shared an identity with it exactly.
+    /// Explicit rather than left to each game's bundled data files differing: MW2 ships no data at all,
+    /// so its material would be the assembly MVIDs alone, shared exactly by any other data-less game.
     /// </param>
     public static string Compute(IEnumerable<string> dataFilePaths, string game)
     {

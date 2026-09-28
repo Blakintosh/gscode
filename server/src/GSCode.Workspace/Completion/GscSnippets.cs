@@ -116,12 +116,10 @@ public static class GscSnippets
             "#include",
             InsideFunction: false),
 
-        // The client contributed this one until it became the last snippet file that broke the rule
-        // the other move established: #precache is BO3's alone (HasPrecacheDirective), and a
-        // contributed snippet cannot be withdrawn per game, so a CoD4 file was offered a directive
-        // its game does not have. The body is the same one DirectiveSnippet writes for a typed '#',
-        // and Retrigger hands the asset type to the same completion arm — so the two routes to a
-        // #precache produce identical text and identical vocabulary.
+        // Here rather than in the client's contributed snippets because #precache is BO3's alone
+        // (HasPrecacheDirective), and a contributed snippet cannot be withdrawn per game. The body is
+        // the same one DirectiveSnippet writes for a typed '#', and Retrigger hands the asset type to
+        // the same completion arm, so both routes to a #precache produce identical text.
         new Entry(
             "precache",
             "#precache( \"$1\", \"${2:asset}\" );",

@@ -99,10 +99,8 @@ public sealed partial class CompletionEngine
                 break;
             }
 
-            // #include is the merge dialects' import and takes the same script path as #using —
-            // it was simply missing here, so the whole Infinity Ward line got no path completion on
-            // the one directive it actually writes. It is not an #insert: a header is a Treyarch
-            // thing, and those dialects have none.
+            // #include is the merge dialects' import and takes the same script path as #using. It is
+            // not an #insert: a header is a Treyarch thing, and those dialects have none.
             if ( kind == TokenKind.UsingDirective || kind == TokenKind.InsertDirective
                 || kind == TokenKind.IncludeDirective )
             {
@@ -347,8 +345,8 @@ public sealed partial class CompletionEngine
             }
         }
 
-        // Typing `cScene::` used to return nothing at all: the qualifier is not a namespace, so the
-        // namespace query found none of its 59 methods.
+        // `cScene::` names a class, not a namespace, so the namespace query alone finds none of its
+        // methods.
         foreach ( ClassMethod method in MethodResolution.MethodsOf(store, contextId, ns, result.Extraction.Classes) )
         {
             if ( seen.Add(method.Method.KeyName) )
@@ -378,8 +376,7 @@ public sealed partial class CompletionEngine
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        // The files at that path, from the relative-path index — the normalization it keys on is
-        // the one this used to apply to every record in the store to find them.
+        // The files at that path, from the relative-path index, keyed on the same normalization.
         foreach ( ScriptRecord record in DatabaseQueries.RecordsAt(store, [normalizedWritten]) )
         {
             if ( !ScriptDatabase.CanSee(contextId, record.ContextId) )
@@ -641,11 +638,10 @@ public sealed partial class CompletionEngine
     /// The names bound INSIDE this function: its parameters, then the locals assigned above the
     /// cursor.
     ///
-    /// These were never offered at all. Nothing in the workspace lists is per-function, so the one
-    /// category of name a script writes most — the variable three lines up — was the one category
-    /// completion could not produce, and the editor's own word-based suggestions were what filled
-    /// the gap until the server's lists (a median of 1,168 entries in statement scope) began
-    /// out-scoring them.
+    /// Nothing in the workspace lists is per-function, so without this the one category of name a script
+    /// writes most — the variable three lines up — is the one completion cannot produce, and the
+    /// server's lists (a median of 1,168 entries in statement scope) out-score the editor's own word
+    /// suggestions that would otherwise fill the gap.
     ///
     /// A local's introduction is an ASSIGNMENT, since GSC has no declaration form: the same
     /// definition <see cref="LocalDefinition"/> resolves go-to-definition against, so the two
@@ -874,13 +870,10 @@ public sealed partial class CompletionEngine
                 keyword, CompletionKind.Keyword, "", KeywordInsertText(keyword, callSuffix), documentation));
         }
 
-        // Everything below used to be behind a `!insideFunction` return, so file scope was a static
-        // word list and no workspace data reached it at all: the macros a header supplies, the
-        // file's own functions, its classes. None of those is a per-CURSOR fact — the macro table
-        // is built per parse from this file plus the headers it #inserts, and a function is in
-        // scope for the file, not for a body — so the return was hiding categories that had no
-        // reason to be hidden, and the two scopes now differ only where a name is BOUND
-        // differently.
+        // Everything below applies at file scope too. The macros a header supplies, the file's own
+        // functions and its classes are not per-CURSOR facts — the macro table is built per parse
+        // from this file plus the headers it #inserts, and a function is in scope for the file, not
+        // for a body — so the two scopes differ only where a name is BOUND differently.
         LanguageStore store = _database.StoreFor(result.Language);
 
         // The class this cursor is inside, read from the live extraction's ranges rather than the
@@ -936,16 +929,13 @@ public sealed partial class CompletionEngine
         //
         // The table is built per parse, from the root file and the headers it #inserts — that is
         // already the answer to "what can this file expand", so the file each definition came from
-        // does not narrow it. Filtering to `SourceFile is null` kept only the root file's own,
-        // which threw away the ones a header exists to supply: a script whose constants all live
-        // in a shared .gsh got none of them, which is the normal arrangement rather than an
-        // unusual one.
-        //
+        // does not narrow it. Filtering to `SourceFile is null` would keep only the root file's own
+        // and throw away the ones a header exists to supply: a script whose constants all live in a
+        // shared .gsh would get none of them, and that is the normal arrangement.
         // Gated on the dialect, like every other category here. The preprocessor records a #define
         // whatever game is active, but only BO3 HAS one: in the IW line the single #define in the
         // corpus is a commented-out block of C in _hud.gsc, and completing its name would offer an
-        // expansion the engine will never perform. This was already true in a body — the gate is
-        // not a consequence of file scope reaching the loop, only of the loop being read again.
+        // expansion the engine will never perform.
         if ( game.HasMacros )
         {
             foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )

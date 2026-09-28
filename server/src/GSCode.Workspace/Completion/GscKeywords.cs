@@ -157,10 +157,8 @@ public static class GscKeywords
         // declares the tree at file scope and #animtree names it in a UseAnimTree call, and both
         // appear in every one of the five corpora.
         //
-        // This used to be a blanket "any directive exists everywhere", with a comment listing
-        // #define and the #if family among them. It is where CoD4 came to be offered a preprocessor
-        // it does not have — the same failure as the contributed #precache snippet, one layer down,
-        // and the reason each directive above now names the flag it depends on.
+        // Every other directive names the flag it depends on: a blanket "any directive exists
+        // everywhere" offered CoD4 a preprocessor it does not have.
         if ( keyword.StartsWith('#') )
         {
             return true;

@@ -262,9 +262,7 @@ public sealed class SignatureEngine
         }
 
         // Shared with the parameter-name inlay hints, which ask the same question about the same
-        // call and used to answer it with a second copy of this — one that had never been given
-        // the merge-dialect half, and was silent on every cross-file call on four of the five games.
-        // See CallResolution for the split and why it exists.
+        // call. See CallResolution for the split and why it exists.
         //
         // A function found by namespace carries no owner class — only a method lookup sets one — so
         // nothing is lost by taking the symbol rather than the ResolvedFunction here.

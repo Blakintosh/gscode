@@ -18,26 +18,11 @@ public static class CacheSchema
 
     /// <summary>Bumped when the ScriptRecord blob serialization changes.</summary>
     /// <remarks>
-    /// 3: SymbolKey gained OwnerClass. A version-2 blob deserializes every method key with a null
-    /// owner, which reads as a plain function rather than as anything obviously wrong — so this had
-    /// to move even though the shape is additive.
-    /// 4: extraction started WRITING OwnerClass, and FunctionSymbol/ClassSymbol gained
-    /// OwnerClassKeyName and Constructor/Destructor. A version-3 blob predates every method key.
-    /// 5: ReferenceEntry gained FromMacro, and the ReferenceKind that used to carry that fact was
-    /// removed. Additive on the wire and therefore the dangerous kind: a version-4 blob deserializes
-    /// with FromMacro false everywhere, so every reference a macro expanded would read as ordinary
-    /// text written in the file — putting go-to-definition and hover on the macro's callee instead
-    /// of the macro, at a range that spells the macro's name.
-    /// 6: gzipped JSON replaced by the binary layout in <see cref="RecordSerializer"/>. Nothing in a
-    /// version-5 blob is readable by it.
-    /// 7: ScriptRecord gained FieldBindings, and ReferenceKind gained FieldWrite in the MIDDLE of
-    /// the enum. The second half is why this is not merely additive: the kind goes on the wire as
-    /// its ordinal, so every kind after FieldAccess shifted by one and a version-6 blob would
-    /// deserialize each of its macro uses as a literal and each literal as the next kind along.
-    /// 8: ReferenceKind gained FieldUpdate, again in the middle, so a format-7 blob reads every
-    /// kind after it shifted by one. Splitting the compound assignments out of FieldWrite is what
-    /// lets go-to-implementation mean "what the field IS" while go-to-definition keeps meaning
-    /// "everywhere it is set".
+    /// Bump for ANY change to what a blob means, additive ones included, because an older blob still
+    /// reads cleanly and describes the wrong thing. A field added without a bump deserializes as its
+    /// default everywhere — a null OwnerClass reads as a plain function, a false FromMacro as text
+    /// written in the file — and a ReferenceKind inserted mid-enum shifts every later ordinal on the
+    /// wire, so each of an old blob's kinds reads as its neighbour.
     /// </remarks>
     public const int RecordFormatVersion = 8;
 

@@ -29,12 +29,9 @@ public sealed class SqliteCache : IAsyncDisposable
     private SqliteCache(SqliteConnection connection)
     {
         _connection = connection;
-        // Unbounded, deliberately — see Enqueue for why a bound here meant losing writes. NOT marked
-        // SingleReader even though there is one: that was once required, because WaitForIdleAsync
-        // read this channel's Count and the single-reader unbounded channel cannot report it. It no
-        // longer reads Count — idleness is one counter of outstanding commands now — so the option
-        // is merely unused rather than unavailable. Turning it on is a throughput change with no
-        // measurement behind it, which is its own commit.
+        // Unbounded, deliberately — see Enqueue for why a bound here loses writes. Not marked
+        // SingleReader although there is one reader: turning it on is a throughput change with no
+        // measurement behind it.
         _writes = Channel.CreateUnbounded<WriteCommand>();
         _writerLoop = Task.Run(ProcessWritesAsync);
     }
@@ -58,11 +55,9 @@ public sealed class SqliteCache : IAsyncDisposable
     /// it. Call after <see cref="DisposeAsync"/>, so the writer has drained and the handles are
     /// released.
     ///
-    /// Scoped to a single file on purpose. The client used to do this by recursively deleting the
-    /// whole `gscode/cache` directory, which threw away every other workspace's cache as a side
-    /// effect of reindexing one — and computed that directory from `process.env.APPDATA`, which
-    /// yields a RELATIVE path when the variable is set but empty, pointing a recursive force
-    /// delete at whatever the extension host's working directory happened to be.
+    /// Scoped to a single file on purpose: deleting the whole `gscode/cache` directory throws away every
+    /// other workspace's cache, and a directory computed from an empty `APPDATA` is RELATIVE, pointing
+    /// a recursive force delete at whatever the extension host's working directory happens to be.
     /// </summary>
     /// <returns>True when a database file was found and removed.</returns>
     public static bool DeleteDatabase(string databasePath)
@@ -154,14 +149,11 @@ public sealed class SqliteCache : IAsyncDisposable
     /// <summary>
     /// Reads every cached entry (warm-restore input) WITHOUT deserializing any of them.
     ///
-    /// This used to return finished records, which made it the whole cost of a warm start: one
-    /// thread inflating and reading records over every file's references and diagnostics, run to
-    /// completion before <c>IndexAsync</c> was called at all. Measured back to back in one process,
-    /// uninstrumented, that restore against a cold index of the same tree: bo3 1,509 ms against
-    /// 390 ms, cod4 720 against 236, bo1 2,747 against 718. The analysis the cache exists to avoid
-    /// runs at <c>ProcessorCount - 1</c>, so a serial restore made the cache four times slower than
-    /// the work it saved. Nothing had ever measured it, because the server calls this as an
-    /// ARGUMENT to <c>UseCache</c> — outside the stopwatch that times indexing.
+    /// Deserializing here would make this the whole cost of a warm start: one thread inflating every
+    /// record before indexing starts, outside the stopwatch that times indexing (the server calls this
+    /// as an ARGUMENT to <c>UseCache</c>). Measured against a cold index of the same tree: bo3 1,509 ms
+    /// against 390, cod4 720 against 236, bo1 2,747 against 718 — a serial restore four times slower
+    /// than the <c>ProcessorCount - 1</c> analysis it exists to avoid.
     ///
     /// What is left here is the part that has to be serial: <see cref="SqliteDataReader"/> is not
     /// thread-safe and a blob is only valid until the next <c>Read</c>. That part is cheap, because
@@ -212,18 +204,13 @@ public sealed class SqliteCache : IAsyncDisposable
     /// Serializes a record and queues it to persist. Never blocks the caller on disk, and never
     /// refuses a write because the writer is behind.
     ///
-    /// The channel used to be bounded at 4,096 and fed with <c>TryWrite</c>, and the writer did the
-    /// serializing — one record at a time on one thread — while every indexing thread
-    /// produced records. On a stock corpus the backlog never reached the bound. At 50,000 files it
-    /// refused 40,889 of them (see PERF.md's scale section), and the next start re-analysed four
-    /// files in five while reporting itself warm.
-    ///
-    /// Two changes, each needed. The serializing now happens HERE, on the enqueuing thread, so it
-    /// runs across every indexing core instead of one and the writer is left with the SQL alone —
-    /// which is what makes the backlog small. And the channel is unbounded, so a backlog that does
-    /// build (a slow disk, an antivirus scan of the database) costs memory rather than data. What it
-    /// can hold is bounded anyway: the compressed blobs of the workspace, about 7 KB a file, and only
-    /// until the writer reaches them.
+    /// The serializing happens HERE, on the enqueuing thread, so it runs across every indexing core and
+    /// leaves the writer only the SQL — which keeps the backlog small. And the channel is unbounded,
+    /// so a backlog that does build (a slow disk, an antivirus scan of the database) costs memory rather
+    /// than data: bounded at 4,096 and fed with <c>TryWrite</c>, it refused 40,889 writes at 50,000
+    /// files (PERF.md, the scale section) and the next start re-analysed four files in five while
+    /// reporting itself warm. What it holds is bounded anyway — the compressed blobs, about 7 KB a
+    /// file, only until the writer reaches them.
     ///
     /// Dirty records are skipped before paying for a serialize — unsaved editor state is never
     /// persisted.
@@ -257,8 +244,8 @@ public sealed class SqliteCache : IAsyncDisposable
     /// the reader.
     ///
     /// The order is the whole point. <see cref="_pending"/> is incremented first, so there is no
-    /// instant in which a command is readable but uncounted — which is exactly the instant the old
-    /// idle test could observe. If the channel refuses the write (only possible once
+    /// instant in which a command is readable but uncounted, the instant an idle test could observe.
+    /// If the channel refuses the write (only possible once
     /// <see cref="DisposeAsync"/> has closed it) the count is given back, because nothing will ever
     /// process it.
     /// </summary>
@@ -277,25 +264,20 @@ public sealed class SqliteCache : IAsyncDisposable
     /// Completes once the writer has nothing left to do.
     ///
     /// The caller that wants this is the post-index settle step. Indexing hands thousands of blobs to
-    /// a single writer, so the writer can still be going after IndexAsync returns — and compacting the heap while it works measures a moment that is about to
-    /// be undone, which is exactly the "memory drops then climbs again" the server used to report.
+    /// a single writer, so the writer can still be going after IndexAsync returns — and compacting the
+    /// heap while it works measures a moment that is about to be undone.
     ///
     /// Polling rather than a signal, deliberately: this is called once per index by one caller that
     /// is already waiting, so a signal would buy nothing it can use.
     ///
     /// What it polls is ONE counter of outstanding commands, incremented before a command reaches
-    /// the channel and decremented only after its transaction has committed. It used to be the
-    /// channel's own Count plus a flag the writer raised, and that pair had a hole in it: the writer
-    /// takes a command OFF the channel — dropping Count to zero — and only then raises the flag, so
-    /// for that instant the queue looked empty and nothing looked busy. A poll landing there
-    /// returned "idle" with a write still in flight, and the caller read a database one commit
-    /// behind. `CacheRowPruningTests` caught it at roughly one run in seven, and only when other
-    /// tests were loading the thread pool enough to widen the gap.
+    /// the channel and decremented only after its transaction has committed. The channel's Count plus
+    /// a writer flag would have a hole: the writer takes a command OFF the channel — Count drops to
+    /// zero — before raising the flag, so a poll landing there returns idle with a write in flight
+    /// (`CacheRowPruningTests` caught that at about one run in seven, under a loaded thread pool).
     ///
-    /// The counter is mutated by every producer, which the previous comment here rejected on hot-path
-    /// grounds. That cost is one `Interlocked.Increment` beside the channel's own bookkeeping in
-    /// `TryWrite`, which is already interlocked — the same order of cost, on a path that then
-    /// serializes and compresses a record.
+    /// Every producer mutates the counter: one `Interlocked.Increment` beside `TryWrite`'s own
+    /// interlocked bookkeeping, on a path that then serializes and compresses a record.
     /// </summary>
     public async Task WaitForIdleAsync(CancellationToken cancellationToken)
     {
@@ -338,11 +320,9 @@ public sealed class SqliteCache : IAsyncDisposable
             catch ( Exception exception ) when ( exception is not OutOfMemoryException )
             {
                 // A failed cache write must never take the server down; the file will simply be
-                // re-analysed next cold start. Not just SqliteException: a bug in
-                // RecordSerializer.Serialize, or anything else ApplyBatch can throw, used to fault
-                // this whole loop permanently — the `await foreach` exits, nothing drains the
-                // channel again for the rest of the session, and every later write silently piles
-                // up as a dropped write. One bad batch degraded the entire run's cache.
+                // re-analysed next cold start. Any exception, not just SqliteException: one escaping
+                // would end the `await foreach`, nothing would drain the channel again, and every
+                // later write would pile up dropped for the rest of the session.
             }
             finally
             {
@@ -488,10 +468,9 @@ public sealed class SqliteCache : IAsyncDisposable
 
         try
         {
-            // The writer loop no longer faults on an ordinary write failure, but awaiting it is
-            // still the one place a truly unexpected exception (a cancellation, an OOM) could
-            // surface — and even then the checkpoint and the connection dispose below must still
-            // run, or a crash here leaks the connection on every shutdown that hits it.
+            // Awaiting the writer is the one place a truly unexpected exception (a cancellation, an
+            // OOM) could surface, and the checkpoint and connection dispose below must still run, or
+            // a crash here leaks the connection on every shutdown that hits it.
             await _writerLoop.ConfigureAwait(false);
         }
         finally

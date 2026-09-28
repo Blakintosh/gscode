@@ -15,12 +15,10 @@ namespace GSCode.Workspace.Cache;
 /// <summary>
 /// Serializes a ScriptRecord to a compact binary blob and back.
 ///
-/// This was gzipped JSON until the scale sweep showed what it cost. Restoring a record — inflate,
-/// then a JSON parse of every reference, range and diagnostic — measured 12.5 s of thread-time over
-/// bo3's 1,085 files, against 7.9 s to lex, preprocess, parse, extract and commit the same files
-/// from source. A warm start therefore could not beat a cold one on any machine with enough cores,
-/// and at 50,000 files it stood at twice its budget. Gzip was never the cost (PERF.md measured the
-/// uncompressed JSON as no faster); the text format was.
+/// Binary rather than text: restoring gzipped JSON — a parse of every reference, range and
+/// diagnostic — cost 12.5 s of thread-time over bo3's 1,085 files, against 7.9 s to lex, preprocess,
+/// parse, extract and commit the same files from source, so a warm start could not beat a cold one.
+/// Gzip was not the cost (PERF.md measured uncompressed JSON as no faster); the text format was.
 ///
 /// The layout is the record's fields in declaration order, with no field names:
 /// <list type="bullet">

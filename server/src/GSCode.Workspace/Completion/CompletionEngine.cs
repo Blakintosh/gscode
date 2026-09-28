@@ -92,10 +92,9 @@ public sealed partial class CompletionEngine
         // answers "what did the user just type" but not "is this construct legal here". The
         // directive family is top level ONLY, so inside a function body the backward scan finds a
         // '#' and confidently offers #using, #insert and #namespace in the middle of a call.
-        // The enclosing declaration itself, not just whether there is one. It answers three
-        // questions that used to be asked separately and walked the same ranges each time: which
-        // keyword set is legal, whether `vararg` binds, and — the reason it is carried rather than
-        // reduced to a bool — WHICH parameters and locals are in scope.
+        // The enclosing declaration itself, not just whether there is one. One walk answers three
+        // questions: which keyword set is legal, whether `vararg` binds, and — the reason it is
+        // carried rather than reduced to a bool — WHICH parameters and locals are in scope.
         FunctionSymbol? enclosingFunction = EnclosingFunction(result, position);
         bool insideFunction = enclosingFunction is not null;
 

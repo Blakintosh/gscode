@@ -412,6 +412,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   is callable is what was put in it, and `level thread [[ level.callback ]]()` is how a script
   spells the indirect call whose target the hierarchy exists to trace. Only prepare knows about
   fields - an item is a function either way.
+- An incoming caller's item is keyed through `GameProfile.KeyNamespace`, because expanding it asks
+  for references to that key. On a merge dialect the declared namespace is the file stem, which no
+  call is keyed under, so a caller keyed on it expanded to nothing (`CallHierarchyDialectTests`).
 - Incoming and outgoing resolve their item through `ResolveForQuery`, so a caller or callee in a
   file the user does not have open still answers, and they read the item's own `DocumentUri` rather
   than round-tripping it through `new Uri(string)` — which throws `UriFormatException` on input

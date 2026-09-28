@@ -239,10 +239,11 @@ internal sealed class StartupIndexRunner
                     // file the user is looking at stale: a tab restored with the window is opened
                     // during initialize, before this point, so its didOpen linted it against a
                     // half-built index and the lints gated on HasCompletedIndex
-                    // (5013/5014/5025/5026) stayed silent. The world moved under every open document
-                    // and none of them owns the event, so all of them are dependents — a lint pass
-                    // each, not a re-parse. Schedule("") means "no single caller", which is why the
-                    // verbose log reads "after an on-disk change" though nothing on disk moved.
+                    // (5013/5014/5025/5026) stayed silent. The world moved under every open
+                    // document and none of them owns the event, so all of them are dependents — a
+                    // lint pass each, not a re-parse. Schedule() with no origin means "no single
+                    // caller", which is why the verbose log reads "after an on-disk change" though
+                    // nothing on disk moved.
                     services.GetRequiredService<DependentDiagnosticsRefresher>().Schedule();
 
                     // Sampled before the monitor starts, so the number reflects the state

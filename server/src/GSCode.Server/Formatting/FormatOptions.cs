@@ -79,12 +79,6 @@ public readonly record struct FormatOptions(
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false);
 
-    /// <summary>One level of indentation as text.</summary>
-    public string IndentUnit
-    {
-        get { return UseTabs ? "\t" : new string(' ', Math.Max(1, IndentWidth)); }
-    }
-
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
     /// per request, plus the GSC knobs from configuration.

@@ -40,19 +40,18 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/TextSyncHandler.cs
 
 - Incremental text sync. didOpen → scheduled onto the thread pool (`Task.Run`, no delay — a file
-  opens once, so nothing needs coalescing, only getting off the LSP handler thread: a window's
-  worth of restored tabs used to run their analyses back to back on it); didChange → ~250 ms
-  debounced re-analysis with per-document cancellation (superseded runs are cancelled, silently);
-  didSave → immediate (bypasses debounce); didClose → clears diagnostics. `AnalysisGate` makes
-  both scheduled paths single-flight per document: a second trigger while one is still running
-  queues a rerun instead of starting a concurrent second analysis. Publishes diagnostics stamped
-  with the WINNING analysis's version (`DocumentStore.AnalyzeSnapshot`), not whatever
-  `document.Version` has become by publish time — the two can differ when two analyses of one
-  document race. Before publishing, it merges the parse diagnostics with the cross-file lints —
-  all of them, via `DocumentLinter` — for GSC/CSC docs, and logs a Warning when one analysis takes
-  at or past the debounce, since that is the file a slow-typing complaint would be about.
-  `gscode/gameMismatch` (once per session) goes through `ConnectionSettleGate` rather than
-  straight to the client.
+  opens once, so nothing needs coalescing, only getting off the LSP handler thread, where a window's
+  worth of restored tabs would run their analyses back to back); didChange → ~250 ms debounced
+  re-analysis with per-document cancellation (superseded runs are cancelled, silently); didSave →
+  immediate (bypasses debounce); didClose → clears diagnostics. `AnalysisGate` makes both scheduled
+  paths single-flight per document: a second trigger while one is still running queues a rerun
+  instead of starting a concurrent second analysis. Publishes diagnostics stamped with the WINNING
+  analysis's version (`DocumentStore.AnalyzeSnapshot`), not whatever `document.Version` has become
+  by publish time — the two can differ when two analyses of one document race. Before publishing, it
+  merges the parse diagnostics with the cross-file lints — all of them, via `DocumentLinter` — for
+  GSC/CSC docs, and logs a Warning when one analysis takes at or past the debounce, since that is
+  the file a slow-typing complaint would be about. `gscode/gameMismatch` (once per session) goes
+  through `ConnectionSettleGate` rather than straight to the client.
 
 ## Handlers/DocumentLinter.cs
 
@@ -110,12 +109,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - The coalescing lives in `ProgressThrottle`, which is interlocked rather than a `Stopwatch` and a
   comparison: `Progressed` is called from inside the indexer's `Parallel.ForEachAsync` on every
   worker thread, a `Stopwatch` is not thread-safe, and check-then-`Restart` is not atomic, so
-  several workers used to pass the gate together. It also refuses a count LOWER than the last one
-  sent — a parallel walk reports out of order, and the status-bar counter visibly ran backwards. `SendNothingBefore` is handed
-  `ConnectionSettleGate.Settled` rather than starting its own timer. `Failed(reason)` is the other
-  notification that may not be dropped: it sends `gscode/indexingFailed` (not a fabricated
-  `indexingComplete`, which would read as success) when the startup pass throws instead of
-  finishing, so the status-bar spinner does not run for the rest of the session.
+  several workers would pass the gate together. It also refuses a count LOWER than the last one
+  sent, since a parallel walk reports out of order and the status-bar counter would run backwards.
+  `SendNothingBefore` is handed `ConnectionSettleGate.Settled` rather than starting its own timer.
+  `Failed(reason)` is the other notification that may not be dropped: it sends
+  `gscode/indexingFailed` (not a fabricated `indexingComplete`, which would read as success) when
+  the startup pass throws instead of finishing, so the status-bar spinner does not run for the rest
+  of the session.
 
 ## Handlers/WatchedFilesHandler.cs
 
@@ -135,41 +135,40 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `SymbolQueryContext` + `ResolveForQuery(uri, cancellationToken)` — the same thing WITHOUT a parse,
   answering from the file's record when it is not open. For the hierarchies: expanding an incoming
   call or a supertype names another file, and that file is normally not one the user has open, so
-  requiring an open document answered those with null — which the protocol reads as "there are
+  requiring an open document would answer those with null — which the protocol reads as "there are
   none". A record already states its context id and declared namespaces, so the fallback costs no
   resolver call and no re-parse; nothing a hierarchy asks needs a syntax tree. `FindAllReferences`
   takes either.
-- `IsBuiltinCall` + the builtin arm of `FindAllReferences` — a BUILTIN is not reachable under one key
-  either, for a different reason than a method: it has no declaration, so extraction keys each call
-  site by the scope it was WRITTEN in, and asking under the asking file's own namespace returned only
-  the sites sharing it. Decided here, in the one query every reference-shaped feature runs, so the
-  list and the CodeLens count cannot disagree. It takes BOTH halves: the engine library (a name
+- `IsBuiltinCall` + the builtin arm of `FindAllReferences` — a BUILTIN is not reachable under one
+  key either, for a different reason than a method: it has no declaration, so extraction keys each
+  call site by the scope it was WRITTEN in, and asking under the asking file's own namespace returns
+  only the sites sharing it. Decided here, in the one query every reference-shaped feature runs, so
+  the list and the CodeLens count cannot disagree. It takes BOTH halves: the engine library (a name
   nothing declares may simply be a typo, and widening a typo across namespaces would group unrelated
   mistakes) and "nothing declares this key" (a script may declare a function sharing an engine name,
   and inside that namespace the call means the script's). The `BuiltinApiSet` is optional on the
   constructor — a fixture with no engine data disables this widening only, which is the correct
   answer for a caller that cannot tell a builtin from a typo.
-- Both overloads take a `CancellationToken`, and it is REQUIRED rather than defaulted. `ResolveFresh`
-  runs a full lex, preprocess, parse and extract on the request thread, and every caller of it is a
-  read path with no debounce in front of it, so a request the client had already cancelled used to
-  be analysed to the end anyway. `Resolve` takes one too so a handler cannot silently pick the
-  uncancellable overload when it meant the freshening one.
-- `ResolveHit(target, position)` — the one entry point for `SymbolAtPosition.Resolve`, which every
+- Both overloads take a `CancellationToken`, and it is REQUIRED rather than defaulted.
+  `ResolveFresh` runs a full lex, preprocess, parse and extract on the request thread, and every
+  caller of it is a read path with no debounce in front of it, so without it a request the client
+  had already cancelled would be analysed to the end anyway. `Resolve` takes one too so a handler
+  cannot silently pick the uncancellable overload when it meant the freshening one.
+- `ResolveHit(target, position)` — the one entry point for `SymbolAtPosition.Resolve`, for every
   position-based handler (hover, definition, references, rename, prepare-rename, highlight, both
-  hierarchies, and `BuiltinAtHandler`) used to call directly: nine copies of one line. A hit's
-  fallthrough on failure — `LocalOccurrencesAt`, since the reference index knows nothing about a
-  local — stays written out per handler, because what each one does with a local differs too much
-  per feature to be worth unifying (a single range, a location list honouring `includeDeclaration`,
-  Read/Write highlight kinds, rename edits).
+  hierarchies, and `BuiltinAtHandler`). A hit's fallthrough on failure — `LocalOccurrencesAt`, since
+  the reference index knows nothing about a local — stays written out per handler, because what each
+  one does with a local differs too much per feature to be worth unifying (a single range, a
+  location list honouring `includeDeclaration`, Read/Write highlight kinds, rename edits).
 - `ResolveDirectivePath(target, path)` — the file a `#using`/`#include` names, with the extension
-  taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same
-  question; with a copy each, a new directive form had to be found twice.
+  taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same question,
+  so a new directive form is taught here once.
 - `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
   number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
   does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers
   what it reaches. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
-  copies of a script, so counts there merged both game modes' callers until it did. Matches on the
-  whole key, namespace included, or a file's own unrelated same-named function would claim the lens.
+  copies of a script, so without it a count merges both game modes' callers. Matches on the whole
+  key, namespace included, or a file's own unrelated same-named function would claim the lens.
 - When `DeclaringFile` names one file, the query is `DatabaseQueries.FindReferencesReaching` — the
   files that can reach it, not every file mentioning the key — and only an unnarrowed key collects
   everything and scopes afterwards. Same answer (`ReferenceScopeCorpusTests`); on a merge dialect,
@@ -250,12 +249,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   because it cannot tell an inherited one from a local; the graph settles it here, where the whole
   workspace is available. A name no ancestor declares is a local after all, and answering `None`
   sends it down the local path exactly as before.
-- That check is the ONLY resolution a member needs. A cursor-time lookup through `MembersOf` sat
-  beside it for one commit, from before the candidates were indexed; once they were, no input could
-  reach it - a class with an unseen ancestor records every bare name, and one whose chain is
-  in-file has every ancestor's members already - so it ran a hierarchy walk per unresolved
-  identifier and returned nothing. Deleted, with its private `EnclosingClassAt`, which was itself a
-  second spelling of `CallResolution.EnclosingClassAt`.
+- That check is the ONLY resolution a member needs. A cursor-time lookup through `MembersOf` would
+  reach no input: a class with an unseen ancestor records every bare name, and one whose chain is
+  in-file has every ancestor's members already.
 - The walk is bounded by the hierarchy - three classes at BO3's deepest - not by the workspace.
 
 ## Handlers/FieldTargets.cs
@@ -333,10 +329,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `ResolveData` carries `builtin` alongside the name and namespace, because a name can be BOTH an
   engine function and a script one and they are separate rows. Documentation is fetched by a second
-  request holding only that blob, so a row that did not say which it was got whichever the NAME
-  resolved to — BO3's builtin `SpawnSpectator` row rendered `globallogic_spawn::spawnSpectator`
-  under a header reading "builtin". Every value there is a STRING, a contract the tests pin after a
-  serializer-casing bug broke the code-lens click.
+  request holding only that blob, so a row that did not say which it was would get whichever the
+  NAME resolved to — BO3's builtin `SpawnSpectator` row would render
+  `globallogic_spawn::spawnSpectator` under a header reading "builtin". Every value there is a
+  STRING, a contract the tests pin, since a serializer's casing can otherwise rename a key.
 - Maps `CompletionEngine` entries to LSP items (kind, snippet insert text). Registers the
   trigger characters `. : # & % \ / "` so completion re-fires where it matters (the `"` fires
   literal completion inside a string). Passes the completion.literals setting through to the engine.
@@ -415,14 +411,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - An incoming caller's item is keyed the way its own callers' references are indexed, because
   expanding it asks for references to that key: a method by its owner class, a function through
   `GameProfile.KeyNamespace`. On a merge dialect the declared namespace is the file stem, which no
-  call is keyed under, so a caller keyed on it expanded to nothing (`CallHierarchyDialectTests`).
+  call is keyed under, so a caller keyed on it would expand to nothing
+  (`CallHierarchyDialectTests`).
 - Methods, end to end (`CallHierarchyMethodTests`). An item's `Data` carries the key's owner class
   as well as its namespace and name, since the item round-trips through the client and a method
-  that came back as a free function of the same name matched no call. The containing function of
-  a call site is `EnclosingFunction.At`, which finds methods; the old top-level-only walk named the
-  FILE as the caller of anything called from a method. Outgoing takes `MethodCall` (the arrow form)
-  as well as `Call`, and resolves a method key through `MethodResolution` rather than the function
-  lookup, which knows nothing of classes.
+  coming back as a free function of the same name would match no call. The containing function of a
+  call site is `EnclosingFunction.At`, which finds methods; a top-level-only walk names the FILE as
+  the caller of anything called from a method. Outgoing takes `MethodCall` (the arrow form) as well
+  as `Call`, and resolves a method key through `MethodResolution` rather than the function lookup,
+  which knows nothing of classes.
 - Incoming and outgoing resolve their item through `ResolveForQuery`, so a caller or callee in a
   file the user does not have open still answers, and they read the item's own `DocumentUri` rather
   than round-tripping it through `new Uri(string)` — which throws `UriFormatException` on input
@@ -524,20 +521,19 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/CodeActionHandler.cs
 
-- `RequestLints` — the document's lint pass, run at most once per request and only if something
-  asks for it. `DiagnosticsForFixes` wants what lands on the request's LINE and
-  `AllUnusedImportDiagnostics` wants the unused imports in the WHOLE document; both used to call
-  `DocumentLinter.Analyze` themselves, so an invoked "Quick Fix..." with nothing in
-  `Context.Diagnostics` ran twenty-six cross-file rules and a whole-file flow pass twice over one
-  unchanged document. Lazy, because an AUTOMATIC request (the lightbulb poll, on every cursor
-  move) returns before either consumer runs and must keep costing nothing. Per request and
-  dropped with it, the same lifetime rule `CallFixContext` states for itself.
+- `RequestLints` — the document's lint pass, run at most once per request and only if something asks
+  for it. `DiagnosticsForFixes` wants what lands on the request's LINE and
+  `AllUnusedImportDiagnostics` wants the unused imports in the WHOLE document; both need the same
+  `DocumentLinter.Analyze` over one unchanged document, so it runs once. Lazy, because an AUTOMATIC
+  request (the lightbulb poll, on every cursor move) returns before either consumer runs and must
+  keep costing nothing. Per request and dropped with it, the same lifetime rule `CallFixContext`
+  states for itself.
 - `CallFixContext` — the per-REQUEST state both call fixes share: the name→declarations lookup
   (cached even when it finds NOTHING, which is the common case here), the existing `#using` set, the
   included-path list and both insertion points. A request carries every diagnostic overlapping the
-  selection, so each of those was being recomputed per diagnostic — twenty unresolved calls meant
-  twenty full store scans and forty directive walks for identical answers. Built per request and
-  dropped with it, so it cannot go stale against an edited buffer.
+  selection, so computed per diagnostic, twenty unresolved calls would mean twenty store scans and
+  forty directive walks for identical answers. Built per request and dropped with it, so it cannot
+  go stale against an edited buffer.
 - `MissingIncludeFixes` answers 5026 with one "Add #include" per file that declares the name. No
   "create it here" offer, unlike the 5013/5014 fixes: there the name matched nothing and a
   declaration was an honest answer; here the function demonstrably exists and a second copy is a bug.
@@ -556,11 +552,10 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   file top). This is the natural fix for the NamespaceNotImported lint. Resolve is a passthrough.
 - **Every fix carries the diagnostic it answers.** An action with no `diagnostics` is a general
   lightbulb entry: it is never presented as the fix FOR the error, Auto Fix skips it (that runs
-  preferred actions only) and Fix All cannot see it. The add-#using action was produced correctly
-  for a long time and still did nothing when asked for, purely because of this. `FindMissingUsingSites`
-  exists to carry the call's range back out so the action can be matched to the reported 5000 —
-  both come from the same `ReferenceEntry`, which is what makes the match exact rather than
-  positional guesswork.
+  preferred actions only) and Fix All cannot see it. An action produced correctly without it still
+  does nothing when asked for. `FindMissingUsingSites` exists to carry the call's range back out so
+  the action can be matched to the reported 5000 — both come from the same `ReferenceEntry`, which
+  is what makes the match exact rather than positional guesswork.
 - `IsPreferred` is set only where one fix is the answer. Several possible imports means the user
   picks; an empty created declaration is never preferred, since it silences the error without the
   function doing anything.
@@ -593,7 +588,7 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   formatting handlers share. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
-  braces, one statement per line, one `FormatOptions.IndentUnit` per brace/dev-block level (a tab
+  braces, one statement per line, one indent per brace/dev-block level (`AppendIndent`: a tab
   or `tabSize` spaces, from the request's `insertSpaces` — the client defaults all three languages
   to tabs, which is what the corpus does), padded
   control-flow and non-empty parens (`( x )`, `()` stays tight), hugging `.`/`::`/`->`/`[ ]`
@@ -606,14 +601,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Program.cs
 
-Top-level entry point and LIFECYCLE only — composition and startup used to live here too, as
-roughly 900 lines of top-level statements that could not be unit tested at all. Both moved out
-into `Composition/ServerServices.cs` and `Startup/`; what is left is what genuinely has to run at
-the top level: Serilog setup to STDERR (stdout must stay clean for the stdio transport; the
-pipe-transport client shows stderr in the "GSCode Server" output channel), argument parsing,
-connecting the transport, handing everything else to `ServerServices.Configure`, and teardown.
-Returns a non-zero exit code for a bad command line or a transport that never connected, and
-silences CommandLineParser's own `HelpWriter` because it writes to STDOUT, which is the stdio
+Top-level entry point and LIFECYCLE only — composition and startup live in
+`Composition/ServerServices.cs` and `Startup/`, where they can be unit tested. What is here is what
+genuinely has to run at the top level: Serilog setup to STDERR (stdout must stay clean for the stdio
+transport; the pipe-transport client shows stderr in the "GSCode Server" output channel), argument
+parsing, connecting the transport, handing everything else to `ServerServices.Configure`, and
+teardown. Returns a non-zero exit code for a bad command line or a transport that never connected,
+and silences CommandLineParser's own `HelpWriter` because it writes to STDOUT, which is the stdio
 transport's wire.
 
 Waits for exit, cancels and bounded-awaits `IndexingLifetime` BEFORE `CacheHolder.CloseAsync()` (so
@@ -725,26 +719,26 @@ transport owner and flushes logs.
 
 - `IndexingLifetime` — owns the startup indexing task's `CancellationTokenSource` and the task
   itself, so exit and `gscode/clearCache` can both `CancelAndWaitAsync` (bounded) it before
-  `CacheHolder.CloseAsync()` runs. Used to run detached on `CancellationToken.None`, so a server
-  closed mid-index raced its own cache close: in-flight `SqliteCache.Enqueue` calls landed on an
-  already-completing write channel and were silently counted as dropped. One token covers the
-  whole startup task — the index, the full-mode lint sweep, the settle delay, the cache drain and
+  `CacheHolder.CloseAsync()` runs. Run detached on `CancellationToken.None`, a server closed
+  mid-index would race its own cache close: in-flight `SqliteCache.Enqueue` calls would land on an
+  already-completing write channel and be silently counted as dropped. One token covers the whole
+  startup task — the index, the full-mode lint sweep, the settle delay, the cache drain and
   `ServerStatusNotifier` — so a single cancellation reaches all of it.
 
 ## Configuration/ConnectionSettleGate.cs
 
 - `ConnectionSettleGate` — the shared "has the pipe had a moment to settle" clock
   (`Task.Delay(500)`, started lazily on first read). A notification sent inside the
-  initialize/initialized window is silently dropped by the transport; this used to be private to
-  `IndexProgressNotifier`, which is exactly why `gscode/serverReady` and a restored tab's
-  `gscode/gameMismatch` went out unprotected. `SendOnceSettled(Action)` runs a send once settled
-  (or immediately, if already settled) via a continuation rather than an awaited `Task`, so a
-  synchronous LSP handler can use it without becoming async.
-  `RunOnceSettled(Task, Action)` is the same deferral against a clock the caller already holds,
-  which is how `IndexProgressNotifier` defers its two terminal sends — one shape rather than four
-  copies. Not `ExecuteSynchronously`: `Task.Delay` completes on a TIMER thread, and running the
-  send inline there serialised a notification and wrote it to the pipe ahead of every other timer
-  in the process. A failed send is logged rather than becoming an unobserved task exception.
+  initialize/initialized window is silently dropped by the transport; shared, because
+  `gscode/serverReady` and a restored tab's `gscode/gameMismatch` need the protection as much as the
+  indexing notifications do. `SendOnceSettled(Action)` runs a send once settled (or immediately, if
+  already settled) via a continuation rather than an awaited `Task`, so a synchronous LSP handler
+  can use it without becoming async. `RunOnceSettled(Task, Action)` is the same deferral against a
+  clock the caller already holds, which is how `IndexProgressNotifier` defers its two terminal sends
+  — one shape rather than four copies. Not `ExecuteSynchronously`: `Task.Delay` completes on a TIMER
+  thread, and running the send inline there would serialise a notification and write it to the pipe
+  ahead of every other timer in the process. A failed send is logged rather than becoming an
+  unobserved task exception.
 
 ## Formatting/
 
@@ -792,22 +786,22 @@ that chose it. These are the pieces that implement it:
   so it stops enqueueing into a cache about to close) THEN drains the cache and deletes only THIS
   workspace's database, server-side where the paths are known.
 - `DependentDiagnosticsRefresher` — debounced re-linting when the world under a file moves. Two
-  halves. OPEN documents: every other open tab, reusing its cached parse instead of reparsing.
-  Three callers, and the second and third pass no origin because the event belongs to no open
-  document: an edit that changes a file's exported cross-file signature (`TextSyncHandler`), a
-  change arriving on disk behind the editor's back (`WatchedFilesHandler`), and the completion of
-  the initial index (`Program.cs`). The last is not optional — a tab restored with the window is
-  opened during initialize, so its `didOpen` linted it against a half-built index and the codes
-  gated on `HasCompletedIndex` (5013/5014/5025/5026) were silent until it was closed and reopened.
+  halves. OPEN documents: every other open tab, reusing its cached parse instead of reparsing. Three
+  callers, and the second and third pass no origin because the event belongs to no open document: an
+  edit that changes a file's exported cross-file signature (`TextSyncHandler`), a change arriving on
+  disk behind the editor's back (`WatchedFilesHandler`), and the completion of the initial index
+  (`Startup/StartupIndex.cs`). The last is not optional — a tab restored with the window is opened
+  during initialize, so its `didOpen` linted it against a half-built index, and the codes gated on
+  `HasCompletedIndex` (5013/5014/5025/5026) would stay silent until it was closed and reopened.
   CLOSED files, `workspaceIndexingMode: full` only, gated on `ScriptDatabase.HasCompletedLintSweep`:
   `ClosedDependentsOf` names the files `LanguageStore.FilesReferencing` says mention a function the
   ORIGIN declares, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
   costs the files that mention the name, not the workspace. Only fires for a caller-named origin
-  (not the on-disk-change case) and only covers function declarations, not classes — stated gaps.
-  Origins a pass does not finish with are handed BACK when it is cancelled: the set is cleared
-  the moment a pass takes it, so cancellation after that point used to drop them, and nothing
-  else re-lints a closed dependent. Cancellation only — returning them after a FAILURE would
-  reschedule the same failing pass every 900 ms for the rest of the session.
+  (not the on-disk-change case) and only covers top-level function declarations, not classes or
+  methods — stated gaps. Origins a pass does not finish with are handed BACK when it is cancelled:
+  the set is cleared the moment a pass takes it, so cancellation after that point would drop them,
+  and nothing else re-lints a closed dependent. Cancellation only — returning them after a FAILURE
+  would reschedule the same failing pass every 900 ms for the rest of the session.
 - `PrepareRenameHandler` — validates a rename before the UI opens: the symbol's range for anything
   the SCRIPTS define, null for what the ENGINE defines (builtins, engine fields) and for keywords, so
   the editor says "cannot rename here" instead of prompting and then failing. Shares
@@ -819,15 +813,14 @@ that chose it. These are the pieces that implement it:
   only the analysis: a rerun queued before the loop's first check is still serviced.
 - `SupportedGamesHandler` + `GameRoster` — the games a picker may offer, in release order, and the
   one in force. One list with two callers (the picker command, and `gscode/gameMismatch`'s payload),
-  because only the server knows which profiles are `Supported` — the client's own copy had drifted to
-  nine games, four of them cores whose selection the server resolved back to Black Ops III.
+  because only the server knows which profiles are `Supported` — a client-side copy drifts, and one
+  did to nine games, four of them cores whose selection the server resolved back to Black Ops III.
 - `ServerStatusNotifier` — keeps the status-bar tooltip's memory figure current. The megabyte
   divisor is its own constant rather than the reporting threshold reused: the threshold is a tuning
-  knob and the divisor is a unit, and as one constant, raising the threshold would silently have
-  changed what the number MEANT. It was previously
-  set once from the `gscode/indexingComplete` payload and never updated again. Starts immediately
-  when `workspaceIndexingMode: off` (nothing to wait for), or after indexing finishes otherwise, on
-  `IndexingLifetime.Token` rather than `CancellationToken.None` — shutdown now actually stops it.
+  knob and the divisor is a unit, and as one constant, raising the threshold would silently change
+  what the number MEANS. Starts immediately when `workspaceIndexingMode: off` (nothing to wait for),
+  or after indexing finishes otherwise, on `IndexingLifetime.Token` rather than
+  `CancellationToken.None`, so shutdown stops it.
 - `WorkspaceLintSweep` — the `full` mode itself: runs the cross-file lints over every indexed
   GSC/CSC record (`RunFullSweepAsync`, once after the startup index) or a named subset
   (`RelintClosedFilesAsync`, from `DependentDiagnosticsRefresher`), storing the merged result via
@@ -842,8 +835,8 @@ that chose it. These are the pieces that implement it:
 - `Refresh()` sends a file only when its diagnostics differ from what was last sent — it remembers
   the array per path and compares by reference, since a record's diagnostics are replaced wholesale
   whenever they are recomputed (erring toward resending, never toward staleness). It runs after
-  every re-lint of an edit's closed dependents, and used to resend every file with a problem each
-  time. Files no longer reported are still taken back.
+  every re-lint of an edit's closed dependents, where resending every file with a problem would
+  flood the client. Files no longer reported are still taken back.
 
 ## .editorconfig
 

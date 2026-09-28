@@ -23,9 +23,8 @@ output before trusting a green run.
 | `GSCODE_PERF_REPORT` | `Perf` tests | Overrides the directory for generated performance reports. |
 | `GSCODE_SWEEP_REPORT` | corpus sweep tests | Overrides the directory for generated diagnostic-sweep reports. |
 
-Every corpus variable names the game's raw folder **directly**. BO3 was once the exception, found
-through `%TA_TOOLS_PATH%` with `share\raw` appended by the fixture; it now follows the same rule as
-the rest, so there is one way to point a corpus at a game.
+Every corpus variable names the game's raw folder **directly**. BO3 included, so there is one way to
+point a corpus at a game.
 
 They are read at process start, so a terminal opened before they were set will not see them, and
 setting one at user scope does NOT reach an already-running shell. Restart it, or pass them inline
@@ -166,22 +165,21 @@ and assertions about what it contains pass without proving anything. Two test fi
 that by building `ScriptRecord`s by hand before the profile was a parameter.
 
 **Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
-rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests` 5022/5023,
-which declaration a call is judged against when a script function and a builtin share a name —
-including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009, both
-import spellings, since an unresolvable `#include` reported nothing at all and silenced 5026 with it ·
-`NamespaceUsageLintTests` 5000, including the merge dialect where the rule is unsatisfiable and says nothing ·
-`UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 · `PreferBooleanLiteralLintTests` 5002 ·
-`PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests` 5004/5005 ·
-`GlobalObjectWriteLintTests` 5035, bare name versus write-THROUGH, and the dialect where `world` is
-an ordinary local name · `DevBlockCallLintTests` 5006,
-including which dev-only builtin candidates the stock corpus contradicts · `AmbiguousFunctionLintTests`
-5007 · `UnusedLocalLintTests` 5008 · `CaseLabelLintTests` 5010/5011 ·
-`FunctionResolutionLintTests` 5013/5014/5025, the split between a script miss and a builtin miss,
-every condition that makes an Error defensible, and the keyword-from-a-later-dialect case that used
-to be reported as a missing builtin · `ClassMethodLintTests` inherited and class-method
-resolution diagnostics · `PathCallResolutionTests` a path call into a file the
-distribution does not ship, reported once for the file rather than once per call ·
+rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests`
+5022/5023, which declaration a call is judged against when a script function and a builtin share a
+name — including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009,
+both import spellings, since an unresolvable `#include` that reported nothing would silence 5026
+with it · `NamespaceUsageLintTests` 5000, including the merge dialect where the rule is
+unsatisfiable and says nothing · `UnusedUsingLintTests` 5001 · `UnusedIncludeLintTests` 5012 ·
+`PreferBooleanLiteralLintTests` 5002 · `PrivateAccessLintTests` 5003 · `ReadOnlyWriteLintTests`
+5004/5005 · `GlobalObjectWriteLintTests` 5035, bare name versus write-THROUGH, and the dialect where
+`world` is an ordinary local name · `DevBlockCallLintTests` 5006, including which dev-only builtin
+candidates the stock corpus contradicts · `AmbiguousFunctionLintTests` 5007 · `UnusedLocalLintTests`
+5008 · `CaseLabelLintTests` 5010/5011 · `FunctionResolutionLintTests` 5013/5014/5025, the split
+between a script miss and a builtin miss, every condition that makes an Error defensible, and the
+keyword-from-a-later-dialect case that must not read as a missing builtin · `ClassMethodLintTests`
+inherited and class-method resolution diagnostics · `PathCallResolutionTests` a path call into a
+file the distribution does not ship, reported once for the file rather than once per call ·
 `UnreachableCodeLintTests` 5015 · `UnassignedVariableLintTests` 5016, and the ten shapes that are
 NOT mistakes — each appeared in code that ships and works · `PragmaDirectiveTests` in-comment
 suppression · `IgnoreCommentTests` 1.5's `// gscode ignore` alias, which suppresses the line below
@@ -196,15 +194,15 @@ corpus, so these controls are all that stands between them and being silently br
 the way `NodeLintPass` runs all nine.
 
 **Api.** `ApiLoaderTests` the builtin library · `ClientApiTests` client-library derivation ·
-`ObjectFieldsTests` engine fields, and that only
-weapon fields are read-only · `RadiantKeyVisibilityTests` client-side keys — hidden from GSC, offered
-to CSC — covering both how BO3 marks them (a `client` prefix) and how WaW/BO1 do (a second
-`clientkeys.txt`) · `Cod4DataTests` CoD4's bundled data · `MacroExpansionPreviewTests`,
-`MacroHoverProbeTests` macro hover · `ApiTypeParsingTests` the declared types the loader used to
-flatten and drop · `BundledDataTests` that every data file a profile CLAIMS to ship exists ·
-`EmpiricalBuiltinCoverageTests` the WaW/BO1 libraries against their corpus harvests ·
-`KeywordDocsTests` the two halves keyword hover needs · `MacroArgumentSpanTests` the positions behind
-macro parameter-name inlay hints · `StockScriptsTests` a locked list file reads as empty.
+`ObjectFieldsTests` engine fields, and that only weapon fields are read-only ·
+`RadiantKeyVisibilityTests` client-side keys — hidden from GSC, offered to CSC — covering both how
+BO3 marks them (a `client` prefix) and how WaW/BO1 do (a second `clientkeys.txt`) · `Cod4DataTests`
+CoD4's bundled data · `MacroExpansionPreviewTests`, `MacroHoverProbeTests` macro hover ·
+`ApiTypeParsingTests` the declared types the loader must not flatten or drop · `BundledDataTests`
+that every data file a profile CLAIMS to ship exists · `EmpiricalBuiltinCoverageTests` the WaW/BO1
+libraries against their corpus harvests · `KeywordDocsTests` the two halves keyword hover needs ·
+`MacroArgumentSpanTests` the positions behind macro parameter-name inlay hints · `StockScriptsTests`
+a locked list file reads as empty.
 
 **Completion.** `CompletionEngineTests` the surface at large · `SignatureEngineTests` signature help ·
 `RealisticKeystrokeTests` completion mid-typing rather than at tidy boundaries ·
@@ -234,38 +232,35 @@ match, and a qualified `namespace::NAME(`.
 **Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order,
 plus the resolution memo (a hit and a miss both cost nothing the second time; a watched
 create/delete forces a re-probe) · `ImportResolutionProbeCostTests` the filesystem-probe count
-behind `#using`/`#include` — confirms the memo's fix, and that the cold, root-count-multiplied
-cost it cannot remove is still exactly what it should be ·
-`WorkspaceIndexerOwnershipTests` an open document's committed record survives a concurrent index
-pass untouched, and the disk content still reaches the cache ·
-`WorkspaceIndexerConcurrencyTests` two `IndexAsync` calls on one indexer never interleave ·
-`DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
-`ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and
-qualified method lookup · `MethodReferenceTests` class-method reference unions ·
-`MacroNavigationTests`, `GshMacroLookupTests` macros across the three language worlds ·
-`DialectDependencyTests` · `DialectIncludeScopeTests` scope narrowing for BOTH dialects — the
-`#include` merge graph, and the `#using` graph that separates two BO3 files sharing a `#namespace` ·
-`ReferenceScopingTests` the same narrowing for reference COUNTS, including that a file declaring the
-name in another namespace does not claim the reference ·
-`LocalDefinitionTests` go-to-definition on a local, which the shared reference index deliberately
-does not carry · `LocalReferencesTests` the occurrence list behind find-references, highlight and
-rename on a variable — what counts as a WRITE, and the names a per-function answer must refuse
-(globals, IW file-scope constants, class members) · `RootDerivationTests` finding the game when
-nothing is configured ·
-`ServerBuildIdentityTests` that two games can never share a cache · `ExportSignatureTests` what an
-edit must NOT fan out on · `LocalSemanticTokensTests` parameters and locals for highlighting ·
-`OverlayShadowingReferenceTests` a mod overlay hiding the raw copy it replaces, in references and
-completion · `DeclarationIndexTests` the bare-name, `(namespace, name)` and dev-only lists across
-edits and removals · `RelativePathIndexTests` · `VocabularyIndexTests` literals and fields, visible
-files only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-record shadowing
-against the old two-pass rule, and that a capped answer is the front of the full one ·
-`IncludeScopeLookupTests` the one-name include-scope lookup against the whole-scope list, across an
-overlay that re-declares a name, one that drops it, and a sibling mod ·
-`SameFileReferenceTests` asking the reference query for ONE file against asking it wide and keeping
-that file, across a mod overlay, a sibling mod and a file nothing references ·
-`DirectiveIndexTests`, `PathTreeIndexTests`, `QualifiedClassLookupTests`, `VisibleClassesTests` and
-`HeaderReferenceIndexTests` each keep the walk an index replaced as a reference and require its
-answer, across overlays, sibling mods, edits and removals ·
+behind `#using`/`#include` — confirms the memo's fix, and that the cold, root-count-multiplied cost
+it cannot remove is still exactly what it should be · `WorkspaceIndexerOwnershipTests` an open
+document's committed record survives a concurrent index pass untouched, and the disk content still
+reaches the cache · `WorkspaceIndexerConcurrencyTests` two `IndexAsync` calls on one indexer never
+interleave · `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
+`ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and qualified
+method lookup · `MethodReferenceTests` class-method reference unions · `MacroNavigationTests`,
+`GshMacroLookupTests` macros across the three language worlds · `DialectDependencyTests` ·
+`DialectIncludeScopeTests` scope narrowing for BOTH dialects — the `#include` merge graph, and the
+`#using` graph that separates two BO3 files sharing a `#namespace` · `ReferenceScopingTests` the
+same narrowing for reference COUNTS, including that a file declaring the name in another namespace
+does not claim the reference · `LocalDefinitionTests` go-to-definition on a local, which the shared
+reference index deliberately does not carry · `LocalReferencesTests` the occurrence list behind
+find-references, highlight and rename on a variable — what counts as a WRITE, and the names a
+per-function answer must refuse (globals, IW file-scope constants, class members) ·
+`RootDerivationTests` finding the game when nothing is configured · `ServerBuildIdentityTests` that
+two games can never share a cache · `ExportSignatureTests` what an edit must NOT fan out on ·
+`LocalSemanticTokensTests` parameters and locals for highlighting · `OverlayShadowingReferenceTests`
+a mod overlay hiding the raw copy it replaces, in references and completion ·
+`DeclarationIndexTests` the bare-name, `(namespace, name)` and dev-only lists across edits and
+removals · `RelativePathIndexTests` · `VocabularyIndexTests` literals and fields, visible files
+only, never a macro body's · `BoundedLookupTests` `LookupFunctions`' per-record shadowing against
+the two-pass rule, and that a capped answer is the front of the full one · `IncludeScopeLookupTests`
+the one-name include-scope lookup against the whole-scope list, across an overlay that re-declares a
+name, one that drops it, and a sibling mod · `SameFileReferenceTests` asking the reference query for
+ONE file against asking it wide and keeping that file, across a mod overlay, a sibling mod and a
+file nothing references · `DirectiveIndexTests`, `PathTreeIndexTests`, `QualifiedClassLookupTests`,
+`VisibleClassesTests` and `HeaderReferenceIndexTests` each keep the walk an index replaced as a
+reference and require its answer, across overlays, sibling mods, edits and removals ·
 `ReferencesReachingTests` the scoped reference query's overlay case, which stock corpora cannot
 exercise · `InsertCacheTests` two headers differing only by case on Linux ·
 `PhysicalFileSystemTests` that the byte-level read returns what `File.ReadAllText` does.
@@ -307,10 +302,9 @@ each profile's `ShortName`.
 
 Every class here joins `GameProfileCollection`, which is what stops them running in parallel.
 `GameProfile.Active` is process-global, so two games swept at once means one analysed under the
-other's dialect — that once reported 861 of BO3's 980 scripts as unparseable. The rule had been
-written in a comment long before anything enforced it. Within a game the per-file loop DOES run in
-parallel, mirroring `WorkspaceIndexer`, and sweeps are memoized per game since four tests want the
-same one.
+other's dialect, which reported 861 of BO3's 980 scripts as unparseable. Within a game the per-file
+loop DOES run in parallel, mirroring `WorkspaceIndexer`, and sweeps are memoized per game since four
+tests want the same one.
 
 The sweep also lifts every library gate and folds those findings into the same report marked
 `[NOT SHOWN — rule gated off for this game]`. A gate exists so the EDITOR does not blame a user for
@@ -321,9 +315,9 @@ line means "suppressed on this game" rather than "run twice".
   preserves the token stream, is idempotent, produces line edits that reproduce the whole-document
   format, and neither loses nor invents a line when sorting directives or aligning. Also the gate on
   reference narrowing: every one of BO3's ~13,700 declared functions keeps its OWN definition after
-  scoping. That is the failure mode narrowing has already produced once — an imports-only rule sent
-  `combat.gsc`'s `main()` from 1,230 references to zero — and a unit test cannot catch it, because
-  the mistake is always a real rule meeting a corpus shape nobody pictured.
+  scoping. An imports-only rule would send `combat.gsc`'s `main()` from 1,230 references to zero,
+  and a unit test cannot catch that, because the mistake is always a real rule meeting a corpus
+  shape nobody pictured.
 - `GameCorpusTests` — the same three properties per game, and the evidence behind
   `GameProfile.Verified`.
 - `LintBudgetTests` — the only TIMING gate in the suite: no cross-file lint may cost more than 40%
@@ -346,29 +340,29 @@ line means "suppressed on this game" rather than "run twice".
   reported is either a real defect in the game's code or a false positive in ours.
 - `ScriptDocCorpusTests` — ScriptDoc parsing against real doc blocks.
 - `UnassignedVariableSweepTests` — measures 5016's false-positive RATE on shipped scripts rather
-  than gating on a count. It went 2,742 reports on CoD4 alone down to 17 across all 7,309 scripts
-  as each dialect fact was learned, so a jump means a gap in the rule's exclusions.
+  than gating on a count. It stands at 17 across all 7,309 scripts against 2,742 on CoD4 alone
+  without the dialect facts, so a jump means a gap in the rule's exclusions.
 - `RecordFormatCorpusTests` — every record a real bo3 and cod4 index produces survives the cache's
   binary layout with its JSON unchanged. The layout is positional, so a dropped field restores a
   record a little wrong rather than failing.
-- `ReferenceScopeCorpusTests` — the scoped reference query against the old collect-then-scope path,
-  for every function declared in a real bo3 and cod4 index (28,808 declarations): identical answers.
+- `ReferenceScopeCorpusTests` — the scoped reference query against the collect-then-scope path, for
+  every function declared in a real bo3 and cod4 index (28,808 declarations): identical answers.
 - `IndexedQueryCorpusTests` — the same check for every query that moved from a walk to an index:
   header dependents, rename plans, directive folder listings, class lookups, visible classes and
   header references, each asked every question of its kind a real bo3 and cod4 index allows, against
-  the old walk kept in the test.
+  the walk each replaced, kept in the test.
 - `ClientArityHarvestTests` — what a game's SERVER library gets wrong against its CLIENT scripts, the
   input for building a CSC library from the GSC one. `StockScriptListTests` generates the per-game
   stock lists behind the raw-folder save warning.
-- `HandlerCostTests` — what one CodeLens, inlay-hint and format request costs on the densest
-  files. `InlayHintCorpusTests` — what the hints SAY over 250 files spread through bo3 and cod4:
-  totals per family reported, and three things asserted — that neither dialect produces zero of
-  either family (the merge dialects lost their parameter names once and nothing counted), that a
-  40-line window returns exactly the whole-file hints inside it (the scroll-pruning invariant), and
-  that no label repeats the word it sits on, read from the source TEXT so the check is not a
-  restatement of the handler's own rule. It found the `DELETE_TRIGGER: delete_trigger` macro case on
-  its first run. `MemoryProbeTests` (`Perf`) — what a full index RETAINS, watched for fifteen seconds, built
-  to be carried onto older commits for bisecting. `PerfReport` / `SweepReport` write the HTML pages.
+- `HandlerCostTests` — what one CodeLens, inlay-hint and format request costs on the densest files.
+  `InlayHintCorpusTests` — what the hints SAY over 250 files spread through bo3 and cod4: totals per
+  family reported, and three things asserted — that neither dialect produces zero of either family
+  (the merge dialects can lose their parameter names with nothing else noticing), that a 40-line
+  window returns exactly the whole-file hints inside it (the scroll-pruning invariant), and that no
+  label repeats the word it sits on, read from the source TEXT so the check is not a restatement of
+  the handler's own rule. It found the `DELETE_TRIGGER: delete_trigger` macro case on its first run.
+  `MemoryProbeTests` (`Perf`) — what a full index RETAINS, watched for fifteen seconds, built to be
+  carried onto older commits for bisecting. `PerfReport` / `SweepReport` write the HTML pages.
 
 **Samples.** `SampleScriptTests` — the hand-written worked example per game per language world in
 `server/samples`, run through the whole diagnostic pipeline and checked against the `// expect`
@@ -380,14 +374,14 @@ like the corpus classes; needs no game install, since each sample folder IS a ra
 `SampleExpectations` parses the comments, `SampleWorkspace` indexes and analyses one game.
 See `server/samples/FOLDER.md`.
 
-This suite is why `GSCode.Server.Tests` no longer runs its collections in parallel, and why
+This suite is why `GSCode.Server.Tests` does not run its collections in parallel, and why
 `SampleWorkspace` puts `GameProfile.Active` back when it is done. It is the first class OUTSIDE
-`Corpus/` to move the active dialect, and three hundred classes here read that global without
-saying so: leaving it on CoD4 failed 132 of them in the formatter and the handlers, for reasons that
-looked like the thing under test. Serializing alone still left 121, since a class running after a
-sample run reads the leftover as happily as one running beside it — both halves are needed while a
-global decides what the parser and the lints do. The serialization costs about a second on 313
-tests, and nothing within a test: the corpus sweeps still parallelise their own file walk.
+`Corpus/` to move the active dialect, and three hundred classes here read that global without saying
+so: leaving it on CoD4 fails 132 of them in the formatter and the handlers, for reasons that look
+like the thing under test. Serializing alone still leaves 121, since a class running after a sample
+run reads the leftover as happily as one running beside it — both halves are needed while a global
+decides what the parser and the lints do. The serialization costs about a second on 313 tests, and
+nothing within a test: the corpus sweeps still parallelise their own file walk.
 
 **Formatting.** `GscFormatterTests` the formatter at large · `FormatMinimalEditsTests` minimal edits ·
 `StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
@@ -396,44 +390,44 @@ tests, and nothing within a test: the corpus sweeps still parallelise their own 
 `FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma disable format` ·
 `GuidelineExampleTests` the examples in `FORMATTING.md`.
 
-**Handlers.** `CodeActionHandlerTests` quick fixes · `CodeActionLintReuseTests` one request runs
-the lint pass once, asserted by array identity rather than by counting calls on a sealed type · `DependentDiagnosticsTests` debounced
-cross-file refreshes for other open documents, plus `ClosedDependentsOf` (the `full`-mode half): a
-closed file referencing the origin's function is named, the origin itself and an open caller are
-not · `ClosedDependentsDialectTests` the same on both dialect families, found under the key the
-references were indexed with rather than one rebuilt from the declaration · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed record's stored
-diagnostics gain the cross-file lints, an open document is skipped and left untouched, and
-`RelintClosedFilesAsync` upgrades only the file it was given · `CodeLensArgumentTests` the lens
-command payload, which must be primitives so no serializer can case-mangle it ·
-`CompletionResolveDataTests` ·
-`DiagnosticsScopeTests` `gscode.diagnostics.scope` · `BuiltinAtTests` the builtin-under-cursor
-request · `OnTypeBlockScopeTests` · `UntitledDocumentTests` documents with no path ·
-`WorkspaceFoldersHandlerTests` · `IndexProgressNotifierTests`, `ServerStatusNotifierTests` ·
-`DocumentSymbolNamelessTests` a half-typed declaration, which used to fail the WHOLE outline
-request · `RenameScopeTests` what may be renamed, drawn on ownership rather than kind ·
-`RenameNameValidationTests` what a rename may rename TO · `MacroRenameAcrossLanguagesTests` a macro
-rename reaching both language worlds · `BuiltinReferenceTests` a builtin found across every
-namespace, class and `sys::` form that calls it, and a script function sharing an engine name keeping
-its own · `MacroReferenceScopeTests`, `DefinitionHandlerMacroScopeTests`
-two same-named macros in sibling `.gsc`/`.csc` files staying apart · `DocumentHighlightSameFileTests`
-highlight on the shared reference query, asked for one file · `CallHierarchyGroupingTests` one incoming entry per calling
-FUNCTION · `CallHierarchyDialectTests` a caller expanding to its own callers on both dialect families ·
-`CallHierarchyMethodTests` a class method prepared from the editor, expanded to its caller and to
-its callee · `ResolveForQueryTests` hierarchies for files not open · `NamespaceImportFixTests` the
-add-`#using` fix driven through the handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`,
-`BuiltinMacroHoverTests` (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests`
-one assignment walk per version · `CompletionLabelDetailsTests`,
-`CompletionSortTextTests` · `InlayHintMacroTests`, `InlayHintTypeCacheTests` one flow pass per version ·
-`InlayHintParameterTests` the on-by-default parameter-name family, as the user sees it ·
-`InlayHintMergeDialectTests` the same hints on a cross-file call under a merge dialect ·
-`FieldNavigationTests` navigation from a field, answered from its writes (definition) and from what
-a write binds (type definition, implementation, the hierarchies) · `ClassMemberNavigationTests` a
-class `var` read as a bare name inside the class body · `ImplementationAndTypeDefinitionTests`
-overriding subclasses and what a local holds, both declining rather than falling back to the
-declaration · `HoverDefinitionLinkTests` the definition link under a hover's signature, and none
-for a builtin · `AutoImportCompletionTests` the directive edit an unimported candidate carries ·
-`GenerateScriptDocTests` a generated ScriptDoc block reading back as documentation in both dialect
-forms.
+**Handlers.** `CodeActionHandlerTests` quick fixes · `CodeActionLintReuseTests` one request runs the
+lint pass once, asserted by array identity rather than by counting calls on a sealed type ·
+`DependentDiagnosticsTests` debounced cross-file refreshes for other open documents, plus
+`ClosedDependentsOf` (the `full`-mode half): a closed file referencing the origin's function is
+named, the origin itself and an open caller are not · `ClosedDependentsDialectTests` the same on
+both dialect families, found under the key the references were indexed with rather than one rebuilt
+from the declaration · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed
+record's stored diagnostics gain the cross-file lints, an open document is skipped and left
+untouched, and `RelintClosedFilesAsync` upgrades only the file it was given ·
+`CodeLensArgumentTests` the lens command payload, which must be primitives so no serializer can
+case-mangle it · `CompletionResolveDataTests` · `DiagnosticsScopeTests` `gscode.diagnostics.scope` ·
+`BuiltinAtTests` the builtin-under-cursor request · `OnTypeBlockScopeTests` ·
+`UntitledDocumentTests` documents with no path · `WorkspaceFoldersHandlerTests` ·
+`IndexProgressNotifierTests`, `ServerStatusNotifierTests` · `DocumentSymbolNamelessTests` a
+half-typed declaration, which must not fail the WHOLE outline request · `RenameScopeTests` what may
+be renamed, drawn on ownership rather than kind · `RenameNameValidationTests` what a rename may
+rename TO · `MacroRenameAcrossLanguagesTests` a macro rename reaching both language worlds ·
+`BuiltinReferenceTests` a builtin found across every namespace, class and `sys::` form that calls
+it, and a script function sharing an engine name keeping its own · `MacroReferenceScopeTests`,
+`DefinitionHandlerMacroScopeTests` two same-named macros in sibling `.gsc`/`.csc` files staying
+apart · `DocumentHighlightSameFileTests` highlight on the shared reference query, asked for one file
+· `CallHierarchyGroupingTests` one incoming entry per calling FUNCTION · `CallHierarchyDialectTests`
+a caller expanding to its own callers on both dialect families · `CallHierarchyMethodTests` a class
+method prepared from the editor, expanded to its caller and to its callee · `ResolveForQueryTests`
+hierarchies for files not open · `NamespaceImportFixTests` the add-`#using` fix driven through the
+handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`, `BuiltinMacroHoverTests`
+(`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests` one assignment walk per
+version · `CompletionLabelDetailsTests`, `CompletionSortTextTests` · `InlayHintMacroTests`,
+`InlayHintTypeCacheTests` one flow pass per version · `InlayHintParameterTests` the on-by-default
+parameter-name family, as the user sees it · `InlayHintMergeDialectTests` the same hints on a
+cross-file call under a merge dialect · `FieldNavigationTests` navigation from a field, answered
+from its writes (definition) and from what a write binds (type definition, implementation, the
+hierarchies) · `ClassMemberNavigationTests` a class `var` read as a bare name inside the class body
+· `ImplementationAndTypeDefinitionTests` overriding subclasses and what a local holds, both
+declining rather than falling back to the declaration · `HoverDefinitionLinkTests` the definition
+link under a hover's signature, and none for a builtin · `AutoImportCompletionTests` the directive
+edit an unimported candidate carries · `GenerateScriptDocTests` a generated ScriptDoc block reading
+back as documentation in both dialect forms.
 
 **Analysis ordering and publishing.** `AnalysisGateTests`, `SingleFlightAnalysisTests` one analysis
 in flight per document and none for a document nothing holds · `DiagnosticsPublishOrderTests` the

@@ -46,10 +46,10 @@ The VSCode extension sources. Five small files; the heavy lifting lives in the s
   `gscode.game`, and offers the reload that applies it.
 - `pickGameFrom(games, selected, log, title)` — the same picker for a roster already in hand,
   which is what `gscode/gameMismatch` carries.
-- The roster is never held here. The client used to own that list and it drifted to nine games,
-  four of them cores with no dialect, so picking one wrote a value the setting's own enum rejects
-  and the server resolved it back to BO3. A request that fails is reported rather than falling
-  back to a list — a fallback list IS the failure mode.
+- The roster is never held here. A client-side copy drifts — one reached nine games, four of them
+  cores with no dialect, so picking one wrote a value the setting's own enum rejects and the server
+  resolved it back to BO3. A request that fails is reported rather than falling back to a list — a
+  fallback list IS the failure mode.
 - The tick follows `GameProfile.Active`, not `gscode.game`. The two differ exactly when something
   is wrong, and ticking a game that is not in use rules out the thing being looked for.
 - A window reload, not `gscode.restartServer`: the game is a command-line argument and the launch

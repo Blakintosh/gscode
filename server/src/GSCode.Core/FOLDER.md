@@ -135,10 +135,10 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 - `enum ScrType` — the coarse PROJECTION of a value's type (Unknown, Undefined, Int, Float, Bool,
   String, IString, Vector, Struct, Array, Entity, Function), for callers that want one name to show
-  a user. No longer the lattice itself — `ScrValue`, below, is that, with disjoint bits, constant
-  values and entity kinds; `ScrValue.ToScrType()` projects down to this at the public boundary a
-  hover or hint reads from. A union that is not exactly one type projects to `Unknown` rather than
-  guessing, which is the zero-false-positive rule this whole boundary exists to keep.
+  a user. Not the lattice — `ScrValue`, below, is that, with disjoint bits, constant values and
+  entity kinds; `ScrValue.ToScrType()` projects down to this at the public boundary a hover or hint
+  reads from. A union that is not exactly one type projects to `Unknown` rather than guessing, which
+  is the zero-false-positive rule this whole boundary exists to keep.
 - `static class ScrTypes` — `DisplayName` (lowercase name for hints/hovers) and `IsKnown` (concrete
   and hint-worthy — excludes Unknown/Undefined). Control-flow joins happen on `ScrValue`, below.
 
@@ -317,13 +317,13 @@ needs to know WHY a type is unknown.
 
 ## GameProfile.cs
 
-- `record GameProfile` — the portability seam: all game-specific knowledge (extensions,
-  global object names, bundled data-file names) flows through this profile so a future
-  GSC-dialect port is data, not code changes. `GameProfile.BlackOps3` is the T7 profile.
-  Equality is BY `Id` alone, hand-written rather than the compiler-generated structural form: the
-  lazily-built keyword-index cache is a private field the generated equality would otherwise
-  compare too, so two `with`-copies of the identical profile compared unequal purely because one
-  of them had answered an `IsKeyword` call and the other had not.
+- `record GameProfile` — the portability seam: all game-specific knowledge (extensions, global
+  object names, bundled data-file names) flows through this profile so a future GSC-dialect port is
+  data, not code changes. `GameProfile.BlackOps3` is the T7 profile. Equality is BY `Id` alone,
+  hand-written rather than the compiler-generated structural form: the lazily-built keyword-index
+  cache is a private field the generated equality would otherwise compare too, so two `with`-copies
+  of the identical profile would compare unequal purely because one of them had answered an
+  `IsKeyword` call.
 - `enum ImportStyle` — `Namespace` (T7's `#using`, calls stay qualified) or `Include` (every earlier
   game: `#include` MERGES the file's functions into the caller's scope, calls are bare or
   path-qualified). Purely LEXICAL — which directive spelling exists — as opposed to
@@ -342,13 +342,12 @@ needs to know WHY a type is unknown.
   this game's or nothing, which `BuiltinApiSet.EngineNamesFor` enforces by returning a set rather
   than a library.
 - `HasTrustedEngineNames` — the one predicate for "may a rule say a name is NOT an engine function":
-  this game's library is complete, or it ships none and borrows. It exists because that condition
-  was once spelled three ways across two assemblies, two of which could disagree.
+  this game's library is complete, or it ships none and borrows. One predicate, so the profile
+  flags, the loader and the lints cannot disagree about it.
 - `ResolvesByNamespace` — the RESOLUTION question `ImportStyle` is deliberately kept separate from:
   whether a function's identity includes the namespace it is declared in (true only for BO3).
   Derived from `ImportStyle` rather than settable, so there is exactly one fact to keep straight per
-  profile; reading the directive spelling to answer this worked only because the two happen to
-  coincide today.
+  profile; reading the directive spelling instead would work only because the two coincide today.
 - `KeyNamespace(namespaceName)` — the namespace a function is actually KEYED under, which is not
   always the namespace it is declared in: a merge dialect still has a namespace (it defaults to the
   file stem) but keys by bare name, so rebuilding a key from a symbol's declared namespace without

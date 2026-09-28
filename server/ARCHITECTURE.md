@@ -9,8 +9,8 @@ semantic tokens, code lens, rename, call/type hierarchy, inlay hints, type-flow 
 formatting, and code actions — plus the client command surface, snippets, docs and packaging. Five
 games are supported rather than one; `GAME_PROFILES.md` says what each dialect claims and why.
 
-Whatever is still open lives in `FOLLOWUPS.md` and nowhere else. A phase number repeated here is a
-second copy of a fact that moves, which is exactly what went stale in the paragraph this replaced.
+Whatever is still open lives in `FOLLOWUPS.md` and nowhere else. A phase number repeated here would
+be a second copy of a fact that moves.
 
 ## Required toolchain
 
@@ -47,13 +47,13 @@ handlers read immutable record snapshots; open documents keep their full `ParseR
 `DocumentStore`. Path/mod-overlay questions (`share\raw` vs `mods\<name>` vs workspace)
 are answered solely by the `PathResolver`.
 
-Each language store keeps a set of inverted indexes beside its records — by reference key,
-declared name (bare and namespace-qualified), namespace, class, script path, the files naming a
-path, and the workspace's literal and field vocabulary — maintained in the same per-file diff that
-swaps a record in. The rule they exist for: **nothing a keystroke or a request pays walks every
-record.** Every walk that did turned into a per-request cost growing with the workspace once it was
-measured at 50,000 files; with the indexes, completion, one file's lint pass and the navigation
-handlers stay flat to that size (`PERF.md`, the scale section).
+Each language store keeps a set of inverted indexes beside its records — by reference key, declared
+name (bare and namespace-qualified), namespace, class, script path, the files naming a path, and the
+workspace's literal and field vocabulary — maintained in the same per-file diff that swaps a record
+in. The rule they exist for: **nothing a keystroke or a request pays walks every record.** A walk
+that does is a per-request cost growing with the workspace, as measured at 50,000 files; with the
+indexes, completion, one file's lint pass and the navigation handlers stay flat to that size
+(`PERF.md`, the scale section).
 
 ## Language features (LSP handlers)
 

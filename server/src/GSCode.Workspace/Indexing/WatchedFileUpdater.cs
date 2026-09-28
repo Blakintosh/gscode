@@ -78,11 +78,11 @@ public sealed class WatchedFileUpdater
 
             if ( language == ScriptLanguage.Gsh )
             {
-                // Unconditionally, unlike the record: the cache is dropped by RemoveFile only when
-                // the file is closed, so a header deleted while open left every inserting file
-                // expanding a header that is no longer there. Dropping a lexed copy of a file that
-                // no longer exists is a fact about the header, not about who has it open — the same
-                // reason the changed branch drops it before anyone is told.
+                // Unconditionally, unlike the record: RemoveFile drops the cache only for a closed file,
+                // and a header deleted while open would leave every inserting file expanding a header
+                // that is no longer there. Dropping a lexed copy of a missing file is a fact about the
+                // header, not about who has it open — the same reason the changed branch drops it
+                // before anyone is told.
                 _indexer.InvalidateGsh(normalized);
 
                 // A header vanishing changes what an insert path resolves to for anyone it used to

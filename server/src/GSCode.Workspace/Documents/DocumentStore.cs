@@ -13,12 +13,10 @@ namespace GSCode.Workspace.Documents;
 /// A completed analysis and the document version whose text produced it, published as one
 /// immutable pair.
 ///
-/// The two were separate fields, written one after the other. Two analyses can run on one document
-/// at once — the debounced one on a thread-pool continuation while a request thread enters
-/// <see cref="DocumentStore.AnalyzeIfStale"/> — so the writes could interleave into a NEW version
-/// stamped on an OLD parse: a document that reports itself fresh while holding text the user has
-/// already replaced, which is exactly what the staleness check exists to prevent. One reference
-/// write of a pair cannot come apart that way.
+/// One reference, because two analyses can run on one document at once — the debounced one on a
+/// thread-pool continuation while a request thread enters <see cref="DocumentStore.AnalyzeIfStale"/>
+/// — and two separate writes could interleave into a NEW version stamped on an OLD parse: a document
+/// reporting itself fresh while holding text the user has already replaced.
 /// </summary>
 /// <param name="HeaderGeneration">
 /// The <see cref="IHeaderMacroCache.Generation"/> the headers in this parse were read at, taken
@@ -146,14 +144,11 @@ public sealed class DocumentStore
             Version = version,
         };
 
-        // A second didOpen for a path already open — a client re-sending one on tab focus, or a
-        // race during a restored session — used to replace the entry outright while whatever the
-        // FIRST open's own immediate analysis was still running kept a direct reference to that
-        // now-unreachable OLD document, not to whatever TryGet would find. It ran to completion
-        // regardless, publishing diagnostics and committing a record from an object nothing else
-        // could ever point at again — an orphan able to overwrite this call's own fresher publish
-        // with a stale one, purely by finishing after it. Cancelling it here is the same defence
-        // Close already gives a document that stops being open outright.
+        // A second didOpen for a path already open — a client re-sending one on tab focus, or a race
+        // during a restored session — replaces the entry while the FIRST open's immediate analysis
+        // may still be running against the OLD document, which nothing else can reach any more.
+        // Left to finish, it would publish and commit from that orphan, overwriting this call's
+        // fresher publish with a stale one. Cancelling it is the defence Close already gives.
         if ( _documents.TryGetValue(normalized, out OpenDocument? previous) )
         {
             previous.PendingAnalysis?.Cancel();
@@ -191,11 +186,9 @@ public sealed class DocumentStore
     /// indexer's own thread-pool work (see <c>TextSyncHandler.ScheduleImmediateAnalysis</c>), so a
     /// request routinely arrives before ANY analysis has published. The cached snapshot is null
     /// then, and for document symbols, folding and selection ranges the client has no "ask again":
-    /// the outline stayed empty until the next edit. Analysis is also debounced 250 ms behind the
+    /// the outline would stay empty until the next edit. Analysis is also debounced 250 ms behind the
     /// keystrokes, so a cached parse describes text the user has already replaced — which for
     /// semantic tokens lands the colouring on the wrong characters.
-    ///
-    /// Five handlers wrote this out for themselves, each with its own copy of that reasoning.
     /// </summary>
     /// <param name="cancellationToken">
     /// Reaches <see cref="AnalyzeIfStale"/>: this runs a full lex, preprocess, parse and extract on
@@ -226,8 +219,7 @@ public sealed class DocumentStore
     /// This is the CHEAP resolve, deliberately: it answers only what the store already has. A
     /// caller that needs a parse of the CURRENT text wants <see cref="TryAnalyzeFresh"/>, and one
     /// needing the database or the resolution context goes through the server's navigation
-    /// support. The handlers that used to read this now take the freshening path, and formatting
-    /// is the caller left.
+    /// support. Formatting is its one caller.
     /// </summary>
     public bool TryGetAnalyzed(string path, out OpenDocument document, out ParseResult result)
     {

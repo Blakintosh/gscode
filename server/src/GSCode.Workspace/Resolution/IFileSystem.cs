@@ -135,7 +135,7 @@ public sealed class PhysicalFileSystem : IFileSystem
     /// The walk is serial work that blocks every indexing worker behind it, and its cost is set by
     /// the size of the WORKSPACE rather than by the number of scripts: a workspace folder that is a
     /// whole Black Ops III install is 295,640 files hiding 1,105 scripts. Measured on that install,
-    /// warm: 741-792 ms as it was, 483-504 ms fanned out across the top-level subtrees, 277-281 ms
+    /// warm: 741-792 ms walked serially, 483-504 ms fanned out across the top-level subtrees, 277-281 ms
     /// pruned, and 231-233 ms with both. All four return the same 1,105 files.
     ///
     /// The fan-out is per TOP-LEVEL subdirectory, which is uneven by nature — one subtree can hold

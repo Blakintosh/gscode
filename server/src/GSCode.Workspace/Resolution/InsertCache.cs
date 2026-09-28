@@ -153,10 +153,9 @@ public sealed class InsertCache : IHeaderMacroCache
     /// the ones it inserts — "a definition recorded inside this header also belongs to whatever
     /// header inserted it", as the preprocessor puts it while adding them. So a wrapper's entry
     /// carries copies of the macros the header underneath it defined, frozen at the moment it was
-    /// walked. Dropping the inner header alone left those copies standing, and every file inserting
-    /// the wrapper went on replaying values the inner header no longer holds — not until a
-    /// re-parse, which replays them again, but until the session ended.
-    ///
+    /// walked. Dropping the inner header alone would leave those copies standing, and every file
+    /// inserting the wrapper would replay values the inner header no longer holds until the session
+    /// ended — a re-parse replays them again.
     /// The reverse edges come from the contributions themselves: each records the nested inserts it
     /// carries, so no separate graph has to be built or kept in step. Only contributions go — an
     /// ancestor's lexed TOKENS are still its own bytes, which have not changed.
@@ -211,12 +210,6 @@ public sealed class InsertCache : IHeaderMacroCache
     {
         Moved();
     }
-
-    // Clear() was here, said it was "used when the resolution roots change", and had no caller in
-    // src or tests. Its premise was wrong as well as unused: entries are keyed by the RESOLVED
-    // absolute path, so a root change cannot make a key mean a different file, and the nested
-    // edges a contribution carries are re-resolved on every hit and refused when any lands
-    // elsewhere. The roots-changed path needs nothing here, which is why nothing ever called it.
 
     /// <summary>How many headers are held. For diagnostics and tests.</summary>
     public int Count

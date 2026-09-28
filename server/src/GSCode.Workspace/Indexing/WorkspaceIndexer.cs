@@ -123,15 +123,10 @@ public sealed class WorkspaceIndexer
     /// <summary>
     /// Lexed <c>#insert</c> targets, shared by every file that inserts one.
     ///
-    /// This used to be a second cache of its own — a <c>ConcurrentDictionary&lt;path,
-    /// Lazy&lt;InsertedFile?&gt;&gt;</c> beside the <see cref="InsertCache"/> the same constructor
-    /// was already handed for macros. Two caches of the same headers, keyed the same way and living
-    /// the same session, so BO3's 114 distinct headers were held twice over; and the local one was
-    /// the weaker of the two, keyed ordinally where paths are not case-sensitive, never revalidated
-    /// against the file, and caching a failed read for good.
+    /// The same <see cref="InsertCache"/> the constructor is handed for macros, not a second cache of
+    /// the same headers, which would hold BO3's 114 distinct headers twice over.
     ///
-    /// Never null: a caller that supplies none gets one of its own rather than no cache at all,
-    /// which is what the argument being optional used to mean. Without it a header is re-read and
+    /// Never null: a caller that supplies none gets one of its own. Without it a header is re-read and
     /// re-lexed once per file that inserts it — BO3 writes 2,137 insert directives naming those
     /// 114 headers.
     /// </summary>
@@ -144,10 +139,9 @@ public sealed class WorkspaceIndexer
     /// <summary>
     /// The blobs a warm start may restore from, held only for the duration of an indexing pass.
     ///
-    /// It used to be set once and kept for the session, and this class is a singleton in the
-    /// server — so a bo3 workspace carried 21 MB of compressed blobs, and a bo1 one 64 MB, for the
-    /// whole run after the last file that could use them was indexed. Against a 400 MB
-    /// steady-state budget that is worth reclaiming.
+    /// Kept for the session it would pin 21 MB of compressed blobs on bo3 and 64 MB on bo1 — this
+    /// class is a singleton in the server — long after the last file that could use them was
+    /// indexed, against a 400 MB steady-state budget.
     ///
     /// <see cref="IndexAsync"/> releases it on the way out and <see cref="ReloadRestoreSnapshot"/>
     /// puts it back for the one caller that indexes twice. Paying a second 13-54 ms read on a
@@ -289,9 +283,9 @@ public sealed class WorkspaceIndexer
         System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
         PerfTracker.Begin("index.total");
 
-        // Enumeration is fully serial and blocks every worker, so it gets its own scope: on a cold
-        // run it is pure I/O with no CPU in flight, and it was previously folded into index.total
-        // where it could not be told apart from the analysis it precedes.
+        // Enumeration is fully serial and blocks every worker, so it gets its own scope rather than
+        // index.total's: on a cold run it is pure I/O with no CPU in flight, and folded in it could
+        // not be told apart from the analysis it precedes.
         PerfTracker.Begin("index.enumerate");
         List<string> targets = [.. Resolver.EnumerateIndexTargets()];
         PerfTracker.End();
@@ -348,8 +342,8 @@ public sealed class WorkspaceIndexer
         // carries the RESOLUTION FROM LAST SESSION: comparing against that stored resolution rather
         // than a freshly computed one misses exactly these cases. An insert that failed to resolve
         // last session stores "" as its ResolvedPath, which is never a real header's path — so a
-        // header appearing never matched, and a header vanishing never even reached changedHeaders,
-        // since a deleted file is no longer among the targets this pass sees at all.
+        // header appearing would never match, and a header vanishing would never reach
+        // changedHeaders, since a deleted file is not among the targets this pass sees.
         if ( restoredRecords.Count > 0 )
         {
             List<ScriptRecord> restoredList = [.. restoredRecords];

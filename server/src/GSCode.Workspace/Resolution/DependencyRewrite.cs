@@ -68,7 +68,7 @@ public static class DependencyRewrite
     /// <summary>
     /// The records in every store — scripts and headers — with a directive whose path has this
     /// written key. A superset of those whose directive matches <see cref="Canonical"/>, which the
-    /// caller still tests; it used to test every record's edges in the workspace.
+    /// caller still tests.
     /// </summary>
     private static List<ScriptRecord> RecordsWriting(ScriptDatabase database, string writtenKey)
     {

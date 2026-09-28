@@ -180,17 +180,13 @@ public static class ApiLoader
     /// Parses a declared type onto the lattice, ONCE at load rather than re-switching on display
     /// text at every call.
     ///
-    /// The data is richer than the old text switch could see, and all of this was being dropped:
+    /// It keeps what a switch on display text would drop:
     ///
-    /// - <c>isArray</c>. 114 of BO3's GSC declarations set it, and an array return produced nothing
-    ///   at all — so <see cref="ScrTypeSet.Array"/> was never once produced by a builtin call. Given
-    ///   that arrays are the only kind whose pass semantics differ between dialects, that was the
-    ///   single most costly omission here.
-    /// - Unions, spelled pipe-separated inside <c>dataType</c>: <c>"int | string"</c>,
-    ///   <c>"bool | int"</c>, <c>"number | vector"</c>. The flat lattice had no way to hold one, so
-    ///   they were dropped; this one splits them.
-    /// - <c>number</c>, which is 349 declarations in BO3's GSC library alone and is exactly
-    ///   <c>int|float</c> — expressible now, and previously discarded as vague.
+    /// - <c>isArray</c>, set on 114 of BO3's GSC declarations — and arrays are the only kind whose
+    ///   pass semantics differ between dialects.
+    /// - Unions, spelled pipe-separated inside <c>dataType</c> (<c>"int | string"</c>,
+    ///   <c>"bool | int"</c>, <c>"number | vector"</c>), split into the union.
+    /// - <c>number</c>, 349 declarations in BO3's GSC library alone, which is exactly <c>int|float</c>.
     /// - <c>vararg</c>, the parameter pack, which is an array.
     ///
     /// Returns <see cref="ScrTypeSet.None"/> for a spelling the lattice genuinely cannot express —

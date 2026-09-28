@@ -216,7 +216,7 @@ public sealed class FlowTyper
         Dictionary<string, ScrValue> environment = EnvironmentAt(function, position);
 
         // Projected onto the coarse lattice at the boundary: a union has no single-value answer for
-        // a hover label, which is exactly what the old behaviour was.
+        // a hover label.
         if ( !environment.TryGetValue(name, out ScrValue value) )
         {
             return false;
@@ -440,8 +440,7 @@ public sealed class FlowTyper
                 return;
             case DevBlockStmtNode devBlock:
                 // `/# … #/` is real code — it runs in a debug build, and assignments inside it want
-                // their hints exactly as anywhere else. It was simply never visited, so nothing
-                // inside a dev block had an inferred type at all.
+                // their hints exactly as anywhere else.
                 //
                 // Walked as an ALTERNATIVE path rather than inline, on the same reasoning as a loop
                 // body: the block is compiled out of a release build, so code after it cannot
@@ -452,9 +451,7 @@ public sealed class FlowTyper
                 return;
             case ConstDeclNode constDecl:
             {
-                // A `const` binds a name for the rest of the function exactly as an assignment
-                // does, and it was falling through the default case — so `const MAX = 4;` left MAX
-                // untyped and unhinted while `MAX = 4;` was both.
+                // A `const` binds a name for the rest of the function exactly as an assignment does.
                 ScrValue value = TypeOf(constDecl.Value, environment);
                 environment[constDecl.NameToken.Text] = value;
 
@@ -1020,11 +1017,10 @@ public sealed class FlowTyper
             return;
         }
 
-        // `a[ i ] = v` is how GSC creates or grows an array — the target being written through is
-        // exactly as informative about `a` as `a = value` is about `a` itself, and the base was
-        // previously left untouched: a variable that started as `undefined` stayed `undefined` for
-        // the rest of the flow, which made 5033 (CannotEnumerateType) warn on code like
-        // `spots = undefined; spots[ spots.size ] = s; foreach ( p in spots ) {}`.
+        // `a[ i ] = v` is how GSC creates or grows an array, so the target written through is exactly
+        // as informative about `a` as `a = value` is. Left untouched, a variable that started as
+        // `undefined` would stay so for the rest of the flow, and 5033 (CannotEnumerateType) would
+        // warn on `spots = undefined; spots[ spots.size ] = s; foreach ( p in spots ) {}`.
         if ( assignment.Operator == TokenKind.Assign && assignment.Target is IndexNode indexTarget )
         {
             // Every index expression along an `a[ i ][ j ]` chain is an ordinary expression and
@@ -1499,10 +1495,9 @@ public sealed class FlowTyper
     /// <summary>
     /// A binary operator, delegated to <see cref="ScrOperators"/>.
     ///
-    /// This is where the <c>vector * 0.5</c> bug is actually fixed: the old code routed every
-    /// arithmetic operator through a helper that took no operator and knew only Int/Float/Unknown,
-    /// so a scaled vector came out a float. The operand diagnosis is discarded here — this pass
-    /// types expressions and does not report — but it is what a rule or a rewriter would read.
+    /// Typed by the operator, so <c>vector * 0.5</c> stays a vector rather than every arithmetic operator
+    /// yielding a number. The operand diagnosis is discarded here — this pass types expressions and
+    /// does not report — but it is what a rule or a rewriter would read.
     /// </summary>
     private ScrValue TypeOfBinary(BinaryNode binary, Dictionary<string, ScrValue> environment)
     {
@@ -1560,15 +1555,15 @@ public sealed class FlowTyper
 
     private ScrValue TypeOfCall(CallNode call, Dictionary<string, ScrValue> environment)
     {
-        // The arguments are expressions in their own right and were never typed — the old code read
-        // only the callee's name. A per-node map with holes wherever an argument sits is no use to a
-        // rewriter, and inferring a parameter from its call sites needs exactly these values.
+        // The arguments are typed in their own right: a per-node map with holes wherever an argument
+        // sits is no use to a rewriter, and inferring a parameter from its call sites needs exactly
+        // these values.
         //
         // Except `self waittill( "damage", attacker, amount );`, which BINDS its trailing
         // arguments — outputs the engine fills in, not reads (the same convention
         // UnassignedVariableLint and LocalReferences honour). They must be REBOUND here, not
         // typed through: reusing a name across a wait is ordinary GSC, and letting the old
-        // type survive the rebind is what made 5033 warn on `x = "s"; self waittill( "e", x );
+        // type survive the rebind would make 5033 warn on `x = "s"; self waittill( "e", x );
         // foreach ( i in x )`. The first argument is the event name, a genuine read.
         bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
 
@@ -1625,9 +1620,8 @@ public sealed class FlowTyper
             return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
         }
 
-        // The union across EVERY overload, parsed at load. The old code read overload zero and no
-        // further, so a builtin whose overloads return different things was reported as returning
-        // whichever happened to be listed first.
+        // The union across EVERY overload, parsed at load: a builtin whose overloads return different
+        // things may return any of them.
         ScrTypeSet mapped = builtin.ReturnTypes;
 
         if ( mapped == ScrTypeSet.None )

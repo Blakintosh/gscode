@@ -1,4 +1,3 @@
-using GSCode.Core.Instrumentation;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using GSCode.Core.Diagnostics;
@@ -6,6 +5,9 @@ using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax.Ast;
+#if GSCODE_INSTRUMENTATION
+using GSCode.Core.Instrumentation;
+#endif
 
 namespace GSCode.Parser.Syntax;
 

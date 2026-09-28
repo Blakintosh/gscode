@@ -6,6 +6,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Serilog;
+using GSCode.Core;
+using FileSystemWatcher = OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher;
 
 namespace GSCode.Server.Handlers;
 
@@ -41,16 +43,16 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
     {
         // GlobPattern's implicit string conversion trips a nullable false-positive here.
 #pragma warning disable CS8601
-        OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher[] watchers =
+        FileSystemWatcher[] watchers =
         [
-            .. GSCode.Core.GameProfile.Active.ScriptGlobs.Select(glob =>
-                new OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher { GlobPattern = "**/" + glob }),
+            .. GameProfile.Active.ScriptGlobs.Select(glob =>
+                new FileSystemWatcher { GlobPattern = "**/" + glob }),
         ];
 #pragma warning restore CS8601
 
         return new DidChangeWatchedFilesRegistrationOptions
         {
-            Watchers = new Container<OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher>(watchers),
+            Watchers = new Container<FileSystemWatcher>(watchers),
         };
     }
 

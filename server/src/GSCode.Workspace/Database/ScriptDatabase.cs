@@ -9,6 +9,7 @@ using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Resolution;
+using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Database;
 
@@ -344,9 +345,9 @@ public sealed class ScriptDatabase
             }
         }
 
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is GSCode.Parser.Syntax.Ast.UsingNode usingNode )
+            if ( element is UsingNode usingNode )
             {
                 dependencies.Add(new DependencyEdge(usingNode.Path, "", IsInsert: false, usingNode.PathRange));
             }
@@ -354,7 +355,7 @@ public sealed class ScriptDatabase
             // #include is the Infinity Ward import; an edge like #using's (resolved lazily per
             // context), so the include graph exists for navigation, rename and merge scoping. A
             // file is one dialect, so #using and #include never mix in the same record.
-            if ( element is GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+            if ( element is IncludeNode includeNode )
             {
                 dependencies.Add(new DependencyEdge(includeNode.Path, "", IsInsert: false, includeNode.PathRange));
             }

@@ -21,6 +21,7 @@ using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
 using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 using GSCode.Core.Paths;
+using Diagnostic = GSCode.Core.Diagnostics.Diagnostic;
 
 namespace GSCode.Server.Handlers;
 
@@ -183,7 +184,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         int requestedLine = request.Range.Start.Line;
         List<LspDiagnostic> onThisLine = [];
 
-        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in lints.All(cancellationToken) )
+        foreach ( Diagnostic diagnostic in lints.All(cancellationToken) )
         {
             // LINE MEMBERSHIP, not TextRange.Overlaps: Overlaps compares positions inclusively
             // (Start <= other.End), so a range built from LineRangeOf's (line, 0)-(line+1, 0) —
@@ -331,7 +332,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         private readonly OpenDocument _document;
         private readonly ParseResult _result;
 
-        private ImmutableArray<GSCode.Core.Diagnostics.Diagnostic>? _all;
+        private ImmutableArray<Diagnostic>? _all;
 
         public RequestLints(DocumentLinter linter, OpenDocument document, ParseResult result)
         {
@@ -341,14 +342,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         /// <summary>Every diagnostic the pass reports, in the order it reports them.</summary>
-        public ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> All(CancellationToken cancellationToken)
+        public ImmutableArray<Diagnostic> All(CancellationToken cancellationToken)
         {
-            if ( _all is ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> already )
+            if ( _all is ImmutableArray<Diagnostic> already )
             {
                 return already;
             }
 
-            ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> analyzed =
+            ImmutableArray<Diagnostic> analyzed =
                 [.. _linter.Analyze(_document, _result, cancellationToken)];
 
             _all = analyzed;
@@ -534,7 +535,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     {
         ImmutableArray<LspDiagnostic>.Builder unused = ImmutableArray.CreateBuilder<LspDiagnostic>();
 
-        foreach ( GSCode.Core.Diagnostics.Diagnostic diagnostic in lints.All(cancellationToken) )
+        foreach ( Diagnostic diagnostic in lints.All(cancellationToken) )
         {
             LspDiagnostic converted = diagnostic.ToLsp();
             GscDiagnosticCode? code = CodeOf(converted);

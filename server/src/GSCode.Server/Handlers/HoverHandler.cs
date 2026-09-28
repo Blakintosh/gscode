@@ -15,6 +15,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 using TextRange = GSCode.Core.Text.TextRange;
+using GSCode.Parser.Preprocessing;
 
 namespace GSCode.Server.Handlers;
 
@@ -195,7 +196,7 @@ public sealed class HoverHandler : HoverHandlerBase
             }
             case SymbolKind.Macro:
             {
-                GSCode.Parser.Preprocessing.MacroDefinition? macro = FindMacro(target, key.Name);
+                MacroDefinition? macro = FindMacro(target, key.Name);
                 if ( macro is null )
                 {
                     return null;
@@ -242,7 +243,7 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private static string? FindBuiltinExpansion(NavigationTarget target, TextRange hitRange)
     {
-        foreach ( GSCode.Parser.Preprocessing.BuiltinExpansion expansion in target.Result.Preprocessed.BuiltinExpansions )
+        foreach ( BuiltinExpansion expansion in target.Result.Preprocessed.BuiltinExpansions )
         {
             if ( expansion.Range.Contains(hitRange.Start) )
             {
@@ -263,7 +264,7 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private static string FindMacroExpansion(NavigationTarget target, string name, TextRange hitRange)
     {
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
+        foreach ( MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
             if ( !string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {
@@ -287,7 +288,7 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private static ImmutableArray<string> ArgumentsAt(NavigationTarget target, TextRange hitRange)
     {
-        foreach ( GSCode.Parser.Preprocessing.MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
+        foreach ( MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
         {
             // Only invocations written in THIS file: one reached through an #insert has its text
             // in another file that is not loaded here.
@@ -316,9 +317,9 @@ public sealed class HoverHandler : HoverHandlerBase
     /// because the record drops <c>SourceFile</c>, and which file the <c>#define</c> is in is half
     /// of what the hover now reports.
     /// </summary>
-    private static GSCode.Parser.Preprocessing.MacroDefinition? FindMacro(NavigationTarget target, string name)
+    private static MacroDefinition? FindMacro(NavigationTarget target, string name)
     {
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
+        foreach ( MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
             if ( string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {

@@ -7,6 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Serilog;
 using Serilog.Core;
+using GSCode.Core;
 
 namespace GSCode.Server.Handlers;
 
@@ -46,8 +47,8 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
 
         // The game drives the active profile (extensions, capabilities). It is also selected at
         // initialize, BEFORE the bundled data resolves; this call only handles a change mid-session.
-        string previousGame = GSCode.Core.GameProfile.Active.ShortName;
-        if ( !GSCode.Core.GameProfile.Select(_settings.Game) )
+        string previousGame = GameProfile.Active.ShortName;
+        if ( !GameProfile.Select(_settings.Game) )
         {
             // A typo cannot break the server, but it must not pass unremarked either — the setting
             // reads back as written while the server runs as BO3.
@@ -59,12 +60,12 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         // whatever game was active then, so changing the game mid-session leaves the profile and the
         // data disagreeing — the profile says CoD4 while the builtins are still BO3's, and every
         // engine call looks unknown. Say so plainly rather than let it read as the user's mistake.
-        if ( !string.Equals(previousGame, GSCode.Core.GameProfile.Active.ShortName, StringComparison.Ordinal) )
+        if ( !string.Equals(previousGame, GameProfile.Active.ShortName, StringComparison.Ordinal) )
         {
             Log.Warning(
                 "Game changed {Previous} -> {Current}, but the bundled data was loaded for {Previous} "
                 + "and is not reloaded. Restart the server so its builtins and engine fields match.",
-                previousGame, GSCode.Core.GameProfile.Active.ShortName);
+                previousGame, GameProfile.Active.ShortName);
         }
 
         // Only when something that matters actually moved. Clients push their whole configuration

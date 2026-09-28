@@ -3,6 +3,9 @@ using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Parser.Extraction;
 using GSCode.Core.Symbols;
+using GSCode.Parser;
+using GSCode.Parser.Syntax.Ast;
+using GSCode.Workspace.Resolution;
 
 namespace GSCode.Workspace.Database;
 
@@ -291,7 +294,7 @@ public static class DatabaseQueries
     /// line has a leading span named after itself. Counting that as declared handed a file the
     /// private members of any namespace that happened to share its filename.
     /// </summary>
-    public static ImmutableArray<string> DeclaredNamespaces(GSCode.Parser.ParseResult result)
+    public static ImmutableArray<string> DeclaredNamespaces(ParseResult result)
     {
         return result.Extraction.DeclaredNamespaces;
     }
@@ -390,7 +393,7 @@ public static class DatabaseQueries
         LanguageStore store,
         string askingContextId,
         string askingPath,
-        GSCode.Parser.ParseResult result,
+        ParseResult result,
         string prefix,
         int limit,
         GameProfile? profile = null)
@@ -572,7 +575,7 @@ public static class DatabaseQueries
     /// Read from the live parse result rather than the record's dependency edges, because a
     /// <c>#using</c> edge is stored with an empty ResolvedPath and so cannot be matched by path.
     /// </summary>
-    public static ImmutableArray<string> ImportedScriptPaths(GSCode.Parser.ParseResult result)
+    public static ImmutableArray<string> ImportedScriptPaths(ParseResult result)
     {
         return DirectivePaths(result, ImportStyle.Namespace);
     }
@@ -594,7 +597,7 @@ public static class DatabaseQueries
     /// of dialect, and the <c>#include</c> lints genuinely want <c>#include</c> only.
     /// </summary>
     public static ImmutableArray<string> LinkedScriptPaths(
-        GSCode.Parser.ParseResult result, GameProfile? profile = null)
+        ParseResult result, GameProfile? profile = null)
     {
         return DirectivePaths(result, (profile ?? GameProfile.Active).ImportStyle);
     }
@@ -606,16 +609,16 @@ public static class DatabaseQueries
     /// for the normalization to drift.
     /// </summary>
     private static ImmutableArray<string> DirectivePaths(
-        GSCode.Parser.ParseResult result, ImportStyle style)
+        ParseResult result, ImportStyle style)
     {
         ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
 
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
             string? path = element switch
             {
-                GSCode.Parser.Syntax.Ast.UsingNode node when style == ImportStyle.Namespace => node.Path,
-                GSCode.Parser.Syntax.Ast.IncludeNode node when style == ImportStyle.Include => node.Path,
+                UsingNode node when style == ImportStyle.Namespace => node.Path,
+                IncludeNode node when style == ImportStyle.Include => node.Path,
                 _ => null,
             };
 
@@ -639,7 +642,7 @@ public static class DatabaseQueries
     /// normalized like <see cref="ImportedScriptPaths"/>. These plus the file itself are the scope a
     /// merged, unqualified call resolves within.
     /// </summary>
-    public static ImmutableArray<string> IncludedScriptPaths(GSCode.Parser.ParseResult result)
+    public static ImmutableArray<string> IncludedScriptPaths(ParseResult result)
     {
         return DirectivePaths(result, ImportStyle.Include);
     }
@@ -676,22 +679,22 @@ public static class DatabaseQueries
     /// </param>
     public static IncludeClosure IncludeClosure(
         LanguageStore store,
-        Resolution.PathResolver resolver,
-        GSCode.Parser.ParseResult result,
+        PathResolver resolver,
+        ParseResult result,
         string askingPath,
         string extension,
         ImmutableArray<ScriptRecord> directIncludes = default)
     {
-        Dictionary<(Resolution.ResolutionContext Context, string Path), string?> resolved = [];
+        Dictionary<(ResolutionContext Context, string Path), string?> resolved = [];
         Queue<string> pending = new();
 
         if ( directIncludes.IsDefault )
         {
-            Resolution.ResolutionContext askingContext = resolver.GetContext(askingPath);
+            ResolutionContext askingContext = resolver.GetContext(askingPath);
 
-            foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+            foreach ( AstNode element in result.Tree.Root.Elements )
             {
-                if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+                if ( element is not IncludeNode includeNode )
                 {
                     continue;
                 }
@@ -729,7 +732,7 @@ public static class DatabaseQueries
             }
 
             reached.Add(record);
-            Resolution.ResolutionContext hop = resolver.GetContext(record.Path);
+            ResolutionContext hop = resolver.GetContext(record.Path);
 
             foreach ( DependencyEdge edge in record.Dependencies )
             {
@@ -751,9 +754,9 @@ public static class DatabaseQueries
     }
 
     private static string? Probe(
-        Resolution.PathResolver resolver,
-        Dictionary<(Resolution.ResolutionContext, string), string?> memo,
-        Resolution.ResolutionContext context,
+        PathResolver resolver,
+        Dictionary<(ResolutionContext, string), string?> memo,
+        ResolutionContext context,
         string rawPath,
         string extension)
     {

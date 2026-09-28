@@ -9,11 +9,10 @@ namespace GSCode.Workspace.Database;
 /// — <c>class cScene</c> in <c>scene_shared.gsc</c> and in <c>scene_shared.csc</c> live in separate
 /// graphs and cannot see each other.
 ///
-/// Exists because every class question used to be a full linear scan of every record in the store:
-/// <c>LookupClasses</c> per parent link, <c>AllVisibleClasses</c> per keystroke, and
-/// <c>NamespaceUsageLint</c>'s class-name set once PER FILE LINTED, which is a store scan per file
-/// across the whole workspace. Method resolution walks parent chains constantly, so it would have
-/// multiplied that; instead it makes those four queries dictionary hits.
+/// It turns every class question into a dictionary hit rather than a scan of every record in the
+/// store: <c>LookupClasses</c> per parent link, <c>AllVisibleClasses</c> per keystroke,
+/// <c>NamespaceUsageLint</c>'s class-name set per file linted, and the parent-chain walks method
+/// resolution makes constantly.
 ///
 /// The reverse maps are all PATH-valued, never name-valued. That is what makes replacing one file's
 /// contribution exact: a file is removed from precisely the buckets its previous contribution

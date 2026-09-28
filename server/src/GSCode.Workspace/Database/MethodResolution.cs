@@ -130,10 +130,9 @@ public static class MethodResolution
     /// What a call site reaches — methods and namespace functions alike, so a caller asking "what
     /// does this name resolve to" never has to know which it was. The single routing facade.
     ///
-    /// <see cref="DatabaseQueries.LookupFunctions"/> is deliberately NOT widened to do this instead.
-    /// It treats a null namespace as "any namespace", which is right for a merge dialect but would
-    /// make an unqualified <c>init()</c> match every unrelated <c>init</c> method in the workspace
-    /// the moment methods became visible to it. Routing explicitly keeps that meaning intact.
+    /// <see cref="DatabaseQueries.LookupFunctions"/> is deliberately NOT widened to do this: it
+    /// treats a null namespace as "any namespace", which is right for a merge dialect but would make
+    /// an unqualified <c>init()</c> match every unrelated <c>init</c> method in the workspace.
     /// </summary>
     public static ImmutableArray<ResolvedFunction> ResolveCall(
         LanguageStore store,
@@ -206,8 +205,7 @@ public static class MethodResolution
         string? declaring = null;
 
         // No localClasses: this answers a question about what the STORE holds, and handing it the
-        // parse in hand would change which declaration wins. Passing the default is exactly what
-        // this walk did for itself before it was shared.
+        // parse in hand would change which declaration wins.
         WalkAncestors(store, askingContextId, classKeyName, default, (classSymbol, _) =>
         {
             foreach ( FunctionSymbol method in classSymbol.Methods )
@@ -299,12 +297,10 @@ public static class MethodResolution
     /// Walks a class and its ancestors, MOST DERIVED FIRST, handing each resolved class to
     /// <paramref name="visit"/> until it returns false or the chain ends.
     ///
-    /// Three callers had written this walk out themselves - <see cref="FindDeclaringClass"/>,
-    /// <see cref="MethodsOf"/> and <see cref="MembersOf"/> - and every rule in it has to hold for
-    /// all three: the most-derived-first order that makes an override win, the
-    /// <see cref="MaxDepth"/> bound that stops a cycle the lint missed, the visited set that stops
-    /// a diamond, and a local class winning over the store's copy of the same name. A change to any
-    /// of those had to land in three places for the three answers to keep agreeing with each other.
+    /// The one walk behind <see cref="FindDeclaringClass"/>, <see cref="MethodsOf"/> and
+    /// <see cref="MembersOf"/>, whose answers must agree: the most-derived-first order that makes an
+    /// override win, the <see cref="MaxDepth"/> bound that stops a cycle the lint missed, the visited
+    /// set that stops a diamond, and a local class winning over the store's copy of the same name.
     ///
     /// The record handed to <paramref name="visit"/> is null when the class came from
     /// <paramref name="localClasses"/> rather than from the store - see <see cref="ClassMethod"/>.

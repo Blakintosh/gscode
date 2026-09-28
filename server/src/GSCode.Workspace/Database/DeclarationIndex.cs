@@ -7,15 +7,14 @@ namespace GSCode.Workspace.Database;
 /// Which files DECLARE a function name — the counterpart to <see cref="ReferenceIndex"/>, which
 /// answers which files mention one.
 ///
-/// It exists because <see cref="DatabaseQueries.LookupFunctions"/> asked the question by walking
-/// every record and every function in each — around thirty thousand symbols on BO3 — once per CALL
-/// SITE. A file with two hundred calls scanned the whole store two hundred times, and four lints
-/// doing that were 97% of the cross-file lint cost, itself some twenty times the parse it runs on.
+/// <see cref="DatabaseQueries.LookupFunctions"/> asks it once per CALL SITE; a walk of every record
+/// and every function in each — around thirty thousand symbols on BO3 — per call made four lints
+/// 97% of the cross-file lint cost, itself some twenty times the parse it runs on.
 ///
 /// Keyed by <see cref="FunctionSymbol.KeyName"/>, the lowercase-canonical form, compared ordinally
-/// — exactly the comparison the lookup it replaces performs, so the candidate set is identical and
-/// every filter that follows (visibility, namespace, privacy, overlay shadowing) is untouched. This
-/// narrows WHERE to look; it decides nothing.
+/// — exactly the lookup's own comparison, so every filter that follows (visibility, namespace,
+/// privacy, overlay shadowing) sees the same candidates. This narrows WHERE to look; it decides
+/// nothing.
 ///
 /// Paths rather than records, matching <see cref="ReferenceIndex"/>: a record is swapped wholesale
 /// on every edit, so holding one here would pin a stale version. The caller resolves the path
@@ -24,13 +23,12 @@ namespace GSCode.Workspace.Database;
 /// The storage, the packing and the per-file diff live in <see cref="PackedInvertedIndex{TKey}"/>,
 /// shared with <see cref="ReferenceIndex"/>.
 ///
-/// It is kept TWICE: by bare name, and by namespace and name together. A namespaced lookup used to
-/// read the bare-name list and throw away every file declaring into another namespace — fine while
-/// a name was declared in a few dozen files, not once it is declared in thousands. Every bo3 system
-/// file declares <c>__init__</c>, so in a 50,000-file workspace one <c>util::__init__</c> call walked
-/// every one of them, and four lints asking that per call site made a single file's lint pass cost
-/// more than the keystroke debounce (PERF.md, the scale section). The qualified list is exactly the
-/// subset the namespace filter kept, so the answer is unchanged.
+/// It is kept TWICE: by bare name, and by namespace and name together, because filtering the
+/// bare-name list by namespace stops scaling once a name is declared in thousands of files. Every
+/// bo3 system file declares <c>__init__</c>, so in a 50,000-file workspace one
+/// <c>util::__init__</c> call would walk every one of them, and four lints asking that per call
+/// site cost more than the keystroke debounce (PERF.md, the scale section). The qualified list is
+/// exactly the subset the namespace filter keeps.
 /// </summary>
 public sealed class DeclarationIndex
 {

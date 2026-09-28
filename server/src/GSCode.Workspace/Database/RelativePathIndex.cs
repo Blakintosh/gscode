@@ -9,15 +9,11 @@ namespace GSCode.Workspace.Database;
 /// file; more when a mod or workspace copy overlays a raw one, which is why the answer is a list
 /// and every caller still applies visibility and shadowing to it.
 ///
-/// It replaces a walk of the whole store. Statement-scope completion asked "which of my imports
-/// declare which namespaces" by normalizing EVERY record's relative path and comparing it against
-/// the import list, on every request; the merge dialect's include scope and the inline
-/// <c>path::</c> completion did the same. At 1,000 files that is noise. At 50,000 it made a
-/// completion's p99 four times its budget and growing with the workspace (PERF.md, the scale
-/// section), while the files actually wanted were the handful the imports name.
-///
-/// PERF.md designed this index when completion was first measured and deferred it until a caller
-/// needed it; the scale sweep is that caller.
+/// It saves a walk of the whole store. Statement-scope completion asks "which of my imports declare
+/// which namespaces", and the merge dialect's include scope and inline <c>path::</c> completion ask
+/// the same of paths; normalizing every record's relative path per request is noise at 1,000 files
+/// and put completion's p99 at four times its budget at 50,000 (PERF.md, the scale section), when
+/// the files actually wanted are the handful the imports name.
 /// </summary>
 public sealed class RelativePathIndex
 {
@@ -25,8 +21,7 @@ public sealed class RelativePathIndex
 
     /// <summary>
     /// The key one record contributes, or null when it sits outside every root and has no
-    /// relative path. The same normalization the queries compare imports with, so a lookup here
-    /// matches exactly the records the old comparison matched.
+    /// relative path. The same normalization the queries compare imports with.
     /// </summary>
     public static string? KeyOf(ScriptRecord? record)
     {

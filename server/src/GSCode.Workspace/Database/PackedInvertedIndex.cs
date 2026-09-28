@@ -6,11 +6,6 @@ namespace GSCode.Workspace.Database;
 /// key → the files mentioning it, packed and sharded. The storage and the per-file diff that
 /// <see cref="ReferenceIndex"/> and <see cref="DeclarationIndex"/> both need, written once.
 ///
-/// The two were the same class twice over: the same string-or-HashSet packing, the same
-/// remove-then-add diff, the same snapshot read, differing only in what a key is. Keeping them
-/// apart meant a change to the diff had to land in both to stay correct, and they had already
-/// drifted — the reference side was sharded for contention and the declaration side was not.
-///
 /// <see cref="NamespaceIndex"/> is deliberately NOT built on this. It holds a plain
 /// <c>HashSet</c> per key because a namespace is declared into by many files by nature, so the
 /// packing below saves nothing there and the diff it needs is genuinely simpler. Unifying the

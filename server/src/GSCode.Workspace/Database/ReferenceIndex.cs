@@ -18,10 +18,10 @@ public sealed class ReferenceIndex
     /// <summary>
     /// The distinct keys a reference list mentions.
     ///
-    /// Separate from <see cref="Apply"/> so the caller can build it OUTSIDE its own write gate. This
-    /// walk is O(references in the file) — thousands for a large script — and it used to run while
-    /// <c>LanguageStore</c>'s write gate was held, so every indexing thread waited on every other
-    /// thread's hashing. That made the commit stage 22% of CoD4's cold-index thread-time.
+    /// Separate from <see cref="Apply"/> so the caller can build it OUTSIDE its own write gate: the
+    /// walk is O(references in the file), thousands for a large script, and under
+    /// <c>LanguageStore</c>'s gate it made every indexing thread wait on every other thread's
+    /// hashing — the commit stage was 22% of CoD4's cold-index thread-time.
     /// </summary>
     public static HashSet<SymbolKey> KeysOf(ImmutableArray<ReferenceEntry> references)
     {

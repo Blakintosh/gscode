@@ -8,16 +8,14 @@ namespace GSCode.Workspace.Database;
 /// Each maps the name to the files using it, so a list can be built from the distinct names
 /// visible to the asking file rather than from every occurrence in every record.
 ///
-/// Both lists used to be built by walking every record — every reference for literals, every
-/// function's assignments for fields — once per request. Occurrences grow with the workspace;
-/// distinct names barely do, since a large workspace mostly reuses the same notify strings, tags and
-/// fields. At 50,000 files literal completion took 190 ms at p99 against a 10 ms budget (PERF.md,
-/// the scale section), for a list whose length had not changed.
+/// A walk of every record per request — every reference for literals, every function's assignments
+/// for fields — grows with the workspace, while distinct names barely do: a large workspace mostly
+/// reuses the same notify strings, tags and fields. At 50,000 files that walk put literal
+/// completion at 190 ms p99 against a 10 ms budget (PERF.md, the scale section).
 ///
 /// A literal is indexed only when literal completion could offer it — a plain
-/// <see cref="ReferenceKind.Literal"/> not produced by a macro body — so the vocabulary holds what
-/// the old walk would have kept and no more. The name-shape filter the list applies stays at the
-/// query, where it is cheap.
+/// <see cref="ReferenceKind.Literal"/> not produced by a macro body. The name-shape filter the list
+/// applies stays at the query, where it is cheap.
 /// </summary>
 public sealed class VocabularyIndex
 {
@@ -103,7 +101,7 @@ public sealed class VocabularyIndex
 
     /// <summary>
     /// The distinct field names assigned in at least one file <paramref name="visible"/> accepts —
-    /// on <paramref name="ownerName"/> only when one is given, compared ordinally as the old walk did.
+    /// on <paramref name="ownerName"/> only when one is given, compared ordinally.
     /// </summary>
     public List<string> FieldNames(string? ownerName, Func<string, bool> visible)
     {

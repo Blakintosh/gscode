@@ -393,10 +393,9 @@ public sealed class ScriptDatabase
         PerfTracker.Begin("commit.hash");
 
         // Hashed in CHUNKS through a pooled buffer rather than by materialising the whole file as
-        // UTF-8 first. The old form allocated a byte array the size of the file for every file
-        // indexed, and anything over ~85 KB goes straight to the large-object heap — which is not
-        // compacted by default, so each one leaves a hole. On BO1 that is thousands of them, and the
-        // fragmented figure after an index dwarfs the live one.
+        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over
+        // ~85 KB lands on the large-object heap, which is not compacted by default — on BO1,
+        // thousands of holes, and a fragmented figure after an index that dwarfs the live one.
         //
         // An Encoder, not repeated GetBytes calls: a chunk boundary can fall between the two halves
         // of a surrogate pair, and only the stateful encoder carries the leading half across. The

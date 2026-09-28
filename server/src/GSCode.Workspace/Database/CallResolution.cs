@@ -34,10 +34,9 @@ namespace GSCode.Workspace.Database;
 public static class CallResolution
 {
     /// <summary>
-    /// The class whose body contains this position, over the file's own handful of classes.
-    ///
-    /// A bare name inside a class body means a method first, so both callers ask this before any
-    /// namespace or builtin lookup — and both used to ask it with their own copy of this loop.
+    /// The class whose body contains this position, over the file's own handful of classes. A bare
+    /// name inside a class body means a method first, so both callers ask this before any namespace
+    /// or builtin lookup.
     /// </summary>
     public static string? EnclosingClassAt(ParseResult result, Position position)
     {
@@ -81,9 +80,9 @@ public static class CallResolution
                 store, askingContextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result), keyName);
         }
 
-        // Each namespace the file participates in, in order. Hoisted out of the loop: it was rebuilt
-        // per iteration in one copy of this, and the spans it was read from included a phantom whose
-        // lookup scanned the whole store to return nothing.
+        // Each namespace the file participates in, in order, built once rather than per iteration,
+        // and from the declarations: a namespace span list includes a phantom leading span whose
+        // lookup scans the whole store to return nothing.
         ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
 
         foreach ( string declared in askingNamespaces )

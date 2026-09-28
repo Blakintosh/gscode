@@ -43,15 +43,12 @@ public sealed class LanguageStore
     /// previous record and diff against it, leaving the indexes describing a version neither of them
     /// wrote.
     ///
-    /// One gate for the whole store used to do that, and it was the wrong shape. The race it exists
-    /// to stop is between two writers of the SAME file; two writers of different files share
-    /// nothing here, because each index below serialises its own dictionary under its own lock. So a
-    /// process-wide gate serialised every index diff in the workspace against every other one, and
-    /// on CoD4 that made <c>commit.upsert</c> 28.6% of cold-index thread-time at 20x parallelism.
-    ///
-    /// Striped by path instead. Two upserts of one file still collide, which is the entire contract;
-    /// two upserts of different files collide only on a hash coincidence, at which point they are
-    /// still correct and merely serialised.
+    /// Striped by path rather than one gate for the store. The race is between two writers of the
+    /// SAME file; writers of different files share nothing here, because each index below
+    /// serialises its own dictionary under its own lock, and a store-wide gate made
+    /// <c>commit.upsert</c> 28.6% of CoD4's cold-index thread-time at 20x parallelism. Two upserts
+    /// of different files collide only on a hash coincidence, where they are still correct and
+    /// merely serialised.
     ///
     /// Reads take none of these — the record map is concurrent and each index snapshots under its
     /// own lock. That is also why the ordering is safe: a gate here is only ever taken on the way IN
@@ -108,10 +105,10 @@ public sealed class LanguageStore
     /// What one record contributes to every index here, built from the INCOMING record alone.
     ///
     /// It exists to be built OUTSIDE the write gate. Each of these is O(symbols in the file) —
-    /// thousands of references for a large script — and none of them depends on what the store
-    /// currently holds, so serialising them made every indexing thread wait on every other thread's
-    /// hashing, which was 22% of CoD4's cold-index thread-time at 21x parallelism. The gate covers
-    /// only the swap and the dictionary mutations it orders.
+    /// thousands of references for a large script — and none depends on what the store holds, so
+    /// building them under the gate made every indexing thread wait on every other thread's hashing:
+    /// 22% of CoD4's cold-index thread-time at 21x parallelism. The gate covers only the swap and the
+    /// dictionary mutations it orders.
     /// </summary>
     private sealed class Contributions
     {
@@ -168,15 +165,11 @@ public sealed class LanguageStore
     /// <summary>
     /// Replaces one file's contribution to EVERY index, under the caller's gate.
     ///
-    /// The one place the index list is written out. <see cref="Upsert"/> and <see cref="Remove"/>
-    /// each named all nine for themselves, so adding a tenth index was two edits and forgetting the
-    /// removal half left a deleted file's keys in the index with nothing to report it. A removal is
-    /// an upsert whose contribution is <see cref="Contributions.None"/> and whose next record is
-    /// null, which is what every index's own diff already means by an empty new set.
-    ///
-    /// The `PerfTracker` scopes therefore cover removals too, where they used to cover upserts
-    /// alone. Nothing in `PERF.md`'s table moves: it measures cold-index thread-time, and a cold
-    /// index removes nothing.
+    /// The one place the index list is written out, so an index added later cannot be updated on
+    /// upsert and forgotten on removal, which would leave a deleted file's keys in it with nothing to
+    /// report it. A removal is an upsert whose contribution is <see cref="Contributions.None"/> and
+    /// whose next record is null, which is what every index's own diff already means by an empty new
+    /// set.
     /// </summary>
     /// <param name="previous">
     /// The record being replaced, readable only under the gate — reading it outside would let two

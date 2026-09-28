@@ -102,16 +102,14 @@ public static class DatabaseQueries
         // An empty asking path means "no asking file", which sees no private functions at all.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        // The files declaring this NAME, not every file. Asked of the declaration index, which keys
-        // on the same lowercase-canonical FunctionSymbol.KeyName this method compares ordinally, so
-        // the candidate set is exactly what the old scan of store.AllRecords produced — and every
-        // filter below it is unchanged. The index narrows where to look and decides nothing.
-        //
-        // It is here because this method is called once per CALL SITE by four separate lints, and
-        // walking thirty thousand symbols each time made those four 97% of the cross-file lint cost.
+        // The files declaring this NAME, from the declaration index. It keys on the same
+        // lowercase-canonical FunctionSymbol.KeyName compared ordinally below, so every filter below
+        // sees exactly the candidates a scan of every record would give it: the index narrows where
+        // to look and decides nothing. This runs once per CALL SITE for four lints, where a scan of
+        // thirty thousand symbols was 97% of the cross-file lint cost.
         //
         // With a namespace, the files declaring the name INTO it — the subset the namespace filter
-        // below would keep anyway. See DeclarationIndex for what the bare-name list cost at scale.
+        // below would keep anyway. See DeclarationIndex for what the bare-name list costs at scale.
         ImmutableArray<string> declaringPaths = namespaceName is null
             ? store.FilesDeclaring(keyName)
             : store.FilesDeclaring(namespaceName, keyName);
@@ -174,24 +172,19 @@ public static class DatabaseQueries
     /// each copy individually declares — so every raw-context match at that path drops out, not
     /// only the ones the overlay happens to also declare under the same name.
     ///
-    /// A per-NAME check here used to stand in for that (the overlay had to contribute a match under
-    /// the same name for the raw one to be dropped), which is right when both copies declare the
-    /// name but silently wrong when the overlay's copy deletes it: <paramref name="matches"/> is
-    /// already narrowed to one name by the caller, so an overlay that no longer declares it never
-    /// appears here to be compared against — the raw declaration survived, resolving to code the
-    /// engine never loads.
+    /// A per-NAME check cannot stand in for that. <paramref name="matches"/> is already narrowed to
+    /// one name, so an overlay whose copy no longer declares it never appears here to be compared
+    /// against, and the raw declaration would survive, resolving to code the engine never loads.
     ///
-    /// Applies to functions and to classes alike, hence the selectors — the rule is one rule, and
-    /// the two were previously typed out separately, which meant a change to it had to be made
-    /// twice. For classes it also decides more than tidiness: without it a mod that overrides a raw
-    /// script contributes a SECOND class of the same name, and every consumer that takes the first
-    /// match — the parent-chain walks in <see cref="Analysis.ClassCycleLint"/> and in method
-    /// resolution — picks between them arbitrarily. Which copy wins then depends on record
+    /// One rule for functions and classes alike, hence the selectors. For classes it also decides
+    /// more than tidiness: without it a mod that overrides a raw script contributes a SECOND class of
+    /// the same name, and every consumer that takes the first match — the parent-chain walks in
+    /// <see cref="Analysis.ClassCycleLint"/> and in method resolution — picks between them by record
     /// enumeration order, so the same edit can resolve to the raw base class one moment and the
     /// overridden one the next.
     /// </summary>
     /// <param name="store">
-    /// Where <see cref="LanguageStore.HasOverlayAt"/> is asked — the fix for the gap above. Optional
+    /// Where <see cref="LanguageStore.HasOverlayAt"/> is asked, for the per-path rule above. Optional
     /// because one caller (<see cref="FindAllReferences"/>) aggregates across GSC, CSC and the GSH
     /// store together, none of which is uniquely "the" store its matches came from; that caller
     /// already sidesteps the per-name gap by keying <paramref name="keyNameOf"/> to a constant, so
@@ -326,10 +319,9 @@ public static class DatabaseQueries
         // Same normalization contract as LookupFunctions: the same-file test gates privacy.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        // The files that declare INTO this namespace, rather than every file in the store. The old
-        // walk read all ~30,000 BO3 symbols to keep the few dozen in one namespace, and it is asked
-        // once per namespace a file can see — so a namespace-dialect script paid for the whole store
-        // several times over on every keystroke.
+        // The files that declare INTO this namespace, rather than every file in the store: this is
+        // asked once per namespace a file can see, on every keystroke, and all ~30,000 BO3 symbols
+        // would otherwise be read to keep the few dozen in one namespace.
         foreach ( string declaringPath in store.FilesDeclaringInto(namespaceName) )
         {
             if ( !store.TryGet(declaringPath, out ScriptRecord record) )
@@ -1102,9 +1094,9 @@ public static class DatabaseQueries
     /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
     /// answer for every other name first. Signature help asks this on a merge dialect for every
     /// keystroke inside an argument list — <c>,</c> is both a trigger and a retrigger character —
-    /// and it was building every function of the asking file and each file it includes, shadowing
-    /// the whole list and filling a dictionary from it, in order to read one entry. On CoD4 a file
-    /// that includes <c>maps\_utility</c> alone pays for 465 of them.
+    /// and building the full list to read one entry costs every function of the asking file and each
+    /// file it includes, shadowed and put in a dictionary: 465 of them on a CoD4 file that includes
+    /// <c>maps\_utility</c> alone.
     ///
     /// It must agree with the full list exactly, and does so by making the same decision per record
     /// rather than over the set. Shadowing can be decided that way HERE, though not in
@@ -1239,8 +1231,8 @@ public static class DatabaseQueries
             ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
 
         // The asking file and the files it imports, read by path: this runs per keystroke behind
-        // statement-scope completion. It used to read every class-declaring file and keep the
-        // imported ones, and in a large workspace every copy of a class-declaring file is one.
+        // statement-scope completion, and in a large workspace every copy of a class-declaring file
+        // would otherwise be read to keep the imported ones.
         List<ScriptRecord> candidates = ScopeRecords(store, normalizedAskingPath, importedPaths);
 
         HashSet<string> seen = new(StringComparer.Ordinal);
@@ -1332,7 +1324,7 @@ public static class DatabaseQueries
     ///
     /// A file can reach the header THROUGH ANOTHER HEADER. Headers live in a store of their own, so
     /// a direct query walks scripts alone and stops one hop in: with base.gsh inserted by
-    /// wrapper.gsh inserted by script.gsc, changing base.gsh found nothing and script.gsc kept a
+    /// wrapper.gsh inserted by script.gsc, a change to base.gsh would leave script.gsc with a
     /// record built against the old macro values for the rest of the session. The startup index
     /// closes the same set over the same graph, for the same chain.
     ///
@@ -1351,7 +1343,7 @@ public static class DatabaseQueries
     {
         // Candidates come from the directive index — the files inserting a header by its resolved
         // path, plus those writing its path — and each is still put to InsertsAny, since the
-        // written-path key is looser than the comparison. It used to test every record's edges.
+        // written-path key is looser than the comparison.
         string writtenKey = headerRelativePath.Length > 0 ? DirectiveIndex.WrittenKey(headerRelativePath) : "";
 
         HashSet<string> changed = new(StringComparer.Ordinal) { normalizedGshPath };
@@ -1460,9 +1452,9 @@ public static class DatabaseQueries
     /// deliberate exception to the language-guard rule, and the only way a macro defined in a
     /// header is reachable from the <c>.gsc</c>/<c>.csc</c> that inserts it.
     ///
-    /// Read through the header store's reference index. It used to scan every header, on the
-    /// grounds that header counts are small next to script counts — true of a game, but a large
-    /// workspace carries its own headers too, and the scan grew with it (PERF.md, the scale section).
+    /// Read through the header store's reference index rather than a scan of every header: header
+    /// counts are small next to a game's scripts, but a large workspace carries its own headers too
+    /// (PERF.md, the scale section).
     /// </summary>
     /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindGshReferences(
@@ -1507,9 +1499,8 @@ public static class DatabaseQueries
     /// Every reference to a key that the asking file can see: its own language world(s) plus the
     /// shared GSH store for macro keys, which is where a header's own definition and uses live.
     ///
-    /// This is the one place that assembles the full set. Callers that assembled it themselves
-    /// drifted apart — the CodeLens count queried a single store while clicking the lens went
-    /// through the client's reference provider, so the number and the peek list disagreed.
+    /// This is the one place that assembles the full set, so the CodeLens count and the peek list
+    /// opened by clicking it are computed the same way.
     /// </summary>
     /// <param name="macroSpansLanguages">
     /// Whether a MACRO key widens to both language stores. Defaults true, which is right for a
@@ -1530,8 +1521,7 @@ public static class DatabaseQueries
     /// </param>
     /// <param name="onlyPath">
     /// When given, only this file's references are collected — for a question that is same-file by
-    /// definition, such as document highlight, which used to run the whole workspace query and then
-    /// drop every entry outside the current file.
+    /// definition, such as document highlight.
     ///
     /// The ANSWER is the same, and the shadow rule is what makes that non-obvious.
     /// <see cref="ApplyShadowing"/> decides over the SET: a raw file's entries drop out when some
@@ -1554,13 +1544,11 @@ public static class DatabaseQueries
 
         bool wideMacro = key.Kind == SymbolKind.Macro && macroSpansLanguages;
 
-        // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is
-        // inserted into .gsc and .csc alike, so a use in either world is a use of the same name and
-        // the asking file's own language decides nothing. Scoped to the asking store, a rename
-        // started in a .gsc rewrote the .gsc and the .gsh and left every .csc use spelled the old
-        // way — expanding to nothing — which is the failure RenameHandler's own comment says it
-        // exists to avoid. Everything else keeps the isolation: a same-named FUNCTION in the other
-        // world is a different function, and conflating the two is what the split is for.
+        // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is inserted
+        // into .gsc and .csc alike, so a use in either world is a use of the same name: scoped to the
+        // asking store, a rename started in a .gsc would leave every .csc use spelled the old way,
+        // expanding to nothing. Everything else keeps the isolation — a same-named FUNCTION in the
+        // other world is a different function.
         ImmutableArray<LanguageStore> scope = wideMacro ? database.BothLanguageStores : stores;
 
         foreach ( LanguageStore store in scope )
@@ -1607,9 +1595,8 @@ public static class DatabaseQueries
     /// `(caller, getentarray)`, the same call in `#namespace lib` is `(lib, getentarray)`, inside a
     /// class it is keyed to the class, and `sys::getentarray()` is `(null, getentarray)`.
     /// `SymbolExtractor.RecordCalleeReference` says so, and calls the builtin case "a query-time
-    /// concern" — this is that concern. Without it, find-references on a builtin returned only the
-    /// sites that happened to share the asking file's namespace, which on a namespace dialect is
-    /// usually just the file itself.
+    /// concern" — this is that concern. Without it, find-references on a builtin finds only the
+    /// sites sharing the asking file's namespace, on a namespace dialect usually just the file.
     ///
     /// **A key is included only when nothing DECLARES it**, applied per key rather than once. A name
     /// can be both an engine function and a script function in some namespace — and where a script

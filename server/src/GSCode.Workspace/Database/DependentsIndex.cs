@@ -9,12 +9,10 @@ namespace GSCode.Workspace.Database;
 ///
 /// It exists for the reference query. When a function key resolves to one declaring file, the
 /// references worth keeping are the ones that can reach that file — its own, and those of files
-/// that import or path-call it (<see cref="DatabaseQueries.ScopeToIncludeGraph"/>) — but the query
-/// used to find them by collecting every reference to the key in the whole workspace first. On a
-/// merge dialect the key has no namespace, so <c>main</c>'s key is every <c>main</c>: at 50,000
-/// files one CodeLens request, which counts references for every declaration in the file, took
-/// 700 ms (PERF.md, the scale section). The files that can reach a declaring file are the ones
-/// this names.
+/// that import or path-call it (<see cref="DatabaseQueries.ScopeToIncludeGraph"/>) — and these are
+/// the files this names. Collecting every reference to the key first costs the workspace: on a
+/// merge dialect <c>main</c>'s key is every <c>main</c>, and at 50,000 files one CodeLens request
+/// took 700 ms that way (PERF.md, the scale section).
 /// </summary>
 public sealed class DependentsIndex
 {

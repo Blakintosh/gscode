@@ -1463,36 +1463,7 @@ public static class DatabaseQueries
         SymbolKey key,
         string onlyPath = "")
     {
-        ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
-            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
-
-        foreach ( string path in database.GshFilesReferencing(key) )
-        {
-            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
-            {
-                continue;
-            }
-
-            if ( !database.TryGetGsh(path, out ScriptRecord record) )
-            {
-                continue;
-            }
-
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            foreach ( ReferenceEntry entry in record.References )
-            {
-                if ( entry.Key == key )
-                {
-                    results.Add((record, entry));
-                }
-            }
-        }
-
-        return results.ToImmutable();
+        return ReferencesIn(database.GshFilesReferencing(key), database.TryGetGsh, askingContextId, key, onlyPath);
     }
 
     /// <summary>
@@ -1669,17 +1640,30 @@ public static class DatabaseQueries
         SymbolKey key,
         string onlyPath = "")
     {
+        return ReferencesIn(store.FilesReferencing(key), store.TryGet, askingContextId, key, onlyPath);
+    }
+
+    private delegate bool RecordLookup(string normalizedPath, out ScriptRecord record);
+
+    /// <summary>
+    /// Every entry under exactly <paramref name="key"/> in the visible records at
+    /// <paramref name="paths"/> — the one body behind the script-store and header-store reads, which
+    /// differ only in where the paths and records come from.
+    /// </summary>
+    private static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ReferencesIn(
+        ImmutableArray<string> paths, RecordLookup tryGet, string askingContextId, SymbolKey key, string onlyPath)
+    {
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( string path in store.FilesReferencing(key) )
+        foreach ( string path in paths )
         {
             if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
             {
                 continue;
             }
 
-            if ( !store.TryGet(path, out ScriptRecord record) )
+            if ( !tryGet(path, out ScriptRecord record) )
             {
                 continue;
             }

@@ -173,7 +173,7 @@ public class CorpusDiagnosticSweepTests
                 // functions -- which is most of what a user actually sees underlined.
                 List<Finding> forFile = [];
                 foreach ( Diagnostic diagnostic in WorkspaceLints.Analyze(
-                    result, language, path, database, resolver, builtins, objectFields) )
+                    result, language, path, database, resolver, builtins, objectFields, cancellationToken: token) )
                 {
                     forFile.Add(new Finding(
                         diagnostic.Code,

@@ -25,7 +25,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 public class IncludeUsageLintTests
 {
     private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string UtilitySource = "scriptPrintln( channel, msg )\n{\n}\n";
 
@@ -39,7 +39,7 @@ public class IncludeUsageLintTests
     /// One engine name, which is all the gate needs: the lint stands down entirely when the set is
     /// empty, so an empty one would make every test pass for the wrong reason.
     /// </summary>
-    private static readonly FrozenSet<string> EngineNames =
+    private static readonly FrozenSet<string> s_engineNames =
         new[] { "println" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
@@ -63,7 +63,7 @@ public class IncludeUsageLintTests
     private static void Commit(ScriptDatabase database, string path, string relativePath, string source)
     {
         ParseResult parsed = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Cod4);
+            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), s_cod4);
 
         database.Commit(parsed, ResolutionContext.RawContext, isDirty: false, relativePath);
     }
@@ -71,7 +71,7 @@ public class IncludeUsageLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource, GameProfile? profile = null)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        GameProfile game = profile ?? Cod4;
+        GameProfile game = profile ?? s_cod4;
         string askingPath = @$"{Raw}\maps\mp\gametypes\_menus.gsc";
 
         ParseResult result = ScriptAnalysis.Analyze(
@@ -79,7 +79,7 @@ public class IncludeUsageLintTests
             NullInsertProvider.Instance, new NameTable(), game);
 
         return IncludeUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, EngineNames, "raw", game);
+            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, s_engineNames, "raw", game);
     }
 
     [Fact]

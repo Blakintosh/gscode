@@ -25,7 +25,7 @@ public class UnusedIncludeLintTests
 
     /// <summary>A hub declaring nothing of its own, reaching utility only by including it.</summary>
     private const string ChainSource = "#include common_scripts\\utility;\n";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
@@ -40,19 +40,19 @@ public class UnusedIncludeLintTests
 
         string utilityPath = @$"{Raw}\common_scripts\utility.gsc";
         ParseResult utility = ScriptAnalysis.Analyze(
-            utilityPath, ScriptLanguage.Gsc, SourceText.From("helper()\n{\n}\n"), NullInsertProvider.Instance, new NameTable(), Cod4);
+            utilityPath, ScriptLanguage.Gsc, SourceText.From("helper()\n{\n}\n"), NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(utility, ResolutionContext.RawContext, isDirty: false, @"common_scripts\utility.gsc");
 
         // A hub that declares nothing itself and exists only to pull utility in — the shape a
         // marginal test has to get right.
         ParseResult chain = ScriptAnalysis.Analyze(
             @$"{Raw}\maps\_chain.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+            NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(chain, ResolutionContext.RawContext, isDirty: false, @"maps\_chain.gsc");
 
         ParseResult chain2 = ScriptAnalysis.Analyze(
             @$"{Raw}\maps\_chain2.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+            NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(chain2, ResolutionContext.RawContext, isDirty: false, @"maps\_chain2.gsc");
 
         return (database, resolver);
@@ -63,7 +63,7 @@ public class UnusedIncludeLintTests
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
         string askingPath = @$"{Raw}\scripts\main.gsc";
         ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), Cod4);
+            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), s_cod4);
 
         return UnusedIncludeLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
     }

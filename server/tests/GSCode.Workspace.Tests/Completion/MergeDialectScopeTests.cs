@@ -29,7 +29,7 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class MergeDialectScopeTests
 {
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
     private const string Raw = @"C:\iw4";
 
@@ -58,24 +58,24 @@ public class MergeDialectScopeTests
         string editedPath = @$"{Raw}\maps\mp\_utility.gsc";
 
         TestWorkspace.Built workspace = TestWorkspace.Build(
-            Mw2,
+            s_mw2,
             Raw,
             (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
             (@$"{Raw}\common_scripts\utility.gsc", IncludedFile),
             (editedPath, EditedFile));
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
+        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
 
         // Line 8 is the blank line inside exploder_sound's body.
         return engine.Complete(
-            Analyze(editedPath, EditedFile), "raw", new Position(8, 4), profile: Mw2);
+            Analyze(editedPath, EditedFile), "raw", new Position(8, 4), profile: s_mw2);
     }
 
     private static ParseResult Analyze(string path, string text)
     {
         return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, new NameTable(), Mw2);
+            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, new NameTable(), s_mw2);
     }
 
     /// <summary>
@@ -134,18 +134,18 @@ public class MergeDialectScopeTests
         const string editedFile = "run()\n{\n    maps\\_utility::\n}\n";
 
         TestWorkspace.Built workspace = TestWorkspace.Build(
-            Mw2,
+            s_mw2,
             Raw,
             (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
             (@$"{Raw}\maps\mp\_utility.gsc", IncludedFile),
             (editedPath, editedFile));
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
+        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
 
         // Line 2, right after "maps\_utility::".
         return engine.Complete(
-            Analyze(editedPath, editedFile), "raw", new Position(2, 19), profile: Mw2);
+            Analyze(editedPath, editedFile), "raw", new Position(2, 19), profile: s_mw2);
     }
 
     [Fact]

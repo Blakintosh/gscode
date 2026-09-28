@@ -16,8 +16,8 @@ namespace GSCode.Parser.Tests.Extraction;
 /// </summary>
 public class DialectResolutionTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     private static ParseResult Analyze(string source, GameProfile profile)
     {
@@ -41,7 +41,7 @@ public class DialectResolutionTests
     public void AnIncludeDialectKeysAFunctionDefinitionWithoutANamespace()
     {
         // The file stem is "_utility"; under #include that is NOT the function's namespace.
-        ParseResult result = Analyze("helper()\n{\n}\n", Cod4);
+        ParseResult result = Analyze("helper()\n{\n}\n", s_cod4);
 
         SymbolKey definition = KeyOf(result, ReferenceKind.Definition, "helper");
         Assert.Null(definition.Namespace);
@@ -51,7 +51,7 @@ public class DialectResolutionTests
     public void AnUnqualifiedCallResolvesToTheDefinitionByName()
     {
         // Definition and call must share one key for go-to-definition (which is key equality).
-        ParseResult result = Analyze("helper()\n{\n}\nrun()\n{\n\thelper();\n}\n", Cod4);
+        ParseResult result = Analyze("helper()\n{\n}\nrun()\n{\n\thelper();\n}\n", s_cod4);
 
         SymbolKey definition = KeyOf(result, ReferenceKind.Definition, "helper");
         SymbolKey call = KeyOf(result, ReferenceKind.Call, "helper");
@@ -65,7 +65,7 @@ public class DialectResolutionTests
     {
         // maps\mp\_utility::foo() and a bare foo definition reduce to the same (null, foo) key, so a
         // path call resolves to the merged function just like an unqualified one.
-        ParseResult result = Analyze("foo()\n{\n}\nrun()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", Cod4);
+        ParseResult result = Analyze("foo()\n{\n}\nrun()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", s_cod4);
 
         SymbolKey definition = KeyOf(result, ReferenceKind.Definition, "foo");
         SymbolKey call = KeyOf(result, ReferenceKind.Call, "foo");
@@ -78,7 +78,7 @@ public class DialectResolutionTests
     public void APathCallRecordsItsTargetFile()
     {
         // The explicit path is kept so go-to-definition can pin the call to that one file.
-        ParseResult result = Analyze("run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", Cod4);
+        ParseResult result = Analyze("run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", s_cod4);
 
         GSCode.Parser.Extraction.PathCallReference pathCall = Assert.Single(result.Extraction.PathCalls);
         Assert.Equal("maps\\mp\\_utility", pathCall.Path);
@@ -88,7 +88,7 @@ public class DialectResolutionTests
     public void ALeadingScopeResolutionRecordsNoTargetFile()
     {
         // ::foo is a local pointer with no explicit file target.
-        ParseResult result = Analyze("run()\n{\n\t::foo();\n}\n", Cod4);
+        ParseResult result = Analyze("run()\n{\n\t::foo();\n}\n", s_cod4);
 
         Assert.Empty(result.Extraction.PathCalls);
     }
@@ -97,7 +97,7 @@ public class DialectResolutionTests
     public void BlackOps3StillKeysFunctionsByNamespace()
     {
         // BO3 identity includes the namespace (the file stem here, "_utility"), unchanged.
-        ParseResult result = Analyze("function helper()\n{\n}\nfunction run()\n{\n\thelper();\n}\n", Bo3);
+        ParseResult result = Analyze("function helper()\n{\n}\nfunction run()\n{\n\thelper();\n}\n", s_bo3);
 
         SymbolKey definition = KeyOf(result, ReferenceKind.Definition, "helper");
         SymbolKey call = KeyOf(result, ReferenceKind.Call, "helper");

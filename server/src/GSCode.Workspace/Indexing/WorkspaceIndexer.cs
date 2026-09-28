@@ -154,9 +154,9 @@ public sealed class WorkspaceIndexer
     /// workspace-folder change is the cheaper side of that trade: the snapshot is live for
     /// milliseconds and dead for hours.
     /// </summary>
-    private IReadOnlyDictionary<string, CachedEntry> _restored = EmptyRestore;
+    private IReadOnlyDictionary<string, CachedEntry> _restored = s_emptyRestore;
 
-    private static readonly IReadOnlyDictionary<string, CachedEntry> EmptyRestore =
+    private static readonly IReadOnlyDictionary<string, CachedEntry> s_emptyRestore =
         new Dictionary<string, CachedEntry>(StringComparer.Ordinal);
 
     /// <summary>
@@ -223,11 +223,11 @@ public sealed class WorkspaceIndexer
     {
         try
         {
-            _restored = _cache?.LoadAll() ?? EmptyRestore;
+            _restored = _cache?.LoadAll() ?? s_emptyRestore;
         }
         catch ( Exception exception ) when ( exception is not OutOfMemoryException )
         {
-            _restored = EmptyRestore;
+            _restored = s_emptyRestore;
         }
     }
 
@@ -272,7 +272,7 @@ public sealed class WorkspaceIndexer
             // folder-change caller passes a real token, and a cancellation there would otherwise
             // pin the whole snapshot for the rest of the session — which is the case this exists
             // to remove.
-            _restored = EmptyRestore;
+            _restored = s_emptyRestore;
             _passGate.Release();
         }
     }

@@ -24,10 +24,10 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class ResolveForQueryTests
 {
-    private static readonly string IndexedPath =
+    private static readonly string s_indexedPath =
         PathUtil.NormalizeAbsolute(@"C:\bo3\share\raw\scripts\shared\util_shared.gsc");
 
-    private static readonly TextRange SomeRange = new(new Position(1, 1), new Position(1, 5));
+    private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
 
     private static NavigationSupport SupportOver(ScriptDatabase database)
     {
@@ -39,7 +39,7 @@ public class ResolveForQueryTests
     {
         return new ScriptRecord
         {
-            Path = IndexedPath,
+            Path = s_indexedPath,
             ContextId = "raw",
             ContentHash = 0,
             Language = ScriptLanguage.Gsc,
@@ -52,8 +52,8 @@ public class ResolveForQueryTests
                     Name = "helper",
                     KeyName = "helper",
                     Namespace = "util_shared",
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                 },
             ],
         };
@@ -66,10 +66,10 @@ public class ResolveForQueryTests
         database.Gsc.Upsert(IndexedRecord());
 
         SymbolQueryContext? context = SupportOver(database).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(IndexedPath), CancellationToken.None);
+            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
 
         Assert.NotNull(context);
-        Assert.Equal(IndexedPath, context.Path);
+        Assert.Equal(s_indexedPath, context.Path);
         Assert.Equal("raw", context.ContextId);
         Assert.Equal(ScriptLanguage.Gsc, context.Language);
         Assert.Contains("util_shared", context.Namespaces);
@@ -80,7 +80,7 @@ public class ResolveForQueryTests
     {
         // The control: the fallback answers from the INDEX, not from the path existing.
         SymbolQueryContext? context = SupportOver(new ScriptDatabase()).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(IndexedPath), CancellationToken.None);
+            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
 
         Assert.Null(context);
     }
@@ -94,7 +94,7 @@ public class ResolveForQueryTests
         database.Gsc.Upsert(IndexedRecord() with { ContextId = "mod:my_mod" });
 
         SymbolQueryContext? context = SupportOver(database).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(IndexedPath), CancellationToken.None);
+            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
 
         Assert.NotNull(context);
         Assert.Equal("mod:my_mod", context.ContextId);

@@ -16,7 +16,7 @@ namespace GSCode.Parser.Tests.Preprocessing;
 /// </summary>
 public class MacroExpansionDepthTests
 {
-    private static readonly TimeSpan Budget = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_budget = TimeSpan.FromSeconds(10);
 
     private static PreprocessResult ProcessWithinBudget(string source)
     {
@@ -29,8 +29,8 @@ public class MacroExpansionDepthTests
         });
 
         Assert.True(
-            preprocess.Wait(Budget),
-            $"preprocessing did not finish within {Budget.TotalSeconds}s on this input");
+            preprocess.Wait(s_budget),
+            $"preprocessing did not finish within {s_budget.TotalSeconds}s on this input");
 
         return preprocess.Result;
     }

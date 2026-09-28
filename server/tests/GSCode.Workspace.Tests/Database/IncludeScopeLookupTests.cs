@@ -18,7 +18,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class IncludeScopeLookupTests
 {
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(0, 0, 0, 1);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(0, 0, 0, 1);
 
     private static ScriptRecord Record(string path, string contextId, string relativePath, params string[] functions)
     {
@@ -30,8 +30,8 @@ public class IncludeScopeLookupTests
                 Name = name,
                 KeyName = name,
                 Namespace = "",
-                NameRange = SomeRange,
-                FullRange = SomeRange,
+                NameRange = s_someRange,
+                FullRange = s_someRange,
             });
         }
 
@@ -64,14 +64,14 @@ public class IncludeScopeLookupTests
         return store;
     }
 
-    private static readonly ImmutableArray<string> Included =
+    private static readonly ImmutableArray<string> s_included =
         [RelativePathIndex.Normalize(@"maps\a.gsc"), RelativePathIndex.Normalize(@"maps\b.gsc")];
 
     /// <summary>What the full list would have answered for one name.</summary>
     private static FunctionSymbol? FromTheFullList(LanguageStore store, string askingContextId, string keyName)
     {
         foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
-            store, askingContextId, AskingPath, Included) )
+            store, askingContextId, AskingPath, s_included) )
         {
             if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
             {
@@ -102,7 +102,7 @@ public class IncludeScopeLookupTests
 
         FunctionSymbol? expected = FromTheFullList(store, askingContextId, keyName);
         FunctionSymbol? actual = DatabaseQueries.FunctionInIncludeScope(
-            store, askingContextId, AskingPath, Included, keyName);
+            store, askingContextId, AskingPath, s_included, keyName);
 
         Assert.Equal(expected, actual);
     }
@@ -114,8 +114,8 @@ public class IncludeScopeLookupTests
         // `dropped` is not in scope for anyone asking as mod m.
         LanguageStore store = Workspace();
 
-        Assert.NotNull(DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, Included, "dropped"));
-        Assert.Null(DatabaseQueries.FunctionInIncludeScope(store, "mod:m", AskingPath, Included, "dropped"));
+        Assert.NotNull(DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, s_included, "dropped"));
+        Assert.Null(DatabaseQueries.FunctionInIncludeScope(store, "mod:m", AskingPath, s_included, "dropped"));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class IncludeScopeLookupTests
         // them — the case ApplyShadowing's own doc says HasOverlayAt exists to get right.
         LanguageStore store = Workspace();
 
-        FunctionSymbol? asRaw = DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, Included, "helper");
+        FunctionSymbol? asRaw = DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, s_included, "helper");
 
         Assert.NotNull(asRaw);
         Assert.Equal(FromTheFullList(store, "raw", "helper"), asRaw);

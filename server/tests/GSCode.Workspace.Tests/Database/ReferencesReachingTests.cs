@@ -16,7 +16,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class ReferencesReachingTests
 {
-    private static readonly SymbolKey Main = new(null, "main", SymbolKind.Function);
+    private static readonly SymbolKey s_main = new(null, "main", SymbolKind.Function);
 
     private static TextRange At(int line)
     {
@@ -45,18 +45,18 @@ public class ReferencesReachingTests
                 NameRange = At(0),
                 FullRange = At(0),
             });
-            references.Add(new ReferenceEntry(Main, At(0), ReferenceKind.Definition));
+            references.Add(new ReferenceEntry(s_main, At(0), ReferenceKind.Definition));
         }
 
         foreach ( int line in callsMainOn ?? [] )
         {
-            references.Add(new ReferenceEntry(Main, At(line), ReferenceKind.Call));
+            references.Add(new ReferenceEntry(s_main, At(line), ReferenceKind.Call));
         }
 
         ImmutableArray<PathCallReference>.Builder targets = ImmutableArray.CreateBuilder<PathCallReference>();
         foreach ( (string Path, int Line) pathCall in pathCalls ?? [] )
         {
-            references.Add(new ReferenceEntry(Main, At(pathCall.Line), ReferenceKind.Call));
+            references.Add(new ReferenceEntry(s_main, At(pathCall.Line), ReferenceKind.Call));
             targets.Add(new PathCallReference(pathCall.Path, At(pathCall.Line)));
         }
 
@@ -115,9 +115,9 @@ public class ReferencesReachingTests
         ScriptDatabase database = new();
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> old = DatabaseQueries.ScopeToIncludeGraph(
-            DatabaseQueries.FindAllReferences(database, stores, askingContextId, Main), @"maps\a.gsc", GameProfile.Cod4);
+            DatabaseQueries.FindAllReferences(database, stores, askingContextId, s_main), @"maps\a.gsc", GameProfile.Cod4);
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped =
-            DatabaseQueries.FindReferencesReaching(stores, askingContextId, Main, @"maps\a.gsc", GameProfile.Cod4);
+            DatabaseQueries.FindReferencesReaching(stores, askingContextId, s_main, @"maps\a.gsc", GameProfile.Cod4);
 
         Assert.Equal(Describe(old), Describe(scoped));
     }
@@ -126,7 +126,7 @@ public class ReferencesReachingTests
     public void FromTheMod_TheShadowedRawCopyIsGone_AndTheUnrelatedMainNeverCounted()
     {
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = DatabaseQueries.FindReferencesReaching(
-            [Workspace()], "mod:m", Main, @"maps\a.gsc", GameProfile.Cod4);
+            [Workspace()], "mod:m", s_main, @"maps\a.gsc", GameProfile.Cod4);
 
         List<string> paths = [.. found.Select(static item => item.Record.Path).Distinct()];
         Assert.Contains(@"c:\raw\maps\a.gsc", paths);

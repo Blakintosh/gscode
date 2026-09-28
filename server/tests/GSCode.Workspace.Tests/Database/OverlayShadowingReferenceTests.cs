@@ -61,7 +61,7 @@ public class OverlayShadowingReferenceTests
         Assert.Equal("mod:zm_grief", kept.ContextId);
     }
 
-    private static readonly GSCode.Core.Text.TextRange SomeRange =
+    private static readonly GSCode.Core.Text.TextRange s_someRange =
         new(new GSCode.Core.Text.Position(1, 1), new GSCode.Core.Text.Position(1, 5));
 
     private static ScriptRecord FunctionRecord(
@@ -84,8 +84,8 @@ public class OverlayShadowingReferenceTests
                     Name = keyName,
                     KeyName = keyName,
                     Namespace = "",
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                     Parameters = parameters,
                 },
             ],
@@ -156,8 +156,8 @@ public class OverlayShadowingReferenceTests
                     KeyName = keyName,
                     Namespace = "",
                     ParentKeyName = parentKeyName,
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                 },
             ],
         };

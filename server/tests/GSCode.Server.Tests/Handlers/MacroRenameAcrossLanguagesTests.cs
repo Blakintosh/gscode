@@ -52,12 +52,12 @@ public class MacroRenameAcrossLanguagesTests
     /// <summary>Serves the one header, so the scripts' MAX_FLAGS is a macro use and not a variable.</summary>
     private sealed class HeaderInsertProvider : IInsertProvider
     {
-        private static readonly SourceText Text = SourceText.From(HeaderSource);
-        private static readonly ImmutableArray<Token> Tokens = Lexer.Lex(Text).Tokens;
+        private static readonly SourceText s_text = SourceText.From(HeaderSource);
+        private static readonly ImmutableArray<Token> s_tokens = Lexer.Lex(s_text).Tokens;
 
         public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
         {
-            inserted = new InsertedFile(GSCode.Core.Paths.PathUtil.NormalizeAbsolute(HeaderPath), Text, Tokens);
+            inserted = new InsertedFile(GSCode.Core.Paths.PathUtil.NormalizeAbsolute(HeaderPath), s_text, s_tokens);
             return string.Equals(rawInsertPath, HeaderRawPath, StringComparison.OrdinalIgnoreCase);
         }
 

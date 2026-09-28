@@ -18,7 +18,7 @@ namespace GSCode.Parser.Tests.Preprocessing;
 public class DuplicateMacroTests
 {
     private const string GshPath = @"scripts\shared\flags.gsh";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static int Count(PreprocessResult result, GscDiagnosticCode code)
     {
@@ -248,7 +248,7 @@ public class DuplicateMacroTests
         // The duplicate rule follows the machinery rather than the dialect for exactly that reason.
         // Gating it on HasMacros would make it Black Ops III's alone, so the same user would
         // `#pragma disable 2016` and lose duplicate-macro checking with it, silently.
-        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: Cod4);
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: s_cod4);
 
         Assert.Contains(
             result.Diagnostics, d => d.Code == GscDiagnosticCode.MacrosNotInDialect);
@@ -261,7 +261,7 @@ public class DuplicateMacroTests
     {
         // The point above, stated as the behaviour a user would see. 2016 is reported once per file;
         // the duplicate is a separate code, so `#pragma disable 2016` does not take it with it.
-        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: Cod4);
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: s_cod4);
 
         Assert.Single(result.Diagnostics, d => d.Code == GscDiagnosticCode.DuplicateMacroDefinition);
     }

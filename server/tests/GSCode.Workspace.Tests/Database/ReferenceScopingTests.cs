@@ -24,10 +24,10 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class ReferenceScopingTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     /// <summary>The range every synthetic path call and reference shares, so they attribute to it.</summary>
-    private static readonly TextRange PathCallRange = new(new Position(1, 1), new Position(1, 5));
+    private static readonly TextRange s_pathCallRange = new(new Position(1, 1), new Position(1, 5));
 
     private static ScriptRecord Record(
         string relativePath, ImmutableArray<string> includes = default, ImmutableArray<string> pathCalls = default,
@@ -50,7 +50,7 @@ public class ReferenceScopingTests
             Functions = functions.IsDefault ? [] : functions,
             PathCallTargets = pathCalls.IsDefault
                 ? []
-                : [.. pathCalls.Select(static path => new PathCallReference(path, PathCallRange))],
+                : [.. pathCalls.Select(static path => new PathCallReference(path, s_pathCallRange))],
         };
     }
 
@@ -62,7 +62,7 @@ public class ReferenceScopingTests
         foreach ( ScriptRecord record in records )
         {
             builder.Add((record, new ReferenceEntry(
-                new SymbolKey(null, "main", SymbolKind.Function), PathCallRange, ReferenceKind.Call)));
+                new SymbolKey(null, "main", SymbolKind.Function), s_pathCallRange, ReferenceKind.Call)));
         }
 
         return builder.ToImmutable();
@@ -75,7 +75,7 @@ public class ReferenceScopingTests
         ScriptRecord caller = Record(@"animscripts\corner", pathCalls: [@"animscripts\combat"]);
 
         ImmutableArray<(ScriptRecord, ReferenceEntry)> kept =
-            DatabaseQueries.ScopeToIncludeGraph(Refs(caller), @"animscripts\combat", Cod4);
+            DatabaseQueries.ScopeToIncludeGraph(Refs(caller), @"animscripts\combat", s_cod4);
 
         Assert.Single(kept);
     }
@@ -86,8 +86,8 @@ public class ReferenceScopingTests
         ScriptRecord importer = Record(@"animscripts\melee", includes: [@"animscripts\combat"]);
         ScriptRecord stranger = Record(@"animscripts\walk");
 
-        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(importer), @"animscripts\combat", Cod4));
-        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(stranger), @"animscripts\combat", Cod4));
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(importer), @"animscripts\combat", s_cod4));
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(stranger), @"animscripts\combat", s_cod4));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class ReferenceScopingTests
     {
         ScriptRecord self = Record(@"animscripts\combat");
 
-        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(self), @"animscripts\combat", Cod4));
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(self), @"animscripts\combat", s_cod4));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class ReferenceScopingTests
         ];
 
         ImmutableArray<(ScriptRecord, ReferenceEntry)> kept = DatabaseQueries.ScopeToIncludeGraph(
-            Refs([reacher, .. strangers]), @"animscripts\combat", Cod4);
+            Refs([reacher, .. strangers]), @"animscripts\combat", s_cod4);
 
         Assert.Single(kept);
     }
@@ -122,7 +122,7 @@ public class ReferenceScopingTests
         // A bare name in a file that declares it means THAT file's function.
         ImmutableArray<FunctionSymbol> declaresMain =
         [
-            new FunctionSymbol { Name = "main", KeyName = "main", Namespace = "", NameRange = PathCallRange, FullRange = PathCallRange },
+            new FunctionSymbol { Name = "main", KeyName = "main", Namespace = "", NameRange = s_pathCallRange, FullRange = s_pathCallRange },
         ];
 
         ScriptRecord coverProne = Record(
@@ -139,10 +139,10 @@ public class ReferenceScopingTests
                 ReferenceKind.Definition)),
         ];
 
-        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(ownDeclaration, @"animscripts\combat.gsc", Cod4));
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(ownDeclaration, @"animscripts\combat.gsc", s_cod4));
 
         // But its combat::main() call, which IS at a path-call site, still counts.
-        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(coverProne), @"animscripts\combat.gsc", Cod4));
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(coverProne), @"animscripts\combat.gsc", s_cod4));
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class ReferenceScopingTests
             @"animscripts\corner.gsc",
             pathCalls: [@"animscripts\cover_behavior"]);
 
-        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(corner), @"animscripts\combat.gsc", Cod4));
+        Assert.Empty(DatabaseQueries.ScopeToIncludeGraph(Refs(corner), @"animscripts\combat.gsc", s_cod4));
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public class ReferenceScopingTests
         {
             builder.Add((record, new ReferenceEntry(
                 new SymbolKey("globallogic_utils", "get_time_remaining", SymbolKind.Function),
-                PathCallRange,
+                s_pathCallRange,
                 ReferenceKind.Call)));
         }
 
@@ -220,8 +220,8 @@ public class ReferenceScopingTests
                     Name = "get_time_remaining",
                     KeyName = "get_time_remaining",
                     Namespace = "globallogic_spawn",
-                    NameRange = PathCallRange,
-                    FullRange = PathCallRange,
+                    NameRange = s_pathCallRange,
+                    FullRange = s_pathCallRange,
                 },
             ]);
 
@@ -234,6 +234,6 @@ public class ReferenceScopingTests
         // Ambiguity must stay wide: a confidently wrong narrow answer is not recoverable.
         ScriptRecord stranger = Record(@"animscripts\walk");
 
-        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(stranger), "", Cod4));
+        Assert.Single(DatabaseQueries.ScopeToIncludeGraph(Refs(stranger), "", s_cod4));
     }
 }

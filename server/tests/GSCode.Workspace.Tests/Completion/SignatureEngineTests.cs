@@ -261,7 +261,7 @@ public class SignatureEngineTests
     // the file's OWN declared (stem) namespaces, so a function reached only through #include never
     // resolved here — unlike completion, which asks FunctionsInIncludeScope for exactly this case.
 
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
     [Fact]
     public void AFunctionReachedOnlyThroughInclude_StillGetsSignatureHelp()
@@ -279,19 +279,19 @@ public class SignatureEngineTests
         string editedPath = @$"{raw}\maps\main.gsc";
 
         TestWorkspace.Built workspace = TestWorkspace.Build(
-            Mw2,
+            s_mw2,
             raw,
             (@$"{raw}\common_scripts\utility.gsc", includedFile),
             (editedPath, editedFile));
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        SignatureEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2));
+        SignatureEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2));
 
         ParseResult result = ScriptAnalysis.Analyze(
-            editedPath, ScriptLanguage.Gsc, SourceText.From(editedFile), NullInsertProvider.Instance, new NameTable(), Mw2);
+            editedPath, ScriptLanguage.Gsc, SourceText.From(editedFile), NullInsertProvider.Instance, new NameTable(), s_mw2);
 
         // Line 4, right after the open paren.
-        SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 24), Mw2);
+        SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 24), s_mw2);
 
         Assert.NotNull(signature);
         Assert.Single(signature!.Parameters);

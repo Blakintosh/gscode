@@ -27,7 +27,7 @@ public sealed class DependentRefreshStampTests : IDisposable
     private const string Source = "function main()\n{\n}\n";
 
     /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_patience = TimeSpan.FromSeconds(30);
 
     private sealed class RecordingSink : IDiagnosticsSink
     {
@@ -81,7 +81,7 @@ public sealed class DependentRefreshStampTests : IDisposable
                 if ( Interlocked.Increment(ref started) == 2 )
                 {
                     entered.Set();
-                    release.Wait(Patience);
+                    release.Wait(s_patience);
                 }
 
                 return NullInsertProvider.Instance;
@@ -130,12 +130,12 @@ public sealed class DependentRefreshStampTests : IDisposable
         documents.ApplyChange(document, range: null, Source, version: 2);
 
         Task refresh = Task.Run(() => refresher.RefreshOne(document));
-        Assert.True(entered.Wait(Patience), "the refresh never reached the analysis");
+        Assert.True(entered.Wait(s_patience), "the refresh never reached the analysis");
 
         // The edit that used to win the stamp: the parse in flight is of v2's text.
         documents.ApplyChange(document, range: null, Source, version: 7);
         release.Set();
-        await refresh.WaitAsync(Patience);
+        await refresh.WaitAsync(s_patience);
 
         PublishDiagnosticsParams published = Assert.Single(sink.Sent);
         Assert.Equal(2, published.Version);

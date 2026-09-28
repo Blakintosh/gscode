@@ -31,7 +31,7 @@ public class WorkspaceDiagnosticsRefreshTests
         }
     }
 
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(0, 0, 0, 1);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(0, 0, 0, 1);
 
     private static ScriptRecord WithProblem(string path, string message)
     {
@@ -41,7 +41,7 @@ public class WorkspaceDiagnosticsRefreshTests
             Language = ScriptLanguage.Gsc,
             ContextId = @"workspace:c:\ws",
             ContentHash = 7,
-            Diagnostics = [new Diagnostic(SomeRange, DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedLocal, message)],
+            Diagnostics = [new Diagnostic(s_someRange, DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedLocal, message)],
         };
     }
 
@@ -90,7 +90,7 @@ public class WorkspaceDiagnosticsRefreshTests
 
         database.SetDiagnostics(
             @"c:\ws\a.gsc", ScriptLanguage.Gsc, 7,
-            [new Diagnostic(SomeRange, DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedLocal, "a, changed")]);
+            [new Diagnostic(s_someRange, DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedLocal, "a, changed")]);
         publisher.Refresh();
 
         PublishDiagnosticsParams sent = Assert.Single(sink.Sent);

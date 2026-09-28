@@ -16,7 +16,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DeclarationIndexTests
 {
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(1, 0, 1, 4);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(1, 0, 1, 4);
 
     private static ScriptRecord Declaring(string path, params (string Namespace, string KeyName)[] functions)
     {
@@ -28,8 +28,8 @@ public class DeclarationIndexTests
                 Name = function.KeyName,
                 KeyName = function.KeyName,
                 Namespace = function.Namespace,
-                NameRange = SomeRange,
-                FullRange = SomeRange,
+                NameRange = s_someRange,
+                FullRange = s_someRange,
             });
         }
 
@@ -100,8 +100,8 @@ public class DeclarationIndexTests
                     KeyName = "cthing",
                     Namespace = "alpha",
                     Methods = [devMethod],
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                 },
             ],
         });

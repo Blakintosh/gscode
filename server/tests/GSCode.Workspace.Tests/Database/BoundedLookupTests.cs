@@ -14,7 +14,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class BoundedLookupTests
 {
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(0, 0, 0, 1);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(0, 0, 0, 1);
 
     private static ScriptRecord Record(string path, string contextId, string relativePath, params string[] functions)
     {
@@ -26,8 +26,8 @@ public class BoundedLookupTests
                 Name = name,
                 KeyName = name,
                 Namespace = "",
-                NameRange = SomeRange,
-                FullRange = SomeRange,
+                NameRange = s_someRange,
+                FullRange = s_someRange,
             });
         }
 

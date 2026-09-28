@@ -1462,7 +1462,7 @@ public class CompletionEngineTests
     // and it cannot filter `scripts\mp\_arena` against anything typed — the list stayed
     // unfiltered and highlighted whatever came first.
 
-    private static readonly FakeFileSystem PathWorld = new FakeFileSystem()
+    private static readonly FakeFileSystem s_pathWorld = new FakeFileSystem()
         .AddFile(@$"{Raw}\scripts\mp\_arena.gsc", "function a()\n{\n}\n")
         .AddFile(@$"{Raw}\scripts\mp\_armor.gsc", "function b()\n{\n}\n")
         .AddFile(@$"{Raw}\scripts\mp\gametypes\tdm.gsc", "function c()\n{\n}\n")
@@ -1474,7 +1474,7 @@ public class CompletionEngineTests
     /// <summary>Completes at the end of a directive line in a file of the given extension.</summary>
     private static ImmutableArray<CompletionEntry> CompletePath(string line, string extension = "gsc")
     {
-        (CompletionEngine engine, _, _) = BuildWorld(PathWorld);
+        (CompletionEngine engine, _, _) = BuildWorld(s_pathWorld);
         ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, line.Length));

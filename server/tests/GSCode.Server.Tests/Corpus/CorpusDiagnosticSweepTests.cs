@@ -106,11 +106,11 @@ public class CorpusDiagnosticSweepTests
     /// was about three minutes of a thirteen-minute run. Safe in a static: every corpus class shares
     /// one collection, so nothing runs concurrently with it, and a sweep never mutates what it reads.
     /// </summary>
-    private static readonly Dictionary<string, List<Finding>> SweepCache = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, List<Finding>> s_sweepCache = new(StringComparer.Ordinal);
 
     private static async Task<List<Finding>> SweepAsync(Target target)
     {
-        if ( SweepCache.TryGetValue(target.Profile.ShortName, out List<Finding>? cached) )
+        if ( s_sweepCache.TryGetValue(target.Profile.ShortName, out List<Finding>? cached) )
         {
             return cached;
         }
@@ -234,7 +234,7 @@ public class CorpusDiagnosticSweepTests
                 .ThenBy(f => (int)f.Code),
         ];
 
-        SweepCache[target.Profile.ShortName] = findings;
+        s_sweepCache[target.Profile.ShortName] = findings;
         return findings;
     }
 

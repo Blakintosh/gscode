@@ -23,8 +23,8 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class UnimportedFunctionCompletionTests
 {
-    private static readonly GameProfile Bo3 = GameProfile.ByName("bo3")!;
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile s_bo3 = GameProfile.ByName("bo3")!;
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
     private static ImmutableArray<CompletionEntry> CompleteIn(
         GameProfile profile, string rawRoot, string editedPath, string editedText, Position position,
@@ -64,7 +64,7 @@ public class UnimportedFunctionCompletionTests
         const string edited = "#namespace caller;\nfunction run()\n{\n    get_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
-            Bo3,
+            s_bo3,
             raw,
             @$"{raw}\scripts\caller.gsc",
             edited,
@@ -83,7 +83,7 @@ public class UnimportedFunctionCompletionTests
         const string edited = "run()\n{\n    exploder_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
-            Mw2,
+            s_mw2,
             raw,
             @$"{raw}\maps\mp\caller.gsc",
             edited,
@@ -102,7 +102,7 @@ public class UnimportedFunctionCompletionTests
         const string edited = "#using scripts\\lib;\n#namespace caller;\nfunction run()\n{\n    get_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
-            Bo3,
+            s_bo3,
             raw,
             @$"{raw}\scripts\caller.gsc",
             edited,
@@ -122,7 +122,7 @@ public class UnimportedFunctionCompletionTests
         const string edited = "#namespace caller;\nfunction run()\n{\n    hid\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
-            Bo3,
+            s_bo3,
             raw,
             @$"{raw}\scripts\caller.gsc",
             edited,

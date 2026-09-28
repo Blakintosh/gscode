@@ -136,7 +136,7 @@ public static class GscSnippets
     /// keywords and no directive names them, so <see cref="GscKeywords.IsAvailable"/> has nothing
     /// to answer with. See <see cref="GameProfile.ScriptDocStyle"/>.
     /// </summary>
-    private static readonly Entry AtSignScriptDoc = new(
+    private static readonly Entry s_atSignScriptDoc = new(
         "doc",
         "/@\n\"Name: ${1:name}( <${2:arg}> )\"\n\"Summary: ${3:What it does.}\"\n\"Module: ${4:Utility}\"\n"
             + "\"CallOn: ${5}\"\n\"MandatoryArg: <${2:arg}> : ${6:description}\"\n\"Example: ${7}\"\n"
@@ -154,7 +154,7 @@ public static class GscSnippets
     /// bare. The lines are quoted for the same reason the BO3 form's are: that is how the shipped
     /// scripts write them, which is what <c>ScriptDocComment.Parse</c>'s unquote step exists for.
     /// </summary>
-    private static readonly Entry TripleSlashScriptDoc = new(
+    private static readonly Entry s_tripleSlashScriptDoc = new(
         "doc",
         "/*\n///ScriptDocBegin\n\"Name: ${1:name}( <${2:arg}> )\"\n\"Summary: ${3:What it does.}\"\n"
             + "\"Module: ${4:Utility}\"\n\"MandatoryArg: <${2:arg}> : ${5:description}\"\n"
@@ -165,7 +165,7 @@ public static class GscSnippets
 
     private static Entry ScriptDoc(GameProfile game)
     {
-        return game.ScriptDocStyle == ScriptDocStyle.AtSign ? AtSignScriptDoc : TripleSlashScriptDoc;
+        return game.ScriptDocStyle == ScriptDocStyle.AtSign ? s_atSignScriptDoc : s_tripleSlashScriptDoc;
     }
 
     /// <summary>The snippets this dialect has, for one completion scope.</summary>

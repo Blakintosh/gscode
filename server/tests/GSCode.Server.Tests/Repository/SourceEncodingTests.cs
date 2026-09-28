@@ -41,7 +41,7 @@ public class SourceEncodingTests
     /// otherwise fail this suite on its magic bytes, and the fix would look like an exclusion rather
     /// than a decision.
     /// </summary>
-    private static readonly string[] TextExtensions =
+    private static readonly string[] s_textExtensions =
     [
         ".cs", ".csproj", ".props", ".slnx", ".editorconfig", ".gitattributes", ".gitignore",
         ".json", ".md", ".ts", ".mjs", ".js", ".svelte", ".css", ".html", ".yml", ".yaml",
@@ -54,7 +54,7 @@ public class SourceEncodingTests
         List<string> offenders = [];
         foreach ( string relative in TrackedTextFiles() )
         {
-            string full = Path.Combine(RepositoryRoot, relative);
+            string full = Path.Combine(s_repositoryRoot, relative);
             if ( File.Exists(full) && StartsWithBom(full) )
             {
                 offenders.Add(relative);
@@ -74,7 +74,7 @@ public class SourceEncodingTests
         List<string> offenders = [];
         foreach ( string relative in TrackedTextFiles() )
         {
-            string full = Path.Combine(RepositoryRoot, relative);
+            string full = Path.Combine(s_repositoryRoot, relative);
             if ( File.Exists(full) && File.ReadAllBytes(full).Contains((byte)'\r') )
             {
                 offenders.Add(relative);
@@ -113,7 +113,7 @@ public class SourceEncodingTests
         {
             string trimmed = relative.Trim();
             if ( trimmed.Length > 0
-                && TextExtensions.Contains(Path.GetExtension(trimmed), StringComparer.OrdinalIgnoreCase) )
+                && s_textExtensions.Contains(Path.GetExtension(trimmed), StringComparer.OrdinalIgnoreCase) )
             {
                 yield return trimmed.Replace('/', Path.DirectorySeparatorChar);
             }
@@ -129,7 +129,7 @@ public class SourceEncodingTests
     {
         using Process? git = Process.Start(new ProcessStartInfo("git", arguments)
         {
-            WorkingDirectory = RepositoryRoot,
+            WorkingDirectory = s_repositoryRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -160,7 +160,7 @@ public class SourceEncodingTests
     /// the root cost a walk up the ancestor chain — a `File.Exists` per level — for every one of the
     /// ~1,400 tracked files, twice over. The answer cannot change while the process lives.
     /// </remarks>
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
+    private static readonly string s_repositoryRoot = FindRepositoryRoot();
 
     private static string FindRepositoryRoot()
     {

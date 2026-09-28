@@ -14,7 +14,7 @@ public static class PathUtil
     /// produces one that does not exist, so there the canonical form preserves case —
     /// still unambiguous, because every key derives from a single real disk path.
     /// </summary>
-    private static readonly bool LowercaseAbsolutePaths =
+    private static readonly bool s_lowercaseAbsolutePaths =
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
 
     /// <summary>
@@ -37,7 +37,7 @@ public static class PathUtil
             full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
-        return LowercaseAbsolutePaths ? NameTable.Shared.InternLower(full) : NameTable.Shared.Intern(full);
+        return s_lowercaseAbsolutePaths ? NameTable.Shared.InternLower(full) : NameTable.Shared.Intern(full);
     }
 
     /// <summary>

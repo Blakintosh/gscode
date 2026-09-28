@@ -15,16 +15,16 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DirectiveIndexTests
 {
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(0, 8, 0, 20);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(0, 8, 0, 20);
 
     private static DependencyEdge Insert(string rawPath, string resolvedPath)
     {
-        return new DependencyEdge(rawPath, resolvedPath, IsInsert: true, SomeRange);
+        return new DependencyEdge(rawPath, resolvedPath, IsInsert: true, s_someRange);
     }
 
     private static DependencyEdge Using(string rawPath)
     {
-        return new DependencyEdge(rawPath, "", IsInsert: false, SomeRange);
+        return new DependencyEdge(rawPath, "", IsInsert: false, s_someRange);
     }
 
     private static ScriptRecord Record(string path, string relativePath, params DependencyEdge[] edges)

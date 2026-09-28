@@ -13,7 +13,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class VocabularyIndexTests
 {
-    private static readonly TextRange SomeRange = TextRange.FromCoordinates(1, 0, 1, 4);
+    private static readonly TextRange s_someRange = TextRange.FromCoordinates(1, 0, 1, 4);
 
     private static ScriptRecord Record(
         string path,
@@ -35,8 +35,8 @@ public class VocabularyIndexTests
                     Name = "f",
                     KeyName = "f",
                     Namespace = "ns",
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                     Assignments = assignments.IsDefault ? [] : assignments,
                 },
             ],
@@ -45,7 +45,7 @@ public class VocabularyIndexTests
 
     private static ReferenceEntry Literal(string text, bool fromMacro = false)
     {
-        return new ReferenceEntry(new SymbolKey(null, text, SymbolKind.StringLiteral), SomeRange, ReferenceKind.Literal, fromMacro);
+        return new ReferenceEntry(new SymbolKey(null, text, SymbolKind.StringLiteral), s_someRange, ReferenceKind.Literal, fromMacro);
     }
 
     [Fact]
@@ -88,15 +88,15 @@ public class VocabularyIndexTests
             "raw",
             assignments:
             [
-                new AssignmentSymbol("self", "health", "health", SomeRange),
-                new AssignmentSymbol("level", "round", "round", SomeRange),
-                new AssignmentSymbol("", "local", "local", SomeRange),
+                new AssignmentSymbol("self", "health", "health", s_someRange),
+                new AssignmentSymbol("level", "round", "round", s_someRange),
+                new AssignmentSymbol("", "local", "local", s_someRange),
             ]));
 
         store.Upsert(Record(
             @"c:\mods\m\b.gsc",
             "mod:m",
-            assignments: [new AssignmentSymbol("self", "mod_only", "mod_only", SomeRange)]));
+            assignments: [new AssignmentSymbol("self", "mod_only", "mod_only", s_someRange)]));
 
         Assert.Equal(["health"], store.VisibleFieldNames("self", "raw"));
         Assert.Equal(["health", "round"], store.VisibleFieldNames(null, "raw").Order());

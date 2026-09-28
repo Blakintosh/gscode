@@ -27,7 +27,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 public class UsingNotFoundLintTests
 {
     private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ImmutableArray<Diagnostic> Missing, ImmutableArray<Diagnostic> All) Lint(string source)
     {
@@ -120,9 +120,9 @@ public class UsingNotFoundLintTests
         string path = @$"{Raw}\maps\mp\_menus.gsc";
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc, SourceText.From(source),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), Cod4);
+            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), s_cod4);
 
-        return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, Cod4);
+        return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, s_cod4);
     }
 
     [Fact]

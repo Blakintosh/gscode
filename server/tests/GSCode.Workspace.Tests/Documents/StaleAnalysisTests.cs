@@ -25,7 +25,7 @@ public class StaleAnalysisTests
     }
 
     /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_patience = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// A store whose FIRST analysis parks inside the insert-provider factory. The factory is
@@ -42,7 +42,7 @@ public class StaleAnalysisTests
                 if ( Interlocked.Increment(ref started) == 1 )
                 {
                     entered.Set();
-                    release.Wait(Patience);
+                    release.Wait(s_patience);
                 }
 
                 return NullInsertProvider.Instance;
@@ -132,13 +132,13 @@ public class StaleAnalysisTests
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
 
         Task<ParseResult> older = Task.Run(() => store.Analyze(document));
-        Assert.True(insideFirst.Wait(Patience));
+        Assert.True(insideFirst.Wait(s_patience));
 
         store.ApplyChange(document, range: null, "#pre\n", version: 2);
         store.Analyze(document);
 
         releaseFirst.Set();
-        ParseResult olderResult = await older.WaitAsync(Patience);
+        ParseResult olderResult = await older.WaitAsync(s_patience);
 
         Assert.Equal(2, document.AnalyzedVersion);
         Assert.Equal("#pre\n", document.LatestResult!.Text.Text);
@@ -166,14 +166,14 @@ public class StaleAnalysisTests
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
 
         Task<AnalysisSnapshot> older = Task.Run(() => store.AnalyzeSnapshot(document));
-        Assert.True(insideFirst.Wait(Patience));
+        Assert.True(insideFirst.Wait(s_patience));
 
         // A second edit arrives and is analysed while the first (v1) analysis is still parked.
         store.ApplyChange(document, range: null, "#pre\n", version: 2);
         AnalysisSnapshot newer = store.AnalyzeSnapshot(document);
 
         releaseFirst.Set();
-        AnalysisSnapshot olderSnapshot = await older.WaitAsync(Patience);
+        AnalysisSnapshot olderSnapshot = await older.WaitAsync(s_patience);
 
         // Both callers see the SAME winning snapshot — version 2 — never the version either one
         // actually read at the top of its own call (1, for the older one).
@@ -195,13 +195,13 @@ public class StaleAnalysisTests
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
 
         Task<ParseResult> analysis = Task.Run(() => store.Analyze(document));
-        Assert.True(inside.Wait(Patience));
+        Assert.True(inside.Wait(s_patience));
 
         // The edit lands after Analyze has taken the version and the text, and before it finishes.
         store.ApplyChange(document, range: null, "#pre\n", version: 2);
 
         release.Set();
-        await analysis.WaitAsync(Patience);
+        await analysis.WaitAsync(s_patience);
 
         Assert.True(document.IsStale);
         Assert.Equal(1, document.AnalyzedVersion);

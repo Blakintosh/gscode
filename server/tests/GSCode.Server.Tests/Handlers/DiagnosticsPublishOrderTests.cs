@@ -34,7 +34,7 @@ public class DiagnosticsPublishOrderTests
         }
     }
 
-    private static readonly string Path = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_menus.gsc");
+    private static readonly string s_path = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_menus.gsc");
 
     private static ImmutableArray<Diagnostic> Diagnostics(int count)
     {
@@ -60,9 +60,9 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 53, Diagnostics(6));
-        publisher.Publish(Path, version: 54, Diagnostics(5));
-        publisher.Publish(Path, version: 38, Diagnostics(6));
+        publisher.Publish(s_path, version: 53, Diagnostics(6));
+        publisher.Publish(s_path, version: 54, Diagnostics(5));
+        publisher.Publish(s_path, version: 38, Diagnostics(6));
 
         Assert.Equal(54, sink.Sent[^1].Version);
         Assert.Equal(5, sink.Sent[^1].Diagnostics.Count());
@@ -74,9 +74,9 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 53, Diagnostics(6));
-        publisher.Publish(Path, version: 54, Diagnostics(5));
-        publisher.Publish(Path, version: 38, Diagnostics(6));
+        publisher.Publish(s_path, version: 53, Diagnostics(6));
+        publisher.Publish(s_path, version: 54, Diagnostics(5));
+        publisher.Publish(s_path, version: 38, Diagnostics(6));
 
         Assert.Equal(2, sink.Sent.Count);
     }
@@ -90,8 +90,8 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 54, Diagnostics(5));
-        publisher.Publish(Path, version: 54, Diagnostics(7));
+        publisher.Publish(s_path, version: 54, Diagnostics(5));
+        publisher.Publish(s_path, version: 54, Diagnostics(7));
 
         Assert.Equal(2, sink.Sent.Count);
         Assert.Equal(7, sink.Sent[^1].Diagnostics.Count());
@@ -105,9 +105,9 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 68, Diagnostics(6));
-        publisher.Clear(Path);
-        publisher.Publish(Path, version: 1, Diagnostics(2));
+        publisher.Publish(s_path, version: 68, Diagnostics(6));
+        publisher.Clear(s_path);
+        publisher.Publish(s_path, version: 1, Diagnostics(2));
 
         Assert.Equal(3, sink.Sent.Count);
         Assert.Equal(1, sink.Sent[^1].Version);
@@ -120,8 +120,8 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: null, Diagnostics(3));
-        publisher.Publish(Path, version: null, Diagnostics(4));
+        publisher.Publish(s_path, version: null, Diagnostics(3));
+        publisher.Publish(s_path, version: null, Diagnostics(4));
 
         Assert.Equal(2, sink.Sent.Count);
     }
@@ -133,9 +133,9 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 9, Diagnostics(3));
-        publisher.Publish(Path, version: null, Diagnostics(4));
-        publisher.Publish(Path, version: 10, Diagnostics(5));
+        publisher.Publish(s_path, version: 9, Diagnostics(3));
+        publisher.Publish(s_path, version: null, Diagnostics(4));
+        publisher.Publish(s_path, version: 10, Diagnostics(5));
 
         Assert.Equal(3, sink.Sent.Count);
         Assert.Equal(10, sink.Sent[^1].Version);
@@ -148,7 +148,7 @@ public class DiagnosticsPublishOrderTests
         DiagnosticsPublisher publisher = new(sink);
         string other = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_utility.gsc");
 
-        publisher.Publish(Path, version: 54, Diagnostics(5));
+        publisher.Publish(s_path, version: 54, Diagnostics(5));
         publisher.Publish(other, version: 2, Diagnostics(1));
 
         Assert.Equal(2, sink.Sent.Count);
@@ -165,14 +165,14 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
-        publisher.Publish(Path, version: 4, Diagnostics(1));
+        publisher.Remember(s_path, DocumentUri.FromFileSystemPath(s_path));
+        publisher.Publish(s_path, version: 4, Diagnostics(1));
 
-        publisher.Clear(Path);
-        publisher.Forget(Path);
+        publisher.Clear(s_path);
+        publisher.Forget(s_path);
 
         int sentBeforeTheLatePublish = sink.Sent.Count;
-        publisher.Publish(Path, version: 5, Diagnostics(1));
+        publisher.Publish(s_path, version: 5, Diagnostics(1));
 
         Assert.Equal(sentBeforeTheLatePublish, sink.Sent.Count);
     }
@@ -185,14 +185,14 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
-        publisher.Clear(Path);
-        publisher.Forget(Path);
+        publisher.Remember(s_path, DocumentUri.FromFileSystemPath(s_path));
+        publisher.Clear(s_path);
+        publisher.Forget(s_path);
 
-        publisher.Remember(Path, DocumentUri.FromFileSystemPath(Path));
+        publisher.Remember(s_path, DocumentUri.FromFileSystemPath(s_path));
 
         int sentBeforeTheReopenPublish = sink.Sent.Count;
-        publisher.Publish(Path, version: 1, Diagnostics(1));
+        publisher.Publish(s_path, version: 1, Diagnostics(1));
 
         Assert.Equal(sentBeforeTheReopenPublish + 1, sink.Sent.Count);
     }
@@ -205,7 +205,7 @@ public class DiagnosticsPublishOrderTests
         RecordingSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
-        publisher.Publish(Path, version: 1, Diagnostics(1));
+        publisher.Publish(s_path, version: 1, Diagnostics(1));
 
         Assert.Single(sink.Sent);
     }

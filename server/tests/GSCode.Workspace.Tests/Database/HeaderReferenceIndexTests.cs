@@ -13,9 +13,9 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class HeaderReferenceIndexTests
 {
-    private static readonly SymbolKey Damage = new(null, "damage", SymbolKind.Macro);
-    private static readonly SymbolKey Health = new(null, "health", SymbolKind.Macro);
-    private static readonly SymbolKey Nothing = new(null, "nothing", SymbolKind.Macro);
+    private static readonly SymbolKey s_damage = new(null, "damage", SymbolKind.Macro);
+    private static readonly SymbolKey s_health = new(null, "health", SymbolKind.Macro);
+    private static readonly SymbolKey s_nothing = new(null, "nothing", SymbolKind.Macro);
 
     private static ReferenceEntry Use(SymbolKey key, int line)
     {
@@ -38,10 +38,10 @@ public class HeaderReferenceIndexTests
     private static ScriptDatabase Workspace()
     {
         ScriptDatabase database = new();
-        database.CommitRecord(Header(@"c:\raw\scripts\shared\shared.gsh", "raw", Use(Damage, 1), Use(Damage, 4), Use(Health, 2)));
-        database.CommitRecord(Header(@"c:\raw\scripts\shared\other.gsh", "raw", Use(Health, 1)));
-        database.CommitRecord(Header(@"c:\mods\m\scripts\shared\mine.gsh", "mod:m", Use(Damage, 3)));
-        database.CommitRecord(Header(@"c:\mods\n\scripts\shared\theirs.gsh", "mod:n", Use(Damage, 5)));
+        database.CommitRecord(Header(@"c:\raw\scripts\shared\shared.gsh", "raw", Use(s_damage, 1), Use(s_damage, 4), Use(s_health, 2)));
+        database.CommitRecord(Header(@"c:\raw\scripts\shared\other.gsh", "raw", Use(s_health, 1)));
+        database.CommitRecord(Header(@"c:\mods\m\scripts\shared\mine.gsh", "mod:m", Use(s_damage, 3)));
+        database.CommitRecord(Header(@"c:\mods\n\scripts\shared\theirs.gsh", "mod:n", Use(s_damage, 5)));
         return database;
     }
 
@@ -99,9 +99,9 @@ public class HeaderReferenceIndexTests
     {
         return index switch
         {
-            0 => Damage,
-            1 => Health,
-            _ => Nothing,
+            0 => s_damage,
+            1 => s_health,
+            _ => s_nothing,
         };
     }
 
@@ -118,17 +118,17 @@ public class HeaderReferenceIndexTests
     public void EditsAndRemovals_LeaveTheIndexBehindThem()
     {
         ScriptDatabase database = Workspace();
-        database.CommitRecord(Header(@"c:\raw\scripts\shared\shared.gsh", "raw", Use(Health, 2)));
+        database.CommitRecord(Header(@"c:\raw\scripts\shared\shared.gsh", "raw", Use(s_health, 2)));
         database.Remove(@"c:\mods\m\scripts\shared\mine.gsh", ScriptLanguage.Gsh);
 
         foreach ( string context in new[] { "raw", "mod:m", "mod:n" } )
         {
-            Assert.Equal(Scan(database, context, Damage), Indexed(database, context, Damage));
-            Assert.Equal(Scan(database, context, Health), Indexed(database, context, Health));
+            Assert.Equal(Scan(database, context, s_damage), Indexed(database, context, s_damage));
+            Assert.Equal(Scan(database, context, s_health), Indexed(database, context, s_health));
         }
 
-        Assert.Empty(Indexed(database, "mod:m", Damage));
-        ImmutableArray<string> declaring = database.GshFilesReferencing(Damage);
+        Assert.Empty(Indexed(database, "mod:m", s_damage));
+        ImmutableArray<string> declaring = database.GshFilesReferencing(s_damage);
         Assert.Equal([@"c:\mods\n\scripts\shared\theirs.gsh"], declaring.ToArray());
     }
 }

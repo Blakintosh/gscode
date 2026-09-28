@@ -20,13 +20,13 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class StartupRacePreAnalysisTests
 {
-    private static readonly string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_path = @"c:\bo3\share\raw\scripts\main.gsc";
     private const string Source = "function f()\n{\n    x = 1;\n}\n";
 
     private static DocumentStore FreshlyOpenedDocument(out OpenDocument document)
     {
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        document = documents.Open(Path, Source, version: 1);
+        document = documents.Open(s_path, Source, version: 1);
         // Deliberately no Analyze/AnalyzeIfStale call — document.Analysis is null, exactly the
         // window between didOpen returning and its queued analysis actually finishing.
         Assert.Null(document.Analysis);
@@ -41,7 +41,7 @@ public class StartupRacePreAnalysisTests
             documents, new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
 
         Container<FoldingRange>? ranges = await handler.Handle(
-            new FoldingRangeRequestParam { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)) },
+            new FoldingRangeRequestParam { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)) },
             CancellationToken.None);
 
         Assert.NotNull(ranges);
@@ -60,7 +60,7 @@ public class StartupRacePreAnalysisTests
         Container<SelectionRange>? ranges = await handler.Handle(
             new SelectionRangeParams
             {
-                TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)),
+                TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)),
                 Positions = new Container<LspPosition>(new LspPosition(2, 8)),
             },
             CancellationToken.None);

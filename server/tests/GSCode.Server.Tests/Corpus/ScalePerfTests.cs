@@ -542,16 +542,16 @@ public partial class ScalePerfTests
 
     // Budgets from PERF.md's scale table, interpolated linearly between its points. Startup budgets
     // grow with the workspace; the per-request ones below are flat by design.
-    private static readonly (int Files, double Value)[] ColdBudget = [(1000, 1), (10000, 8), (25000, 18), (50000, 35)];
-    private static readonly (int Files, double Value)[] WarmBudget = [(1000, 1), (10000, 3), (25000, 6), (50000, 10)];
-    private static readonly (int Files, double Value)[] SweepBudget = [(1000, 2), (10000, 10), (25000, 25), (50000, 60)];
-    private static readonly (int Files, double Value)[] MemoryBudget = [(1000, 50), (10000, 600), (25000, 1500), (50000, 3000)];
+    private static readonly (int Files, double Value)[] s_coldBudget = [(1000, 1), (10000, 8), (25000, 18), (50000, 35)];
+    private static readonly (int Files, double Value)[] s_warmBudget = [(1000, 1), (10000, 3), (25000, 6), (50000, 10)];
+    private static readonly (int Files, double Value)[] s_sweepBudget = [(1000, 2), (10000, 10), (25000, 25), (50000, 60)];
+    private static readonly (int Files, double Value)[] s_memoryBudget = [(1000, 50), (10000, 600), (25000, 1500), (50000, 3000)];
 
     /// <summary>Completion p99, flat: low single-digit milliseconds today at every stock size.</summary>
     private const double CompletionBudgetMilliseconds = 10;
 
     /// <summary>One file's whole lint pass, flat: the LintBudgetTests share of the debounce.</summary>
-    private static readonly double LintBudgetMilliseconds = AnalysisTiming.DebounceMilliseconds * 0.40;
+    private static readonly double s_lintBudgetMilliseconds = AnalysisTiming.DebounceMilliseconds * 0.40;
 
     private static double BudgetAt((int Files, double Value)[] points, int files)
     {
@@ -580,10 +580,10 @@ public partial class ScalePerfTests
 
     private void WriteRow(ScaleRow row)
     {
-        double coldBudget = BudgetAt(ColdBudget, row.Total);
-        double warmBudget = BudgetAt(WarmBudget, row.Total);
-        double sweepBudget = BudgetAt(SweepBudget, row.Total);
-        double memoryBudget = BudgetAt(MemoryBudget, row.Total);
+        double coldBudget = BudgetAt(s_coldBudget, row.Total);
+        double warmBudget = BudgetAt(s_warmBudget, row.Total);
+        double sweepBudget = BudgetAt(s_sweepBudget, row.Total);
+        double memoryBudget = BudgetAt(s_memoryBudget, row.Total);
 
         _output.WriteLine($"     cold index        {row.ColdSeconds,8:F1} s   budget {coldBudget,6:F1} s   {Verdict(row.ColdSeconds, coldBudget)}  (find {row.EnumerateSeconds:F1} s, {row.Parallelism:F1}x parallel)");
         _output.WriteLine($"     warm start        {row.WarmSeconds,8:F1} s   budget {warmBudget,6:F1} s   {Verdict(row.WarmSeconds, warmBudget)}  (LoadAll {row.LoadAllMilliseconds:F0} ms / {row.LoadAllMegabytes:F0} MB, index {row.WarmIndexSeconds:F1} s)");
@@ -596,7 +596,7 @@ public partial class ScalePerfTests
         _output.WriteLine($"     codeLens p99      {row.LensP99,8:F1} ms  max {row.LensMax,7:F1} ms  ({row.HandlerFiles} files, whole file)");
         _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms  ({row.ReferenceResults:N0} locations returned in all)");
         _output.WriteLine($"     rename p99        {row.RenameP99,8:F1} ms  max {row.RenameMax,7:F1} ms");
-        _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {LintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, LintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
+        _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {s_lintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, s_lintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");
 
         foreach ( (string Rule, double Max, double P99) rule in row.LintRules.Take(6) )

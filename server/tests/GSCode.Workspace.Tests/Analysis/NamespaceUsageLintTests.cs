@@ -17,7 +17,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 public class NamespaceUsageLintTests
 {
     private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
@@ -115,7 +115,7 @@ public class NamespaceUsageLintTests
         database.Commit(
             ScriptAnalysis.Analyze(
                 @$"{Raw}\myutils.gsc", ScriptLanguage.Gsc, SourceText.From(utilitySource),
-                NullInsertProvider.Instance, new NameTable(), Cod4),
+                NullInsertProvider.Instance, new NameTable(), s_cod4),
             ResolutionContext.RawContext,
             isDirty: false,
             @"myutils.gsc");
@@ -123,10 +123,10 @@ public class NamespaceUsageLintTests
         string askingPath = @$"{Raw}\maps\mp\_menus.gsc";
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+            NullInsertProvider.Instance, new NameTable(), s_cod4);
 
         return NamespaceUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, "raw", Cod4);
+            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, "raw", s_cod4);
     }
 
     [Fact]

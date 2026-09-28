@@ -566,7 +566,7 @@ public class CodeActionHandlerTests
     // The merge dialects' counterpart. The function EXISTS here, so the only honest offer is the
     // import; a "create it here" fix would talk the user into a second copy of it.
 
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string Cod4AskingPath = @"C:\cod4\raw\maps\mp\gametypes\_menus.gsc";
 
@@ -576,7 +576,7 @@ public class CodeActionHandlerTests
         ParseResult utility = ScriptAnalysis.Analyze(
             @"C:\cod4\raw\common_scripts\utility.gsc", ScriptLanguage.Gsc,
             SourceText.From("scriptPrintln( channel, msg )\n{\n}\n"),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+            NullInsertProvider.Instance, new NameTable(), s_cod4);
 
         database.Commit(utility, ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
         return database;
@@ -592,7 +592,7 @@ public class CodeActionHandlerTests
     {
         ParseResult result = ScriptAnalysis.Analyze(
             Cod4AskingPath, ScriptLanguage.Gsc, SourceText.From(source),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+            NullInsertProvider.Instance, new NameTable(), s_cod4);
 
         const string called = "scriptPrintln";
         string[] lines = source.Split('\n');
@@ -600,7 +600,7 @@ public class CodeActionHandlerTests
         int start = lines[line].IndexOf(called, StringComparison.Ordinal);
 
         CodeActionHandler.CallFixContext context = new(
-            result, database?.Gsc, "raw", Cod4AskingPath, Cod4);
+            result, database?.Gsc, "raw", Cod4AskingPath, s_cod4);
 
         return CodeActionHandler.MissingIncludeFixes(
             DocumentUri.FromFileSystemPath(Cod4AskingPath),

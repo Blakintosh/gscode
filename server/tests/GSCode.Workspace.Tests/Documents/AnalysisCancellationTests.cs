@@ -19,7 +19,7 @@ public class AnalysisCancellationTests
     private const string Source = "function main()\n{\n    x = 1;\n}\n";
 
     /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_patience = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// A store whose first analysis parks inside the insert-provider factory — the one place a test
@@ -35,7 +35,7 @@ public class AnalysisCancellationTests
                 if ( Interlocked.Increment(ref started) == 1 )
                 {
                     entered.Set();
-                    release.Wait(Patience);
+                    release.Wait(s_patience);
                 }
 
                 return NullInsertProvider.Instance;
@@ -54,7 +54,7 @@ public class AnalysisCancellationTests
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", Source, version: 1);
 
         Task analysis = Task.Run(() => store.AnalyzeSnapshot(document, cancellation.Token));
-        Assert.True(entered.Wait(Patience), "the analysis never started");
+        Assert.True(entered.Wait(s_patience), "the analysis never started");
 
         cancellation.Cancel();
         release.Set();
@@ -77,10 +77,10 @@ public class AnalysisCancellationTests
         OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", Source, version: 1);
 
         Task analysis = Task.Run(() => store.AnalyzeSnapshot(document, CancellationToken.None));
-        Assert.True(entered.Wait(Patience), "the analysis never started");
+        Assert.True(entered.Wait(s_patience), "the analysis never started");
 
         release.Set();
-        await analysis.WaitAsync(Patience);
+        await analysis.WaitAsync(s_patience);
 
         Assert.Equal(1, document.AnalyzedVersion);
     }

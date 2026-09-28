@@ -14,7 +14,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class QualifiedClassLookupTests
 {
-    private static readonly TextRange Anywhere = new(new Position(1, 1), new Position(1, 5));
+    private static readonly TextRange s_anywhere = new(new Position(1, 1), new Position(1, 5));
 
     private static ClassSymbol Class(string namespaceName, string name)
     {
@@ -23,8 +23,8 @@ public class QualifiedClassLookupTests
             Name = name,
             KeyName = name.ToLowerInvariant(),
             Namespace = namespaceName,
-            NameRange = Anywhere,
-            FullRange = Anywhere,
+            NameRange = s_anywhere,
+            FullRange = s_anywhere,
         };
     }
 

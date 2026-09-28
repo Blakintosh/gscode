@@ -39,7 +39,7 @@ internal static class ScaleCorpusFixture
 
     private const string MarkerFileName = ".gscode-scale-complete";
 
-    private static readonly Regex NamespaceDirective = new(
+    private static readonly Regex s_namespaceDirective = new(
         @"^(\s*#namespace\s+)(\w+)(\s*;)", RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
     public static IReadOnlyList<int> Sizes()
@@ -142,7 +142,7 @@ internal static class ScaleCorpusFixture
             if ( profile.ShortName == "bo3" )
             {
                 string suffix = "_" + CopyNameOf(item.Target, workspaceRoot);
-                text = NamespaceDirective.Replace(text, match => match.Groups[1].Value + match.Groups[2].Value + suffix + match.Groups[3].Value);
+                text = s_namespaceDirective.Replace(text, match => match.Groups[1].Value + match.Groups[2].Value + suffix + match.Groups[3].Value);
             }
 
             File.WriteAllText(item.Target, text);

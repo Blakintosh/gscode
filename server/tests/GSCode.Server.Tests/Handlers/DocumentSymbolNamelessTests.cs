@@ -20,12 +20,12 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DocumentSymbolNamelessTests
 {
-    private static readonly string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_path = @"c:\bo3\share\raw\scripts\main.gsc";
 
     private static async Task<List<DocumentSymbol>> OutlineAsync(string text)
     {
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(Path, text, version: 1);
+        OpenDocument document = documents.Open(s_path, text, version: 1);
         documents.Analyze(document);
 
         DocumentSymbolHandler handler = new(
@@ -34,7 +34,7 @@ public class DocumentSymbolNamelessTests
             new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
 
         SymbolInformationOrDocumentSymbolContainer? container = await handler.Handle(
-            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)) },
+            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)) },
             CancellationToken.None);
 
         List<DocumentSymbol> symbols = [];
@@ -83,7 +83,7 @@ public class DocumentSymbolNamelessTests
         // — this is exactly that race, and the handler must parse for itself instead of trusting a
         // snapshot that has not been published yet.
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(Path, "#namespace vibing3;\nfunction one()\n{\n}\n", version: 1);
+        OpenDocument document = documents.Open(s_path, "#namespace vibing3;\nfunction one()\n{\n}\n", version: 1);
         Assert.Null(document.Analysis);
 
         DocumentSymbolHandler handler = new(
@@ -92,7 +92,7 @@ public class DocumentSymbolNamelessTests
             new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
 
         SymbolInformationOrDocumentSymbolContainer? container = await handler.Handle(
-            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)) },
+            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)) },
             CancellationToken.None);
 
         List<DocumentSymbol> symbols = [];

@@ -20,7 +20,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class SingleFlightAnalysisTests
 {
-    private static readonly string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_path = @"c:\bo3\share\raw\scripts\main.gsc";
 
     private static DocumentStore NewStore()
     {
@@ -33,7 +33,7 @@ public class SingleFlightAnalysisTests
         DocumentStore documents = NewStore();
         SingleFlightAnalysis singleFlight = new(documents);
 
-        OpenDocument first = documents.Open(Path, "function one(){}\n", version: 1);
+        OpenDocument first = documents.Open(s_path, "function one(){}\n", version: 1);
         using CancellationTokenSource firstCts = new();
         first.PendingAnalysis = firstCts;
 
@@ -57,7 +57,7 @@ public class SingleFlightAnalysisTests
                 // this pass's own token observe the cancellation below, the same way
                 // TextSyncHandler.ScheduleImmediateAnalysis wires PendingAnalysis to the token
                 // AnalyzeAndPublish actually runs under.
-                OpenDocument second = documents.Open(Path, "function two(){}\n", version: 2);
+                OpenDocument second = documents.Open(s_path, "function two(){}\n", version: 2);
                 using CancellationTokenSource secondCts = new();
                 second.PendingAnalysis = secondCts;
                 singleFlight.Run(second, secondCts.Token, Analyze);
@@ -78,7 +78,7 @@ public class SingleFlightAnalysisTests
         DocumentStore documents = NewStore();
         SingleFlightAnalysis singleFlight = new(documents);
 
-        OpenDocument document = documents.Open(Path, "function f(){}\n", version: 1);
+        OpenDocument document = documents.Open(s_path, "function f(){}\n", version: 1);
         int calls = 0;
 
         singleFlight.Run(document, CancellationToken.None, (_, _) => calls++);
@@ -94,7 +94,7 @@ public class SingleFlightAnalysisTests
         DocumentStore documents = NewStore();
         SingleFlightAnalysis singleFlight = new(documents);
 
-        OpenDocument document = documents.Open(Path, "function f(){}\n", version: 1);
+        OpenDocument document = documents.Open(s_path, "function f(){}\n", version: 1);
         List<int> order = [];
 
         void Analyze(OpenDocument doc, CancellationToken token)

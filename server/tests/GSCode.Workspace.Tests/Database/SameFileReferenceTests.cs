@@ -19,7 +19,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class SameFileReferenceTests
 {
-    private static readonly SymbolKey Main = new(null, "main", SymbolKind.Function);
+    private static readonly SymbolKey s_main = new(null, "main", SymbolKind.Function);
 
     private static TextRange At(int line)
     {
@@ -31,7 +31,7 @@ public class SameFileReferenceTests
         ImmutableArray<ReferenceEntry>.Builder references = ImmutableArray.CreateBuilder<ReferenceEntry>();
         foreach ( int line in callLines )
         {
-            references.Add(new ReferenceEntry(Main, At(line), ReferenceKind.Call));
+            references.Add(new ReferenceEntry(s_main, At(line), ReferenceKind.Call));
         }
 
         return new ScriptRecord
@@ -66,7 +66,7 @@ public class SameFileReferenceTests
     private static List<string> WideThenFiltered(LanguageStore store, string askingContextId, string path)
     {
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> wide =
-            DatabaseQueries.FindAllReferences(new ScriptDatabase(), [store], askingContextId, Main);
+            DatabaseQueries.FindAllReferences(new ScriptDatabase(), [store], askingContextId, s_main);
 
         return Describe([.. wide.Where(hit => hit.Record.Path == path)]);
     }
@@ -74,7 +74,7 @@ public class SameFileReferenceTests
     private static List<string> AskedForOneFile(LanguageStore store, string askingContextId, string path)
     {
         return Describe(DatabaseQueries.FindAllReferences(
-            new ScriptDatabase(), [store], askingContextId, Main, onlyPath: path));
+            new ScriptDatabase(), [store], askingContextId, s_main, onlyPath: path));
     }
 
     [Theory]

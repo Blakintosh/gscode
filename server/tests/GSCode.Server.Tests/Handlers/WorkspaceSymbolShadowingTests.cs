@@ -15,7 +15,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class WorkspaceSymbolShadowingTests
 {
-    private static readonly TextRange SomeRange = new(new Position(1, 1), new Position(1, 5));
+    private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
 
     private static ScriptRecord FunctionRecord(string path, string contextId, string relativePath, string name)
     {
@@ -33,8 +33,8 @@ public class WorkspaceSymbolShadowingTests
                     Name = name,
                     KeyName = name,
                     Namespace = "",
-                    NameRange = SomeRange,
-                    FullRange = SomeRange,
+                    NameRange = s_someRange,
+                    FullRange = s_someRange,
                 },
             ],
         };

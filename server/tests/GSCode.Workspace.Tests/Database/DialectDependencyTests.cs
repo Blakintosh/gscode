@@ -18,7 +18,7 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DialectDependencyTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string Source = "#include common_scripts\\utility;\nrun()\n{\n\thelper();\n}\n";
 
@@ -30,7 +30,7 @@ public class DialectDependencyTests
             SourceText.From(Source),
             NullInsertProvider.Instance,
             new NameTable(),
-            Cod4);
+            s_cod4);
     }
 
     [Fact]

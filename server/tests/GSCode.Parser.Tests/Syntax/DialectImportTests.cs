@@ -12,13 +12,13 @@ namespace GSCode.Parser.Tests.Syntax;
 /// </summary>
 public class DialectImportTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     [Fact]
     public void AKeywordlessDialectParsesInclude()
     {
-        ParseTree tree = ParserTestHelper.Parse("#include common_scripts\\utility;\nmain()\n{\n}\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("#include common_scripts\\utility;\nmain()\n{\n}\n", s_cod4);
 
         IncludeNode include = Assert.Single(tree.Root.Elements.OfType<IncludeNode>());
         Assert.Equal("common_scripts\\utility", include.Path);
@@ -30,7 +30,7 @@ public class DialectImportTests
     public void BlackOps3DoesNotRecognizeInclude()
     {
         // #include is not a BO3 directive, so it is reported as unknown -- unchanged behaviour.
-        ParseTree tree = ParserTestHelper.Parse("#include common_scripts\\utility;\n", Bo3);
+        ParseTree tree = ParserTestHelper.Parse("#include common_scripts\\utility;\n", s_bo3);
 
         Assert.DoesNotContain(tree.Root.Elements, static element => element is IncludeNode);
         Assert.NotEmpty(tree.Diagnostics);
@@ -39,7 +39,7 @@ public class DialectImportTests
     [Fact]
     public void BlackOps3StillParsesUsing()
     {
-        ParseTree tree = ParserTestHelper.Parse("#using scripts\\shared\\util_shared;\n", Bo3);
+        ParseTree tree = ParserTestHelper.Parse("#using scripts\\shared\\util_shared;\n", s_bo3);
 
         UsingNode import = Assert.Single(tree.Root.Elements.OfType<UsingNode>());
         Assert.Equal("scripts\\shared\\util_shared", import.Path);
@@ -50,7 +50,7 @@ public class DialectImportTests
     public void AKeywordlessDialectDoesNotRecognizeUsing()
     {
         // #using is a BO3 directive; in an Infinity Ward dialect it is unknown.
-        ParseTree tree = ParserTestHelper.Parse("#using scripts\\shared\\util_shared;\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("#using scripts\\shared\\util_shared;\n", s_cod4);
 
         Assert.DoesNotContain(tree.Root.Elements, static element => element is UsingNode);
         Assert.NotEmpty(tree.Diagnostics);

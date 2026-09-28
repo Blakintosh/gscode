@@ -217,6 +217,8 @@ public sealed class HoverHandler : HoverHandlerBase
             }
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language, target);
+            case SymbolKind.Member:
+                return RenderMember(target, key);
             case SymbolKind.StringLiteral:
                 // The one shape a plain string literal reference is not: __FUNCTION__/__FILE__
                 // already expanded to a string before parsing, so the reader looking at the literal
@@ -429,6 +431,34 @@ public sealed class HoverHandler : HoverHandlerBase
         // answer. Add would throw on the loser instead.
         _assignmentCache.AddOrUpdate(target.Result, inferred);
         return inferred.Assignments;
+    }
+
+    /// <summary>
+    /// A class <c>var</c>, named with the class that actually declares it — which for an inherited
+    /// member is not the class the cursor is in, and is the fact a reader most needs here. The
+    /// name on screen looks exactly like a local, so saying nothing at all is what it did before.
+    /// </summary>
+    private string RenderMember(NavigationTarget target, SymbolKey key)
+    {
+        string declaring = key.OwnerClass is null
+            ? ""
+            : MethodResolution.FindDeclaringClassForMember(
+                target.Store, target.ContextId, key.OwnerClass, key.Name) ?? key.OwnerClass;
+
+        System.Text.StringBuilder markdown = new();
+        markdown.Append("```gsc\n(member) ").Append(key.Name).Append("\n```\n");
+
+        if ( declaring.Length > 0 )
+        {
+            foreach ( ResolvedClass resolved in DatabaseQueries.LookupClasses(
+                target.Store, target.ContextId, namespaceName: null, declaring) )
+            {
+                markdown.Append("\n---\n\nmember of `").Append(resolved.Class.Name).Append('`');
+                return markdown.ToString();
+            }
+        }
+
+        return markdown.ToString();
     }
 
     /// <summary>

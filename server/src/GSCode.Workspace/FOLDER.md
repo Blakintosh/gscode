@@ -23,6 +23,24 @@ lints, `Completion/` and `Typing/` the information surfaces.
   invoked in another, so answering "what runs when this field is called" by re-parsing the binding
   file would mean parsing unopened files on a request path.
 
+## Database/MethodResolution.cs - members
+
+- `MembersOf` is every `var` reachable on a class, own and inherited, most derived winning. It
+  feeds completion's statement scope AND, since a bare name in a class body IS the member,
+  navigation's resolution of one.
+- `FindDeclaringClassForMember` is the member counterpart of `FindDeclaringClass`, needed for the
+  same reason: extraction keys a bare use by the class whose BODY it sits in, which for an
+  inherited member is not the class holding the `var`.
+- `FindMemberReferences` canonicalizes DOWN to the declarer, then unions back UP across every
+  descendant. Both directions are needed - the declaration is on one class and the uses are keyed
+  by whichever class's body each sits in - and without the second, renaming a base's `var` rewrote
+  the declaration and left the subclasses spelling the old name.
+- `MemberIsFullyIndexed` is false when the hierarchy spans FILES. Extraction keys a bare use only
+  where the declaring class is in the same file, which is all one parse can see; when it is not,
+  the subclasses' uses were read as locals and are absent from the index. Rename consults this and
+  declines, rather than rewriting the half it can see. 199 of BO3's 206 `var`s are single-file and
+  unaffected; the 7 that are not are `cScriptBundleObjectBase`'s and `cScriptBundleBase`'s.
+
 ## Database/ClassGraph.cs
 
 - `ClassGraph` — the per-language reverse index of class declarations, parent links, and method

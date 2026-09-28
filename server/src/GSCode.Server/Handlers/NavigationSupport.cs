@@ -5,6 +5,8 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
+using GSCode.Parser.Syntax;
+using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -232,7 +234,82 @@ public sealed class NavigationSupport
     /// </summary>
     public PositionHit ResolveHit(NavigationTarget target, GSCode.Core.Text.Position position)
     {
-        return SymbolAtPosition.Resolve(target.Result, position);
+        PositionHit hit = SymbolAtPosition.Resolve(target.Result, position);
+        if ( hit.Kind != HitKind.None )
+        {
+            return hit;
+        }
+
+        return InheritedMemberAt(target, position);
+    }
+
+    /// <summary>
+    /// A bare name inside a class body that names a <c>var</c> declared by an ancestor IN ANOTHER
+    /// FILE — the one member shape extraction cannot key on its own, since it sees one file and
+    /// the declaration is not in it.
+    ///
+    /// 199 of BO3's 206 <c>var</c> declarations have their whole hierarchy in one file and are
+    /// keyed at extraction; the remaining 7 are <c>cScriptBundleObjectBase</c>'s and
+    /// <c>cScriptBundleBase</c>'s, read bare throughout <c>scene_shared.gsc</c>. Without this they
+    /// answer nothing at all, which is what every class member did before.
+    ///
+    /// Only reached when the reference index had NO answer, so the ordinary path pays nothing, and
+    /// only inside a class body, which a cursor rarely is. The ancestor walk behind
+    /// <see cref="MethodResolution.MembersOf"/> is bounded by the hierarchy — three classes at
+    /// BO3's deepest — rather than by the workspace.
+    ///
+    /// What this does NOT do is put the use in the index. Go-to-definition, hover and
+    /// go-to-implementation ask from the cursor outwards and are answered; find-references and
+    /// rename ask the opposite direction and can only report what was indexed, so for these seven
+    /// they see the declaration and its own file's uses. <c>RenameHandler</c> refuses rather than
+    /// rewriting half of them.
+    /// </summary>
+    private PositionHit InheritedMemberAt(NavigationTarget target, GSCode.Core.Text.Position position)
+    {
+        string? enclosingClass = EnclosingClassAt(target.Result, position);
+        if ( enclosingClass is null )
+        {
+            return PositionHit.None;
+        }
+
+        if ( !AstSearch.TryFindLocalContext(
+            target.Result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode _) )
+        {
+            return PositionHit.None;
+        }
+
+        foreach ( ClassMember member in MethodResolution.MembersOf(
+            target.Store, target.ContextId, enclosingClass, target.Result.Extraction.Classes) )
+        {
+            if ( !string.Equals(member.Member.Name, identifier.Token.Text, StringComparison.OrdinalIgnoreCase) )
+            {
+                continue;
+            }
+
+            return new PositionHit(
+                HitKind.Reference,
+                new SymbolKey(
+                    null, NameTable.Shared.InternLower(identifier.Token.Text), SymbolKind.Member, enclosingClass),
+                identifier.Token.RootRange,
+                ReferenceKind.FieldAccess,
+                "");
+        }
+
+        return PositionHit.None;
+    }
+
+    /// <summary>The class whose body a position sits in, or null at file scope.</summary>
+    private static string? EnclosingClassAt(ParseResult result, GSCode.Core.Text.Position position)
+    {
+        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
+        {
+            if ( classSymbol.FullRange.Contains(position) )
+            {
+                return classSymbol.KeyName;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -343,6 +420,17 @@ public sealed class NavigationSupport
         bool macroSpansLanguages = true,
         string onlyPath = "")
     {
+        // A class MEMBER has the same problem in both directions: the `var` is on one class and
+        // the bare uses are keyed by whichever class's body each sits in, so the key canonicalizes
+        // DOWN to the declarer and the union comes back UP across its descendants. First, because
+        // nothing below knows about the class graph — and here rather than per handler, so
+        // find-references, rename, highlight and the CodeLens count cannot disagree about it.
+        if ( key.Kind == SymbolKind.Member )
+        {
+            return MethodResolution.FindMemberReferences(
+                _database, target.Stores, target.Store, target.ContextId, key, onlyPath);
+        }
+
         // A method is not reachable under one key the way a function is — inheritance, the
         // Class::method form and untyped arrow calls each name it differently — so it resolves to
         // its declaration's key first and then unions the ways a call site can spell it. Done HERE

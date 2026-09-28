@@ -59,6 +59,11 @@ public sealed class RenameHandler : RenameHandlerBase
             return Task.FromResult(RenameLocal(target, request));
         }
 
+        if ( RefusesIncompleteMember(target, hit) )
+        {
+            return Task.FromResult<WorkspaceEdit?>(null);
+        }
+
         if ( !IsLegalNewName(hit.Key.Kind, request.NewName) )
         {
             return Task.FromResult<WorkspaceEdit?>(null);
@@ -186,6 +191,25 @@ public sealed class RenameHandler : RenameHandlerBase
     /// the engine, but took the scripts' own fields and literals with it, and a notify string is
     /// exactly the kind of name worth renaming everywhere at once.
     /// </summary>
+    /// <summary>
+    /// True when this is a class member whose uses are NOT all in the index, which is a rename
+    /// that must not proceed.
+    ///
+    /// Extraction keys a bare member use only where the declaring class is in the same file, all
+    /// one file's parse can see. When a hierarchy spans files the subclasses' bare uses were read
+    /// as locals and are absent, so the edit would rewrite the <c>var</c> and its own file and
+    /// leave every subclass spelling the old name - silent breakage in code that worked.
+    ///
+    /// Separate from <see cref="IsRenameable"/>, which is about OWNERSHIP, and checked after its
+    /// fallthrough on purpose: a member that fails this must answer nothing, not be handed to
+    /// <see cref="RenameLocal"/> and renamed across one function as though it were a local.
+    /// </summary>
+    internal static bool RefusesIncompleteMember(NavigationTarget target, PositionHit hit)
+    {
+        return hit.Key.Kind == SymbolKind.Member
+            && !MethodResolution.MemberIsFullyIndexed(target.Store, target.ContextId, hit.Key);
+    }
+
     internal static bool IsRenameable(PositionHit hit, BuiltinApi builtins, ObjectFields objectFields)
     {
         if ( hit.Kind != HitKind.Reference )
@@ -204,6 +228,10 @@ public sealed class RenameHandler : RenameHandlerBase
                 // An engine field is the engine's name in the same way a builtin is.
                 return objectFields.FindField(hit.Key.Name).Length == 0;
 
+            // A class `var` is declared by the scripts outright, so there is no engine name to
+            // collide with the way a field can carry one. Whether every USE of it can be found is
+            // a separate question, and RefusesIncompleteMember answers that one.
+            case SymbolKind.Member:
             case SymbolKind.Class:
             case SymbolKind.Macro:
             case SymbolKind.StringLiteral:

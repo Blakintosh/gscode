@@ -117,6 +117,10 @@ public sealed class SymbolExtractor
 
     private void Run(ParseTree tree, PreprocessResult preprocessed)
     {
+        // Before anything is walked, because a method body can read a member the class declares
+        // BELOW it, and a child class can be written above its parent.
+        CollectClassMembers(tree.Root.Elements);
+
         // The dominant scope, and the parent of extract.doc and extract.body: everything the walk
         // does is inside it, so the three read as a breakdown rather than as peers.
         PerfTracker.Begin("extract.declarations");
@@ -212,6 +216,106 @@ public sealed class SymbolExtractor
         }
 
         return false;
+    }
+
+    // --- Class members ---
+
+    // Every class this FILE declares, by lowercase name: its parent's name and its own `var`
+    // names. Built before the walk, since a method can read a member declared below it and a
+    // child class can be written above its parent.
+    private readonly Dictionary<string, (string? Parent, HashSet<string> Members)> _classMembers =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    // The members in scope as bare names right now: the current class's own plus every ancestor
+    // THIS FILE declares. Null outside a class body.
+    //
+    // Ancestors in ANOTHER file are missing, and that is the known limit of doing this at
+    // extraction — see MemberNamesInScope. 199 of BO3's 206 `var` declarations have their whole
+    // hierarchy in one file, so this resolves almost all of them; the rest are widened at
+    // resolution time by the handlers, which have the store and can walk the real class graph.
+    private HashSet<string>? _currentClassMemberNames;
+
+    private void CollectClassMembers(ImmutableArray<AstNode> elements)
+    {
+        foreach ( AstNode element in elements )
+        {
+            switch ( element )
+            {
+                case ClassNode classNode:
+                {
+                    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+                    foreach ( AstNode member in classNode.Members )
+                    {
+                        if ( member is VarDeclNode varDecl )
+                        {
+                            names.Add(varDecl.NameToken.Text);
+                        }
+                    }
+
+                    _classMembers[_names.InternLower(classNode.NameToken.Text)] =
+                        (classNode.ParentToken is null ? null : _names.InternLower(classNode.ParentToken.Value.Text),
+                         names);
+                    continue;
+                }
+
+                // A class inside a dev block is still a class.
+                case DevBlockDeclNode devBlock:
+                    CollectClassMembers(devBlock.Declarations);
+                    continue;
+
+                default:
+                    continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bare names that mean a member inside <paramref name="classKeyName"/>'s body: its own
+    /// <c>var</c>s and those of every ancestor this file declares.
+    ///
+    /// Bounded like every other ancestor walk here, and for the same reason — a class cycle is a
+    /// state the workspace can be in, which <c>ClassCycleLint</c> reports rather than the walks
+    /// assuming away.
+    /// </summary>
+    private HashSet<string> MemberNamesInScope(string classKeyName)
+    {
+        HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+
+        string? current = classKeyName;
+        for ( int depth = 0; current is not null && depth < 32 && visited.Add(current); depth++ )
+        {
+            if ( !_classMembers.TryGetValue(current, out (string? Parent, HashSet<string> Members) entry) )
+            {
+                break;
+            }
+
+            names.UnionWith(entry.Members);
+            current = entry.Parent;
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// The key for a class member. Owned by the class whose body the cursor is in, which for an
+    /// INHERITED member is not the class that declares it — the same split
+    /// <c>MethodResolution.Canonicalize</c> already closes for methods, and the reference query
+    /// applies it here too so a base's declaration and a subclass's use meet.
+    /// </summary>
+    private SymbolKey MemberKey(string name)
+    {
+        return new SymbolKey(null, _names.InternLower(name), SymbolKind.Member, _currentClass);
+    }
+
+    /// <summary>
+    /// True when a bare identifier in the current class body names a member rather than a local,
+    /// which is how BO3's own scripts read one — <c>_b_set_goal = true;</c> inside
+    /// <c>cSceneObject</c>, never <c>self._b_set_goal</c>.
+    /// </summary>
+    private bool IsMemberName(string name)
+    {
+        return _currentClass is not null && _currentClassMemberNames?.Contains(name) == true;
     }
 
     // --- Namespace span bookkeeping ---
@@ -396,7 +500,9 @@ public sealed class SymbolExtractor
         // bodies, and the constructor and destructor bodies. Restored rather than nulled at the end
         // so this stays correct if classes ever nest.
         string? enclosingClass = _currentClass;
+        HashSet<string>? enclosingMembers = _currentClassMemberNames;
         _currentClass = classKeyName;
+        _currentClassMemberNames = MemberNamesInScope(classKeyName);
 
         if ( classNode.ParentToken is not null )
         {
@@ -414,8 +520,15 @@ public sealed class SymbolExtractor
             switch ( member )
             {
                 case VarDeclNode varDecl:
+                {
                     members.Add(new MemberSymbol(varDecl.NameToken.Text, _names.InternLower(varDecl.NameToken.Text), varDecl.NameToken.RootRange));
+
+                    // A member is the one field-shaped thing GSC does declare, so unlike a plain
+                    // field it gets a real Definition reference and go-to-definition needs no
+                    // special case for it.
+                    AddReference(MemberKey(varDecl.NameToken.Text), varDecl.NameToken, ReferenceKind.Definition);
                     continue;
+                }
                 case FunctionNode method:
                     // Class methods carry no namespace; the class scopes them.
                     methods.Add(ExtractFunction(method, "", classKeyName));
@@ -448,6 +561,7 @@ public sealed class SymbolExtractor
         }
 
         _currentClass = enclosingClass;
+        _currentClassMemberNames = enclosingMembers;
 
         // Same reasoning as ExtractFunction: a class NAMED by a macro body belongs at the
         // invocation, not at the #define's own position.
@@ -682,7 +796,18 @@ public sealed class SymbolExtractor
 
                 TextRange? enclosingWrite = _fieldWriteRange;
                 ReferenceKind enclosingKind = _fieldWriteKind;
-                _fieldWriteRange = assignment.Target is MemberNode target ? target.NameToken.RootRange : null;
+
+                // A MemberNode target is `owner.field`; a bare IdentifierNode target inside a
+                // class body is a member of that class, written the way BO3's own scripts write
+                // one. Both are assignments to a named thing that is not a local, so both mark
+                // the range their own walk will recognise a moment later.
+                _fieldWriteRange = assignment.Target switch
+                {
+                    MemberNode target => target.NameToken.RootRange,
+                    IdentifierNode named when IsMemberName(named.Token.Text) => named.Token.RootRange,
+                    _ => null,
+                };
+
                 _fieldWriteKind = plain ? ReferenceKind.FieldWrite : ReferenceKind.FieldUpdate;
                 WalkExpression(assignment.Target, assignments);
                 _fieldWriteRange = enclosingWrite;
@@ -737,6 +862,22 @@ public sealed class SymbolExtractor
             }
             case PostfixNode postfix:
                 WalkExpression(postfix.Operand, assignments);
+                return;
+
+            // A bare name inside a class body that matches a `var` is a MEMBER, not a local.
+            // Nothing recorded bare identifiers before this: a local needs no reference, since the
+            // index is workspace-wide and every `i` would collide. A member is the opposite — it
+            // is declared, it is shared across the class's methods, and its uses are exactly what
+            // find-references and rename are being asked about.
+            //
+            // Read or write by the same rule a field uses, so `_b_set_goal = true` is a write and
+            // `if ( _b_set_goal )` is a read.
+            case IdentifierNode identifier when IsMemberName(identifier.Token.Text):
+                AddReference(
+                    MemberKey(identifier.Token.Text),
+                    identifier.Token,
+                    _fieldWriteRange == identifier.Token.RootRange ? _fieldWriteKind : ReferenceKind.FieldAccess);
+
                 return;
             case ParenNode paren:
                 WalkExpression(paren.Inner, assignments);
@@ -866,6 +1007,10 @@ public sealed class SymbolExtractor
         switch ( target )
         {
             case IdentifierNode identifier:
+                // The AssignmentSymbol is kept even when this name is a class member, because
+                // typing, completion and the unused-local lint already read these and already
+                // know a member is not an unused local. The member REFERENCE is emitted by the
+                // target's own walk instead, exactly as a field's is.
                 AddLocalAssignment(identifier.Token, assignments);
                 return;
             case MemberNode { Object: IdentifierNode owner } member:

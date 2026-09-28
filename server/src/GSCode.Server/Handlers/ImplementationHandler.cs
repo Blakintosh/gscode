@@ -81,7 +81,9 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
 
-        if ( hit.Key.Kind == SymbolKind.Field )
+        // A class MEMBER answers the same way a field does. It DOES have a declaration, which is
+        // go-to-definition's answer; what it IS, is still whatever its plain assignments give it.
+        if ( hit.Key.Kind == SymbolKind.Field || hit.Key.Kind == SymbolKind.Member )
         {
             return Task.FromResult(Answer(FieldImplementations(target, hit.Key, cancellationToken)));
         }

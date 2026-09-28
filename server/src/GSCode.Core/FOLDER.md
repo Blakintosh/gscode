@@ -38,6 +38,11 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 ## Symbols/SymbolKey.cs
 
+- `SymbolKind.Member` is a class `var`. Close to Field and deliberately not it: a member IS
+  declared, so it has one Definition reference at the `var`, where a field has none anywhere.
+  Read as a BARE NAME inside the class body (all 206 of BO3's are), so the token at the cursor
+  looks exactly like a local and only the enclosing class says otherwise. Appended to the enum
+  rather than slotted beside Field, since a kind travels to the record cache as its ordinal.
 - `enum SymbolKind` — what a key identifies: Function/Class/Macro/Field plus the four
   literal kinds (StringLiteral/HashString/LocalizedString/AnimReference).
 - `readonly record struct SymbolKey(Namespace, Name, Kind, OwnerClass)` — the cross-file lookup key.

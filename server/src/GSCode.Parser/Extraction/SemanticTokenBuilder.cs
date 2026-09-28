@@ -67,6 +67,7 @@ public static class SemanticTokenBuilder
             case SymbolKind.Macro:
                 return SemanticTokenType.Macro;
             case SymbolKind.Field:
+            case SymbolKind.Member:
                 return SemanticTokenType.Property;
             default:
                 return null;

@@ -228,6 +228,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   workspace can be in (`ClassCycleLint` reports it) rather than one the walk may assume away.
 - Whether the name IS a method is answered by `MethodResolution.ResolveCall`, not by the syntax at
   the cursor: a bare call inside the class writes no receiver.
+- A class MEMBER answers the same way: it HAS a declaration, which is go-to-definition's answer,
+  but what it IS is still whatever its plain assignments give it.
 - A FIELD is declared nowhere and holds whatever its writes give it, so what it IS, is its plain
   assignments: every `level.foo = ...` in the workspace is one answer. PLAIN only - a `FieldUpdate`
   is left out, which is the line between this request and go-to-definition (that one lists every
@@ -240,6 +242,17 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   go-to-type-definition's question.
 - A top-level function still returns null rather than its own declaration: it has no overrides,
   and falling back would duplicate go-to-definition and hide that the request did not apply.
+
+## Handlers/NavigationSupport.cs - inherited members
+
+- `ResolveHit` falls through to `InheritedMemberAt` when the reference index has no answer: a bare
+  name inside a class body naming a `var` declared by an ancestor IN ANOTHER FILE is the one member
+  shape extraction cannot key, since it sees one file and the declaration is not in it.
+- Only reached on a miss and only inside a class body, so the ordinary path pays nothing; the
+  ancestor walk is bounded by the hierarchy (three classes at BO3's deepest), not the workspace.
+- It resolves the CURSOR outwards only. Definition, hover and implementation are answered; find-
+  references and rename ask the opposite direction and can report only what was indexed, so rename
+  refuses these rather than rewriting half of them.
 
 ## Handlers/FieldTargets.cs
 

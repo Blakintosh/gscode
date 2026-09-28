@@ -11,6 +11,23 @@ public enum SymbolKind
     HashString,
     LocalizedString,
     AnimReference,
+
+    /// <summary>
+    /// A class <c>var</c> — <c>var _b_set_goal;</c> and the bare <c>_b_set_goal</c> that reads it.
+    ///
+    /// Distinct from <see cref="Field"/>, which it otherwise resembles, because a member IS
+    /// declared: it has one <see cref="ReferenceKind.Definition"/> at the <c>var</c>, where a
+    /// field has none anywhere and has to be answered from its writes.
+    ///
+    /// Read as a BARE NAME inside the class body, never through <c>self.</c> — all 206 <c>var</c>
+    /// declarations in BO3's shipped scripts are used that way. So the thing at the cursor looks
+    /// exactly like a local, and only the enclosing class says otherwise.
+    ///
+    /// Appended rather than slotted beside <see cref="Field"/> on purpose: a kind travels to the
+    /// record cache as its ordinal, and inserting one mid-enum costs a format bump and misreads
+    /// every older blob. The four literal kinds above have that hazard and no reason to move.
+    /// </summary>
+    Member,
 }
 
 /// <summary>

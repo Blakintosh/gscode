@@ -197,6 +197,140 @@ public class FieldBindingTests
         Assert.Equal(ReferenceKind.FieldAccess, Assert.Single(FieldReferences(result, "b")).Kind);
     }
 
+    private static ImmutableArray<ReferenceEntry> MemberReferences(ParseResult result, string name)
+    {
+        return [.. result.Extraction.References.Where(
+            entry => entry.Key.Kind == SymbolKind.Member && entry.Key.Name == name)];
+    }
+
+    [Fact]
+    public void AClassVarIsDeclaredAndItsBareUsesAreKeyedToIt()
+    {
+        // The spelling that makes this hard: BO3 reads a member as a BARE NAME inside the class
+        // body, never through `self.`. So the token looks exactly like a local, and only the
+        // enclosing class says otherwise.
+        ParseResult result = Analyze(
+            "class cThing\n"
+            + "{\n"
+            + "    var _count;\n"
+            + "    function bump()\n"
+            + "    {\n"
+            + "        _count = 1;\n"
+            + "        x = _count;\n"
+            + "    }\n"
+            + "}\n");
+
+        ImmutableArray<ReferenceEntry> references = MemberReferences(result, "_count");
+        Assert.Equal(3, references.Length);
+
+        // Unlike a plain field, a member HAS a declaration — so go-to-definition needs no
+        // writes-as-definition special case for it.
+        Assert.Single(references, entry => entry.Kind == ReferenceKind.Definition);
+        Assert.Single(references, entry => entry.Kind == ReferenceKind.FieldWrite);
+        Assert.Single(references, entry => entry.Kind == ReferenceKind.FieldAccess);
+
+        Assert.All(references, entry => Assert.Equal("cthing", entry.Key.OwnerClass));
+    }
+
+    [Fact]
+    public void AMemberInheritedWithinTheFileIsKeyedToTheUsingClass()
+    {
+        // Keyed by the class whose BODY the use sits in, not by the declarer — the same split
+        // MethodResolution.Canonicalize already closes for methods, and the reference query
+        // applies it here so the two meet.
+        ParseResult result = Analyze(
+            "class cBase\n"
+            + "{\n"
+            + "    var _shared;\n"
+            + "}\n"
+            + "class cChild : cBase\n"
+            + "{\n"
+            + "    function use()\n"
+            + "    {\n"
+            + "        _shared = 1;\n"
+            + "    }\n"
+            + "}\n");
+
+        ImmutableArray<ReferenceEntry> references = MemberReferences(result, "_shared");
+        Assert.Equal(2, references.Length);
+        Assert.Single(references, entry => entry.Key.OwnerClass == "cbase" && entry.Kind == ReferenceKind.Definition);
+        Assert.Single(references, entry => entry.Key.OwnerClass == "cchild" && entry.Kind == ReferenceKind.FieldWrite);
+    }
+
+    [Fact]
+    public void AChildDeclaredAboveItsParentStillResolves()
+    {
+        // The members are collected in a pre-pass for exactly this: a class can be written above
+        // the one it inherits from, and a method can read a `var` declared below it.
+        ParseResult result = Analyze(
+            "class cChild : cBase\n"
+            + "{\n"
+            + "    function use()\n"
+            + "    {\n"
+            + "        _shared = 1;\n"
+            + "    }\n"
+            + "}\n"
+            + "class cBase\n"
+            + "{\n"
+            + "    var _shared;\n"
+            + "}\n");
+
+        Assert.Equal(2, MemberReferences(result, "_shared").Length);
+    }
+
+    [Fact]
+    public void AnOrdinaryLocalInAClassMethodIsNotAMember()
+    {
+        // The cost of getting this wrong is every `i` in every method becoming a workspace-wide
+        // symbol, so the negative matters as much as the positive.
+        ParseResult result = Analyze(
+            "class cThing\n"
+            + "{\n"
+            + "    var _count;\n"
+            + "    function bump()\n"
+            + "    {\n"
+            + "        i = 0;\n"
+            + "        _count = i;\n"
+            + "    }\n"
+            + "}\n");
+
+        Assert.Empty(MemberReferences(result, "i"));
+        Assert.Equal(2, MemberReferences(result, "_count").Length);
+    }
+
+    [Fact]
+    public void ANameMatchingAMemberOutsideEveryClassIsNotAMember()
+    {
+        ParseResult result = Analyze(
+            "class cThing\n"
+            + "{\n"
+            + "    var _count;\n"
+            + "}\n"
+            + "function loose()\n"
+            + "{\n"
+            + "    _count = 1;\n"
+            + "}\n");
+
+        Assert.Single(MemberReferences(result, "_count"));
+    }
+
+    [Fact]
+    public void ACompoundAssignmentToAMemberIsAnUpdate()
+    {
+        ParseResult result = Analyze(
+            "class cThing\n"
+            + "{\n"
+            + "    var _count;\n"
+            + "    function bump()\n"
+            + "    {\n"
+            + "        _count += 1;\n"
+            + "    }\n"
+            + "}\n");
+
+        ImmutableArray<ReferenceEntry> references = MemberReferences(result, "_count");
+        Assert.Single(references, entry => entry.Kind == ReferenceKind.FieldUpdate);
+    }
+
     [Fact]
     public void ANestedAssignmentKeepsItsOwnTarget()
     {

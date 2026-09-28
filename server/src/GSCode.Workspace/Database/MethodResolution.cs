@@ -462,6 +462,143 @@ public static class MethodResolution
     }
 
     /// <summary>
+    /// The class that actually declares a <c>var</c> reachable from <paramref name="classKeyName"/>,
+    /// or null when nothing in the chain does.
+    ///
+    /// The member counterpart of <see cref="FindDeclaringClass"/>, and needed for the same reason:
+    /// extraction keys a bare member use by the class whose body it sits in, which for an
+    /// INHERITED member is not the class holding the <c>var</c>.
+    /// </summary>
+    public static string? FindDeclaringClassForMember(
+        LanguageStore store, string askingContextId, string classKeyName, string memberKeyName)
+    {
+        string? declaring = null;
+
+        WalkAncestors(store, askingContextId, classKeyName, default, (classSymbol, _) =>
+        {
+            foreach ( MemberSymbol member in classSymbol.Members )
+            {
+                if ( string.Equals(member.KeyName, memberKeyName, StringComparison.OrdinalIgnoreCase) )
+                {
+                    declaring = classSymbol.KeyName;
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        return declaring;
+    }
+
+    /// <summary>
+    /// Every reference to a class <c>var</c>, from the key of any site that names it.
+    ///
+    /// A member has the same reachability problem a method does, in both directions at once. The
+    /// declaration sits on one class; the uses sit in the bodies of that class AND of every class
+    /// that inherits from it, each keyed by the class its own body belongs to. So the key is first
+    /// canonicalized DOWN to the declaring class, then the union is taken back UP across every
+    /// descendant — otherwise renaming a base's <c>var</c> rewrites the declaration and leaves the
+    /// subclasses spelling the old name.
+    ///
+    /// <c>DirectChildren</c> is a real index, so the descendant walk costs the size of the
+    /// hierarchy rather than the size of the workspace. BO3's deepest is three classes.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindMemberReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        LanguageStore store,
+        string askingContextId,
+        SymbolKey key,
+        string onlyPath = "")
+    {
+        if ( key.Kind != SymbolKind.Member || key.OwnerClass is null )
+        {
+            return [];
+        }
+
+        string root = FindDeclaringClassForMember(store, askingContextId, key.OwnerClass, key.Name)
+            ?? key.OwnerClass;
+
+        Dictionary<(string, TextRange), (ScriptRecord, ReferenceEntry)> union = [];
+        foreach ( string owner in HierarchyFrom(store, root) )
+        {
+            foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in DatabaseQueries.FindAllReferences(
+                database,
+                stores,
+                askingContextId,
+                new SymbolKey(null, key.Name, SymbolKind.Member, owner),
+                macroSpansLanguages: false,
+                onlyPath) )
+            {
+                union[(hit.Record.Path, hit.Entry.Range)] = hit;
+            }
+        }
+
+        return [.. union.Values];
+    }
+
+    /// <summary>
+    /// Whether every use of a member is INDEXED, which decides whether a rename may proceed.
+    ///
+    /// Extraction keys a bare member use only when the declaring class is in the same file, since
+    /// that is all one file's parse can see. When a hierarchy spans files, the subclasses' bare
+    /// uses were read as locals and are absent from the index — so a rename would rewrite the
+    /// <c>var</c> and the declaring file's own uses and leave every subclass spelling the old
+    /// name. That is silent breakage in code that worked, so rename declines instead.
+    ///
+    /// 7 of BO3's 206 <c>var</c>s are affected: <c>cScriptBundleObjectBase</c>'s and
+    /// <c>cScriptBundleBase</c>'s, whose subclasses live in <c>scene_shared.gsc</c>.
+    /// </summary>
+    public static bool MemberIsFullyIndexed(LanguageStore store, string askingContextId, SymbolKey key)
+    {
+        if ( key.Kind != SymbolKind.Member || key.OwnerClass is null )
+        {
+            return false;
+        }
+
+        string root = FindDeclaringClassForMember(store, askingContextId, key.OwnerClass, key.Name)
+            ?? key.OwnerClass;
+
+        HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( string owner in HierarchyFrom(store, root) )
+        {
+            foreach ( string path in store.Classes.PathsDeclaring(owner) )
+            {
+                paths.Add(path);
+            }
+        }
+
+        return paths.Count <= 1;
+    }
+
+    /// <summary>A class and every class below it, bounded like the ancestor walk above.</summary>
+    private static List<string> HierarchyFrom(LanguageStore store, string classKeyName)
+    {
+        List<string> all = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        Queue<(string Name, int Depth)> pending = new();
+        pending.Enqueue((classKeyName, 0));
+
+        while ( pending.Count > 0 )
+        {
+            (string name, int depth) = pending.Dequeue();
+            if ( depth > MaxDepth || !seen.Add(name) )
+            {
+                continue;
+            }
+
+            all.Add(name);
+            foreach ( string child in store.Classes.DirectChildren(name) )
+            {
+                pending.Enqueue((child, depth + 1));
+            }
+        }
+
+        return all;
+    }
+
+    /// <summary>
     /// Every reference to a class method, given the CANONICAL key of its declaration.
     ///
     /// A method is not reachable under one key the way a function is, so this unions the four ways a

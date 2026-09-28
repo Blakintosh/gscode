@@ -18,20 +18,18 @@ namespace GSCode.Workspace.Analysis;
 /// called function may live in a sibling file), or it declares an autoexec function (the file
 /// is imported purely for its side effects).
 ///
-/// One unreadable <c>#using</c> used to suppress the whole pass, copied from
-/// <see cref="NamespaceUsageLint"/> where it IS load-bearing. It is not load-bearing here, and the
-/// question this rule asks is why: whether import Y is used depends on THIS FILE'S REFERENCES and
-/// on Y'S OWN DECLARATIONS, and a file we cannot read is neither of those. Nor can it flip an
-/// answer — if the unreadable file was the real provider of what this file calls, then Y provides
-/// nothing referenced and saying so is right. So an unreadable directive is simply not judged (it
-/// never entered <c>Usings</c>), and every other one still is: a workspace missing one script no
-/// longer greys out nothing at all.
+/// An unreadable <c>#using</c> does not suppress the pass. It is load-bearing in
+/// <see cref="NamespaceUsageLint"/> but not here: whether import Y is used depends on THIS FILE'S
+/// REFERENCES and on Y'S OWN DECLARATIONS, and a file we cannot read is neither. Nor can it flip an
+/// answer — if it was the real provider of what this file calls, then Y provides nothing referenced
+/// and saying so is right. So an unreadable directive is simply not judged (it never enters
+/// <c>Usings</c>) and every other one still is.
 ///
-/// An unresolved <c>#insert</c> DOES suppress the pass, and that is the gate the old one was
-/// standing in for without saying so. A header that did not expand takes its macros with it, so
-/// <c>REGISTER_SYSTEM(...)</c> never becomes <c>system::register(...)</c> and the reference set is
-/// short — which is exactly the shape that makes a live import look unused. The reference count is
-/// this rule's INPUT, so a gate about macros belongs here in a way a gate about imports never did.
+/// An unresolved <c>#insert</c> DOES suppress the pass. A header that did not expand takes its
+/// macros with it, so <c>REGISTER_SYSTEM(...)</c> never becomes <c>system::register(...)</c> and the
+/// reference set is short — exactly the shape that makes a live import look unused. The reference
+/// count is this rule's INPUT, so a gate about macros belongs here in a way a gate about imports does
+/// not.
 /// </summary>
 public static class UnusedUsingLint
 {

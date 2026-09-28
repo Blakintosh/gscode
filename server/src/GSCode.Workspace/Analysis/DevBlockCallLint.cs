@@ -47,9 +47,9 @@ public static class DevBlockCallLint
         // source as FunctionResolutionLint uses for the same purpose.
         string fileNamespace = askingNamespaces.IsDefaultOrEmpty ? "" : askingNamespaces[0];
 
-        // Keyed on the WRITTEN key, so a name called repeatedly in one file is routed once. This
-        // stands in for the FunctionLookupCache that used to be here: that memo can only ask
-        // LookupFunctions, and LookupFunctions is the query this rule must no longer use alone.
+        // Keyed on the WRITTEN key, so a name called repeatedly in one file is routed once. A
+        // FunctionLookupCache cannot do this: it can only ask LookupFunctions, which this rule must
+        // not use alone.
         Dictionary<SymbolKey, ImmutableArray<ResolvedFunction>> resolutions = [];
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
@@ -62,9 +62,8 @@ public static class DevBlockCallLint
         {
             // FromMacro is not skipped: a dev-only function called from a macro body vanishes from
             // a release build exactly as it would called directly, and the file invoking the macro
-            // is the one that stops compiling. This is the rule the flag change helps most — the
-            // failure appears only once the mod ships, so an editor that stayed silent about it
-            // was silent about the one class of bug this lint exists for.
+            // is the one that stops compiling — found only once the mod ships, the one class of bug
+            // this lint exists for.
             if ( !entry.IsFunctionCall )
             {
                 continue;

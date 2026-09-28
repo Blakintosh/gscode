@@ -12,8 +12,7 @@ namespace GSCode.Workspace.Analysis;
 /// <summary>
 /// Hints that a literal <c>0</c>/<c>1</c> passed to a builtin parameter declared <c>bool</c>
 /// should be <c>false</c>/<c>true</c>. Scoped exactly to declared-bool parameters: an int
-/// parameter legitimately takes 0 and 1, and flagging those was the v1 bug this rule's
-/// original test was written to pin down.
+/// parameter legitimately takes 0 and 1.
 ///
 /// Overloads must agree. If any overload declares something other than bool at that position,
 /// the call is left alone, since which overload the author meant is unknowable here.

@@ -55,9 +55,8 @@ public static class ExpressionStatementLint
     /// Whether this rule speaks about this file at all. It stands down on a file the parser could
     /// not read, and the corpus is the entire argument for that.
     ///
-    /// Before this gate the rule reported nine statements across the five games and not one was a
-    /// statement with no effect — every single one was the wreckage of a parse the tree had
-    /// recovered from:
+    /// Without this gate the rule reports nine statements across the five games, and not one is a
+    /// statement with no effect — every one is the wreckage of a parse the tree recovered from:
     ///
     /// <list type="bullet">
     /// <item>bo3's two are the known `gib.gsc(58)` grammar gap, where an object-like macro is called

@@ -15,10 +15,9 @@ namespace GSCode.Workspace.Analysis;
 ///
 /// These need the whole database rather than a single file — whether a <c>#using</c> is unused,
 /// whether a private function is reachable, whether a call crosses into a dev block — so they
-/// cannot live in the parser and used to be assembled inline in the server's text-sync handler.
-/// Pulling them out lets anything with a parse result and a database run the exact set the editor
-/// runs, which is what makes an offline sweep over the whole corpus meaningful: a lint audited
-/// against a copy of the pipeline audits the copy.
+/// cannot live in the parser. Here, anything with a parse result and a database can run the exact
+/// set the editor runs, which is what makes an offline sweep over the whole corpus meaningful: a lint
+/// audited against a copy of the pipeline audits the copy.
 /// </summary>
 public static class WorkspaceLints
 {
@@ -114,9 +113,8 @@ public static class WorkspaceLints
 
         ImmutableArray<Diagnostic>.Builder lints = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // The file's imports, resolved ONCE for the four lints that each used to resolve them
-        // again. Every resolve is a filesystem probe per configured root, and this runs on every
-        // keystroke — on a BO3 file the same #using list was being walked three times over.
+        // The file's imports, resolved ONCE for the four lints that need them: every resolve is a
+        // filesystem probe per configured root, and this runs on every keystroke.
         FileImports imports;
         using ( LintScope.For("lint.FileImports.Resolve", timings) )
         {
@@ -178,8 +176,7 @@ public static class WorkspaceLints
             lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
         }
         // One typer for all three rules that read it, and — because InferValues memoises per parse
-        // — one inference walk between them. Each used to run its own: two InferAssignments and an
-        // InferValues over the same tree, which was 30% of BO3's lint pass and is now 20%.
+        // — one inference walk between them: separate walks cost 30% of BO3's lint pass, shared 20%.
         // Whichever rule runs first pays for the walk; the other two read the same ScriptTypes.
         FlowTyper typer;
         using ( LintScope.For("lint.FlowTyper.ctor", timings) )

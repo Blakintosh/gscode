@@ -24,8 +24,8 @@ namespace GSCode.Workspace.Analysis;
 ///
 /// * A <b>parameter</b> often cannot be removed. GSC passes positionally, and the reason BO3 has so
 ///   many unused ones is callbacks — a signature fixed by the engine or a dispatcher, where the last
-///   parameter is as stuck as the middle one. (A trailing-only restriction was tried on the theory
-///   that those were the removable ones; it barely moved the number, which is how that theory died.)
+///   parameter is as stuck as the middle one. (Counting only trailing parameters barely moves the
+///   number.)
 /// * A <b>waittill output</b> is the author's own choice, so a dead one genuinely can go:
 ///   <c>self waittill( "damage", attacker );</c> becomes <c>self waittill( "damage" );</c> when
 ///   nothing reads <c>attacker</c>.

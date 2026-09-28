@@ -17,15 +17,15 @@ namespace GSCode.Workspace.Analysis;
 /// conservative — deleting a working include is worse than keeping a stale one — so an autoexec
 /// anywhere it reaches keeps it (imported for its side effects).
 ///
-/// An unreadable <c>#include</c> DIRECTIVE used to suppress the whole pass and no longer does, for
+/// An unreadable <c>#include</c> DIRECTIVE does not suppress the whole pass, for
 /// the reason <see cref="UnusedUsingLint"/> sets out: it never enters the resolved list, so it goes
 /// unjudged while its siblings are judged. What is still bailed out on is one level down — an
 /// unreadable file inside a resolved include's CLOSURE, checked per include below, because there the
 /// missing file really could be the one supplying a name and "nothing else supplies it" is the whole
 /// test.
 ///
-/// <see cref="UnusedUsingLint"/> gained an unresolved-<c>#insert</c> gate in the same change and
-/// this did not, which is a dialect fact rather than an oversight: <c>#insert</c> does not lex on
+/// There is no unresolved-<c>#insert</c> gate here, unlike <see cref="UnusedUsingLint"/>, and that
+/// is a dialect fact rather than an oversight: <c>#insert</c> does not lex on
 /// an include dialect (<c>Keywords.IsDirectiveEnabled</c>), so the diagnostic that gate reads can
 /// never be raised in a file this rule runs on. Writing it here would be a branch nothing can
 /// take.
@@ -34,9 +34,9 @@ namespace GSCode.Workspace.Analysis;
 /// Error. <c>#include</c> flattens transitively (see <see cref="DatabaseQueries.IncludeClosure"/>), so
 /// a file may include a hub purely as a conduit — <c>maps\_createpath.gsc</c> reaches
 /// <c>flag_init</c> through <c>maps\_utility</c> and includes nothing else. Judging a directive by
-/// what its target declares ITSELF called that unused, offered "Remove", and the removal broke the
-/// file: 5026 then reports the call as out of scope. A quick fix that turns working code into an
-/// error is worse than either rule being wrong alone.
+/// what its target declares ITSELF would call that unused and offer "Remove", and the removal would
+/// break the file: 5026 then reports the call as out of scope. A quick fix that turns working code
+/// into an error is worse than either rule being wrong alone.
 ///
 /// So an include is reported only when removing it would take nothing away: no called name that its
 /// closure supplies is supplied by it ALONE. Membership in the closure is not enough, or a hub would

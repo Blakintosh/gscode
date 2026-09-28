@@ -16,11 +16,10 @@ namespace GSCode.Workspace.Analysis;
 /// before control returns, so the value is correct until somebody adds a wait to a function three
 /// files away and every caller silently starts reading undefined.
 ///
-/// 1.5 raised this as two codes. <c>ConsumedThreadedCallResult</c> asked whether a call's result was
-/// consumed, and <c>AssignOnThreadedFunction</c> asked whether an assignment's right-hand side
-/// contained a thread call — the same mistake, counted twice, so an assignment matched both. This
-/// is the first question only, because it is the one that generalises: an argument, a condition, a
-/// return value and a wait duration all consume a value, and none of them is an assignment.
+/// One question, where 1.5 asked two (<c>ConsumedThreadedCallResult</c> and
+/// <c>AssignOnThreadedFunction</c>, one mistake counted twice): is the value consumed at all? An
+/// argument, a condition, a return value and a wait duration all consume one, and none of them is an
+/// assignment.
 ///
 /// Needs no type information. The distinction is positional: an expression STATEMENT evaluates its
 /// expression for effect and discards the value, which is exactly what a threaded call is for.

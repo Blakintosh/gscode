@@ -14,10 +14,9 @@ namespace GSCode.Workspace.Analysis;
 /// jump back in, since GSC has no labels or gotos. That makes this a syntactic question rather
 /// than a dataflow one, and it is why the answer can be trusted.
 ///
-/// Reported as Information, which is the quietest severity VS Code's Problems panel shows. It was
-/// a Hint, and a Hint never reaches that panel — and this rule has nothing to fade in the panel's
-/// place, since it carries no Unnecessary tag and a greyed run of statements is indistinguishable
-/// from a comment. The finding was therefore invisible unless the reader happened to hover it.
+/// Reported as Information, the quietest severity VS Code's Problems panel shows. A Hint never
+/// reaches that panel, and this rule has nothing to fade in its place: it carries no Unnecessary tag,
+/// and a greyed run of statements is indistinguishable from a comment.
 ///
 /// The corpora are what make the panel affordable: 48 findings in 42 files across all five shipped
 /// games (BO1 17, BO3 13, WAW 8, MW2 6, CoD4 4) out of roughly 8,300 scripts. That is the test a

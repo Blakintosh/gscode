@@ -14,8 +14,8 @@ namespace GSCode.Workspace.Analysis;
 /// The governing rule is **report only when the owner's type makes the field read-only**, never
 /// on the field name alone. Names collide across worlds — `name` is read-only on the engine's
 /// player and weapon, but is an ordinary field on a struct you made — so
-/// <c>state_machine = SpawnStruct(); state_machine.name = name;</c> is perfectly legal and was
-/// previously flagged. An owner the flow typer cannot type yields Unknown and is left alone;
+/// <c>state_machine = SpawnStruct(); state_machine.name = name;</c> is perfectly legal. An owner
+/// the flow typer cannot type yields Unknown and is left alone;
 /// silence beats a false error on correct code.
 ///
 /// Owner types come from <see cref="FlowTyper"/>'s own walk rather than a second inference pass,

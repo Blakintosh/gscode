@@ -14,20 +14,14 @@ namespace GSCode.Workspace.Analysis;
 /// not a defect: the script runs, and half-finished work in progress is the normal reason to have
 /// one. Anything louder would be nagging someone mid-edit.
 ///
-/// It was Information, which put every one in the editor's problem list — 1,716 of them over MW2's
-/// scripts alone, and 4,711 across the five games, all in code that ships and works. A list that
-/// long is one nobody reads. The tag is what carries the finding: the editor greys the name either
-/// way, so the signal survives and only the list entry goes. Every other rule of this kind here
-/// (5020, 5012, 5001, 5002) was already a Hint.
+/// Information would put every one in the editor's problem list — 4,711 across the five games, 1,716
+/// on MW2 alone, all in code that ships and works. The tag is what carries the finding: the editor
+/// greys the name either way. Every other rule of this kind here (5020, 5012, 5001, 5002) is a Hint
+/// too.
 ///
 /// 5015 is the exception that shows what the number decides rather than the category: unreachable
 /// code is the same kind of finding, and it is Information, because it fires 48 times across all
 /// five corpora rather than 4,711.
-///
-/// Reads and writes are told apart structurally rather than by counting occurrences. A name is
-/// READ wherever it appears except as the direct target of a plain <c>=</c>; a compound assignment
-/// (<c>+=</c>) reads its target, and so does <c>x++</c>, which is why those do not count as
-/// dead stores.
 ///
 /// Only plain locals are considered. <c>self.foo</c> and <c>level.bar</c> are fields with lives of
 /// their own — another script may read them — so an unread write to one says nothing.
@@ -56,10 +50,7 @@ public static class UnusedLocalLint
     /// store. Real BO3 code hits this on an ordinary setter —
     /// <c>function set_door_paths( p ) { m_n_door_connect_paths = p; }</c> in
     /// <c>scripts\shared\doors_shared.gsc</c> — where the member is read by another method
-    /// entirely. Constructors were the first case found (<c>id = undefined;</c> in
-    /// <c>_driving_fx.csc</c>'s <c>GroundFx</c> constructor, read by that class's <c>play()</c>),
-    /// but the same reasoning always applied to every method — reaching a member needs member
-    /// resolution first, not a wider walk.
+    /// entirely. Reaching a member needs member resolution first, not a wider walk.
     ///
     /// <see cref="UnassignedVariableLint"/> already takes this same all-or-nothing view of a class,
     /// via its own <c>insideClass</c>. <see cref="UnusedBindingLint"/> does inspect every method,

@@ -10,10 +10,8 @@ namespace GSCode.Workspace.Analysis;
 /// Two type-derived findings the union lattice made answerable: a non-array enumerated, and a vector
 /// component that cannot be a number.
 ///
-/// Both were ruled out while the lattice was flat, for the same recorded reason — <c>ScrType.Join</c>
-/// collapsed any disagreement to Unknown, so a rule was silent where it was safe and wrong where it
-/// was not. Real unions change the question into one <see cref="ScrValue.MustBe"/> can answer: every
-/// possible type has to fail before anything is said.
+/// Real unions make both answerable by <see cref="ScrValue.MustBe"/>: every possible type has to fail
+/// before anything is said.
 ///
 /// Reads the per-node map rather than re-deriving anything, so a rule and the type the editor shows
 /// can never disagree about what an expression means.

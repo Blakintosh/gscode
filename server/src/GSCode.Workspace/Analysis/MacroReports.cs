@@ -12,10 +12,9 @@ namespace GSCode.Workspace.Analysis;
 /// set holds expanded entries alone and is not allocated until one arrives. Every file in a dialect
 /// without a preprocessor therefore pays nothing, and so does every BO3 file invoking no macro.
 ///
-/// The set is the CALLER'S local, passed by <c>ref</c>, rather than state held here. Six lints each
-/// wrote this block out and the obvious collapse was a small struct owning the set — which is a
-/// mutable struct, and copying one before its first insert would give each copy its own set and
-/// split the deduplication silently. A <c>ref</c> to the caller's own local cannot be copied wrong.
+/// The set is the CALLER'S local, passed by <c>ref</c>, rather than state held here: a small struct
+/// owning it would be a mutable struct, and copying one before its first insert would give each copy
+/// its own set and split the deduplication silently.
 ///
 /// WHAT the key is stays the caller's, because it is the rule's own claim rather than a detail:
 /// 5000 keys on the namespace it would have you import, 5026 on the function name it would have you

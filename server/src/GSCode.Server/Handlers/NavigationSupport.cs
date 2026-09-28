@@ -235,12 +235,42 @@ public sealed class NavigationSupport
     public PositionHit ResolveHit(NavigationTarget target, GSCode.Core.Text.Position position)
     {
         PositionHit hit = SymbolAtPosition.Resolve(target.Result, position);
+
+        // A MEMBER hit is the one kind extraction may have guessed at. Inside a class whose
+        // ancestors are not all in the file, it records every bare name as a member, because it
+        // cannot tell an inherited one from a local and the alternative is that the inherited ones
+        // stay invisible. The class graph settles it here, where the whole workspace is available:
+        // a name no ancestor declares is a local after all, and answering None sends it down the
+        // local path exactly as before.
+        if ( hit.Kind == HitKind.Reference && hit.Key.Kind == SymbolKind.Member )
+        {
+            return IsRealMember(target, hit.Key) ? hit : PositionHit.None;
+        }
+
         if ( hit.Kind != HitKind.None )
         {
             return hit;
         }
 
         return InheritedMemberAt(target, position);
+    }
+
+    /// <summary>
+    /// Whether a member key names a <c>var</c> the class really has, own or inherited.
+    ///
+    /// Bounded by the hierarchy rather than the workspace — three classes at BO3's deepest — and
+    /// reached only for a cursor inside a class body, which is rare enough that document highlight
+    /// firing on every cursor move does not care.
+    /// </summary>
+    private static bool IsRealMember(NavigationTarget target, SymbolKey key)
+    {
+        if ( key.OwnerClass is null )
+        {
+            return false;
+        }
+
+        return MethodResolution.FindDeclaringClassForMember(
+            target.Store, target.ContextId, key.OwnerClass, key.Name) is not null;
     }
 
     /// <summary>

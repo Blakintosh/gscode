@@ -235,6 +235,22 @@ public sealed class SymbolExtractor
     // resolution time by the handlers, which have the store and can walk the real class graph.
     private HashSet<string>? _currentClassMemberNames;
 
+    // True when the current class inherits from one this file does NOT declare, so an unfamiliar
+    // bare name inside it MIGHT be a member and nothing here can tell.
+    //
+    // Those names are recorded anyway, keyed to this class like a known member. A genuine local
+    // recorded this way is harmless: the key carries its own name, so it can only ever be matched
+    // by a query for a member OF THAT NAME — and if the hierarchy really does declare one, then
+    // the bare name IS that member and the entry was right after all. What it buys is the reverse
+    // direction, which is the half a single file's parse cannot otherwise supply: without it a
+    // rename of a base's `var` rewrote the declaration and left every subclass in another file
+    // spelling the old name.
+    //
+    // Scoped to these classes alone so the index does not grow for the 31 of BO3's 33 that see
+    // their whole chain. Verified at the cursor by NavigationSupport.ResolveHit, which asks the
+    // real class graph whether the name is a member before letting a hit stand.
+    private bool _currentClassHasUnseenAncestor;
+
     private void CollectClassMembers(ImmutableArray<AstNode> elements)
     {
         foreach ( AstNode element in elements )
@@ -295,6 +311,39 @@ public sealed class SymbolExtractor
         }
 
         return names;
+    }
+
+    /// <summary>
+    /// True when the in-file ancestor chain of <paramref name="classKeyName"/> runs out at a
+    /// parent this file does not declare — so the chain continues somewhere this parse cannot see,
+    /// and an unfamiliar bare name in the body might be a member of it.
+    /// </summary>
+    private bool HasUnseenAncestor(string classKeyName)
+    {
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+
+        string? current = classKeyName;
+        for ( int depth = 0; current is not null && depth < 32 && visited.Add(current); depth++ )
+        {
+            if ( !_classMembers.TryGetValue(current, out (string? Parent, HashSet<string> Members) entry) )
+            {
+                // Reached a class this file does not declare, having been named as a parent.
+                return true;
+            }
+
+            current = entry.Parent;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when a bare name in the current class body has to be RECORDED as a member, whether or
+    /// not this file can prove it is one. See <see cref="_currentClassHasUnseenAncestor"/>.
+    /// </summary>
+    private bool IsMemberCandidate(string name)
+    {
+        return IsMemberName(name) || (_currentClass is not null && _currentClassHasUnseenAncestor);
     }
 
     /// <summary>
@@ -501,8 +550,10 @@ public sealed class SymbolExtractor
         // so this stays correct if classes ever nest.
         string? enclosingClass = _currentClass;
         HashSet<string>? enclosingMembers = _currentClassMemberNames;
+        bool enclosingUnseen = _currentClassHasUnseenAncestor;
         _currentClass = classKeyName;
         _currentClassMemberNames = MemberNamesInScope(classKeyName);
+        _currentClassHasUnseenAncestor = HasUnseenAncestor(classKeyName);
 
         if ( classNode.ParentToken is not null )
         {
@@ -562,6 +613,7 @@ public sealed class SymbolExtractor
 
         _currentClass = enclosingClass;
         _currentClassMemberNames = enclosingMembers;
+        _currentClassHasUnseenAncestor = enclosingUnseen;
 
         // Same reasoning as ExtractFunction: a class NAMED by a macro body belongs at the
         // invocation, not at the #define's own position.
@@ -804,7 +856,7 @@ public sealed class SymbolExtractor
                 _fieldWriteRange = assignment.Target switch
                 {
                     MemberNode target => target.NameToken.RootRange,
-                    IdentifierNode named when IsMemberName(named.Token.Text) => named.Token.RootRange,
+                    IdentifierNode named when IsMemberCandidate(named.Token.Text) => named.Token.RootRange,
                     _ => null,
                 };
 
@@ -872,7 +924,7 @@ public sealed class SymbolExtractor
             //
             // Read or write by the same rule a field uses, so `_b_set_goal = true` is a write and
             // `if ( _b_set_goal )` is a read.
-            case IdentifierNode identifier when IsMemberName(identifier.Token.Text):
+            case IdentifierNode identifier when IsMemberCandidate(identifier.Token.Text):
                 AddReference(
                     MemberKey(identifier.Token.Text),
                     identifier.Token,

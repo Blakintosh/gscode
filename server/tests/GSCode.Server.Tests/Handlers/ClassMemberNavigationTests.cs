@@ -321,23 +321,56 @@ public sealed class ClassMemberNavigationTests : IDisposable
     }
 
     [Fact]
-    public async Task RenameRefusesAMemberWhoseHierarchySpansFiles()
+    public async Task RenamingAnInheritedMemberReachesTheSubclassInTheOtherFile()
     {
-        // The uses in the subclass file are not in the index, so renaming would rewrite the `var`
-        // and base.gsc's own uses and leave derived.gsc spelling the old name. Refusing is the
-        // only safe answer, and silence beats silently breaking code that works.
-        WorkspaceEdit? result = await RenameAtAsync("base.gsc", 12, 12, "_renamed");
+        // The case the whole cross-file half exists for. `_shared` is declared in base.gsc and
+        // read bare in derived.gsc, whose parse cannot see the `var` — so derived.gsc records the
+        // name as a member candidate on the strength of having an ancestor it cannot see, and the
+        // class graph confirms it here. Without that, this rewrote base.gsc and left derived.gsc
+        // spelling the old name.
+        WorkspaceEdit? result = await RenameAtAsync("base.gsc", 7, 8, "_renamed");
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.NotNull(result!.Changes);
+
+        Dictionary<string, int> perFile = result.Changes!.ToDictionary(
+            static pair => Path.GetFileName(pair.Key.GetFileSystemPath()),
+            static pair => pair.Value.Count(),
+            StringComparer.OrdinalIgnoreCase);
+
+        // base.gsc: the `var` and one write. derived.gsc: one write and one read.
+        Assert.Equal(2, perFile["base.gsc"]);
+        Assert.Equal(2, perFile["derived.gsc"]);
     }
 
     [Fact]
-    public async Task PrepareRenameRefusesTheSameMemberTheRenameWould()
+    public async Task PrepareRenameOffersAnInheritedMember()
     {
-        // Shared test, so the editor says "cannot rename here" rather than opening a box whose
-        // result is then discarded.
-        RangeOrPlaceholderRange? result = await PrepareRenameAtAsync("base.gsc", 12, 12);
+        RangeOrPlaceholderRange? result = await PrepareRenameAtAsync("derived.gsc", 9, 20);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task FindReferencesOnAnInheritedMemberCrossesTheFileBoundary()
+    {
+        LocationContainer? result = await ReferencesAtAsync("derived.gsc", 9, 20);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result!.Count());
+    }
+
+    [Fact]
+    public async Task AnOrdinaryLocalInAClassWithAnUnseenParentIsStillALocal()
+    {
+        // The cost of the candidate rule, and the check that pays it back. derived.gsc records
+        // EVERY bare name in cDerived as a member, `y` included, because it cannot see cBase.
+        // The class graph says no ancestor declares `y`, so the hit is dropped and `y` goes down
+        // the local path exactly as before — one function, not the workspace.
+        WorkspaceEdit? result = await RenameAtAsync("derived.gsc", 9, 8, "_renamed");
+
+        Assert.NotNull(result);
+        List<TextEdit> edits = [.. result!.Changes!.Values.SelectMany(static e => e)];
+        Assert.Single(edits);
     }
 }

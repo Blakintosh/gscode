@@ -35,11 +35,13 @@ lints, `Completion/` and `Typing/` the information surfaces.
   descendant. Both directions are needed - the declaration is on one class and the uses are keyed
   by whichever class's body each sits in - and without the second, renaming a base's `var` rewrote
   the declaration and left the subclasses spelling the old name.
-- `MemberIsFullyIndexed` is false when the hierarchy spans FILES. Extraction keys a bare use only
-  where the declaring class is in the same file, which is all one parse can see; when it is not,
-  the subclasses' uses were read as locals and are absent from the index. Rename consults this and
-  declines, rather than rewriting the half it can see. 199 of BO3's 206 `var`s are single-file and
-  unaffected; the 7 that are not are `cScriptBundleObjectBase`'s and `cScriptBundleBase`'s.
+- A use in a class whose ancestors are NOT all in the file is indexed too, on the strength of the
+  class having an ancestor the parse cannot see: extraction records every bare name there as a
+  member of that class. A genuine local recorded that way is inert, because the key carries its own
+  name and can only be matched by a query for a member OF THAT NAME - and if the hierarchy really
+  declares one, the bare name IS it. This is what makes the reverse direction complete, so renaming
+  a base's `var` reaches the subclasses in other files. Cost on bo3: 3,242 member references,
+  1.39% of the 232,703 total, across 12 of 980 files.
 
 ## Database/ClassGraph.cs
 

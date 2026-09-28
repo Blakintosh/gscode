@@ -538,40 +538,6 @@ public static class MethodResolution
         return [.. union.Values];
     }
 
-    /// <summary>
-    /// Whether every use of a member is INDEXED, which decides whether a rename may proceed.
-    ///
-    /// Extraction keys a bare member use only when the declaring class is in the same file, since
-    /// that is all one file's parse can see. When a hierarchy spans files, the subclasses' bare
-    /// uses were read as locals and are absent from the index — so a rename would rewrite the
-    /// <c>var</c> and the declaring file's own uses and leave every subclass spelling the old
-    /// name. That is silent breakage in code that worked, so rename declines instead.
-    ///
-    /// 7 of BO3's 206 <c>var</c>s are affected: <c>cScriptBundleObjectBase</c>'s and
-    /// <c>cScriptBundleBase</c>'s, whose subclasses live in <c>scene_shared.gsc</c>.
-    /// </summary>
-    public static bool MemberIsFullyIndexed(LanguageStore store, string askingContextId, SymbolKey key)
-    {
-        if ( key.Kind != SymbolKind.Member || key.OwnerClass is null )
-        {
-            return false;
-        }
-
-        string root = FindDeclaringClassForMember(store, askingContextId, key.OwnerClass, key.Name)
-            ?? key.OwnerClass;
-
-        HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( string owner in HierarchyFrom(store, root) )
-        {
-            foreach ( string path in store.Classes.PathsDeclaring(owner) )
-            {
-                paths.Add(path);
-            }
-        }
-
-        return paths.Count <= 1;
-    }
-
     /// <summary>A class and every class below it, bounded like the ancestor walk above.</summary>
     private static List<string> HierarchyFrom(LanguageStore store, string classKeyName)
     {

@@ -59,13 +59,6 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
             return Task.FromResult(LocalRangeAt(target, request.Position.ToCore()));
         }
 
-        // Shared with the rename itself, so the preview says "cannot rename here" for exactly the
-        // members the rename would refuse.
-        if ( RenameHandler.RefusesIncompleteMember(target, hit) )
-        {
-            return Task.FromResult<RangeOrPlaceholderRange?>(null);
-        }
-
         return Task.FromResult<RangeOrPlaceholderRange?>(new RangeOrPlaceholderRange(hit.Range.ToLsp()));
     }
 

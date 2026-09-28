@@ -245,14 +245,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/NavigationSupport.cs - inherited members
 
-- `ResolveHit` falls through to `InheritedMemberAt` when the reference index has no answer: a bare
-  name inside a class body naming a `var` declared by an ancestor IN ANOTHER FILE is the one member
-  shape extraction cannot key, since it sees one file and the declaration is not in it.
-- Only reached on a miss and only inside a class body, so the ordinary path pays nothing; the
-  ancestor walk is bounded by the hierarchy (three classes at BO3's deepest), not the workspace.
-- It resolves the CURSOR outwards only. Definition, hover and implementation are answered; find-
-  references and rename ask the opposite direction and can report only what was indexed, so rename
-  refuses these rather than rewriting half of them.
+- `ResolveHit` VERIFIES every member hit against the class graph before letting it stand. Inside a
+  class whose ancestors are not all in the file, extraction records every bare name as a member,
+  because it cannot tell an inherited one from a local; the graph settles it here, where the whole
+  workspace is available. A name no ancestor declares is a local after all, and answering `None`
+  sends it down the local path exactly as before.
+- `InheritedMemberAt` is the other half: when the index has no entry at all, a bare name in a class
+  body is resolved through `MembersOf` at the cursor. Reached only on a miss and only inside a
+  class body, so the ordinary path pays nothing.
+- Both walks are bounded by the hierarchy - three classes at BO3's deepest - not by the workspace.
 
 ## Handlers/FieldTargets.cs
 

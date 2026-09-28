@@ -86,9 +86,23 @@ public static class UnusedBindingLint
         bool hasVarargs,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        // A waittill output is the thing being judged, so binding it is not a mention of it —
+        // otherwise no output would ever be unused. Every other use is a mention, WRITES included:
+        // `function f( out ) { out = 1; }` does something when the argument is by-reference, and
+        // telling that apart needs by-reference knowledge this rule does not have.
         HashSet<string> mentioned = new(StringComparer.OrdinalIgnoreCase);
         List<PToken> waittillBindings = [];
-        Collect(body, mentioned, waittillBindings);
+        foreach ( LocalUse use in LocalUses.Of(body) )
+        {
+            if ( use.Kind == LocalUseKind.EventBinding )
+            {
+                waittillBindings.Add(use.Token);
+            }
+            else
+            {
+                mentioned.Add(use.Token.Text);
+            }
+        }
 
         // A varargs function reaches its arguments through the vararg mechanism as well as by name,
         // so an unmentioned PARAMETER says nothing there. Its waittill outputs are unaffected.
@@ -129,55 +143,4 @@ public static class UnusedBindingLint
 
         diagnostics.Add(unused with { Tags = [DiagnosticTag.Unnecessary] });
     }
-
-    /// <summary>
-    /// Every name the body MENTIONS, plus the <c>waittill</c> outputs it BINDS.
-    ///
-    /// A binding is not a mention of itself, which is the whole reason the two are separated in one
-    /// walk: counting `attacker` in <c>waittill( "damage", attacker )</c> as a use would mean no
-    /// waittill output was ever unused.
-    ///
-    /// Mentions are not split into reads and writes. `function f( out ) { out = 1; }` assigns to its
-    /// parameter, which does something in GSC when the argument is by-reference; fading that would
-    /// be wrong, and telling the two apart needs by-reference knowledge this rule does not have.
-    /// </summary>
-    private static void Collect(AstNode node, HashSet<string> mentioned, List<PToken> bindings)
-    {
-        switch ( node )
-        {
-            case IdentifierNode identifier:
-                mentioned.Add(identifier.Token.Text);
-                return;
-
-            case CallNode call when AstSearch.IsWaittill(call.Callee):
-                // The first argument is the event NAME and is a genuine value; everything after it
-                // is an output the engine fills in.
-                for ( int index = 0; index < call.Arguments.Length; index++ )
-                {
-                    if ( index > 0 && call.Arguments[index] is IdentifierNode bound )
-                    {
-                        bindings.Add(bound.Token);
-                        continue;
-                    }
-
-                    Collect(call.Arguments[index], mentioned, bindings);
-                }
-
-                if ( call.Target is not null )
-                {
-                    Collect(call.Target, mentioned, bindings);
-                }
-
-                return;
-
-            default:
-                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-                {
-                    Collect(child, mentioned, bindings);
-                }
-
-                return;
-        }
-    }
-
 }

@@ -87,6 +87,16 @@ LSP types anywhere.
   blocks from raw tokens, and case-insensitive nestable `/* region */`…`/* endregion */`
   user regions.
 
+## Syntax/LocalUses.cs
+
+- `static LocalUses.Of(body)` — every use of a local name in a function body, in source order, as
+  `LocalUse(Token, Kind)`. The one walk behind find-references, rename, highlight, local semantic
+  tokens and the two local lints; each caller decides what the kinds mean. An assignment target is
+  written down to the name it is rooted at (`a[ 0 ] = x` creates `a`, so `ElementAssign`) while its
+  subscripts are read; `foreach` variables and `waittill` outputs are bindings; a bare, qualified
+  or path-qualified callee and `&foo` name functions, not variables. `UnusedLocalLint` counts only
+  `Assign` as a store that can be dead; the others treat every non-`Read` kind as a write.
+
 ## Syntax/AstSearch.cs
 
 - `static AstSearch` — `ChainAt(root, position)` (containing-node chain, outermost →

@@ -412,10 +412,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `readonly record struct LocalOccurrence(Range, IsWrite, IsDeclaration)` + `static LocalReferences`
   — the occurrence list for a local, the companion to `LocalDefinition` and outside the shared index
   for the same reason. Backs find-references, document highlight and rename on variables.
-- `Find` walks the enclosing function's body with the classification the lints already proved: an
-  assignment target is a WRITE down to the name it is rooted at (`a[ 0 ] = x` creates `a`) while its
-  subscript is a read, `foreach` bindings and `waittill` outputs are writes, and a bare identifier
-  callee or `&foo` names a function rather than a variable.
+- `Find` walks the enclosing function's body through `LocalUses.Of` (Parser), the one read/write
+  classification it shares with `UnassignedVariableLint` and `UnusedLocalLint`, so what rename
+  touches and what the lints report can never disagree about what a use of a local is.
 - `IsDeclaration` marks the parameter, or the first write when there is none — the same "where the
   name is introduced" rule `UnusedLocalLint` reports against. Only that one is dropped when a
   request excludes the declaration; a later `x = 2` is a reference to something already existing.

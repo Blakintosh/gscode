@@ -139,7 +139,19 @@ public static class UnassignedVariableLint
             assigned.Add(global);
         }
 
-        Collect(function.Body, assigned, reads);
+        // Flow-insensitive on purpose: every kind of write binds the name, and only a name no
+        // write anywhere in the body binds is reported.
+        foreach ( LocalUse use in LocalUses.Of(function.Body) )
+        {
+            if ( use.IsWrite )
+            {
+                assigned.Add(use.Token.Text);
+            }
+            else
+            {
+                reads.Add(use.Token);
+            }
+        }
 
         foreach ( PToken read in reads )
         {
@@ -195,133 +207,6 @@ public static class UnassignedVariableLint
                 DiagnosticSeverity.Warning,
                 GscDiagnosticCode.VariableNeverAssigned,
                 read.Text));
-        }
-    }
-
-    /// <summary>
-    /// Records an assignment target: the name it is rooted at is WRITTEN, while any subscript
-    /// expression along the way is read.
-    /// </summary>
-    private static void CollectAssignmentTarget(ExprNode target, HashSet<string> assigned, List<PToken> reads)
-    {
-        switch ( target )
-        {
-            case IdentifierNode identifier:
-                assigned.Add(identifier.Token.Text);
-                return;
-
-            case IndexNode index:
-                CollectAssignmentTarget(index.Object, assigned, reads);
-                Collect(index.Index, assigned, reads);
-                return;
-
-            case MemberNode member:
-                CollectAssignmentTarget(member.Object, assigned, reads);
-                return;
-
-            default:
-                // Anything else — a call result, a deref — is not a name being introduced, so the
-                // ordinary read rules apply.
-                Collect(target, assigned, reads);
-                return;
-        }
-    }
-
-    /// <summary>
-    /// Walks a function, recording every name WRITTEN and every identifier READ as a value.
-    ///
-    /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
-    /// kind. The interesting nodes are few — assignments, foreach bindings, and the places an
-    /// identifier is NOT a value — and enumerating children generically means a node type added
-    /// later is traversed without this rule having to learn about it.
-    /// </summary>
-    private static void Collect(AstNode node, HashSet<string> assigned, List<PToken> reads)
-    {
-        switch ( node )
-        {
-            case AssignmentNode assignment:
-                // The whole target is a WRITE, down to the name it is rooted at. `a[ 0 ] = x`
-                // CREATES `a` when it does not exist — that is how a GSC array is built, and
-                // `quotes[ quotes.size ] = "…"` appears all through the stock scripts. Treating the
-                // base as a read instead accounted for most of what this rule reported on code that
-                // ships and works.
-                //
-                // The subscript itself is still read: `a[ i ] = x` genuinely reads `i`.
-                CollectAssignmentTarget(assignment.Target, assigned, reads);
-                Collect(assignment.Value, assigned, reads);
-                return;
-
-            case ForeachNode foreachNode:
-                if ( foreachNode.KeyToken is not null )
-                {
-                    assigned.Add(foreachNode.KeyToken.Value.Text);
-                }
-
-                assigned.Add(foreachNode.ValueToken.Text);
-                Collect(foreachNode.Collection, assigned, reads);
-                Collect(foreachNode.Body, assigned, reads);
-                return;
-
-            case ConstDeclNode constDecl:
-                assigned.Add(constDecl.NameToken.Text);
-                Collect(constDecl.Value, assigned, reads);
-                return;
-
-            case IdentifierNode identifier:
-                reads.Add(identifier.Token);
-                return;
-
-            case MemberNode member:
-                // `a.b` reads `a`; `b` is a field name rather than a variable.
-                Collect(member.Object, assigned, reads);
-                return;
-
-            case CallNode call:
-                // The Callee is a FUNCTION name rather than a variable, so a bare one is skipped.
-                // Target is what the call is made ON (`self foo()`), which IS a value and is read.
-                if ( call.Callee is not IdentifierNode )
-                {
-                    Collect(call.Callee, assigned, reads);
-                }
-
-                if ( call.Target is not null )
-                {
-                    Collect(call.Target, assigned, reads);
-                }
-
-                // `self waittill( "damage", attacker, amount );` BINDS attacker and amount — they
-                // are outputs the engine fills in, not values being read. Missing this was the
-                // single largest source of false positives by a wide margin: it accounted for
-                // `other`, `attacker`, `damage` and `notetrack`, which between them were most of
-                // what the rule reported across CoD4's shipped scripts.
-                //
-                // The first argument is the event NAME and is a genuine read.
-                bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
-
-                for ( int index = 0; index < call.Arguments.Length; index++ )
-                {
-                    if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
-                    {
-                        assigned.Add(bound.Token.Text);
-                        continue;
-                    }
-
-                    Collect(call.Arguments[index], assigned, reads);
-                }
-
-                return;
-
-            case PrefixNode prefix when prefix.Operator == TokenKind.Ampersand:
-                // `&foo` is a pointer to a FUNCTION, not a read of a variable.
-                return;
-
-            default:
-                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-                {
-                    Collect(child, assigned, reads);
-                }
-
-                return;
         }
     }
 }

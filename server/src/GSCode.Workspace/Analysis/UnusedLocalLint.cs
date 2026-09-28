@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -114,7 +113,21 @@ public static class UnusedLocalLint
             read.Add(parameter.NameToken.Text);
         }
 
-        Collect(body, firstWrite, read);
+        // Only a plain `x = v` (or a const) is a store that can be dead. A compound assignment
+        // reads the old value; `a[ i ] = v` and `a.f = v` use what `a` already held; a foreach
+        // variable and a waittill output are bound by the loop and the engine, and an unused one
+        // there is idiomatic rather than dead. So all of those count as uses of the name.
+        foreach ( LocalUse use in LocalUses.Of(body) )
+        {
+            if ( use.Kind == LocalUseKind.Assign )
+            {
+                RecordWrite(use.Token, firstWrite);
+            }
+            else
+            {
+                read.Add(use.Token.Text);
+            }
+        }
 
         foreach ( KeyValuePair<string, PToken> write in firstWrite )
         {
@@ -137,95 +150,6 @@ public static class UnusedLocalLint
                 write.Value.Text);
 
             diagnostics.Add(unused with { Tags = [DiagnosticTag.Unnecessary] });
-        }
-    }
-
-    /// <summary>
-    /// Walks a function body, recording the first WRITE of each name and every name READ.
-    ///
-    /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
-    /// kind, the same way <see cref="UnassignedVariableLint"/> does. The interesting nodes are few
-    /// — assignments, the two binding forms, and the one place an identifier is a function name
-    /// rather than a value — and enumerating children generically means a node type added later is
-    /// traversed without this rule having to learn about it.
-    /// </summary>
-    private static void Collect(AstNode node, Dictionary<string, PToken> firstWrite, HashSet<string> read)
-    {
-        switch ( node )
-        {
-            case AssignmentNode assignment:
-                // `x = value` writes x. `x += value` READS x as well, so it can never be a dead
-                // store on its own.
-                if ( assignment.Target is IdentifierNode target )
-                {
-                    if ( assignment.Operator == TokenKind.Assign )
-                    {
-                        RecordWrite(target.Token, firstWrite);
-                    }
-                    else
-                    {
-                        read.Add(target.Token.Text);
-                    }
-                }
-                else
-                {
-                    // self.foo = … — a field, whose reader may be another script entirely.
-                    Collect(assignment.Target, firstWrite, read);
-                }
-
-                Collect(assignment.Value, firstWrite, read);
-                return;
-
-            case ForeachNode foreachNode:
-                // A loop variable is bound by the loop, not assigned by the author, and an unused
-                // `key` in `foreach ( key, value in … )` is idiomatic rather than dead.
-                if ( foreachNode.KeyToken is not null )
-                {
-                    read.Add(foreachNode.KeyToken.Value.Text);
-                }
-
-                read.Add(foreachNode.ValueToken.Text);
-                Collect(foreachNode.Collection, firstWrite, read);
-                Collect(foreachNode.Body, firstWrite, read);
-                return;
-
-            case ConstDeclNode constDecl:
-                RecordWrite(constDecl.NameToken, firstWrite);
-                Collect(constDecl.Value, firstWrite, read);
-                return;
-
-            case IdentifierNode identifier:
-                read.Add(identifier.Token.Text);
-                return;
-
-            case CallNode call:
-                // Target is the object a method is called ON — `self` in `self foo()`.
-                if ( call.Target is not null )
-                {
-                    Collect(call.Target, firstWrite, read);
-                }
-
-                // The callee of `foo()` names a FUNCTION, so it is not a read of a local called
-                // foo. `[[ handler ]]()` is different: that really does read the local.
-                if ( call.Callee is not (IdentifierNode or QualifiedNode or PathQualifiedNode) )
-                {
-                    Collect(call.Callee, firstWrite, read);
-                }
-
-                foreach ( ExprNode argument in call.Arguments )
-                {
-                    Collect(argument, firstWrite, read);
-                }
-
-                return;
-
-            default:
-                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-                {
-                    Collect(child, firstWrite, read);
-                }
-
-                return;
         }
     }
 

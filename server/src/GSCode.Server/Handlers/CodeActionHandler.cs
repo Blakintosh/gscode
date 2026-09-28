@@ -503,16 +503,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return;
         }
 
-        HashSet<int> lines = [];
-        List<TextEdit> edits = [];
-        foreach ( LspDiagnostic diagnostic in unused )
-        {
-            TextRange range = diagnostic.Range.ToCore();
-            if ( lines.Add(range.Start.Line) )
-            {
-                edits.Add(new TextEdit { Range = LineRangeOf(range).ToLsp(), NewText = "" });
-            }
-        }
+        List<TextEdit> edits = LineDeletions(unused);
 
         actions.Add(new CommandOrCodeAction(BuildAction(
             "Organize imports (remove " + edits.Count + " unused)",
@@ -610,7 +601,23 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<LspDiagnostic> unused,
         string directive)
     {
-        // Whole-line deletions on distinct lines never overlap, so order does not matter.
+        List<TextEdit> edits = LineDeletions(unused);
+
+        return QuickFix(
+            "Remove all " + edits.Count + " unused " + directive + " directives",
+            uri,
+            edits,
+            new Container<LspDiagnostic>(unused));
+    }
+
+    /// <summary>
+    /// One whole-line deletion per distinct line the unused-import diagnostics sit on — the edit set
+    /// both Organize Imports and "Remove all unused" apply, so the two cannot disagree about what
+    /// removing every unused import means. Whole-line deletions on distinct lines never overlap, so
+    /// order does not matter.
+    /// </summary>
+    private static List<TextEdit> LineDeletions(IEnumerable<LspDiagnostic> unused)
+    {
         HashSet<int> lines = [];
         List<TextEdit> edits = [];
         foreach ( LspDiagnostic diagnostic in unused )
@@ -622,11 +629,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        return QuickFix(
-            "Remove all " + edits.Count + " unused " + directive + " directives",
-            uri,
-            edits,
-            new Container<LspDiagnostic>(unused));
+        return edits;
     }
 
     /// <summary>

@@ -239,16 +239,27 @@ public static class ArgumentCountLint
             return;
         }
 
-        FunctionSymbol declared = candidates[0].Function;
+        JudgeAgainst(candidates[0].Function, name, supplied, nameRange, diagnostics);
+    }
 
-        // Varargs takes anything.
+    /// <summary>
+    /// The one rule for a call against a single resolved script declaration, function or method
+    /// alike: varargs takes anything, and ONLY the upper bound is checked. Fewer arguments than
+    /// declared is legal and idiomatic — the missing ones are undefined — so a lower bound here
+    /// would flag thousands of correct stock calls.
+    /// </summary>
+    private static void JudgeAgainst(
+        FunctionSymbol declared,
+        string name,
+        int supplied,
+        Core.Text.TextRange nameRange,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
         if ( declared.HasVarargs )
         {
             return;
         }
 
-        // ONLY the upper bound. Fewer arguments than declared is legal and idiomatic — the missing
-        // ones are undefined — so a lower bound here would flag thousands of correct stock calls.
         if ( supplied > declared.Parameters.Length )
         {
             diagnostics.Add(Diagnostic.Create(
@@ -316,8 +327,8 @@ public static class ArgumentCountLint
     }
 
     /// <summary>
-    /// Compares a call against a resolved method's declared parameters, on the same terms as a
-    /// function: only the upper bound, and never against varargs.
+    /// Compares a call against a resolved method's declared parameters, through the same
+    /// <see cref="JudgeAgainst"/> a function call uses.
     /// </summary>
     private static void InspectAgainstMethod(
         LanguageStore store,
@@ -338,22 +349,7 @@ public static class ArgumentCountLint
             return;
         }
 
-        FunctionSymbol declared = methods[0].Function;
-        if ( declared.HasVarargs )
-        {
-            return;
-        }
-
-        if ( supplied > declared.Parameters.Length )
-        {
-            diagnostics.Add(Diagnostic.Create(
-                nameRange,
-                DiagnosticSeverity.Error,
-                GscDiagnosticCode.TooManyArguments,
-                name,
-                declared.Parameters.Length,
-                supplied));
-        }
+        JudgeAgainst(methods[0].Function, name, supplied, nameRange, diagnostics);
     }
 
     private static void InspectBuiltin(

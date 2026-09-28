@@ -24,9 +24,9 @@ four lines usually is not — see the layering rule below.
 
 Good areas, in the order they tend to pay:
 
-1. `GSCode.Server/Handlers` — 36 files, thin by design, and the place copies breed because each
-   handler is written against the protocol on its own.
-2. `GSCode.Workspace/Analysis` — 29 lint files that each answer a question about the same AST.
+1. `GSCode.Server/Handlers` — the largest folder of thin-by-design files, and the place copies
+   breed because each handler is written against the protocol on its own.
+2. `GSCode.Workspace/Analysis` — the lint files, each answering a question about the same AST.
 3. `GSCode.Workspace/Database` — where the last 200 commits put most of their new code: nine
    index types, all the same shape (see "The shapes this codebase already has"), and the queries
    that read them. Its guardrails are the strictest here — the dialect seam and the measured

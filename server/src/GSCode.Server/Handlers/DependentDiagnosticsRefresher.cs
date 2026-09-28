@@ -50,7 +50,7 @@ namespace GSCode.Server.Handlers;
 ///
 /// It only fires for a caller-named origin path — an on-disk change
 /// with no single origin (a branch switch, most plausibly) does not attempt it, and neither does
-/// a class rename (only function declarations are covered so far). Both are stated gaps, not
+/// a class rename or a method edit (only top-level function declarations are covered so far). Both are stated gaps, not
 /// silent ones: the closed file involved keeps whatever cross-file diagnostics its last sweep or
 /// refresh gave it until the next full sweep, an edit that does reach it through
 /// <see cref="RefreshClosedDependentsAsync"/>, or <c>gscode.clearCacheAndReindex</c>.
@@ -424,11 +424,11 @@ public sealed class DependentDiagnosticsRefresher
         // declaration matched no reference and no closed caller was ever re-linted.
         GameProfile game = GameProfile.Active;
 
+        // Top-level functions only: a class method lives on its class, not in this list, so methods
+        // fall inside the class gap the class comment states rather than being covered here.
         foreach ( FunctionSymbol function in origin.Functions )
         {
-            SymbolKey key = function.OwnerClassKeyName is string ownerClass
-                ? new SymbolKey(null, function.KeyName, SymbolKind.Function, ownerClass)
-                : new SymbolKey(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
+            SymbolKey key = new(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
 
             foreach ( string path in store.FilesReferencing(key) )
             {

@@ -110,14 +110,15 @@ public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
     /// </summary>
     private List<Location> BoundDeclarations(NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
     {
+        // One reference set for both questions below, since they ask it of the same field.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references =
+            FieldTargets.ReferencesTo(_support, target, field);
+
         List<Location> locations = [];
 
-        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Class, cancellationToken) )
+        foreach ( ResolvedClass resolved in FieldTargets.ClassesOf(target, references, field, cancellationToken) )
         {
-            foreach ( ResolvedClass resolved in FieldTargets.Classes(target, bound) )
-            {
-                locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Class.NameRange));
-            }
+            locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Class.NameRange));
         }
 
         if ( locations.Count > 0 )
@@ -125,12 +126,9 @@ public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
             return locations;
         }
 
-        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Function, cancellationToken) )
+        foreach ( ResolvedFunction resolved in FieldTargets.FunctionsOf(target, references, field, cancellationToken) )
         {
-            foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, bound) )
-            {
-                locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
-            }
+            locations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
         }
 
         return locations;

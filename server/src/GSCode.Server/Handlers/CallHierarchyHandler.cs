@@ -59,7 +59,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         if ( hit.Key.Kind == SymbolKind.Field )
         {
             List<CallHierarchyItem> bound = [];
-            foreach ( SymbolKey held in FieldTargets.Of(_support, target, hit.Key, SymbolKind.Function, cancellationToken) )
+            // The two-level form, where the other three field callers use the flattened
+            // FunctionsOf: the item's Data carries the KEY, and the key a write named is not the
+            // one rebuilt from the declaration it resolved to. An unqualified `&foo` keys with a
+            // null namespace, which is what the union behind find-references is built on.
+            foreach ( SymbolKey held in FieldTargets.FunctionKeysOf(_support, target, hit.Key, cancellationToken) )
             {
                 foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, held) )
                 {

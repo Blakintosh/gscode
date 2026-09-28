@@ -133,10 +133,16 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
         List<Location> implementations = [];
         HashSet<(string Path, Position At)> emitted = [];
 
+        // ONE reference set, used for both halves. This ran the workspace query twice — once
+        // here and once inside FieldTargets — which paid the indexed lookup, the shadow rule and
+        // the include scoping over again, and left the writes and the bindings coming from two
+        // sets nothing guaranteed were equal.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references =
+            FieldTargets.ReferencesTo(_support, target, field);
+
         // The assignments themselves. FieldWrite alone, so a compound update is left out — see
         // the class comment.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in
-            _support.FindAllReferences(target, field, ReferenceKind.FieldAccess) )
+        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -148,14 +154,11 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
 
         // And what any of them named. A function is reached in ONE hop this way; from the
         // assignment line alone the reader would have to ask again.
-        foreach ( SymbolKey bound in FieldTargets.Of(_support, target, field, SymbolKind.Function, cancellationToken) )
+        foreach ( ResolvedFunction resolved in FieldTargets.FunctionsOf(target, references, field, cancellationToken) )
         {
-            foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, bound) )
+            if ( emitted.Add((resolved.DeclaringPath, resolved.Function.NameRange.Start)) )
             {
-                if ( emitted.Add((resolved.DeclaringPath, resolved.Function.NameRange.Start)) )
-                {
-                    implementations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
-                }
+                implementations.Add(LspMapping.LocationAt(resolved.DeclaringPath, resolved.Function.NameRange));
             }
         }
 

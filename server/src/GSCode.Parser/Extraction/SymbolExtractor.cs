@@ -226,13 +226,18 @@ public sealed class SymbolExtractor
     private readonly Dictionary<string, (string? Parent, HashSet<string> Members)> _classMembers =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // The depth every in-file ancestor walk stops at. Named rather than repeated so the bound is
+    // one number; a cycle is already stopped by the visited set, and this bounds a chain that is
+    // merely absurd - the same pairing MethodResolution.MaxDepth uses.
+    private const int MaxClassDepth = 32;
+
     // The members in scope as bare names right now: the current class's own plus every ancestor
     // THIS FILE declares. Null outside a class body.
     //
-    // Ancestors in ANOTHER file are missing, and that is the known limit of doing this at
-    // extraction — see MemberNamesInScope. 199 of BO3's 206 `var` declarations have their whole
-    // hierarchy in one file, so this resolves almost all of them; the rest are widened at
-    // resolution time by the handlers, which have the store and can walk the real class graph.
+    // Ancestors in ANOTHER file are missing, which is what one file's parse can see and no more.
+    // 199 of BO3's 206 `var` declarations have their whole hierarchy in one file and are resolved
+    // exactly here; the rest are covered by _currentClassHasUnseenAncestor below, which records
+    // them without being able to prove them.
     private HashSet<string>? _currentClassMemberNames;
 
     // True when the current class inherits from one this file does NOT declare, so an unfamiliar
@@ -295,21 +300,7 @@ public sealed class SymbolExtractor
     /// </summary>
     private HashSet<string> MemberNamesInScope(string classKeyName)
     {
-        HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
-
-        string? current = classKeyName;
-        for ( int depth = 0; current is not null && depth < 32 && visited.Add(current); depth++ )
-        {
-            if ( !_classMembers.TryGetValue(current, out (string? Parent, HashSet<string> Members) entry) )
-            {
-                break;
-            }
-
-            names.UnionWith(entry.Members);
-            current = entry.Parent;
-        }
-
+        WalkInFileAncestors(classKeyName, out HashSet<string> names, out bool _);
         return names;
     }
 
@@ -320,21 +311,42 @@ public sealed class SymbolExtractor
     /// </summary>
     private bool HasUnseenAncestor(string classKeyName)
     {
+        WalkInFileAncestors(classKeyName, out HashSet<string> _, out bool unseen);
+        return unseen;
+    }
+
+    /// <summary>
+    /// One walk up the in-file chain answering both questions the callers above ask: which member
+    /// names it contributes, and whether it ran out at a parent this file does not declare.
+    ///
+    /// Written once because the two answers come from the same loop and have to agree about it —
+    /// the cycle bound and the visited set are the same rule, and a chain one of them thought was
+    /// complete while the other walked further would record a class's members and its candidates
+    /// at once.
+    ///
+    /// Bounded like every other ancestor walk here: a class cycle is a state the workspace can be
+    /// in, which <c>ClassCycleLint</c> reports rather than the walks assuming away.
+    /// </summary>
+    private void WalkInFileAncestors(string classKeyName, out HashSet<string> names, out bool hasUnseenAncestor)
+    {
+        names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        hasUnseenAncestor = false;
+
         HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
 
         string? current = classKeyName;
-        for ( int depth = 0; current is not null && depth < 32 && visited.Add(current); depth++ )
+        for ( int depth = 0; current is not null && depth < MaxClassDepth && visited.Add(current); depth++ )
         {
             if ( !_classMembers.TryGetValue(current, out (string? Parent, HashSet<string> Members) entry) )
             {
-                // Reached a class this file does not declare, having been named as a parent.
-                return true;
+                // Named as a parent but not declared here, so the chain continues out of sight.
+                hasUnseenAncestor = true;
+                return;
             }
 
+            names.UnionWith(entry.Members);
             current = entry.Parent;
         }
-
-        return false;
     }
 
     /// <summary>

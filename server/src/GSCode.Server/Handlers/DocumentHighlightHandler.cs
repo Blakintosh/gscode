@@ -69,8 +69,7 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
             // `= 1` that set it. A compound update counts too: the editor colours `x += 1` as a
             // write, and the distinction that separates the two kinds is go-to-implementation's,
             // not this one's.
-            bool isWrite = entry.Kind == ReferenceKind.Definition
-                || DefinitionHandler.IsFieldWrite(entry.Kind);
+            bool isWrite = entry.Kind == ReferenceKind.Definition || entry.IsFieldWrite;
 
             highlights.Add(new DocumentHighlight
             {

@@ -55,12 +55,10 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         if ( hit.Key.Kind == SymbolKind.Field )
         {
             List<TypeHierarchyItem> bound = [];
-            foreach ( SymbolKey held in FieldTargets.Of(_support, target, hit.Key, SymbolKind.Class, cancellationToken) )
+            foreach ( ResolvedClass resolved in FieldTargets.ClassesOf(
+                _support, target, hit.Key, cancellationToken) )
             {
-                foreach ( ResolvedClass resolved in FieldTargets.Classes(target, held) )
-                {
-                    bound.Add(MakeItem(resolved.Class, resolved.Record));
-                }
+                bound.Add(MakeItem(resolved.Class, resolved.Record));
             }
 
             return Task.FromResult<Container<TypeHierarchyItem>?>(

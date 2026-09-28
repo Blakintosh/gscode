@@ -83,7 +83,10 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     reference is and `FromMacro` is WHERE its text came from: two orthogonal facts that shared the
     enum until an expansion overwriting the kind left every `Kind == Call` rule blind to a call a
     macro produced. When `FromMacro` is set, `Range` is the INVOCATION site, not the callee.
-    `IsFunctionCall` is the named call to a script function that five cross-file lints open on.
+    `IsFunctionCall` is the named call to a script function that five cross-file lints open on, and
+    `IsFieldWrite` is either way a field or member is assigned to - both write kinds, for the two
+    surfaces asking where a name is SET. Go-to-implementation tests `FieldWrite` directly instead,
+    since it asks what the field IS and a compound update never decides that.
     Four kinds worth knowing by name. `FieldWrite` is the field on the left of a plain `=`, and
     `FieldUpdate` the same under a compound one (`+=`, `|=`). Both are split from `FieldAccess`
     because a field is DECLARED nowhere: nothing ever emits a `Definition` for one, so

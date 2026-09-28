@@ -250,10 +250,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   because it cannot tell an inherited one from a local; the graph settles it here, where the whole
   workspace is available. A name no ancestor declares is a local after all, and answering `None`
   sends it down the local path exactly as before.
-- `InheritedMemberAt` is the other half: when the index has no entry at all, a bare name in a class
-  body is resolved through `MembersOf` at the cursor. Reached only on a miss and only inside a
-  class body, so the ordinary path pays nothing.
-- Both walks are bounded by the hierarchy - three classes at BO3's deepest - not by the workspace.
+- That check is the ONLY resolution a member needs. A cursor-time lookup through `MembersOf` sat
+  beside it for one commit, from before the candidates were indexed; once they were, no input could
+  reach it - a class with an unseen ancestor records every bare name, and one whose chain is
+  in-file has every ancestor's members already - so it ran a hierarchy walk per unresolved
+  identifier and returned nothing. Deleted, with its private `EnclosingClassAt`, which was itself a
+  second spelling of `CallResolution.EnclosingClassAt`.
+- The walk is bounded by the hierarchy - three classes at BO3's deepest - not by the workspace.
 
 ## Handlers/FieldTargets.cs
 
@@ -261,6 +264,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   type definition, implementation, and both hierarchies' prepare step. All four declined on a field
   before, and it read as four unrelated omissions - it is one, since a field is declared nowhere and
   there was no symbol to hand any of them.
+- Two forms of every entry point: one that runs the reference query, one that takes a set already
+  fetched. Go-to-implementation wants the writes AND what they bind, and running the query twice
+  paid the indexed lookup, the shadow rule and the include scoping over again - and left the two
+  halves reading sets nothing guaranteed were equal.
+- `FunctionsOf`/`ClassesOf` return the declarations; `FunctionKeysOf` returns the KEYS, for call
+  hierarchy alone. An item carries the key in `Data`, and the key a write named is not the one
+  rebuilt from the declaration it resolved to - an unqualified `&foo` keys with a null namespace.
 - Reads `ScriptRecord.FieldBindings`, recorded at extraction, so a callback bound in one script
   answers in another without re-parsing that file on the request path. Cost is bounded by the
   field's WRITES, not the workspace: the reference query is indexed by key, and only the files

@@ -106,7 +106,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
             [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
-                .Where(source => field ? IsFieldWrite(source.Entry.Kind) : source.Entry.Kind == ReferenceKind.Definition)];
+                .Where(source => field ? source.Entry.IsFieldWrite : source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
 
@@ -120,12 +120,6 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
         return Task.FromResult<LocationOrLocationLinks?>(
             new LocationOrLocationLinks(definitions.Select(location => new LocationOrLocationLink(location))));
-    }
-
-    /// <summary>Either way a field is assigned to — a plain <c>=</c> or a compound update.</summary>
-    internal static bool IsFieldWrite(ReferenceKind kind)
-    {
-        return kind == ReferenceKind.FieldWrite || kind == ReferenceKind.FieldUpdate;
     }
 
     /// <summary>The parameter or assignment that introduced the local under the cursor, if any.</summary>

@@ -5,8 +5,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
-using GSCode.Parser.Syntax;
-using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -247,12 +245,7 @@ public sealed class NavigationSupport
             return IsRealMember(target, hit.Key) ? hit : PositionHit.None;
         }
 
-        if ( hit.Kind != HitKind.None )
-        {
-            return hit;
-        }
-
-        return InheritedMemberAt(target, position);
+        return hit;
     }
 
     /// <summary>
@@ -271,75 +264,6 @@ public sealed class NavigationSupport
 
         return MethodResolution.FindDeclaringClassForMember(
             target.Store, target.ContextId, key.OwnerClass, key.Name) is not null;
-    }
-
-    /// <summary>
-    /// A bare name inside a class body that names a <c>var</c> declared by an ancestor IN ANOTHER
-    /// FILE — the one member shape extraction cannot key on its own, since it sees one file and
-    /// the declaration is not in it.
-    ///
-    /// 199 of BO3's 206 <c>var</c> declarations have their whole hierarchy in one file and are
-    /// keyed at extraction; the remaining 7 are <c>cScriptBundleObjectBase</c>'s and
-    /// <c>cScriptBundleBase</c>'s, read bare throughout <c>scene_shared.gsc</c>. Without this they
-    /// answer nothing at all, which is what every class member did before.
-    ///
-    /// Only reached when the reference index had NO answer, so the ordinary path pays nothing, and
-    /// only inside a class body, which a cursor rarely is. The ancestor walk behind
-    /// <see cref="MethodResolution.MembersOf"/> is bounded by the hierarchy — three classes at
-    /// BO3's deepest — rather than by the workspace.
-    ///
-    /// What this does NOT do is put the use in the index. Go-to-definition, hover and
-    /// go-to-implementation ask from the cursor outwards and are answered; find-references and
-    /// rename ask the opposite direction and can only report what was indexed, so for these seven
-    /// they see the declaration and its own file's uses. <c>RenameHandler</c> refuses rather than
-    /// rewriting half of them.
-    /// </summary>
-    private PositionHit InheritedMemberAt(NavigationTarget target, GSCode.Core.Text.Position position)
-    {
-        string? enclosingClass = EnclosingClassAt(target.Result, position);
-        if ( enclosingClass is null )
-        {
-            return PositionHit.None;
-        }
-
-        if ( !AstSearch.TryFindLocalContext(
-            target.Result.Tree.Root, position, out IdentifierNode identifier, out FunctionNode _) )
-        {
-            return PositionHit.None;
-        }
-
-        foreach ( ClassMember member in MethodResolution.MembersOf(
-            target.Store, target.ContextId, enclosingClass, target.Result.Extraction.Classes) )
-        {
-            if ( !string.Equals(member.Member.Name, identifier.Token.Text, StringComparison.OrdinalIgnoreCase) )
-            {
-                continue;
-            }
-
-            return new PositionHit(
-                HitKind.Reference,
-                new SymbolKey(
-                    null, NameTable.Shared.InternLower(identifier.Token.Text), SymbolKind.Member, enclosingClass),
-                identifier.Token.RootRange,
-                ReferenceKind.FieldAccess,
-                "");
-        }
-
-        return PositionHit.None;
-    }
-
-    /// <summary>The class whose body a position sits in, or null at file scope.</summary>
-    private static string? EnclosingClassAt(ParseResult result, GSCode.Core.Text.Position position)
-    {
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            if ( classSymbol.FullRange.Contains(position) )
-            {
-                return classSymbol.KeyName;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

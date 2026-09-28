@@ -331,4 +331,18 @@ public readonly record struct ReferenceEntry(
     {
         get { return Kind == ReferenceKind.Call && Key.Kind == SymbolKind.Function; }
     }
+
+    /// <summary>
+    /// Either way a field or class member is assigned to — the shape every surface asking "where
+    /// is this SET" opens on, which is go-to-definition and document highlight.
+    ///
+    /// Both kinds, deliberately. The split between <see cref="ReferenceKind.FieldWrite"/> and
+    /// <see cref="ReferenceKind.FieldUpdate"/> exists for go-to-IMPLEMENTATION alone, which asks
+    /// what the field IS and so wants the plain assignments only; it tests that kind directly
+    /// rather than through this.
+    /// </summary>
+    public bool IsFieldWrite
+    {
+        get { return Kind == ReferenceKind.FieldWrite || Kind == ReferenceKind.FieldUpdate; }
+    }
 }

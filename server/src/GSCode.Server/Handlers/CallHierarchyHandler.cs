@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
@@ -114,10 +115,15 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         {
             // A call outside every function body — a file-scope constant's initialiser, say — has
             // no calling function to name, so the file stands in for it.
+            //
+            // The caller is keyed on its KEY namespace, not its declared one, because expanding this
+            // item asks for the references to that key. A merge dialect declares a function into its
+            // file stem but keys every call to it with no namespace, so the declared one matched no
+            // reference and the caller reported no callers of its own.
             CallHierarchyItem item = group.Caller is not null
                 ? MakeItem(
                     new SymbolKey(
-                        group.Caller.Namespace.Length > 0 ? group.Caller.Namespace : null,
+                        GameProfile.Active.KeyNamespace(group.Caller.Namespace),
                         group.Caller.KeyName,
                         SymbolKind.Function),
                     group.Record,

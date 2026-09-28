@@ -133,6 +133,48 @@ The merge dialects key a function as `(null, name)` — no namespace. CoD4's ani
 Scope per REFERENCE, never per file: a path call names its file outright, and a bare name resolves
 locally first. Filtering whole files was wrong twice.
 
+## A function pointer is always SPELLED as one, and the spelling forks by dialect
+
+```gsc
+level.callback = &on_damage;          // BO3
+level.callback = ::on_damage;         // the IW merge dialects
+level.callback = maps\mp\_util::on_damage;
+level.callback = handler;             // NOT a function pointer — reads a local
+```
+
+There is no form in which a bare identifier names a function. The sigil is the whole difference,
+and a rule that treats `level.foo = bar` as binding `bar` the function jumps to whatever function
+happens to share the local's name.
+
+Measured over every `owner.field = …` write in two corpora, with the FLOW TYPER rather than the
+syntax — so this covers `bar = &on_damage; level.cb = bar;`, the case that makes the naive rule
+sound reasonable:
+
+| | bo3 (980 files) | cod4 (894 files) |
+|---|---|---|
+| field writes with a value | 17,755 | 16,315 |
+| `&foo` | 865 | 0 |
+| `::foo` / `path\file::foo` | 0 | 185 |
+| `new Foo()` | 9 | 0 |
+| bare identifier | 2,301 | 1,426 |
+| …of those, holding a function | **0** | **0** |
+| every other shape | 14,580 | 14,704 |
+| …of those, holding a function | **0** | **0** |
+
+Not one of 3,727 bare-identifier writes holds a function. The top names written bare say why —
+`weapon`, `self`, `player`, `angles`, `attacker`, `team`, `origin`, `node`, `value`, `textscale`.
+Entity and struct data, which is what a field mostly is.
+
+Note the two zeroes on the diagonal: bo3 has every `&` and no `::`, cod4 every `::` and no `&`.
+Recognising only the BO3 spelling leaves every Infinity Ward game with no callback navigation at
+all, while the suite stays green — `GameProfile` is the seam, and a corpus sweep over both families
+is what catches it.
+
+What this supports, and its limit: `FieldBinding` records the three sigil forms so
+go-to-type-definition, go-to-implementation and both hierarchies can answer on a callback field.
+It is deliberately syntactic, since the flow typer recovers nothing extra here (the two zero rows)
+and typing an unopened file per request is not affordable.
+
 ## An undefined variable is not an error
 
 Reading one yields `undefined` and the script runs on. So a mistake surfaces far from its cause,

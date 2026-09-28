@@ -98,13 +98,10 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.UnusedInclude] = "'{0}' is included but nothing from it is used.",
-        // Each names WHERE it looked, which is the only thing separating the two codes. v1's wording
-        // for the script case ("The function '{0}' could not be resolved.", its FunctionDoesNotExist
-        // = 3035) was kept for a long time because it says the right thing in isolation — but beside
-        // the builtin message it was not distinguishable, and a reader who cannot tell which code
-        // fired cannot tell whether a typo or a gap in our engine data is the likelier explanation.
-        // The builtin case still avoids "could not be resolved", which reads as a tooling failure
-        // when the name may simply be an engine function we have no data for.
+        // Each names WHERE it looked, which is the only thing separating the two codes: a reader who
+        // cannot tell which fired cannot tell whether a typo or a gap in our engine data is likelier.
+        // The builtin case avoids "could not be resolved", which reads as a tooling failure when the
+        // name may simply be an engine function we have no data for.
         [GscDiagnosticCode.ScriptFunctionNotFound] = "The script function '{0}' could not be resolved; this call names a script location, so no engine function could have matched.",
         [GscDiagnosticCode.BuiltinFunctionNotFound] = "'{0}' matches no script function or known engine function.",
         // {0} is the noun -- "Parameter" or "Field" -- since the same rule covers a builtin's
@@ -151,15 +148,10 @@ public static class DiagnosticMessages
     /// <summary>
     /// Formats the template for a code with its arguments.
     ///
-    /// A template with no placeholders of its own (like
-    /// <see cref="GscDiagnosticCode.UnterminatedBlock"/>'s) still spells a literal brace as
-    /// '{{'/'}}', string.Format's own escape for it — so returning the template unchanged when
-    /// there are no arguments, as this used to, left those escapes in the message the user sees.
-    /// But calling <see cref="string.Format(IFormatProvider?, string, object?[])"/> unconditionally
-    /// is not the fix either: a template that DOES have a placeholder throws FormatException if it
-    /// is ever formatted with zero arguments, since string.Format still looks for '{0}' in the
-    /// argument list. Zero arguments only happens for a template with none of its own, so the
-    /// escapes are unescaped by hand in that case instead.
+    /// With no arguments the template's brace escapes ('{{'/'}}') are unescaped by hand. Returning
+    /// the template unchanged would show the escapes to the user, and passing it through
+    /// <see cref="string.Format(IFormatProvider?, string, object?[])"/> with zero arguments throws
+    /// FormatException for any template that does have a placeholder.
     /// </summary>
     public static string Format(GscDiagnosticCode code, params object[] arguments)
     {

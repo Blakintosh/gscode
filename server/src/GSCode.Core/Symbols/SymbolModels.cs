@@ -74,9 +74,8 @@ public sealed record FunctionSymbol
     /// <summary>
     /// Lowercase name of the class declaring this as a method, or null for a top-level function.
     ///
-    /// The explicit answer to "is this a method", which consumers previously had to infer from
-    /// <see cref="Namespace"/> being empty — a test that is true for a method but says nothing about
-    /// WHICH class, and which quietly also matches anything else that ends up namespace-less.
+    /// The explicit answer to "is this a method". An empty <see cref="Namespace"/> is not one: it says
+    /// nothing about WHICH class, and anything else namespace-less matches it too.
     /// </summary>
     public string? OwnerClassKeyName { get; init; }
 
@@ -358,18 +357,15 @@ public enum ReferenceKind
 /// True when the token that produced this reference came out of a MACRO BODY, in which case
 /// <see cref="Range"/> is the INVOCATION site in this file rather than the macro's own text.
 ///
-/// A separate field rather than a <see cref="ReferenceKind"/> value, which is what it was. The two
-/// facts are orthogonal — WHAT the reference is (a call, a field access, an address-of) and WHERE
-/// its text was written — and one enum can only carry one of them, so provenance won and the kind
-/// was overwritten. Every consumer that asked `Kind == Call` therefore could not see a call a macro
-/// expanded into: `#define HELP() flag::exists("x")` needs `#using scripts\shared\flag_shared`
-/// exactly as much as writing the call out does, and nothing said so.
+/// A separate field rather than a <see cref="ReferenceKind"/> value because the two facts are
+/// orthogonal — WHAT the reference is and WHERE its text was written. One enum holding both hides a
+/// call a macro expanded into from every `Kind == Call` rule: `#define HELP() flag::exists("x")`
+/// needs `#using scripts\shared\flag_shared` exactly as much as the call written out does.
 ///
-/// Both facts have real consumers wanting opposite things, which is why neither can be dropped.
-/// Counting the use is right — dropping these told 471 stock files their
-/// `#using scripts\shared\system_shared` was pointless, and left code lens and find-all-references
-/// short by the same amount. Resolving the CURSOR to one is not: the characters on screen spell
-/// `REGISTER_SYSTEM`, so hover and go-to-definition belong to the macro.
+/// Both facts have consumers wanting opposite things. Counting the use is right — without it, 471
+/// stock files were told their `#using scripts\shared\system_shared` was pointless, and code lens
+/// and find-all-references came up short by as much. Resolving the CURSOR to one is not: the
+/// characters on screen spell `REGISTER_SYSTEM`, so hover and go-to-definition belong to the macro.
 /// </param>
 public readonly record struct ReferenceEntry(
     SymbolKey Key, TextRange Range, ReferenceKind Kind, bool FromMacro = false)

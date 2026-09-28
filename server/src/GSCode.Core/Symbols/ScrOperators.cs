@@ -334,12 +334,9 @@ public static class ScrOperators
     }
 
     /// <summary>
-    /// Numeric result typing, replacing <c>NumericResult</c>.
-    ///
-    /// The old one was asymmetric in a way that asserted types it did not know:
-    /// <c>Float + Unknown</c> came out <c>Float</c> while <c>Int + Unknown</c> came out
-    /// <c>Unknown</c>. Here an operand that could be anything makes the result a number at best,
-    /// never a specific one.
+    /// Numeric result typing. An operand that could be anything makes the result a number at best,
+    /// never a specific one — <c>Float + Unknown</c> is no more a <c>Float</c> than
+    /// <c>Int + Unknown</c> is an <c>Int</c>.
     /// </summary>
     private static ScrValue Arithmetic(ScrBinaryOp op, ScrValue left, ScrValue right)
     {
@@ -353,14 +350,11 @@ public static class ScrOperators
 
         if ( !leftNumeric || !rightNumeric )
         {
-            // Not enough is known to name a type — but bare Number is not the honest answer it
-            // looks like: it is the ONE union ToScrType widens back to `float` (the special case
-            // that keeps a genuine int/float branch join showing correctly), so returning it here
-            // claimed a value was a known float when nothing established that at all. An
-            // untyped parameter is MayBe(Universe) — every bit — so `param + 1` hovered `float`
-            // for a parameter that could just as legally be `param + "x"` or a vector add gone
-            // wrong. Widened with every OTHER type the unmeasured operand might actually turn out
-            // to be, the union stops being exactly Number and projects to Unknown instead.
+            // Not enough is known to name a type, and bare Number is not the honest answer it looks
+            // like: it is the one union ToScrType widens back to `float`, so `param + 1` on an
+            // untyped parameter (MayBe(Universe)) would hover `float` for a value that could as
+            // legally be a string concatenation. Widened with every other type the unmeasured
+            // operand might be, the union projects to Unknown instead.
             ScrTypeSet fallback = ScrTypeSet.Number;
 
             if ( op == ScrBinaryOp.Add && (left.MayBe(ScrTypeSet.AnyString) || right.MayBe(ScrTypeSet.AnyString)) )

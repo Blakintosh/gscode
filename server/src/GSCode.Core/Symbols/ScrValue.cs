@@ -390,13 +390,11 @@ public readonly record struct ScrFunctionRef(string? Namespace, string Name);
 ///
 /// The union is the point. <see cref="ScrType"/> collapses any disagreement to <c>Unknown</c>, which
 /// is right for a lint that must not guess and wrong for a rewriter that must still emit something:
-/// <c>int|string</c> is a usable fact and <c>Unknown</c> is not. Two branches assigning an int and a
-/// string produce <c>Int | String</c> here, and <c>ScrTypes.Join</c> would have produced nothing.
+/// two branches assigning an int and a string produce <c>Int | String</c> here, a usable fact.
 ///
-/// Precision is expressed by <see cref="MustBe"/> versus <see cref="MayBe"/> rather than by a
-/// trust flag. v1.5 carried one <c>Indeterminate</c> boolean meaning "do not rely on this", which
-/// could say a value was untrustworthy but never that it was one of exactly two things, one of them
-/// unsafe. That distinction is the whole question for array pass-semantics.
+/// Precision is <see cref="MustBe"/> versus <see cref="MayBe"/> rather than a trust flag: a flag can
+/// say a value is untrustworthy but never that it is one of exactly two things, one of them unsafe,
+/// and that distinction is the whole question for array pass-semantics.
 /// </summary>
 public readonly record struct ScrValue
 {
@@ -567,15 +565,11 @@ public readonly record struct ScrValue
     /// <summary>
     /// Removes types from the set — the <c>isdefined</c>-style narrowing primitive.
     ///
-    /// Every field that depended on the removed bits is recomputed or cleared for the narrower
-    /// set, not merely carried over: Truthiness used to be kept as-is unless the value became
-    /// impossible, so narrowing `Struct|Undefined` down to `Struct` alone stayed at its old
-    /// uncertain `null` instead of becoming the definite `true` a fresh Struct value would have —
-    /// removing what made truthiness UNCERTAIN can make it certain, and the old code never
-    /// re-asked the question. EntityKinds/InstanceClass/FunctionTarget carry a value's IDENTITY
-    /// and are meaningless once their own type bit (Entity/Instance/Function) is gone, but stayed
-    /// populated regardless, so a value narrowed away from Entity could still answer
-    /// <c>EntityKinds == ["player"]</c> despite no longer being an entity at all.
+    /// Every field that depended on the removed bits is recomputed or cleared, not carried over.
+    /// Truthiness is asked again, since removing what made it uncertain can make it certain:
+    /// <c>Struct|Undefined</c> narrowed to <c>Struct</c> is definitely true. EntityKinds,
+    /// InstanceClass and FunctionTarget carry a value's IDENTITY and are cleared once their own type
+    /// bit (Entity/Instance/Function) is gone.
     /// </summary>
     public ScrValue Without(ScrTypeSet removed)
     {
@@ -603,12 +597,9 @@ public readonly record struct ScrValue
     }
 
     /// <summary>
-    /// Projects onto the coarse <see cref="ScrType"/> the editor surfaces speak.
-    ///
-    /// This is what keeps every existing consumer — hover, inlay hints, and the two typing lints —
-    /// working unchanged while the walk underneath carries far more. A union has no single-value
-    /// answer, so anything that is not exactly one type projects to <see cref="ScrType.Unknown"/>,
-    /// which is precisely the old behaviour.
+    /// Projects onto the coarse <see cref="ScrType"/> the editor surfaces speak — hover, inlay hints
+    /// and the two typing lints. A union has no single-value answer, so anything that is not exactly
+    /// one type projects to <see cref="ScrType.Unknown"/>.
     /// </summary>
     public ScrType ToScrType()
     {
@@ -631,11 +622,9 @@ public readonly record struct ScrValue
             // A class instance is a struct with a name, and ScrType cannot carry the name.
             case ScrTypeSet.Instance: return ScrType.Struct;
 
-            // The one union the coarse lattice had an answer for: ScrTypes.Join widens an int/float
-            // disagreement to float. Reproduced here rather than collapsing to Unknown, because this
-            // is a PROJECTION — it has to give the editor exactly what the old lattice gave it, and
-            // a hover that used to read "float" must not start reading nothing. The richer value
-            // underneath still says Int|Float, which is what a rewriter needs.
+            // The one union the projection answers: an int/float disagreement widens to float, so a
+            // genuine int/float branch join still hovers "float". The value underneath still says
+            // Int|Float, which is what a rewriter needs.
             case ScrTypeSet.Number: return ScrType.Float;
 
             default: return ScrType.Unknown;

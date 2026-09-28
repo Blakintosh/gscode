@@ -236,9 +236,8 @@ public enum GscDiagnosticCode
     /// threaded function containing no wait runs to completion first, so the value is correct until
     /// someone adds a wait to it and every caller starts reading undefined at once.
     ///
-    /// 1.5 raised this and <c>AssignOnThreadedFunction</c> as two codes for one mistake; an
-    /// assignment satisfied both. This is the general question — an argument, a condition and a
-    /// return value all consume a value without being an assignment.
+    /// One code for what 1.5 counted twice (with <c>AssignOnThreadedFunction</c>): an argument, a
+    /// condition and a return value consume the value as surely as an assignment does.
     /// </summary>
     ConsumedThreadedCallResult = 5028,
 

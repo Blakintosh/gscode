@@ -183,9 +183,8 @@ public sealed partial record GameProfile
     /// Whether a rule may say a name is NOT an engine function: this game's library is complete, or
     /// it ships none and borrows a sibling's list.
     ///
-    /// One predicate rather than the condition spelled out at each reader. It was written three ways
-    /// across two assemblies for a while — the profile flags here, the loader's own-versus-borrowed
-    /// decision, and the lint re-deriving both — and two of the three could disagree.
+    /// One predicate rather than the condition spelled out at each reader, so the profile flags, the
+    /// loader's own-versus-borrowed decision and the lint that reads both cannot disagree.
     /// </summary>
     public bool HasTrustedEngineNames => HasCompleteBuiltinLibrary || EngineNameFallbackPrefix is not null;
 
@@ -298,10 +297,9 @@ public sealed partial record GameProfile
     /// <summary>
     /// Whether the given word is a keyword in this dialect. Called once per word that the central
     /// table has already matched — so the words that reach it are the most frequent ones a script
-    /// contains (<c>if</c>, <c>for</c>, <c>return</c>, <c>wait</c>), not the rarest.
-    ///
-    /// That is why it is a hashed probe rather than the scan it used to be: two dozen entries is
-    /// cheap per call and about twelve case-insensitive comparisons on the hottest path in the lexer.
+    /// contains (<c>if</c>, <c>for</c>, <c>return</c>, <c>wait</c>), not the rarest. Hence a hashed
+    /// probe: a scan of two dozen entries is about twelve case-insensitive comparisons per call on
+    /// the hottest path in the lexer.
     /// </summary>
     public bool IsKeyword(ReadOnlySpan<char> word)
     {

@@ -180,8 +180,8 @@ public sealed partial class Parser
         // on one line and omits the separator — but a stray token. CoD4's
         // animscripts\traverse\stairs_up.gsc line 29 is the case: `endPos = self endnode.origin +
         // (0,0,1);` has a leftover `self` (its sibling stairs_down.gsc writes the same statement
-        // without it). The fix is to delete a token, not to add one, so the old report is the right
-        // one: point AT the offender and name it, because the reader can see it.
+        // without it). The fix is to delete a token, not to add one, so the ordinary report is right:
+        // point AT the offender and name it, because the reader can see it.
         //
         // On a LATER LINE the statement really was left unterminated, and then naming the offender is
         // worse than useless — it sends the reader to a line that is correct.

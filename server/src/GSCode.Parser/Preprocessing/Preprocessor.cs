@@ -58,8 +58,7 @@ public sealed class Preprocessor
     /// rather than left to grow from empty: a PToken is 40 bytes, so this array crosses the
     /// large-object-heap threshold at about 2,120 entries — which the larger scripts clear — and
     /// each array a doubling chain abandons on the way there is a hole in a heap that is never
-    /// compacted. The width is pinned by TokenWidthTests; it was 80 bytes, and the threshold
-    /// therefore 1,060 entries, until Provenance stopped being copied into every token.
+    /// compacted. The width is pinned by TokenWidthTests.
     /// </summary>
     private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
@@ -585,7 +584,7 @@ public sealed class Preprocessor
         // effect cannot have depended on the file it was inserted from. Anything else is
         // per-includer: emitted tokens land in that file's stream, a diagnostic or an invocation
         // carries the invoking site's range, and a #if can see macros this file happens to have
-        // defined. Those headers keep being walked, exactly as before. BO3's stock headers are all
+        // defined. Those headers are walked every time. BO3's stock headers are all
         // unconditional macro banks (checked: zero #if lines across all 118), so in practice this
         // refuses nothing there.
         bool pureMacroBank = sink.Count == outputBefore
@@ -1175,14 +1174,10 @@ public sealed class Preprocessor
     /// appended as text: a parameter splice, or a nested macro's own use — so both share this rather
     /// than each answering it differently.
     ///
-    /// Before this was shared, only <see cref="ExpandBody"/>'s own loop asked it: a macro name
-    /// appearing as one of a NESTED call's arguments — <c>#define WRAP() INNER(VALUE)</c>, where
-    /// VALUE is itself a <c>#define</c> — reached <see cref="TryCollectBodyArguments"/> instead,
-    /// which only spliced an OUTER parameter reference and otherwise copied every token verbatim.
-    /// <c>VALUE</c> stayed as the literal identifier rather than expanding, and — since it never
-    /// reached this method's <c>_macros.TryGet</c> branch — the nested <c>INNER</c> call itself
-    /// recorded no <see cref="MacroInvocation"/> either, leaving hover and find-references with
-    /// nothing to say about a macro used only inside another macro's body.
+    /// Asked in only one of the two loops, a macro name used as a NESTED call's argument —
+    /// <c>#define WRAP() INNER(VALUE)</c>, VALUE itself a <c>#define</c> — stays a literal identifier,
+    /// and the nested <c>INNER</c> call records no <see cref="MacroInvocation"/>, so hover and
+    /// find-references have nothing to say about a macro used only inside another macro's body.
     ///
     /// Returns false when nothing here applies, so the caller appends the token unexpanded —
     /// matching <see cref="TryExpandAt"/>'s "not a macro" contract at the top level.

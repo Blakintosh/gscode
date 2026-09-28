@@ -102,13 +102,11 @@ public static class AstSearch
     /// Direct structural children of a node (expression operands included).
     ///
     /// Returns a STRUCT enumerable rather than an <c>IEnumerable</c>, and every caller is a
-    /// <c>foreach</c> that binds to it by shape, so the walk allocates nothing. It used to be a
-    /// <c>yield return</c> iterator, which allocated one state machine per node VISITED — and this
-    /// is walked once per rule, by fifteen lints plus the reference, hint and typing passes, over
-    /// trees of a million nodes. Measured on bo3: a bare full-tree walk of every script cost
-    /// 128–145 ms through the iterator against 35–47 ms without it, three times over, and a variant
-    /// that short-circuits leaves before the type switch measured the same as the plain one — so the
-    /// allocation was the cost and the thirty-case switch was not.
+    /// <c>foreach</c> that binds to it by shape, so the walk allocates nothing. A <c>yield return</c>
+    /// iterator allocates one state machine per node VISITED, and this is walked once per rule — by
+    /// fifteen lints plus the reference, hint and typing passes — over trees of a million nodes.
+    /// Measured on bo3, a bare full-tree walk: 128–145 ms through an iterator against 35–47 ms
+    /// without, while short-circuiting leaves before the type switch changed nothing.
     /// </summary>
     public static ChildEnumerable ChildrenOf(AstNode node)
     {

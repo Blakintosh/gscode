@@ -51,9 +51,8 @@ public interface IHeaderMacroCache
     /// asked whether the headers it expanded are still the ones on disk.
     ///
     /// A parse is stale for two reasons, not one: the file's own text moved, or a header it
-    /// <c>#insert</c>s did. Only the first was ever checked, so editing a GSH left every open
-    /// dependent holding a parse of the OLD macro bodies while reporting itself current — the
-    /// reported hover bug, where a value updated only once something was typed into the dependent.
+    /// <c>#insert</c>s did. Checking only the first leaves every open dependent of an edited GSH
+    /// holding a parse of the OLD macro bodies while reporting itself current.
     ///
     /// One counter for all headers rather than a per-document dependency set: a header edit is a
     /// rare, user-paced event and open documents are few, so the cost of the occasional needless

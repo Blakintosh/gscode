@@ -13,12 +13,10 @@ namespace GSCode.Parser.Lexing;
 public sealed class Lexer
 {
     /// <summary>
-    /// The character classes the scan runs over, as vector-searchable sets.
-    ///
-    /// Every run below — whitespace, a word, a digit sequence, the body of a comment or a string —
-    /// used to be a loop testing one character per iteration. <see cref="SearchValues{T}"/> answers
-    /// the same question over many characters at a time, and comment and string text is most of the
-    /// CHARACTER volume of a decompiled script even though it is a handful of its tokens.
+    /// The character classes the scan runs over, as vector-searchable sets. Every run below —
+    /// whitespace, a word, a digit sequence, the body of a comment or a string — is searched many
+    /// characters at a time rather than one per iteration, and comment and string text is most of
+    /// the CHARACTER volume of a decompiled script even though it is a handful of its tokens.
     /// </summary>
     private static readonly SearchValues<char> s_spacesAndTabs = SearchValues.Create(" \t");
     private static readonly SearchValues<char> s_lineBreaks = SearchValues.Create("\r\n");

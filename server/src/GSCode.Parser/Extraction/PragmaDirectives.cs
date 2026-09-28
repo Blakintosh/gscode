@@ -77,10 +77,8 @@ public readonly record struct PragmaDirective(
 /// documentation: a file whose parse errors are suppressed still fails to parse. Only the report
 /// goes away, so the features that need a good tree stay degraded with nothing on screen saying why.
 ///
-/// <c>#pragma warning disable</c> is still SCANNED, undocumented, as an alias for the same thing.
-/// The word only ever cost a regex group, and it was the published spelling for the two weeks
-/// between the pragma landing and being renamed — long enough for files to exist, short enough that
-/// nothing outside this tree can carry one, which is why it is accepted rather than taught.
+/// <c>#pragma warning disable</c> is still SCANNED, undocumented, as an alias for the same thing:
+/// it was briefly the published spelling, and accepting it costs one regex group.
 ///
 /// <c>all</c> is accepted in place of a code, and codes may be written bare (<c>5014</c>) or
 /// prefixed the way the editor displays them (<c>gscode-5014</c>), because that is what is on

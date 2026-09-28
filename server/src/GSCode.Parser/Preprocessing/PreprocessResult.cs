@@ -41,9 +41,8 @@ public sealed record BuiltinExpansion(string Name, TextRange Range, string Expan
 /// including one a later redefinition went on to shadow. <see cref="Macros"/> answers "what does
 /// this name resolve to"; this answers "what did the file declare" — the question a reference at
 /// each <c>#define</c>'s own name deserves regardless of which one the table kept. A shadowed
-/// root-file definition (redefined later in the same file, or overridden by a later `#insert`)
-/// used to have NO Definition reference at all: <c>Macros.All</c> holds only the winner, so the
-/// loser's own name was invisible to go-to-definition and rename.</param>
+/// shadowed root-file definition (redefined later in the file, or overridden by a later `#insert`)
+/// has no Definition reference otherwise: <c>Macros.All</c> holds only the winner.</param>
 public sealed record PreprocessResult(
     ImmutableArray<PToken> Tokens,
     MacroTable Macros,

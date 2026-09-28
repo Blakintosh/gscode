@@ -466,9 +466,8 @@ public sealed class SymbolExtractor
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
 
         // Recursive over every statement and expression in the function, so this is the other half of
-        // extraction's cost and the one that is genuinely proportional to the code. Separating it
-        // from extract.doc is what makes the two distinguishable: both scale with function count,
-        // but only one of them used to scale with token count as well.
+        // extraction's cost and the one that is genuinely proportional to the code. Timed apart from
+        // extract.doc because both scale with function count but only this one with token count.
         PerfTracker.Begin("extract.body");
         WalkStatement(function.Body, assignments);
         PerfTracker.End();
@@ -481,17 +480,13 @@ public sealed class SymbolExtractor
                 parameter.NameToken.Text, parameter.ByRef, DefaultValueText(parameter.DefaultValue, sourceFile)));
         }
 
-        // A name token whose text came out of a MACRO BODY (DefinitionSite set) does not really
-        // live where its own Range sits — that is a position inside the #define, e.g. the line in
-        // shared.gsh where REGISTER_SYSTEM's own `function autoexec __init__sytem__()` is written.
-        // The declaration belongs to whoever INVOKED the macro, so its RootRange (the invocation
-        // site) is what NameRange and SourceFile must agree with FullRange on, which was already
-        // built from RootRange (see RangeFrom in Parser.cs). Left as .Range/.Provenance.SourceFile,
-        // a CodeLens or go-to-definition landed inside the header on whatever line the macro
-        // happens to be defined at — reported as an "autoexec entry point" lens on an unrelated
-        // `else`. A function written directly IN a header (no macro involved) has no
-        // DefinitionSite, and keeps reporting that header as its home — that one really is where
-        // it lives.
+        // A name token whose text came out of a MACRO BODY (DefinitionSite set) sits, by its own
+        // Range, inside the #define — e.g. REGISTER_SYSTEM's `function autoexec __init__sytem__()` in
+        // shared.gsh. The declaration belongs to whoever INVOKED the macro, so NameRange and
+        // SourceFile come from the invocation site (RootRange), agreeing with FullRange, which
+        // RangeFrom in Parser.cs also builds from RootRange. Otherwise a CodeLens or go-to-definition
+        // lands on whatever header line the macro is defined at. A function written directly IN a
+        // header has no DefinitionSite and keeps that header as its home.
         bool fromMacroBody = function.NameToken.Provenance.DefinitionSite is not null;
         TextRange nameRange = fromMacroBody ? function.NameToken.RootRange : function.NameToken.Range;
         string declaredIn = fromMacroBody ? "" : sourceFile ?? "";
@@ -525,7 +520,7 @@ public sealed class SymbolExtractor
     /// included (the range covers the invocation as written, not its expansion). For a function an
     /// <c>#insert</c>ed header declares, every token's range collapses onto the insert SITE — see
     /// <c>Provenance.RootSite</c> — so slicing there would return the directive's own characters. The
-    /// printer stays the fallback for that one case, same as before this existed.
+    /// printer stays the fallback for that one case.
     /// </summary>
     private string DefaultValueText(ExprNode? defaultValue, string? sourceFile)
     {
@@ -928,11 +923,10 @@ public sealed class SymbolExtractor
                 WalkExpression(postfix.Operand, assignments);
                 return;
 
-            // A bare name inside a class body that matches a `var` is a MEMBER, not a local.
-            // Nothing recorded bare identifiers before this: a local needs no reference, since the
-            // index is workspace-wide and every `i` would collide. A member is the opposite — it
-            // is declared, it is shared across the class's methods, and its uses are exactly what
-            // find-references and rename are being asked about.
+            // A bare name inside a class body that matches a `var` is a MEMBER, not a local. A local
+            // gets no reference — the index is workspace-wide and every `i` would collide — but a
+            // member is declared, shared across the class's methods, and its uses are exactly what
+            // find-references and rename are asked about.
             //
             // Read or write by the same rule a field uses, so `_b_set_goal = true` is a write and
             // `if ( _b_set_goal )` is a read.
@@ -1314,13 +1308,10 @@ public sealed class SymbolExtractor
     /// <summary>
     /// Doc-comment tokens by the line they END on, built once and shared by every lookup.
     ///
-    /// This used to be a scan of <see cref="_rawTokens"/> from the top FOR EACH declaration, which is
-    /// O(functions x tokens): a file's function count and its token count both grow with its size, so
-    /// the cost is quadratic in file size. It was invisible on a median file and dominant on the
-    /// largest — `_utility.gsc` is the slowest file in four of the five game corpora, and extraction
-    /// was the majority of it. Non-BO3 dialects paid worse still, because
-    /// <see cref="IsDocCommentToken"/> materialises and fence-scans the TEXT of every block comment
-    /// it passes, and the old scan passed them all again for every function.
+    /// A scan of <see cref="_rawTokens"/> per declaration is O(functions x tokens), quadratic in file
+    /// size: invisible on a median file and dominant on the largest (`_utility.gsc` is the slowest
+    /// file in four of the five game corpora). Non-BO3 dialects pay worse, because
+    /// <see cref="IsDocCommentToken"/> materialises and fence-scans the TEXT of every block comment.
     ///
     /// Null until first use: a file with no declarations never builds it.
     /// </summary>
@@ -1338,9 +1329,8 @@ public sealed class SymbolExtractor
         {
             if ( IsDocCommentToken(token) )
             {
-                // TryAdd, not indexer assignment: the old scan walked tokens in source order and
-                // returned the FIRST match, so where two doc blocks end on one line the earlier
-                // token has to keep winning.
+                // TryAdd, not indexer assignment: where two doc blocks end on one line, the earlier
+                // token in source order wins.
                 _docCommentsByEndLine.TryAdd(token.Range.End.Line, token);
             }
         }
@@ -1464,10 +1454,8 @@ public sealed class SymbolExtractor
     /// reads it. Arguments passed at the call site keep their own provenance and so are recorded
     /// unflagged, as is the MacroUse reference for the invocation itself.
     ///
-    /// The KIND is left alone, which it was not before: an expanded call used to be rewritten to a
-    /// kind of its own, so a lint asking `Kind == Call` could not see it. A call a macro expands
-    /// into is still a call, and needs its import, its dev-block check and its argument count like
-    /// any other.
+    /// The KIND is left alone: a call a macro expands into is still a call, and needs its import,
+    /// its dev-block check and its argument count like any other.
     /// </summary>
     private void AddReference(SymbolKey key, PToken token, ReferenceKind kind)
     {

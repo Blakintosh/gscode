@@ -647,42 +647,6 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static FunctionSymbol? EnclosingFunction(ParseResult result, Position position)
     {
-        foreach ( FunctionSymbol function in result.Extraction.Functions )
-        {
-            if ( function.FullRange.Contains(position) )
-            {
-                return function;
-            }
-        }
-
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            if ( !classSymbol.FullRange.Contains(position) )
-            {
-                continue;
-            }
-
-            foreach ( FunctionSymbol method in classSymbol.Methods )
-            {
-                if ( method.FullRange.Contains(position) )
-                {
-                    return method;
-                }
-            }
-
-            // A constructor or destructor body is a function body too, for every purpose this
-            // answers — which is why they are carried on the class at all.
-            if ( classSymbol.Constructor is not null && classSymbol.Constructor.FullRange.Contains(position) )
-            {
-                return classSymbol.Constructor;
-            }
-
-            if ( classSymbol.Destructor is not null && classSymbol.Destructor.FullRange.Contains(position) )
-            {
-                return classSymbol.Destructor;
-            }
-        }
-
-        return null;
+        return GSCode.Core.Symbols.EnclosingFunction.At(result.Extraction.Functions, result.Extraction.Classes, position);
     }
 }

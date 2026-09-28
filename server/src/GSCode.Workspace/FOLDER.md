@@ -344,7 +344,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   .Statements / .Expressions)`, and the same reason.
   - `.Context.cs` — WHERE the cursor is. All static, and reads only tokens, source text and the
     parse tree: `IsStatementPosition`, `FindLiteralAtOffset`, `EnclosingFunction`,
-    `PreviousSignificant`, `TryPrecacheContext`, `IsAddressOfPosition` and the rest. `EnclosingFunction` is carried by the
+    `PreviousSignificant`, `TryPrecacheContext`, `IsAddressOfPosition` and the rest. `EnclosingFunction` (which delegates to
+    Core's `EnclosingFunction.At`, the walk that knows methods live on their class) is carried by the
     dispatcher as a symbol rather than reduced to a bool, since the same walk answers which keyword
     set is legal, whether `vararg` binds, and which parameters and locals are in scope. Nothing here
     touches the database, which is the property that makes the boundary hold.

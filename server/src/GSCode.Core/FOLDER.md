@@ -78,6 +78,11 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     namespaces does this file declare into", derived from the declarations themselves (a namespace
     is reachable exactly when something is declared in it) rather than from `NamespaceSpan`, shared
     by the extraction result and the indexed record so the two can never drift.
+  - `static class EnclosingFunction` — `At(functions, classes, position)`: the one definition of
+    "which function body contains this position" — a top-level function, a class method, or a
+    constructor or destructor body. Methods live on their class, so a walk of the top-level list
+    alone answers "no function" inside every method; completion and the call hierarchy each made
+    that mistake with their own copy, and both now ask this.
   - `enum ReferenceKind` + `readonly record struct ReferenceEntry(Key, Range, Kind, FromMacro)` —
     one classified reference site; no text stored beyond the interned key. `Kind` is WHAT the
     reference is and `FromMacro` is WHERE its text came from: two orthogonal facts that shared the

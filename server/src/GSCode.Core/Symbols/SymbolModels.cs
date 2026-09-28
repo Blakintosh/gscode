@@ -202,6 +202,61 @@ public static class DeclaredNamespaceSet
     }
 }
 
+/// <summary>
+/// The one definition of "which function body contains this position": a top-level function, a
+/// class method, or a constructor or destructor body. Shared by the extraction result's consumers
+/// and the indexed record's, which carry the same two lists.
+///
+/// Methods live on their class, not in the top-level list, so a walk of that list alone answers
+/// "no function" for every position inside a method. Completion made that mistake and completed
+/// every method body as though it were file scope; the call hierarchy made it again and named the
+/// FILE as the caller of anything called from a method.
+/// </summary>
+public static class EnclosingFunction
+{
+    public static FunctionSymbol? At(
+        ImmutableArray<FunctionSymbol> functions, ImmutableArray<ClassSymbol> classes, Position position)
+    {
+        foreach ( FunctionSymbol function in functions )
+        {
+            if ( function.FullRange.Contains(position) )
+            {
+                return function;
+            }
+        }
+
+        foreach ( ClassSymbol classSymbol in classes )
+        {
+            if ( !classSymbol.FullRange.Contains(position) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                if ( method.FullRange.Contains(position) )
+                {
+                    return method;
+                }
+            }
+
+            // A constructor or destructor body is a function body too, for every purpose this
+            // answers — which is why they are carried on the class at all.
+            if ( classSymbol.Constructor is not null && classSymbol.Constructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Constructor;
+            }
+
+            if ( classSymbol.Destructor is not null && classSymbol.Destructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Destructor;
+            }
+        }
+
+        return null;
+    }
+}
+
 /// <summary>How a reference site uses its symbol.</summary>
 public enum ReferenceKind
 {

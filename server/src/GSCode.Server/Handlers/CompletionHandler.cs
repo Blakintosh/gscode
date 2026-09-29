@@ -56,12 +56,6 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return CallPunctuation.ParensAndSemicolon;
     }
 
-    /// <summary>Maps the client setting; anything unrecognised keeps the safer owner-scoped default.</summary>
-    private static FieldScope FieldScopeFromSetting(string value)
-    {
-        return string.Equals(value, "all", StringComparison.OrdinalIgnoreCase) ? FieldScope.All : FieldScope.Owner;
-    }
-
     /// <summary>
     /// Whether the client renders <c>CompletionItem.labelDetails</c> — the dimmed text beside a
     /// label, which is where a parameter list belongs.
@@ -127,7 +121,6 @@ public sealed class CompletionHandler : CompletionHandlerBase
             target.ContextId,
             request.Position.ToCore(),
             _settings.CompletionLiterals,
-            FieldScopeFromSetting(_settings.CompletionFieldScope),
             CallPunctuationFromSetting(_settings.CompletionCallPunctuation),
             profile: null,
             parameterHints: _settings.CompletionParameterHints,

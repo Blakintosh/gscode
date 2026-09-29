@@ -399,12 +399,12 @@ public sealed class LanguageStore
     }
 
     /// <summary>
-    /// The distinct field names assigned in a file <paramref name="askingContextId"/> can see, on one
-    /// owner when <paramref name="ownerName"/> is given — see <see cref="VocabularyIndex"/>.
+    /// The distinct field names assigned, on any owner, in a file <paramref name="askingContextId"/>
+    /// can see — see <see cref="VocabularyIndex"/>.
     /// </summary>
-    public List<VocabularyName> VisibleFieldNames(string? ownerName, string askingContextId)
+    public List<VocabularyName> VisibleFieldNames(string askingContextId)
     {
-        return _vocabulary.FieldNames(ownerName, path => IsVisibleTo(path, askingContextId));
+        return _vocabulary.FieldNames(path => IsVisibleTo(path, askingContextId));
     }
 
     /// <summary>

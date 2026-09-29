@@ -674,24 +674,24 @@ public sealed partial class CompletionEngine
         ParseResult result,
         string contextId,
         string ownerName,
-        FieldScope fieldScope,
         string typed)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        // Scope only when asked AND the owner is known; otherwise every owner contributes.
-        bool scopeToOwner = fieldScope == FieldScope.Owner && ownerName.Length > 0;
-
-        // Every spelling the workspace writes, from the store's vocabulary rather than every
-        // function of every record — see VocabularyIndex — grouped by the name the engine sees.
+        // Every field assigned anywhere visible, on ANY owner. The name before the dot says nothing
+        // about the object: `self` is whatever the function was called on, and after
+        // `blah = level;` a `blah.` is level. Offering only fields assigned under the same variable
+        // name hid `level.foo` from exactly those two, so the owner only names the row's header.
+        //
+        // From the store's vocabulary rather than every function of every record — see
+        // VocabularyIndex — grouped by the name the engine sees.
         LanguageStore fieldStore = _database.StoreFor(result.Language);
-        FieldSpellings spellings = new(fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId));
+        FieldSpellings spellings = new(fieldStore.VisibleFieldNames(contextId));
 
         // The live file first, so unsaved edits are offered immediately and in the file's own
-        // spelling, then every visible record's — a field assigned on `level` in one file is
-        // reachable from all of them.
-        CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, spellings, seen, entries);
+        // spelling, then every visible record's.
+        CollectAssignedFields(result.Extraction.Functions, ownerName, spellings, seen, entries);
 
         // The .size pseudo-member, whatever has been typed: it is what an array is asked for.
         if ( seen.Add("size") )
@@ -885,7 +885,6 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static void CollectAssignedFields(
         ImmutableArray<FunctionSymbol> functions,
-        bool scopeToOwner,
         string ownerName,
         FieldSpellings spellings,
         HashSet<string> seen,
@@ -897,11 +896,6 @@ public sealed partial class CompletionEngine
             {
                 // An empty owner marks a plain local, which is not a field at all.
                 if ( assignment.OwnerName.Length == 0 )
-                {
-                    continue;
-                }
-
-                if ( scopeToOwner && !string.Equals(assignment.OwnerName, ownerName, StringComparison.Ordinal) )
                 {
                     continue;
                 }

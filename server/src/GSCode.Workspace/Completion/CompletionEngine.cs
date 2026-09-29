@@ -29,7 +29,6 @@ public sealed partial class CompletionEngine
 
     /// <summary>Produces completion suggestions for a position in an analysed document.</summary>
     /// <param name="includeLiterals">Whether to offer known literals inside a "..."/&amp;"..."/#"..." string (the gscode.completion.literals setting).</param>
-    /// <param name="fieldScope">How widely assignment-derived fields are offered after a `.` (the gscode.completion.fieldScope setting).</param>
     /// <param name="profile">
     /// The dialect to complete for; defaults to the active one. Explicit for the same reason
     /// <c>ScriptAnalysis.Analyze</c> takes it — a test naming its dialect does not have to mutate
@@ -40,7 +39,6 @@ public sealed partial class CompletionEngine
         string contextId,
         Position position,
         bool includeLiterals = true,
-        FieldScope fieldScope = FieldScope.Owner,
         CallPunctuation callPunctuation = CallPunctuation.Parens,
         GameProfile? profile = null,
         bool parameterHints = true,
@@ -278,7 +276,7 @@ public sealed partial class CompletionEngine
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
             return FieldCompletions(
-                result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope, WordBefore(result, tokens, currentIndex, offset));
+                result, contextId, OwnerBefore(result, tokens, triggerIndex), WordBefore(result, tokens, currentIndex, offset));
         }
 
         return StatementScopeCompletions(

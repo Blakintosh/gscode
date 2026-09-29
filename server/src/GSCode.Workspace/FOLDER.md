@@ -241,15 +241,17 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/VocabularyIndex.cs
 
 - `sealed class VocabularyIndex` — the workspace's distinct literals (by `SymbolKey`) and assigned
-  fields (by owner and name), each → the files using it, for literal and field completion.
+  fields (by name, on any owner), each → the files using it, for literal and field completion.
   Occurrences grow with the workspace and distinct names barely do, so both lists read this rather
   than every reference / assignment of every record per request. A literal is indexed only when
   literal completion could offer it (a plain `ReferenceKind.Literal`, not from a macro body); the
   name-shape filter stays at the query. Read through `LanguageStore.VisibleLiterals` /
   `VisibleFieldNames`, as `VocabularyName(Name, Files)`: each name with how many files write it
   (literals handed to a callback, fields as a list).
-  Field names are kept as WRITTEN — `level.foo` and `level.Foo` are two names here, one spelling on
-  two owners is one name with both counted — and choosing a spelling is the completion list's call.
+  Field names are kept as WRITTEN — `level.foo` and `level.Foo` are two names here — and choosing a
+  spelling is the completion list's call. Not keyed by owner: the name before the dot is a variable,
+  not the object (`self` is whatever a function was called on; after `blah = level;`, `blah.` is
+  level), so scoping a field list by it hid fields the object has.
 
 ## Database/ScriptDatabase.cs
 
@@ -301,6 +303,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `VocabularyIndex` (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments (from the stores' `PathTreeIndex`), `ns::` (that namespace's functions only), `owner.` fields
+  assigned on ANY owner
   (+ `.size`; also from `VocabularyIndex` — one row per field ignoring case, labelled in this file's
   own spelling or else the most-used one; the detail reads `level.foo · field`, and a field written
   in more than one casing adds a dimmed `+N spellings` and lists them, with file counts, in the

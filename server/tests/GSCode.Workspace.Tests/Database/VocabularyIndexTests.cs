@@ -92,7 +92,7 @@ public class VocabularyIndexTests
     }
 
     [Fact]
-    public void Fields_AreScopedToTheOwnerWhenOneIsGiven_AndLocalsAreNeverFields()
+    public void Fields_AreOfferedOnEveryOwnerFromVisibleFiles_AndLocalsAreNeverFields()
     {
         LanguageStore store = new();
         store.Upsert(Record(
@@ -110,9 +110,8 @@ public class VocabularyIndexTests
             "mod:m",
             assignments: [new AssignmentSymbol("self", "mod_only", "mod_only", s_someRange)]));
 
-        Assert.Equal(["health"], Names(store.VisibleFieldNames("self", "raw")));
-        Assert.Equal(["health", "round"], Names(store.VisibleFieldNames(null, "raw")).Order());
-        Assert.Equal(["health", "mod_only"], Names(store.VisibleFieldNames("self", "mod:m")).Order());
+        Assert.Equal(["health", "round"], Names(store.VisibleFieldNames("raw")).Order());
+        Assert.Equal(["health", "mod_only", "round"], Names(store.VisibleFieldNames("mod:m")).Order());
     }
 
     [Fact]
@@ -120,7 +119,7 @@ public class VocabularyIndexTests
     {
         // The count ranks a list, so it is of every file writing the name. Spellings stay separate
         // — `Foo` and `foo` are the same field to the engine, but choosing between them is the
-        // completion list's call — and one spelling written on two owners counts both.
+        // completion list's call — and one spelling written on two owners is one name.
         LanguageStore store = new();
         store.Upsert(Record(@"c:\raw\a.gsc", "raw", [Literal("shared_event")], [new AssignmentSymbol("level", "Foo", "foo", s_someRange)]));
         store.Upsert(Record(@"c:\raw\b.gsc", "raw", [Literal("shared_event")], [new AssignmentSymbol("self", "Foo", "foo", s_someRange)]));
@@ -128,11 +127,8 @@ public class VocabularyIndexTests
 
         Assert.Equal([new VocabularyName("shared_event", 2)], Literals(store, SymbolKind.StringLiteral, "raw"));
 
-        List<VocabularyName> everyOwner = store.VisibleFieldNames(null, "raw");
-        Assert.Equal(2, everyOwner.Single(name => name.Name == "Foo").Files);
-        Assert.Equal(1, everyOwner.Single(name => name.Name == "foo").Files);
-
-        List<VocabularyName> onLevel = store.VisibleFieldNames("level", "raw");
-        Assert.Equal(1, onLevel.Single(name => name.Name == "Foo").Files);
+        List<VocabularyName> fields = store.VisibleFieldNames("raw");
+        Assert.Equal(2, fields.Single(name => name.Name == "Foo").Files);
+        Assert.Equal(1, fields.Single(name => name.Name == "foo").Files);
     }
 }

@@ -61,7 +61,7 @@ public class EffectiveSummaryTests
         ServerSettings settings = new();
         string before = settings.EffectiveSummary;
 
-        settings.Apply(JToken.Parse("""{ "gscode": { "completion": { "fieldScope": "all" } } }"""));
+        settings.Apply(JToken.Parse("""{ "gscode": { "completion": { "callPunctuation": "parens" } } }"""));
 
         Assert.Equal(before, settings.EffectiveSummary);
     }

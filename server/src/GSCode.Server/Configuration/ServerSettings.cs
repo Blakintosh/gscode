@@ -33,7 +33,6 @@ public sealed class ServerSettings
         public bool InlayMacroParameterNames { get; init; }
         public bool CompletionLiterals { get; init; } = true;
         public bool CompletionAutoImport { get; init; } = true;
-        public string CompletionFieldScope { get; init; } = "owner";
         public string CompletionCallPunctuation { get; init; } = "parensAndSemicolon";
         public bool CompletionParameterHints { get; init; } = true;
         public string DiagnosticsScope { get; init; } = "workspace";
@@ -144,13 +143,6 @@ public sealed class ServerSettings
     {
         get { return _current.CompletionAutoImport; }
         set { _current = _current with { CompletionAutoImport = value }; }
-    }
-
-    /// <summary>"owner" (default) or "all" — how widely assignment-derived fields are offered.</summary>
-    public string CompletionFieldScope
-    {
-        get { return _current.CompletionFieldScope; }
-        set { _current = _current with { CompletionFieldScope = value }; }
     }
 
     /// <summary>
@@ -352,9 +344,6 @@ public sealed class ServerSettings
             CompletionAutoImport = section.Value<bool?>("completion.autoImport")
                 ?? section["completion"]?.Value<bool?>("autoImport")
                 ?? current.CompletionAutoImport,
-            CompletionFieldScope = section.Value<string>("completion.fieldScope")
-                ?? section["completion"]?.Value<string>("fieldScope")
-                ?? current.CompletionFieldScope,
             CompletionCallPunctuation = section.Value<string>("completion.callPunctuation")
                 ?? section["completion"]?.Value<string>("callPunctuation")
                 ?? current.CompletionCallPunctuation,

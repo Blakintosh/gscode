@@ -24,7 +24,7 @@ public sealed class VocabularyIndex
     {
         public static Contribution None { get; } = new([], []);
 
-        public Contribution(HashSet<SymbolKey> literals, HashSet<(string OwnerName, string Name)> fields)
+        public Contribution(HashSet<SymbolKey> literals, HashSet<string> fields)
         {
             Literals = literals;
             Fields = fields;
@@ -32,13 +32,16 @@ public sealed class VocabularyIndex
 
         public HashSet<SymbolKey> Literals { get; }
 
-        public HashSet<(string OwnerName, string Name)> Fields { get; }
+        /// <summary>
+        /// The field names this file assigns, as written, on ANY owner — see <see cref="FieldNames"/>
+        /// for why the owner is not part of the key.
+        /// </summary>
+        public HashSet<string> Fields { get; }
     }
 
     private readonly PackedInvertedIndex<SymbolKey> _literals = new(EqualityComparer<SymbolKey>.Default);
 
-    private readonly PackedInvertedIndex<(string OwnerName, string Name)> _fields =
-        new(EqualityComparer<(string OwnerName, string Name)>.Default);
+    private readonly PackedInvertedIndex<string> _fields = new(StringComparer.Ordinal);
 
     public static Contribution Of(ScriptRecord? record)
     {
@@ -56,7 +59,7 @@ public sealed class VocabularyIndex
             }
         }
 
-        HashSet<(string OwnerName, string Name)> fields = [];
+        HashSet<string> fields = new(StringComparer.Ordinal);
         foreach ( FunctionSymbol function in record.Functions )
         {
             foreach ( AssignmentSymbol assignment in function.Assignments )
@@ -64,7 +67,7 @@ public sealed class VocabularyIndex
                 // An empty owner marks a plain local, which is not a field at all.
                 if ( assignment.OwnerName.Length > 0 )
                 {
-                    fields.Add((assignment.OwnerName, assignment.Name));
+                    fields.Add(assignment.Name);
                 }
             }
         }
@@ -94,31 +97,18 @@ public sealed class VocabularyIndex
     }
 
     /// <summary>
-    /// The distinct field names assigned in at least one file <paramref name="visible"/> accepts —
-    /// on <paramref name="ownerName"/> only when one is given, compared ordinally. Spelled as WRITTEN:
-    /// <c>level.foo</c> and <c>level.Foo</c> are two names here, each counted on its own, and choosing
-    /// between them is the completion list's business, not the index's.
+    /// The distinct field names assigned, on any owner, in at least one file <paramref name="visible"/>
+    /// accepts. Spelled as WRITTEN: <c>level.foo</c> and <c>level.Foo</c> are two names here, each
+    /// counted on its own, and choosing between them is the completion list's business.
+    ///
+    /// Not keyed by owner. The name before the dot is a variable, not the object: <c>self</c> is
+    /// whatever a function was called on, and after <c>blah = level;</c> a <c>blah.</c> is level, so
+    /// a field list scoped to the variable name hid fields the object really has.
     /// </summary>
-    public List<VocabularyName> FieldNames(string? ownerName, Func<string, bool> visible)
+    public List<VocabularyName> FieldNames(Func<string, bool> visible)
     {
-        // Across every owner one spelling can arrive once per owner — `self.health` and
-        // `level.health` — so the counts are summed per spelling rather than listed twice.
-        Dictionary<string, int> files = new(StringComparer.Ordinal);
-        _fields.ForEachKey(
-            key => ownerName is null || string.Equals(key.OwnerName, ownerName, StringComparison.Ordinal),
-            visible,
-            (key, count) =>
-            {
-                files.TryGetValue(key.Name, out int sum);
-                files[key.Name] = sum + count;
-            });
-
-        List<VocabularyName> names = new(files.Count);
-        foreach ( KeyValuePair<string, int> name in files )
-        {
-            names.Add(new VocabularyName(name.Key, name.Value));
-        }
-
+        List<VocabularyName> names = [];
+        _fields.ForEachKey(static _ => true, visible, (name, files) => names.Add(new VocabularyName(name, files)));
         return names;
     }
 }

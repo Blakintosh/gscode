@@ -866,7 +866,6 @@ public class CorpusPerfTests
             contextId,
             position,
             includeLiterals: true,
-            fieldScope: FieldScope.Owner,
             callPunctuation: CallPunctuation.Parens,
             profile: profile,
             parameterHints: true).Length;

@@ -496,7 +496,6 @@ public partial class ScalePerfTests
             contextId,
             position,
             includeLiterals: true,
-            fieldScope: FieldScope.Owner,
             callPunctuation: CallPunctuation.Parens,
             profile: profile,
             parameterHints: true);

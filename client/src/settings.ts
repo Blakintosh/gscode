@@ -22,7 +22,6 @@ export interface GscodeSettings {
     "inlayHints.macroParameterNames": boolean;
     "completion.autoImport": boolean;
     "completion.literals": boolean;
-    "completion.fieldScope": string;
     "completion.callPunctuation": string;
     "completion.parameterHints": boolean;
     "diagnostics.scope": string;
@@ -54,7 +53,6 @@ export function readSettings(): GscodeSettings {
         "inlayHints.macroParameterNames": config.get<boolean>("inlayHints.macroParameterNames", false),
         "completion.autoImport": config.get<boolean>("completion.autoImport", true),
         "completion.literals": config.get<boolean>("completion.literals", true),
-        "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
         "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),
         "completion.parameterHints": config.get<boolean>("completion.parameterHints", true),
         "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),

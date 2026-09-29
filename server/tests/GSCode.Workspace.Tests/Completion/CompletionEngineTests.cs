@@ -1988,8 +1988,10 @@ public class CompletionEngineTests
     }
 
     [Fact]
-    public void MemberAccess_ScopesAssignedFieldsToTheOwner()
+    public void MemberAccess_OffersFieldsWhateverTheyWereAssignedOn()
     {
+        // The name before the dot is a variable, not the object, so it does not narrow the list:
+        // a field written through `self` in a function called on level is level's field.
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
@@ -2000,7 +2002,23 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterLevelDot);
 
         Assert.True(HasLabel(entries, "round_number"));
-        Assert.False(HasLabel(entries, "player_score"));
+        Assert.True(HasLabel(entries, "player_score"));
+    }
+
+    [Fact]
+    public void MemberAccess_SelfAndAnAliasSeeTheFieldsWrittenOnLevel()
+    {
+        // The reported case: `self` inside a function run on level, and `blah = level;` then
+        // `blah.`, both ARE level, and both hid level.foo when the list was scoped by the name.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\setup.gsc", "function setup()\n{\n    level.foo = \"foo\";\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult onSelf = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.fo\n}\n");
+        ParseResult onAlias = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    blah = level;\n    x = blah.fo\n}\n");
+
+        Assert.True(HasLabel(engine.Complete(onSelf, "raw", new Position(2, 15)), "foo"));
+        Assert.True(HasLabel(engine.Complete(onAlias, "raw", new Position(3, 15)), "foo"));
     }
 
     [Fact]
@@ -2021,22 +2039,6 @@ public class CompletionEngineTests
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterOwnerDot);
 
         Assert.True(HasLabel(entries, "other_field"));
-    }
-
-    [Fact]
-    public void MemberAccess_AllScope_OffersFieldsFromEveryOwner()
-    {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
-        (CompletionEngine engine, _, _) = BuildWorld(files);
-
-        string text = "function run()\n{\n    level.round_number = 1;\n    self.player_score = 0;\n    x = level.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
-
-        ImmutableArray<CompletionEntry> entries = engine.Complete(
-            result, "raw", new Position(4, 14), includeLiterals: true, fieldScope: FieldScope.All);
-
-        Assert.True(HasLabel(entries, "round_number"));
-        Assert.True(HasLabel(entries, "player_score"));
     }
 
     [Fact]

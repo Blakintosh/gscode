@@ -9,7 +9,6 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -24,7 +23,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class IncludeUsageLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string UtilitySource = "scriptPrintln( channel, msg )\n{\n}\n";
@@ -45,17 +43,17 @@ public class IncludeUsageLintTests
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\common_scripts\utility.gsc", UtilitySource)
-            .AddFile(@$"{Raw}\maps\mp\_load.gsc", LoadSource)
-            .AddFile(@$"{Raw}\maps\_chain.gsc", ChainSource);
+            .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), UtilitySource)
+            .AddFile(TestPaths.Raw(@"maps\mp\_load.gsc"), LoadSource)
+            .AddFile(TestPaths.Raw(@"maps\_chain.gsc"), ChainSource);
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
 
-        Commit(database, @$"{Raw}\common_scripts\utility.gsc", @"common_scripts\utility.gsc", UtilitySource);
-        Commit(database, @$"{Raw}\maps\mp\_load.gsc", @"maps\mp\_load.gsc", LoadSource);
-        Commit(database, @$"{Raw}\maps\_chain.gsc", @"maps\_chain.gsc", ChainSource);
+        Commit(database, TestPaths.Raw(@"common_scripts\utility.gsc"), @"common_scripts\utility.gsc", UtilitySource);
+        Commit(database, TestPaths.Raw(@"maps\mp\_load.gsc"), @"maps\mp\_load.gsc", LoadSource);
+        Commit(database, TestPaths.Raw(@"maps\_chain.gsc"), @"maps\_chain.gsc", ChainSource);
 
         return (database, resolver);
     }
@@ -72,7 +70,7 @@ public class IncludeUsageLintTests
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
         GameProfile game = profile ?? s_cod4;
-        string askingPath = @$"{Raw}\maps\mp\gametypes\_menus.gsc";
+        string askingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
 
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),

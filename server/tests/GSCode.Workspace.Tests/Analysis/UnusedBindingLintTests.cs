@@ -15,7 +15,7 @@ public class UnusedBindingLintTests
     private static ImmutableArray<Diagnostic> Lint(string source)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return UnusedBindingLint.Analyze(result);
     }

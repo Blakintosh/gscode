@@ -52,7 +52,7 @@ public class StaleAnalysisTests
 
     private static OpenDocument OpenAndAnalyze(DocumentStore store, string text)
     {
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", text, version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), text, version: 1);
         store.Analyze(document);
         return document;
     }
@@ -129,7 +129,7 @@ public class StaleAnalysisTests
         ManualResetEventSlim releaseFirst = new(false);
         DocumentStore store = GatedStore(insideFirst, releaseFirst);
 
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), "#p\n", version: 1);
 
         Task<ParseResult> older = Task.Run(() => store.Analyze(document));
         Assert.True(insideFirst.Wait(s_patience));
@@ -163,7 +163,7 @@ public class StaleAnalysisTests
         ManualResetEventSlim releaseFirst = new(false);
         DocumentStore store = GatedStore(insideFirst, releaseFirst);
 
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), "#p\n", version: 1);
 
         Task<AnalysisSnapshot> older = Task.Run(() => store.AnalyzeSnapshot(document));
         Assert.True(insideFirst.Wait(s_patience));
@@ -192,7 +192,7 @@ public class StaleAnalysisTests
         ManualResetEventSlim release = new(false);
         DocumentStore store = GatedStore(inside, release);
 
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", "#p\n", version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), "#p\n", version: 1);
 
         Task<ParseResult> analysis = Task.Run(() => store.Analyze(document));
         Assert.True(inside.Wait(s_patience));

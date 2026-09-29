@@ -4,7 +4,6 @@ using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
@@ -17,22 +16,21 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class GshMacroLookupTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static ScriptDatabase BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\shared\shared.gsh",
+                TestPaths.Raw(@"scripts\shared\shared.gsh"),
                 "#define IS_TRUE(__a) (isdefined(__a) && __a)\n#define REGISTER_SYSTEM(__n) register(__n)\n")
             .AddFile(
-                @$"{Raw}\scripts\shared\array_shared.gsc",
+                TestPaths.Raw(@"scripts\shared\array_shared.gsc"),
                 "#insert scripts\\shared\\shared.gsh;\n#namespace array;\nfunction run( v )\n{\n    if ( IS_TRUE( v ) )\n    {\n    }\n}\n")
             .AddFile(
-                @$"{Raw}\scripts\shared\array_shared.csc",
+                TestPaths.Raw(@"scripts\shared\array_shared.csc"),
                 "#insert scripts\\shared\\shared.gsh;\n#namespace array;\nfunction run( v )\n{\n    if ( IS_TRUE( v ) )\n    {\n    }\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -112,14 +110,14 @@ public class GshMacroLookupTests
     {
         ScriptDatabase database = BuildWorkspace();
 
-        Assert.True(database.TryGetAnyRecord(Path.Combine(Raw, relative), out ScriptRecord record));
+        Assert.True(database.TryGetAnyRecord(Path.Combine(TestPaths.RawRoot, relative), out ScriptRecord record));
         Assert.EndsWith(Path.GetFileName(relative), record.Path, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void AnUnknownPathIsNotFound()
     {
-        Assert.False(BuildWorkspace().TryGetAnyRecord(@$"{Raw}\scripts\nothing_here.gsc", out _));
+        Assert.False(BuildWorkspace().TryGetAnyRecord(TestPaths.Raw(@"scripts\nothing_here.gsc"), out _));
     }
 
     [Fact]

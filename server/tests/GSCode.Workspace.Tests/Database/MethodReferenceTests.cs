@@ -4,7 +4,6 @@ using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
@@ -20,17 +19,16 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class MethodReferenceTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static (ScriptDatabase Database, LanguageStore Store) Build(params (string Name, string Source)[] files)
     {
         FakeFileSystem system = new();
         foreach ( (string Name, string Source) file in files )
         {
-            system.AddFile(@$"{Raw}\scripts\{file.Name}.gsc", file.Source);
+            system.AddFile(TestPaths.Raw(@$"scripts\{file.Name}.gsc"), file.Source);
         }
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], system);
+        RootConfig config = TestPaths.Config(system);
         PathResolver resolver = new(config, system);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, system, new NameTable());

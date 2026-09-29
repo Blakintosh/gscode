@@ -25,7 +25,7 @@ public class UnusedLocalLintTests
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f( p )\n{\n" + body + "\n}\n"),
             NullInsertProvider.Instance,
@@ -143,7 +143,7 @@ public class UnusedLocalLintTests
             + "}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.Empty(UnusedLocalLint.Analyze(result));
     }
@@ -153,7 +153,7 @@ public class UnusedLocalLintTests
     {
         // A name read in another function does not keep this one alive.
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function a()\n{\n    bar = 1;\n}\nfunction b()\n{\n    bar = 2;\n    use( bar );\n}\n"),
             NullInsertProvider.Instance,

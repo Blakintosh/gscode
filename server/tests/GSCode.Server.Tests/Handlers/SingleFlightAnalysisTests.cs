@@ -20,7 +20,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class SingleFlightAnalysisTests
 {
-    private static readonly string s_path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static DocumentStore NewStore()
     {

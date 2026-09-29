@@ -26,14 +26,14 @@ public class DocumentStoreTests
     public void Open_CancelsThePreviousDocumentsPendingAnalysis()
     {
         DocumentStore store = Build();
-        OpenDocument first = store.Open(@"C:\ws\scripts\t.gsc", "function f()\n{\n}\n", version: 1);
+        OpenDocument first = store.Open(TestPaths.Raw(@"scripts\t.gsc"), "function f()\n{\n}\n", version: 1);
 
         // Scheduled the way TextSyncHandler.ScheduleImmediateAnalysis does for the first open,
         // standing in for the orphan's in-flight token.
         CancellationTokenSource pending = new();
         first.PendingAnalysis = pending;
 
-        store.Open(@"C:\ws\scripts\t.gsc", "function f()\n{\n}\n", version: 1);
+        store.Open(TestPaths.Raw(@"scripts\t.gsc"), "function f()\n{\n}\n", version: 1);
 
         Assert.True(pending.IsCancellationRequested);
     }
@@ -42,9 +42,9 @@ public class DocumentStoreTests
     public void Open_WithNoPriorAnalysisPending_DoesNotThrow()
     {
         DocumentStore store = Build();
-        store.Open(@"C:\ws\scripts\t.gsc", "function f()\n{\n}\n", version: 1);
+        store.Open(TestPaths.Raw(@"scripts\t.gsc"), "function f()\n{\n}\n", version: 1);
 
-        OpenDocument reopened = store.Open(@"C:\ws\scripts\t.gsc", "function f()\n{\n}\n", version: 2);
+        OpenDocument reopened = store.Open(TestPaths.Raw(@"scripts\t.gsc"), "function f()\n{\n}\n", version: 2);
 
         Assert.Equal(2, reopened.Version);
     }
@@ -53,12 +53,12 @@ public class DocumentStoreTests
     public void Open_ForADifferentPath_DoesNotCancelAnUnrelatedDocument()
     {
         DocumentStore store = Build();
-        OpenDocument other = store.Open(@"C:\ws\scripts\other.gsc", "function g()\n{\n}\n", version: 1);
+        OpenDocument other = store.Open(TestPaths.Raw(@"scripts\other.gsc"), "function g()\n{\n}\n", version: 1);
 
         CancellationTokenSource pending = new();
         other.PendingAnalysis = pending;
 
-        store.Open(@"C:\ws\scripts\t.gsc", "function f()\n{\n}\n", version: 1);
+        store.Open(TestPaths.Raw(@"scripts\t.gsc"), "function f()\n{\n}\n", version: 1);
 
         Assert.False(pending.IsCancellationRequested);
     }

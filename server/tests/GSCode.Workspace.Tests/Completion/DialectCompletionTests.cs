@@ -8,7 +8,6 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -160,7 +159,7 @@ public class DialectCompletionTests
         // every file-scope list.
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("\nmain()\n{\n}\n"),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
@@ -182,7 +181,7 @@ public class DialectCompletionTests
     {
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("#define CAP 5\n\nmain()\n{\n}\n"),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
@@ -325,7 +324,7 @@ public class DialectCompletionTests
     {
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("#\n"),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
@@ -340,7 +339,7 @@ public class DialectCompletionTests
     {
         CompletionEngine engine = BuildEngine();
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("\n"),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
@@ -358,17 +357,16 @@ public class DialectCompletionTests
     // continues into. The profile is passed explicitly rather than through GameProfile.Active, so
     // these cannot be perturbed by a test that mutates it.
 
-    private const string Raw = @"C:\cod4\raw";
 
     private static readonly FakeFileSystem s_pathWorld = new FakeFileSystem()
-        .AddFile(@$"{Raw}\maps\mp\_utility.gsc", "helper()\n{\n}\n")
-        .AddFile(@$"{Raw}\maps\mp\_load.gsc", "load()\n{\n}\n")
-        .AddFile(@$"{Raw}\maps\mp\gametypes\dm.gsc", "main()\n{\n}\n")
-        .AddFile(@$"{Raw}\common_scripts\utility.gsc", "u()\n{\n}\n");
+        .AddFile(TestPaths.Raw(@"maps\mp\_utility.gsc"), "helper()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"maps\mp\_load.gsc"), "load()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"maps\mp\gametypes\dm.gsc"), "main()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), "u()\n{\n}\n");
 
     private static CompletionEngine BuildEngine()
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\cod4\mods", [], s_pathWorld);
+        RootConfig config = TestPaths.Config(s_pathWorld);
         PathResolver resolver = new(config, s_pathWorld);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, s_pathWorld, new NameTable());
@@ -394,7 +392,7 @@ public class DialectCompletionTests
         string opening = profile.HasFunctionKeyword ? "function " : "";
         string text = opening + "main()\n{\n    " + line + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(text),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
@@ -508,7 +506,7 @@ public class DialectCompletionTests
         CompletionEngine engine = BuildEngine();
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
+            TestPaths.Raw(@"maps\mp\test.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("#include maps\\\nmain()\n{\n}\n"),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,

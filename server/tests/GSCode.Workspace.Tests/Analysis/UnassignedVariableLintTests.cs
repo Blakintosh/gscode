@@ -23,7 +23,7 @@ public class UnassignedVariableLintTests
     private static ImmutableArray<Diagnostic> Lint(string source, string game = "bo3")
     {
         GameProfile profile = GameProfile.ByName(game)!;
-        string path = game == "bo3" ? @"c:\ws\scripts\t.gsc" : @"c:\ws\maps\t.gsc";
+        string path = game == "bo3" ? TestPaths.Raw(@"scripts\t.gsc") : TestPaths.Raw(@"maps\t.gsc");
 
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), profile);

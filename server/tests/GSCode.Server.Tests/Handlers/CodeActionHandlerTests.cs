@@ -18,7 +18,7 @@ public class CodeActionHandlerTests
 {
     private static ParseResult Analyze(string source)
     {
-        return AnalyzeAt(source, @"c:\ws\scripts\t.gsc");
+        return AnalyzeAt(source, TestPaths.Raw(@"scripts\t.gsc"));
     }
 
     private static ParseResult AnalyzeAt(string source, string path)
@@ -48,7 +48,7 @@ public class CodeActionHandlerTests
     private static ScriptDatabase DatabaseWithUtil()
     {
         ScriptDatabase database = new();
-        ParseResult util = AnalyzeAt("#namespace util;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\scripts\util.gsc");
+        ParseResult util = AnalyzeAt("#namespace util;\nfunction helper()\n{\n}\n", TestPaths.Raw(@"scripts\util.gsc"));
         database.Commit(util, ResolutionContext.RawContext, false, "scripts\\util.gsc");
         return database;
     }
@@ -108,7 +108,7 @@ public class CodeActionHandlerTests
         // exist, which is why the two are tracked separately rather than compared with each other.
         string source = "#include maps\\_utility;\n#include maps\\_utility;\nmain(){}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\maps\t.gsc",
+            TestPaths.Raw(@"maps\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,
@@ -127,7 +127,7 @@ public class CodeActionHandlerTests
     public void FindsMissingUsing_ForUnimportedQualifiedCall()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult asking = AnalyzeAt("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
         List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
@@ -139,7 +139,7 @@ public class CodeActionHandlerTests
     public void NoMissingUsing_WhenAlreadyImported()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult asking = AnalyzeAt(
             "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
@@ -152,7 +152,7 @@ public class CodeActionHandlerTests
     public void NoMissingUsing_ForOwnNamespaceCall()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\util_more.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\util_more.gsc");
         ParseResult asking = AnalyzeAt("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
         List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
@@ -179,7 +179,7 @@ public class CodeActionHandlerTests
 
         CodeActionParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc") },
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\t.gsc")) },
             Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 1000, 0),
             Context = new CodeActionContext
             {
@@ -316,7 +316,7 @@ public class CodeActionHandlerTests
     // real resolvable #using, which needs a workspace with a filesystem behind it; that is proven
     // by inspection instead: it takes no range/line parameter at all, unlike DiagnosticsForFixes.)
 
-    private static DocumentUri TestUri => DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc");
+    private static DocumentUri TestUri => DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\t.gsc"));
 
     [Fact]
     public void UnusedImport_OffersAnOrganizeImportsAction_EvenJustOne()
@@ -419,7 +419,7 @@ public class CodeActionHandlerTests
     // lets qualifying be an insert at the range start and re-qualifying a replace of the scanned-back
     // qualifier.
 
-    private const string AskingPath = @"C:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string AskingPath = TestPaths.Raw(@"scripts\main.gsc");
 
     private static List<CodeAction> CallFixes(string source, int line, int start, int end, ScriptDatabase? database = null)
     {
@@ -521,7 +521,7 @@ public class CodeActionHandlerTests
         // Already reachable unqualified, so an import would be noise and a qualifier a no-op.
         ScriptDatabase database = new();
         ParseResult util = AnalyzeAt(
-            "#namespace game;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\scripts\other.gsc");
+            "#namespace game;\nfunction helper()\n{\n}\n", TestPaths.Raw(@"scripts\other.gsc"));
         database.Commit(util, ResolutionContext.RawContext, false, "scripts\\other.gsc");
 
         string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
@@ -568,13 +568,13 @@ public class CodeActionHandlerTests
 
     private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
-    private const string Cod4AskingPath = @"C:\cod4\raw\maps\mp\gametypes\_menus.gsc";
+    private static readonly string Cod4AskingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
 
     private static ScriptDatabase DatabaseWithCod4Utility()
     {
         ScriptDatabase database = new();
         ParseResult utility = ScriptAnalysis.Analyze(
-            @"C:\cod4\raw\common_scripts\utility.gsc", ScriptLanguage.Gsc,
+            TestPaths.Raw(@"common_scripts\utility.gsc"), ScriptLanguage.Gsc,
             SourceText.From("scriptPrintln( channel, msg )\n{\n}\n"),
             NullInsertProvider.Instance, new NameTable(), s_cod4);
 

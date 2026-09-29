@@ -23,7 +23,7 @@ public class UnreachableCodeLintTests
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f()\n{\n" + body + "\n}\n"),
             NullInsertProvider.Instance,
@@ -109,7 +109,7 @@ public class UnreachableCodeLintTests
     public void NestedFunctionsAndClassesAreWalked()
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("class C\n{\n\tfunction m()\n\t{\n\t\treturn;\n\t\tx = 1;\n\t}\n}\n"),
             NullInsertProvider.Instance,
@@ -126,7 +126,7 @@ public class UnreachableCodeLintTests
         // dead code inside it went unreported. Nothing in the shipped corpora happens to hit the
         // shape, which is exactly why it needs a test rather than a corpus run to hold it.
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("/#\nfunction dbg()\n{\n\treturn;\n\tx = 1;\n}\n#/\n"),
             NullInsertProvider.Instance,

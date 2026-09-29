@@ -59,7 +59,7 @@ public class DependentDiagnosticsTests
     {
         // The whole point: another open file's diagnostics were computed against the edited one.
         Assert.True(DependentDiagnosticsRefresher.ShouldRefresh(
-            Document(@"c:\ws\caller.gsc"), OneOrigin(@"c:\ws\util.gsc")));
+            Document(TestPaths.Raw(@"caller.gsc")), OneOrigin(TestPaths.Raw(@"util.gsc"))));
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class DependentDiagnosticsTests
     {
         // Its own handler is publishing it; doing it here as well would only race that.
         Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(
-            Document(@"c:\ws\util.gsc"), OneOrigin(@"c:\ws\util.gsc")));
+            Document(TestPaths.Raw(@"util.gsc")), OneOrigin(TestPaths.Raw(@"util.gsc"))));
     }
 
     [Fact]
@@ -75,16 +75,16 @@ public class DependentDiagnosticsTests
     {
         // Text newer than anything committed, and a debounced analysis of its own already queued.
         // Publishing here would describe text the user has already replaced.
-        OpenDocument typing = Document(@"c:\ws\caller.gsc", version: 7, analyzedVersion: 4);
+        OpenDocument typing = Document(TestPaths.Raw(@"caller.gsc"), version: 7, analyzedVersion: 4);
 
         Assert.True(typing.IsStale);
-        Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(typing, OneOrigin(@"c:\ws\util.gsc")));
+        Assert.False(DependentDiagnosticsRefresher.ShouldRefresh(typing, OneOrigin(TestPaths.Raw(@"util.gsc"))));
     }
 
     // --- ClosedDependentsOf (F7: the full-mode closed-file half) ---
 
-    private const string LibPath = @"C:\ws\lib.gsc";
-    private const string CallerPath = @"C:\ws\caller.gsc";
+    private static readonly string LibPath = TestPaths.Raw(@"lib.gsc");
+    private static readonly string CallerPath = TestPaths.Raw(@"caller.gsc");
 
     private static (ScriptDatabase Database, ScriptRecord Origin) BuildTwoFileWorkspace()
     {
@@ -196,14 +196,14 @@ public class DependentDiagnosticsTests
         // so those files kept diagnostics computed against exports the origin no longer has until
         // some unrelated later edit happened to name the same file.
         DependentDiagnosticsRefresher refresher = EmptyRefresher();
-        refresher.Schedule(@"c:\ws\util.gsc");
+        refresher.Schedule(TestPaths.Raw(@"util.gsc"));
 
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresher.RunPassAsync(cancelled.Token));
 
-        Assert.Contains(@"c:\ws\util.gsc", refresher.PendingOrigins);
+        Assert.Contains(TestPaths.Raw(@"util.gsc"), refresher.PendingOrigins);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class DependentDiagnosticsTests
         // The control: an uncancelled pass over an empty workspace consumes its origins rather than
         // handing them back, so the case above cannot pass by nothing ever being taken.
         DependentDiagnosticsRefresher refresher = EmptyRefresher();
-        refresher.Schedule(@"c:\ws\util.gsc");
+        refresher.Schedule(TestPaths.Raw(@"util.gsc"));
 
         await refresher.RunPassAsync(CancellationToken.None);
 
@@ -229,9 +229,9 @@ public class DependentDiagnosticsTests
         CountingCodeLensSink lenses = new();
         DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = true });
 
-        refresher.Schedule(@"c:\ws\a.gsc");
-        refresher.Schedule(@"c:\ws\b.gsc");
-        refresher.Schedule(@"c:\ws\c.gsc");
+        refresher.Schedule(TestPaths.Raw(@"a.gsc"));
+        refresher.Schedule(TestPaths.Raw(@"b.gsc"));
+        refresher.Schedule(TestPaths.Raw(@"c.gsc"));
 
         await refresher.RunPassAsync(CancellationToken.None);
 
@@ -246,7 +246,7 @@ public class DependentDiagnosticsTests
         CountingCodeLensSink lenses = new();
         DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = false });
 
-        refresher.Schedule(@"c:\ws\a.gsc");
+        refresher.Schedule(TestPaths.Raw(@"a.gsc"));
 
         await refresher.RunPassAsync(CancellationToken.None);
 

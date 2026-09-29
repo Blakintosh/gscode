@@ -22,7 +22,7 @@ public class BracketSpacingTests
     private static string Body(string statements)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f( a, i, j, ptr )\n{\n\t" + statements + "\n}\n"),
             NullInsertProvider.Instance,
@@ -74,7 +74,7 @@ public class BracketSpacingTests
         string once = Body("a[i] = [[ptr]]( a[j] );");
 
         ParseResult reparsed = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_tabs));
     }

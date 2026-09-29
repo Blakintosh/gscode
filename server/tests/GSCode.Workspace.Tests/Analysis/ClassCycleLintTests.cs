@@ -9,14 +9,12 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class ClassCycleLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     /// <summary>
     /// Lints <paramref name="askingSource"/> as scripts\main.gsc, with <paramref name="otherSource"/>
@@ -31,17 +29,17 @@ public class ClassCycleLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource, string otherSource = "")
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\main.gsc", askingSource)
-            .AddFile(@$"{Raw}\scripts\other.gsc", otherSource);
+            .AddFile(TestPaths.Raw(@"scripts\main.gsc"), askingSource)
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), otherSource);
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
         indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
 

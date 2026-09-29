@@ -8,7 +8,6 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -25,18 +24,17 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class AmbiguousFunctionLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static ImmutableArray<Diagnostic> Lint(FakeFileSystem files, string source)
     {
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
         indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
 
@@ -47,8 +45,8 @@ public class AmbiguousFunctionLintTests
     private static FakeFileSystem TwoProviders()
     {
         return new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\nfunction only_here()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\nfunction only_here()\n{\n}\n");
     }
 
     [Fact]
@@ -151,8 +149,8 @@ public class AmbiguousFunctionLintTests
         // namespace, and this asking file declares a different one — so counting it made a call
         // that unambiguously resolves to the one PUBLIC declaration look like it reached two.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction private helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
         Assert.Empty(Lint(
             files,
@@ -166,8 +164,8 @@ public class AmbiguousFunctionLintTests
         // The asking file declares INTO the same namespace as the private declaration, so it can
         // see it — the ambiguity is real, and the fix must not swing the other way and hide it.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction private helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
         Diagnostic ambiguous = Assert.Single(Lint(
             files,

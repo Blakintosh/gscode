@@ -21,7 +21,7 @@ public class ColumnAlignerTests
     private static string Format(string source)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return GscFormatter.Format(result, s_aligned)!;
     }
@@ -189,7 +189,7 @@ public class ColumnAlignerTests
             """);
 
         ParseResult reparsed = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_aligned));
     }
@@ -198,7 +198,7 @@ public class ColumnAlignerTests
     public void OffByDefault()
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f()\n{\nfoo[ \"key\" ] = 1;\nfoo[ \"somethingelse\" ] = 2;\n}\n"),
             NullInsertProvider.Instance,

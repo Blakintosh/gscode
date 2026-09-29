@@ -26,7 +26,7 @@ public class ThreadedResultLintTests
         string source = "function f( a, b )\n{\n" + body + "\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return ThreadedResultLint.Analyze(result);
     }

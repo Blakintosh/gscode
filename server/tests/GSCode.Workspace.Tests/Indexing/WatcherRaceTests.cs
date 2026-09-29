@@ -4,7 +4,6 @@ using GSCode.Core.Paths;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -26,8 +25,7 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class WatcherRaceTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string ScriptPath = @$"{Raw}\scripts\util.gsc";
+    private static readonly string ScriptPath = TestPaths.Raw(@"scripts\util.gsc");
     private const string BeforeEdit = "function util()\n{\n}\n";
     private const string AfterEdit = "function util()\n{\n}\nfunction other()\n{\n}\n";
 
@@ -40,7 +38,7 @@ public class WatcherRaceTests
     public void ASlowIndexCallLosesToAFasterConcurrentEditOfTheSameFile()
     {
         FakeFileSystem inner = new FakeFileSystem().AddFile(ScriptPath, BeforeEdit);
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], inner);
+        RootConfig config = TestPaths.Config(inner);
         PathResolver resolver = new(config, inner);
         ScriptDatabase database = new();
 

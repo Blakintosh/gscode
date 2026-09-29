@@ -10,7 +10,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -26,7 +25,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ClassMethodLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ScriptDatabase Workspace(params (string Name, string Source)[] files)
@@ -34,10 +32,10 @@ public class ClassMethodLintTests
         FakeFileSystem system = new();
         foreach ( (string Name, string Source) file in files )
         {
-            system.AddFile(@$"{Raw}\scripts\{file.Name}.gsc", file.Source);
+            system.AddFile(TestPaths.Raw(@$"scripts\{file.Name}.gsc"), file.Source);
         }
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], system);
+        RootConfig config = TestPaths.Config(system);
         PathResolver resolver = new(config, system);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, system, new NameTable());
@@ -57,7 +55,7 @@ public class ClassMethodLintTests
     private static ImmutableArray<Diagnostic> Resolution(
         string source, params (string Name, string Source)[] others)
     {
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ScriptDatabase database = Workspace([("main", source), .. others]);
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
 
@@ -68,7 +66,7 @@ public class ClassMethodLintTests
     /// <summary>Argument-count diagnostics for <paramref name="source"/>.</summary>
     private static ImmutableArray<Diagnostic> Arity(string source, params (string Name, string Source)[] others)
     {
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ScriptDatabase database = Workspace([("main", source), .. others]);
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
 
@@ -224,12 +222,12 @@ public class ClassMethodLintTests
         // No #using can import a class, so a class qualifier must never be called an unimported
         // namespace. All 23 times this lint fired on the stock scripts, this was why.
         string source = "#namespace main;\nfunction run()\n{\n    o cScene::play();\n}\n";
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
 
         ScriptDatabase database = Workspace(
             ("main", source), ("base", "class cScene\n{\n    function play()\n    {\n    }\n}\n"));
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], new FakeFileSystem());
+        RootConfig config = TestPaths.Config(new FakeFileSystem());
         Assert.Empty(NamespaceUsageLint.Analyze(
             Parse(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
     }
@@ -240,12 +238,12 @@ public class ClassMethodLintTests
         // The strict form. The old name-only test called this fine, so a typo against a real class
         // had nowhere at all to surface.
         string source = "#namespace main;\nfunction run()\n{\n    o cScene::no_such_thing();\n}\n";
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
 
         ScriptDatabase database = Workspace(
             ("main", source), ("base", "class cScene\n{\n    function play()\n    {\n    }\n}\n"));
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], new FakeFileSystem());
+        RootConfig config = TestPaths.Config(new FakeFileSystem());
         Diagnostic diagnostic = Assert.Single(NamespaceUsageLint.Analyze(
             Parse(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
 

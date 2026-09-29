@@ -8,7 +8,6 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -21,7 +20,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class UnusedIncludeLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     /// <summary>A hub declaring nothing of its own, reaching utility only by including it.</summary>
     private const string ChainSource = "#include common_scripts\\utility;\n";
@@ -30,15 +28,15 @@ public class UnusedIncludeLintTests
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\common_scripts\utility.gsc", "helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\maps\_chain.gsc", ChainSource)
-            .AddFile(@$"{Raw}\maps\_chain2.gsc", ChainSource);
+            .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), "helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"maps\_chain.gsc"), ChainSource)
+            .AddFile(TestPaths.Raw(@"maps\_chain2.gsc"), ChainSource);
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
 
-        string utilityPath = @$"{Raw}\common_scripts\utility.gsc";
+        string utilityPath = TestPaths.Raw(@"common_scripts\utility.gsc");
         ParseResult utility = ScriptAnalysis.Analyze(
             utilityPath, ScriptLanguage.Gsc, SourceText.From("helper()\n{\n}\n"), NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(utility, ResolutionContext.RawContext, isDirty: false, @"common_scripts\utility.gsc");
@@ -46,12 +44,12 @@ public class UnusedIncludeLintTests
         // A hub that declares nothing itself and exists only to pull utility in — the shape a
         // marginal test has to get right.
         ParseResult chain = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\_chain.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
+            TestPaths.Raw(@"maps\_chain.gsc"), ScriptLanguage.Gsc, SourceText.From(ChainSource),
             NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(chain, ResolutionContext.RawContext, isDirty: false, @"maps\_chain.gsc");
 
         ParseResult chain2 = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\_chain2.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
+            TestPaths.Raw(@"maps\_chain2.gsc"), ScriptLanguage.Gsc, SourceText.From(ChainSource),
             NullInsertProvider.Instance, new NameTable(), s_cod4);
         database.Commit(chain2, ResolutionContext.RawContext, isDirty: false, @"maps\_chain2.gsc");
 
@@ -61,7 +59,7 @@ public class UnusedIncludeLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), s_cod4);
 

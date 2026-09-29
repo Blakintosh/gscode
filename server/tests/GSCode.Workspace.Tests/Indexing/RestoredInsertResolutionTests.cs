@@ -3,7 +3,6 @@ using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -23,9 +22,8 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class RestoredInsertResolutionTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string HeaderPath = @$"{Raw}\scripts\shared\base.gsh";
-    private const string ScriptPath = @$"{Raw}\scripts\uses_it.gsc";
+    private static readonly string HeaderPath = TestPaths.Raw(@"scripts\shared\base.gsh");
+    private static readonly string ScriptPath = TestPaths.Raw(@"scripts\uses_it.gsc");
 
     private static bool Declares(ScriptDatabase database, string functionName)
     {
@@ -35,7 +33,7 @@ public class RestoredInsertResolutionTests
     /// <summary>One indexing pass, backed by a real SqliteCache, as one server "session" would run it.</summary>
     private static async Task<ScriptDatabase> RunSessionAsync(FakeFileSystem files, SqliteCache cache)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

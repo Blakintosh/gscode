@@ -22,7 +22,7 @@ public class FormatPragmaTests
     private static ParseResult Analyze(string source)
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,

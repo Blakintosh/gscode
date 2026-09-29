@@ -20,7 +20,7 @@ namespace GSCode.Server.Tests.Formatting;
 /// </summary>
 public class StaleFormatEditTests
 {
-    private const string Path = @"C:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static DocumentStore NewStore()
     {

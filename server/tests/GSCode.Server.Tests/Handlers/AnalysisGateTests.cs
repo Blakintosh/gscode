@@ -18,7 +18,7 @@ namespace GSCode.Server.Tests.Handlers;
 public class AnalysisGateTests
 {
     private const string Source = "function main()\n{\n}\n";
-    private const string Path = @"C:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static DocumentStore NewStore()
     {

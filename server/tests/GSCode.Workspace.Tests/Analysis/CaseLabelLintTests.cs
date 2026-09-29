@@ -26,7 +26,7 @@ public class CaseLabelLintTests
             + "function f( v )\n{\n    switch ( v )\n    {\n" + cases + "\n    }\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode);
     }
@@ -91,7 +91,7 @@ public class CaseLabelLintTests
             + "            break;\n    }\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode)).Code);
     }
@@ -197,7 +197,7 @@ public class CaseLabelLintTests
             + "    switch ( w )\n    {\n        default:\n            break;\n    }\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
             NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode),

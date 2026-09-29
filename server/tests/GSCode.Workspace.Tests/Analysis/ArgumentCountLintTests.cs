@@ -10,7 +10,6 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -25,8 +24,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ArgumentCountLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string AskingPath = @"C:\bo3\share\raw\scripts\zm\_zm.gsc";
+    private static readonly string AskingPath = TestPaths.Raw(@"scripts\zm\_zm.gsc");
 
     /// <summary>
     /// A stand-in for BO3's <c>SpawnSpectator( origin, angles )</c>, both parameters mandatory —
@@ -47,7 +45,7 @@ public class ArgumentCountLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource, string? otherFile = null)
     {
         FakeFileSystem files = new();
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
 
@@ -56,7 +54,7 @@ public class ArgumentCountLintTests
         // so the namespace is the only way this happens.
         if ( otherFile is not null )
         {
-            string otherPath = @$"{Raw}\scripts\zm\_zm_utility.gsc";
+            string otherPath = TestPaths.Raw(@"scripts\zm\_zm_utility.gsc");
             ParseResult other = ScriptAnalysis.Analyze(
                 otherPath, ScriptLanguage.Gsc, SourceText.From(otherFile), NullInsertProvider.Instance, new NameTable());
 

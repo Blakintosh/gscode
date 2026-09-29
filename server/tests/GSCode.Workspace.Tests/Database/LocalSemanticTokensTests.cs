@@ -21,7 +21,7 @@ public class LocalSemanticTokensTests
     private static ImmutableArray<SemanticToken> Tokens(string source, GameProfile? profile = null)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\bo3\share\raw\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,

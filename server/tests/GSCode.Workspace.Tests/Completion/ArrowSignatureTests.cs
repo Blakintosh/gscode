@@ -7,7 +7,6 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -24,12 +23,11 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class ArrowSignatureTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static SignatureEngine BuildEngine(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -50,10 +48,10 @@ public class ArrowSignatureTests
     {
         return new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\scene.gsc",
+                TestPaths.Raw(@"scripts\scene.gsc"),
                 "class cSceneObject\n{\n    function play( str_state )\n    {\n    }\n}\n")
             .AddFile(
-                @$"{Raw}\scripts\animation.gsc",
+                TestPaths.Raw(@"scripts\animation.gsc"),
                 "#namespace animation;\nfunction play( animation, v_origin, v_angles )\n{\n}\n");
     }
 
@@ -63,7 +61,7 @@ public class ArrowSignatureTests
         SignatureEngine engine = BuildEngine(World());
 
         string text = "#namespace game;\nfunction run()\n{\n    thread [[o_obj]]->play( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         SignatureResult? signature = engine.Resolve(result, "raw", new Position(3, 28));
 
@@ -79,13 +77,13 @@ public class ArrowSignatureTests
         // answer merely because the cursor happens to be in it.
         FakeFileSystem files = World()
             .AddFile(
-                @$"{Raw}\scripts\other.gsc",
+                TestPaths.Raw(@"scripts\other.gsc"),
                 "class cScene\n{\n    function play( a, b, c, d )\n    {\n    }\n}\n");
 
         SignatureEngine engine = BuildEngine(files);
 
         string text = "class cScene\n{\n    function run()\n    {\n        [[o_obj]]->play( \n    }\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 25));
 
@@ -100,7 +98,7 @@ public class ArrowSignatureTests
         SignatureEngine engine = BuildEngine(World());
 
         string text = "class cScene\n{\n    function play( n_alert )\n    {\n    }\n    function run()\n    {\n        [[self]]->play( \n    }\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         SignatureResult? signature = engine.Resolve(result, "raw", new Position(7, 24));
 
@@ -115,7 +113,7 @@ public class ArrowSignatureTests
         SignatureEngine engine = BuildEngine(World());
 
         string text = "#namespace game;\nfunction run()\n{\n    [[o_obj]]->GetTime( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         Assert.Null(engine.Resolve(result, "raw", new Position(3, 24)));
     }
@@ -127,7 +125,7 @@ public class ArrowSignatureTests
         SignatureEngine engine = BuildEngine(World());
 
         string text = "#using scripts\\animation;\n#namespace game;\nfunction run()\n{\n    animation::play( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 21));
 

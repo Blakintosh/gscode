@@ -9,14 +9,12 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class UnusedUsingLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     /// <summary>
     /// A small world: util (plain functions), boot (an autoexec), shapes (a class), and
@@ -25,12 +23,12 @@ public class UnusedUsingLintTests
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\util_more.gsc", "#namespace util;\nfunction extra()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\boot.gsc", "#namespace boot;\nfunction autoexec start()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\shapes.gsc", "#namespace shapes;\nclass Circle\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\util_more.gsc"), "#namespace util;\nfunction extra()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\boot.gsc"), "#namespace boot;\nfunction autoexec start()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\shapes.gsc"), "#namespace shapes;\nclass Circle\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -42,7 +40,7 @@ public class UnusedUsingLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
 

@@ -7,19 +7,17 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
 
 public class CompletionEngineTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static (CompletionEngine Engine, ScriptDatabase Db, PathResolver Resolver) BuildWorld(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -49,14 +47,14 @@ public class CompletionEngineTests
     public void NamespaceQualified_OffersOnlyThatNamespacesFunctions()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction alpha()\n{\n}\nfunction beta()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\other.gsc", "#namespace other;\nfunction gamma()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction alpha()\n{\n}\nfunction beta()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), "#namespace other;\nfunction gamma()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // "util::" — cursor right after the ::.
         string text = "#namespace game;\nfunction run()\n{\n    util::\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position after = new(3, 10); // just past "util::"
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", after);
@@ -74,12 +72,12 @@ public class CompletionEngineTests
         // matches from the buffer. A script function sharing a builtin's name is the trap: it is
         // what the qualifier exists to step past, so it must not be offered here.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\zm\_zm.gsc", "#namespace zm;\nfunction spawnSpectator()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\zm\_zm.gsc"), "#namespace zm;\nfunction spawnSpectator()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\nfunction run()\n{\n    sys::\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position after = new(3, 9); // just past "sys::"
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", after);
@@ -93,14 +91,14 @@ public class CompletionEngineTests
     public void NamespaceQualified_OffersPrivateFunctions_ToFilesInTheSameNamespace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // main.gsc declares the SAME namespace, so util's private members are in scope:
         // privacy is scoped to the namespace, not the file.
         string sameNamespace = "#namespace util;\nfunction run()\n{\n    util::\n}\n";
-        ParseResult inside = Analyze(@$"{Raw}\scripts\main.gsc", sameNamespace);
+        ParseResult inside = Analyze(TestPaths.Raw(@"scripts\main.gsc"), sameNamespace);
         ImmutableArray<CompletionEntry> insideEntries = engine.Complete(inside, "raw", new Position(3, 10));
 
         Assert.True(HasLabel(insideEntries, "hidden"));
@@ -108,7 +106,7 @@ public class CompletionEngineTests
 
         // A file in a different namespace sees only the public one.
         string otherNamespace = "#namespace game;\nfunction run()\n{\n    util::\n}\n";
-        ParseResult outside = Analyze(@$"{Raw}\scripts\other.gsc", otherNamespace);
+        ParseResult outside = Analyze(TestPaths.Raw(@"scripts\other.gsc"), otherNamespace);
         ImmutableArray<CompletionEntry> outsideEntries = engine.Complete(outside, "raw", new Position(3, 10));
 
         Assert.False(HasLabel(outsideEntries, "hidden"));
@@ -118,11 +116,11 @@ public class CompletionEngineTests
     [Fact]
     public void Keywords_CarryDocumentation_AndAssertIsNotAKeyword()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
 
         CompletionEntry isdefined = entries.First(e => e.Label == "isdefined" && e.Kind == CompletionKind.Keyword);
@@ -137,12 +135,12 @@ public class CompletionEngineTests
     public void InsideStringLiteral_OffersKnownStringLiterals()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\events.gsc"), "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // main.gsc: cursor inside the empty string on line 3 (between the quotes).
         string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position insideString = new(3, 9);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", insideString);
@@ -158,11 +156,11 @@ public class CompletionEngineTests
         // `fx/misc/smoke` as much as for `misc_model`. The one it begins still ranks first.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\events.gsc",
+                TestPaths.Raw(@"scripts\events.gsc"),
                 "#namespace ev;\nfunction fire()\n{\n    a = \"fx/misc/smoke\";\n    b = \"misc_model\";\n    c = \"other_event\";\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = \"misc\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    x = \"misc\n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 13));
 
         List<string> labels = [.. entries.Select(static entry => entry.Label)];
@@ -187,12 +185,12 @@ public class CompletionEngineTests
         many.Append("    p = \"popular_event\";\n}\n");
 
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\events.gsc", many.ToString())
-            .AddFile(@$"{Raw}\scripts\more.gsc", "#namespace more;\nfunction f()\n{\n    p = \"popular_event\";\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\events.gsc"), many.ToString())
+            .AddFile(TestPaths.Raw(@"scripts\more.gsc"), "#namespace more;\nfunction f()\n{\n    p = \"popular_event\";\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    m = \"mine_own\";\n    x = \"\";\n}\n");
+            TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    m = \"mine_own\";\n    x = \"\";\n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 9));
 
         Assert.Contains(entries, static entry => entry.Label == "mine_own");
@@ -206,10 +204,10 @@ public class CompletionEngineTests
         // `level.rou` — the workspace's `round_number` matches, its `player_score` does not, and
         // `.size` is offered whatever was typed, since it is what an array is asked for.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\other.gsc", "function setup()\n{\n    level.round_number = 1;\n    level.player_score = 0;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), "function setup()\n{\n    level.round_number = 1;\n    level.player_score = 0;\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.rou\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = level.rou\n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 17));
 
         Assert.True(HasLabel(entries, "round_number"));
@@ -228,11 +226,11 @@ public class CompletionEngineTests
         // completion right after one, offered every known string literal in the workspace instead
         // of nothing.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\events.gsc"), "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         // Right after the closing quote of the (empty) string literal.
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 10));
@@ -249,11 +247,11 @@ public class CompletionEngineTests
     /// <summary>Completes inside an empty string in main.gsc, given a workspace file to harvest.</summary>
     private static ImmutableArray<CompletionEntry> LiteralsFrom(string harvestSource)
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\events.gsc", harvestSource);
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\events.gsc"), harvestSource);
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n");
+            TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n");
 
         return engine.Complete(result, "raw", new Position(3, 9));
     }
@@ -319,12 +317,12 @@ public class CompletionEngineTests
     [Fact]
     public void ANameJustTypedInThisFile_IsOfferedImmediately()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // The second string is still open, exactly as it is mid-keystroke.
         string text = "#namespace game;\nfunction run()\n{\n    self notify( \"foobarbaz\" );\n    self endon( \"\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 17));
 
@@ -334,11 +332,11 @@ public class CompletionEngineTests
     [Fact]
     public void ANameJustTypedInThisFile_IsOfferedEvenWithTheStringClosed()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\nfunction run()\n{\n    self notify( \"foobarbaz\" );\n    self endon( \"\" );\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 17));
 
@@ -410,14 +408,14 @@ public class CompletionEngineTests
         // The reported bug: KILLSTREAK_COMBAT_ROBOT_CRATE was offered lowercased, because istring
         // keys were interned lowercase to make them match case-insensitively.
         FakeFileSystem files = new FakeFileSystem().AddFile(
-            @$"{Raw}\scripts\ui.gsc",
+            TestPaths.Raw(@"scripts\ui.gsc"),
             "#namespace ui;\nfunction f()\n{\n    x = &\"KILLSTREAK_COMBAT_ROBOT_CRATE\";\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // Cursor inside the empty istring on line 3.
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = &\"\";\n}\n");
+            TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    x = &\"\";\n}\n");
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 10));
 
@@ -429,11 +427,11 @@ public class CompletionEngineTests
     public void HashStringsKeepTheirCaseToo()
     {
         FakeFileSystem files = new FakeFileSystem().AddFile(
-            @$"{Raw}\scripts\ui.gsc", "#namespace ui;\nfunction f()\n{\n    x = #\"Zombie_State\";\n}\n");
+            TestPaths.Raw(@"scripts\ui.gsc"), "#namespace ui;\nfunction f()\n{\n    x = #\"Zombie_State\";\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = #\"\";\n}\n");
+            TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    x = #\"\";\n}\n");
 
         Assert.True(HasLabel(engine.Complete(result, "raw", new Position(3, 10)), "Zombie_State"));
     }
@@ -442,11 +440,11 @@ public class CompletionEngineTests
     public void InsideStringLiteral_OffersNothing_WhenLiteralsDisabled()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\events.gsc", "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\events.gsc"), "#namespace ev;\nfunction fire()\n{\n    self notify( \"player_spawned\" );\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\nfunction run()\n{\n    x = \"\";\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position insideString = new(3, 9);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", insideString, includeLiterals: false);
@@ -457,11 +455,11 @@ public class CompletionEngineTests
     [Fact]
     public void StatementScope_OffersKeywordsMacrosAndBuiltins()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#define CAP 5\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position inside = new(3, 4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", inside);
@@ -479,13 +477,13 @@ public class CompletionEngineTests
     [Fact]
     public void StatementScope_OffersTheParameterPackOnlyInsideAVarargFunction()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // `vararg` is bound by the DECLARATION, not by the dialect alone, so it is offered per
         // function rather than from the keyword list.
         string text = "function run( first, ... )\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
 
@@ -507,11 +505,11 @@ public class CompletionEngineTests
     public void StatementScope_OffersFunctionsFromAnImportedNamespace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\hud_message.gsc", "#namespace globallogic;\nfunction init()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\hud_message.gsc"), "#namespace globallogic;\nfunction init()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\hud_message;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -538,11 +536,11 @@ public class CompletionEngineTests
         // The mirror of the above: nothing gives a function away just for existing somewhere in
         // the workspace. Only what this file has actually `#using`'d belongs in the list.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\hud_message.gsc", "#namespace globallogic;\nfunction init()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\hud_message.gsc"), "#namespace globallogic;\nfunction init()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 4));
 
@@ -555,11 +553,11 @@ public class CompletionEngineTests
         // A file may `#using` another file that shares its OWN namespace (split across files) —
         // that function is still called bare, so it must not also gain a qualified duplicate.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util_part2.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util_part2.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace util;\n#using scripts\\util_part2;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -575,11 +573,11 @@ public class CompletionEngineTests
         // ("init") found nothing, because only functions were offered — and most function names
         // share nothing with their namespace's name. The namespace itself has to be a candidate too.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util_shared.gsc", "#namespace util;\nfunction get_players()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util_shared.gsc"), "#namespace util;\nfunction get_players()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -596,11 +594,11 @@ public class CompletionEngineTests
     public void StatementScope_DoesNotOfferAnUnimportedNamespaceByName()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util_shared.gsc", "#namespace util;\nfunction get_players()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util_shared.gsc"), "#namespace util;\nfunction get_players()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 4));
 
@@ -622,14 +620,14 @@ public class CompletionEngineTests
         // `util_shared` (the span governing the import lines above the `#namespace` directive).
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util_shared.gsc",
+                TestPaths.Raw(@"scripts\util_shared.gsc"),
                 "#using scripts\\other;\n#namespace util;\n\nfunction get_players()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\other.gsc", "#namespace other;\nfunction thing()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), "#namespace other;\nfunction thing()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -645,12 +643,12 @@ public class CompletionEngineTests
         // after it, so struct.gsc must still be offered as `struct`. Only a span governing nothing
         // is a phantom — and asking the functions distinguishes the two for free.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\struct.gsc", "function createstruct()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\struct.gsc"), "function createstruct()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\struct;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -666,13 +664,13 @@ public class CompletionEngineTests
         // share nothing with the namespace holding them. Now the whole namespace comes with it.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util_shared.gsc",
+                TestPaths.Raw(@"scripts\util_shared.gsc"),
                 "#namespace util;\nfunction get_players()\n{\n}\nfunction wait_endon()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\util_shared;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -696,13 +694,13 @@ public class CompletionEngineTests
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util.gsc",
+                TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction get_players( team, alive )\n{\n}\nfunction now()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n");
 
         return engine.Complete(
@@ -753,12 +751,12 @@ public class CompletionEngineTests
         // The editor truncates an over-long row wherever it happens to reach, and a name cut
         // mid-word reads as though it were the name. Cutting here keeps the row honest.
         FakeFileSystem files = new FakeFileSystem().AddFile(
-            @$"{Raw}\scripts\util.gsc",
+            TestPaths.Raw(@"scripts\util.gsc"),
             "#namespace util;\nfunction many( einflictor, eattacker, idamage, idflags, smeansofdeath, sweapon, vpoint )\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n");
 
         CompletionEntry entry = Assert.Single(
@@ -772,10 +770,10 @@ public class CompletionEngineTests
     [Fact]
     public void BuiltinsCarryTheirParametersToo_MarkingOptionalOnes()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuiltinWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    \n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    \n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 4));
 
         CompletionEntry builtin = entries.First(e => e.Detail == "builtin" && e.LabelDetail.Length > 0);
@@ -800,11 +798,11 @@ public class CompletionEngineTests
     public void StatementScope_ImportedNamespaceFunctions_RespectPrivacy()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n#using scripts\\util;\n\nfunction run()\n{\n    \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 4));
 
@@ -815,11 +813,11 @@ public class CompletionEngineTests
     [Fact]
     public void TopLevel_OffersDeclarationKeywords()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\n\nfunction run()\n{\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position topLevel = new(1, 0);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", topLevel);
@@ -845,12 +843,12 @@ public class CompletionEngineTests
     private static CompletionEntry CallEntry(string line, CallPunctuation punctuation = CallPunctuation.ParensAndSemicolon)
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foo()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction foo()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace util;\nfunction run()\n{\n    " + line + "\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(3, 4 + line.Length), callPunctuation: punctuation);
@@ -888,14 +886,14 @@ public class CompletionEngineTests
     public void AFileScopeCallTakesNoSemicolon()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foo()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction foo()\n{\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // The caret sits on the blank line after run()'s closing brace — where a REGISTER_SYSTEM
         // line goes.
         string text = "#namespace util;\nfunction run()\n{\n}\n\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(4, 0), callPunctuation: CallPunctuation.ParensAndSemicolon);
@@ -986,8 +984,8 @@ public class CompletionEngineTests
         // nothing and the store would have had no function to offer.
         string text = "main()\n{\n    x = mask & \n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptAnalysis.LanguageFromPath(@$"{Raw}\maps\mp\test.gsc"),
+            TestPaths.Raw(@"maps\mp\test.gsc"),
+            ScriptAnalysis.LanguageFromPath(TestPaths.Raw(@"maps\mp\test.gsc")),
             SourceText.From(text),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
             new NameTable(),
@@ -1016,11 +1014,11 @@ public class CompletionEngineTests
     private static CompletionEntry KeywordEntry(
         string line, string keyword, CallPunctuation punctuation = CallPunctuation.ParensAndSemicolon)
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "function run()\n{\n    " + line + "\n}\n");
+            TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    " + line + "\n}\n");
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(2, 4 + line.Length), callPunctuation: punctuation);
@@ -1124,10 +1122,10 @@ public class CompletionEngineTests
     [Fact]
     public void BuiltinsFollowTheSameRule()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    self \n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    self \n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(2, 9), callPunctuation: CallPunctuation.ParensAndSemicolon);
 
@@ -1145,11 +1143,11 @@ public class CompletionEngineTests
     /// <summary>Completes at the end of `line`, placed inside a function body.</summary>
     private static ImmutableArray<CompletionEntry> CompleteInsideFunction(string line, FakeFileSystem? files = null)
     {
-        files ??= new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        files ??= new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#namespace game;\nfunction run()\n{\n    " + line + "\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         return engine.Complete(result, "raw", new Position(3, 4 + line.Length));
     }
@@ -1195,7 +1193,7 @@ public class CompletionEngineTests
         // What the first colon was on the way to. Suppressing the half-typed form must not cost
         // the completed one.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction alpha()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction alpha()\n{\n}\n");
 
         Assert.True(HasLabel(CompleteInsideFunction("util::", files), "alpha"));
     }
@@ -1276,7 +1274,7 @@ public class CompletionEngineTests
         // The other thing a '#' can begin on a dialect that has them. The quotes come with it,
         // since only the '#' has been typed and the cursor is not inside a string yet.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\ui.gsc", "#namespace ui;\nfunction f()\n{\n    x = #\"zombie_state\";\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\ui.gsc"), "#namespace ui;\nfunction f()\n{\n    x = #\"zombie_state\";\n}\n");
 
         ImmutableArray<CompletionEntry> entries = CompleteInsideFunction("self notify(#", files);
 
@@ -1310,7 +1308,7 @@ public class CompletionEngineTests
         // The guard covers the three TOP-LEVEL contexts only; `ns::` and `owner.` are legal
         // wherever an expression is and must be untouched by it.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction alpha()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction alpha()\n{\n}\n");
 
         Assert.True(HasLabel(CompleteInsideFunction("util::", files), "alpha"));
     }
@@ -1334,11 +1332,11 @@ public class CompletionEngineTests
     private static ImmutableArray<CompletionEntry> CompleteInMain(string text, Position position)
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\vehicles.gsc", ClassFile);
+            .AddFile(TestPaths.Raw(@"scripts\vehicles.gsc"), ClassFile);
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        return engine.Complete(Analyze(@$"{Raw}\scripts\main.gsc", text), "raw", position);
+        return engine.Complete(Analyze(TestPaths.Raw(@"scripts\main.gsc"), text), "raw", position);
     }
 
     [Fact]
@@ -1384,13 +1382,13 @@ public class CompletionEngineTests
         // The merge-dialect arm (FunctionsInIncludeScope) has the same gap: its "same file" reach
         // is answered from the store too.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\vehicles.gsc", ClassFile);
+            .AddFile(TestPaths.Raw(@"scripts\vehicles.gsc"), ClassFile);
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         GameProfile mw2 = GameProfile.ByName("mw2")!;
         string text = "helper_just_typed()\n{\n}\n\nrun()\n{\n    \n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\main.gsc", GSCode.Core.Symbols.ScriptLanguage.Gsc, SourceText.From(text),
+            TestPaths.Raw(@"maps\main.gsc"), GSCode.Core.Symbols.ScriptLanguage.Gsc, SourceText.From(text),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), mw2);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(6, 4), profile: mw2);
@@ -1422,10 +1420,10 @@ public class CompletionEngineTests
     /// <summary>Completes at the end of `line`, placed on its own line above a function.</summary>
     private static ImmutableArray<CompletionEntry> CompleteAfter(string line)
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", line + "\n\nfunction run()\n{\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, line.Length));
     }
@@ -1487,11 +1485,11 @@ public class CompletionEngineTests
     {
         // Worth seeing: an override has to land on the right name, and a collision is better
         // spotted before it is written than after.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         ParseResult result = Analyze(
-            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction alreadyHere()\n{\n}\nfunction ");
+            TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction alreadyHere()\n{\n}\nfunction ");
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 9));
 
@@ -1553,19 +1551,19 @@ public class CompletionEngineTests
     // unfiltered and highlighted whatever came first.
 
     private static readonly FakeFileSystem s_pathWorld = new FakeFileSystem()
-        .AddFile(@$"{Raw}\scripts\mp\_arena.gsc", "function a()\n{\n}\n")
-        .AddFile(@$"{Raw}\scripts\mp\_armor.gsc", "function b()\n{\n}\n")
-        .AddFile(@$"{Raw}\scripts\mp\gametypes\tdm.gsc", "function c()\n{\n}\n")
-        .AddFile(@$"{Raw}\scripts\codescripts\struct.gsc", "function d()\n{\n}\n")
-        .AddFile(@$"{Raw}\scripts\mp\_arena.csc", "function e()\n{\n}\n")
-        .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define X 1\n")
-        .AddFile(@$"{Raw}\scripts\mp\mp.gsh", "#define Y 2\n");
+        .AddFile(TestPaths.Raw(@"scripts\mp\_arena.gsc"), "function a()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"scripts\mp\_armor.gsc"), "function b()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"scripts\mp\gametypes\tdm.gsc"), "function c()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"scripts\codescripts\struct.gsc"), "function d()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"scripts\mp\_arena.csc"), "function e()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"scripts\shared\shared.gsh"), "#define X 1\n")
+        .AddFile(TestPaths.Raw(@"scripts\mp\mp.gsh"), "#define Y 2\n");
 
     /// <summary>Completes at the end of a directive line in a file of the given extension.</summary>
     private static ImmutableArray<CompletionEntry> CompletePath(string line, string extension = "gsc")
     {
         (CompletionEngine engine, _, _) = BuildWorld(s_pathWorld);
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@$"scripts\main.{extension}"), line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, line.Length));
     }
@@ -1766,10 +1764,10 @@ public class CompletionEngineTests
         string line, int quoteIndex, string extension = "gsc")
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n    s = \"some free text\";\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n    s = \"some free text\";\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.{extension}", line + "\n\nfunction run()\n{\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@$"scripts\main.{extension}"), line + "\n\nfunction run()\n{\n}\n");
 
         return engine.Complete(result, "raw", new Position(0, quoteIndex + 1));
     }
@@ -1913,11 +1911,11 @@ public class CompletionEngineTests
     public void HashInsideAStringLiteral_IsNotADirectiveContext()
     {
         // Literal completion owns this position; a '#' inside quotes is just a character.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    x = \"#p\";\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 12));
 
@@ -1944,11 +1942,11 @@ public class CompletionEngineTests
         // trivia) ever checked for a comment, so typing inside one landed on whatever code
         // precedes it — every '/', '.', ':', '#' and '\' typed while writing a comment popped
         // statement-scope, member, or path completion over the top of it.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    // see level.foo\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         // Right after "level." inside the comment.
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 17));
@@ -1959,11 +1957,11 @@ public class CompletionEngineTests
     [Fact]
     public void InsideABlockComment_NothingIsOffered()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    /* level.foo */\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         // Right after "level." inside the comment.
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 13));
@@ -1974,11 +1972,11 @@ public class CompletionEngineTests
     [Fact]
     public void MemberAccess_OffersFieldsAndSize()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    self.health = 1;\n    x = self.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterDot = new(3, 13); // just past "self."
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterDot);
@@ -1992,11 +1990,11 @@ public class CompletionEngineTests
     {
         // The name before the dot is a variable, not the object, so it does not narrow the list:
         // a field written through `self` in a function called on level is level's field.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    level.round_number = 1;\n    self.player_score = 0;\n    x = level.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterLevelDot = new(4, 14); // just past "level."
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterLevelDot);
@@ -2011,11 +2009,11 @@ public class CompletionEngineTests
         // The reported case: `self` inside a function run on level, and `blah = level;` then
         // `blah.`, both ARE level, and both hid level.foo when the list was scoped by the name.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\setup.gsc", "function setup()\n{\n    level.foo = \"foo\";\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\setup.gsc"), "function setup()\n{\n    level.foo = \"foo\";\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult onSelf = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.fo\n}\n");
-        ParseResult onAlias = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    blah = level;\n    x = blah.fo\n}\n");
+        ParseResult onSelf = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = self.fo\n}\n");
+        ParseResult onAlias = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    blah = level;\n    x = blah.fo\n}\n");
 
         Assert.True(HasLabel(engine.Complete(onSelf, "raw", new Position(2, 15)), "foo"));
         Assert.True(HasLabel(engine.Complete(onAlias, "raw", new Position(3, 15)), "foo"));
@@ -2029,11 +2027,11 @@ public class CompletionEngineTests
         // nested writes like `self.owner.field = value` are never recorded as assignments at all —
         // there is no real "owner" to scope by, so narrowing to that name found nothing genuine
         // and returned a near-empty list instead of the honestly-unknown-owner's full one.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    abc.other_field = 1;\n    x = self.owner.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterOwnerDot = new(3, 19); // just past "self.owner."
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterOwnerDot);
@@ -2048,13 +2046,13 @@ public class CompletionEngineTests
         // row: which one labelled it used to be an accident of index order, and the other spelling
         // is context worth seeing rather than a second row to choose between.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.Foo = 1;\n}\n")
-            .AddFile(@$"{Raw}\scripts\b.gsc", "function b()\n{\n    level.Foo = 2;\n}\n")
-            .AddFile(@$"{Raw}\scripts\c.gsc", "function c()\n{\n    level.foo = 3;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\a.gsc"), "function a()\n{\n    level.Foo = 1;\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\b.gsc"), "function b()\n{\n    level.Foo = 2;\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\c.gsc"), "function c()\n{\n    level.foo = 3;\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = level.\n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 14));
 
         CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
@@ -2070,11 +2068,11 @@ public class CompletionEngineTests
         // The ordinary row: the header says what is being completed, and there is no hint and no
         // pane text, since there is no other spelling to point at.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.round_number = 1;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\a.gsc"), "function a()\n{\n    level.round_number = 1;\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = level.\n}\n");
         CompletionEntry round = engine.Complete(result, "raw", new Position(2, 14)).First(entry => entry.Label == "round_number");
 
         Assert.Equal("level.round_number · field", round.Detail);
@@ -2088,12 +2086,12 @@ public class CompletionEngineTests
         // The file being edited writes `level.foo`; the workspace writes `level.Foo` twice. The row
         // reads the way this file already spells it, and still names the other.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.Foo = 1;\n}\n")
-            .AddFile(@$"{Raw}\scripts\b.gsc", "function b()\n{\n    level.Foo = 2;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\a.gsc"), "function a()\n{\n    level.Foo = 1;\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\b.gsc"), "function b()\n{\n    level.Foo = 2;\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    level.foo = 0;\n    x = level.\n}\n");
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    level.foo = 0;\n    x = level.\n}\n");
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 14));
 
         CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
@@ -2109,12 +2107,12 @@ public class CompletionEngineTests
         // The GlobalObjectOwners scenario: a field assigned on `level` in one file is offered
         // when completing `level.` in another.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\other.gsc", "function setup()\n{\n    level.spawned_from_elsewhere = 1;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), "function setup()\n{\n    level.spawned_from_elsewhere = 1;\n}\n");
 
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    x = level.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 14));
 
@@ -2126,11 +2124,11 @@ public class CompletionEngineTests
     {
         // `players[0].` has no owner name to scope by; offering nothing would be worse than
         // offering everything, so the scope quietly widens.
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    self.player_score = 0;\n    x = players[0].\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 19));
 
@@ -2140,16 +2138,16 @@ public class CompletionEngineTests
     [Fact]
     public void MemberAccess_OffersEngineFieldsAndRadiantMapKeys()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         // Each asked with the start of its name typed: the engine's ~600 fields and ~350 map keys
         // carry no file count, so with nothing typed the 200-row cut keeps the workspace's own
         // fields and an alphabetical run of the rest (see MemberAccess_IsCutToWhatHasBeenTyped).
         ImmutableArray<CompletionEntry> origin = engine.Complete(
-            Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.ori\n}\n"), "raw", new Position(2, 16));
+            Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = self.ori\n}\n"), "raw", new Position(2, 16));
         ImmutableArray<CompletionEntry> entries = engine.Complete(
-            Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.amb\n}\n"), "raw", new Position(2, 16));
+            Analyze(TestPaths.Raw(@"scripts\main.gsc"), "function run()\n{\n    x = self.amb\n}\n"), "raw", new Position(2, 16));
 
         // An engine object field.
         Assert.True(HasLabel(origin, "origin"));
@@ -2165,11 +2163,11 @@ public class CompletionEngineTests
     [Fact]
     public void MemberAccess_KeepsRadiantDocumentation_WhenANameIsAlsoAnEngineField()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "function run()\n{\n    x = self.script_note\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 24));
 
@@ -2182,11 +2180,11 @@ public class CompletionEngineTests
     [Fact]
     public void PrecacheArgument_OffersAssetTypes()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\dummy.gsc"), "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
         string text = "#precache( \n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(0, 11);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterParen);

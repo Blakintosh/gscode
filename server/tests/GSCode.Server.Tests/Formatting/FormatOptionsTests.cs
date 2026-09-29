@@ -18,7 +18,7 @@ public class FormatOptionsTests
     private static string Format(string source, FormatOptions? options = null)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return GscFormatter.Format(result, options) ?? throw new InvalidOperationException("formatter refused the input");
     }

@@ -4,7 +4,6 @@ using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Documents;
@@ -22,9 +21,8 @@ namespace GSCode.Workspace.Tests.Documents;
 /// </summary>
 public class HeaderEditRefreshTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string GshPath = @$"{Raw}\scripts\shared\shared.gsh";
-    private const string GscPath = @$"{Raw}\scripts\uses_it.gsc";
+    private static readonly string GshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
+    private static readonly string GscPath = TestPaths.Raw(@"scripts\uses_it.gsc");
     private const string Dependent = "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\n    x = CAP;\n}\n";
 
     private static (DocumentStore Store, InsertCache Inserts, FakeFileSystem Files) Build()
@@ -33,7 +31,7 @@ public class HeaderEditRefreshTests
             .AddFile(GshPath, "#define CAP 5\n")
             .AddFile(GscPath, Dependent);
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         InsertCache inserts = new();
 
@@ -98,8 +96,8 @@ public class HeaderEditRefreshTests
         // A header inserted through ANOTHER header. Re-parsing is not enough on its own here: the
         // wrapper's cached contribution carries copies of the macros the inner header defined, so
         // dropping the inner one alone leaves the re-parse replaying the values it just discarded.
-        const string WrapperPath = @$"{Raw}\scripts\shared\wrapper.gsh";
-        const string BasePath = @$"{Raw}\scripts\shared\base.gsh";
+        string WrapperPath = TestPaths.Raw(@"scripts\shared\wrapper.gsh");
+        string BasePath = TestPaths.Raw(@"scripts\shared\base.gsh");
         const string ThroughWrapper = "#insert scripts\\shared\\wrapper.gsh;\nfunction f()\n{\n    x = CAP;\n}\n";
 
         FakeFileSystem files = new FakeFileSystem()
@@ -107,7 +105,7 @@ public class HeaderEditRefreshTests
             .AddFile(WrapperPath, "#insert scripts\\shared\\base.gsh;\n")
             .AddFile(GscPath, ThroughWrapper);
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         InsertCache inserts = new();
         DocumentStore store = new(

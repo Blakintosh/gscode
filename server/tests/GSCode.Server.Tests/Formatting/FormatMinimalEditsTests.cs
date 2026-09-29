@@ -26,7 +26,7 @@ public class FormatMinimalEditsTests
     private static ParseResult Analyze(string source)
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
     }
 
     /// <summary>Applies the edits the way an editor would — right to left, so earlier offsets hold.</summary>

@@ -34,7 +34,7 @@ public class MacroNavigationTests
     private static ParseResult Analyze()
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(Source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(Source), NullInsertProvider.Instance, new NameTable());
     }
 
     private static Position InvocationPosition(ParseResult result)

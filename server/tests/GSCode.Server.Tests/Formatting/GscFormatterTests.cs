@@ -15,7 +15,7 @@ public class GscFormatterTests
     private static ParseResult Analyze(string source)
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
     }
 
     private static string? Format(string source)

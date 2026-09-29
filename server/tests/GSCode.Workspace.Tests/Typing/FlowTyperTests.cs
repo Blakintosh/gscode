@@ -23,7 +23,7 @@ public class FlowTyperTests
     {
         string source = "function f()\n{\n" + body + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         FlowTyper typer = NewTyper();
         ImmutableArray<InferredAssignment> inferred = typer.InferAssignments(result);
@@ -104,7 +104,7 @@ public class FlowTyperTests
         // are first-for-name, which is what the inlay surface filters on.
         string source = "function f()\n{\n    self.count = 1;\n    level.count = 2;\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         ImmutableArray<InferredAssignment> inferred = NewTyper().InferAssignments(result);
 
@@ -198,7 +198,7 @@ public class FlowTyperTests
         // rather than at every reassignment.
         string source = "function f()\n{\n    a = 1;\n    a = \"now a string\";\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         ImmutableArray<InferredAssignment> assignments = NewTyper().InferAssignments(result);
         InferredAssignment[] toA = [.. assignments.Where(a => a.Name == "a")];
@@ -222,7 +222,7 @@ public class FlowTyperTests
     {
         string source = "function f()\n{\n    count = 5;\n    other = count;\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
         FlowTyper typer = NewTyper();
 
         // Position on 'count' where it is READ in `other = count;` (line 3, char 12).
@@ -238,7 +238,7 @@ public class FlowTyperTests
     {
         string source = "function f( amount )\n{\n    use( amount );\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
         FlowTyper typer = NewTyper();
 
         // 'amount' is a parameter, never assigned a concrete type -> no hover.
@@ -265,7 +265,7 @@ public class FlowTyperTests
     private static bool HoverAt(string source, Position position, out LocalTypeHover hover)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return NewTyper().TryGetLocalTypeAt(result, position, out hover);
     }
@@ -382,7 +382,7 @@ public class FlowTyperTests
             "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = 5;\n\tcase 2:\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.True(NewTyper().TryGetValueAt(result, new Position(7, 7), out ScrValue value));
         Assert.True(value.MayBe(ScrTypeSet.Int));
@@ -406,7 +406,7 @@ public class FlowTyperTests
         // count is an int, then a string, then read once more.
         string source = "function f()\n{\n    count = 5;\n    a = count;\n    count = \"hello\";\n    b = count;\n}\n";
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
     }
 
     [Fact]
@@ -463,7 +463,7 @@ public class FlowTyperTests
         string source = "function f()\n{\n\ti = 0;\n\ti++;\n\tuse( i );\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
         Assert.Equal(ScrType.Int, value.ToScrType());
@@ -476,7 +476,7 @@ public class FlowTyperTests
         string source = "function f()\n{\n\ti = 5;\n\ti--;\n\tuse( i );\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
         Assert.Equal(4, value.Constant!.Value.Integer);

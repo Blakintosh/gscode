@@ -8,7 +8,6 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -27,12 +26,11 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class LocalScopeCompletionTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static CompletionEngine BuildWorld(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -95,7 +93,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction register( str_pool_name, n_bits )\n{\n    RegisterClientField( str|\n}\n");
 
         Assert.True(HasVariable(entries, "str_pool_name"));
@@ -110,7 +108,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction fill( &a_out )\n{\n    |\n}\n");
 
         Assert.Equal("parameter (by ref)", Entry(entries, "a_out")!.Detail);
@@ -123,7 +121,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction run()\n{\n    n_count = 3;\n    |\n}\n");
 
         Assert.True(HasVariable(entries, "n_count"));
@@ -142,7 +140,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction run()\n{\n    |\n    n_later = 3;\n}\n");
 
         Assert.False(HasVariable(entries, "n_later"));
@@ -155,7 +153,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction run( a_players )\n{\n    foreach ( e_player in a_players )\n    {\n        |\n    }\n}\n");
 
         Assert.True(HasVariable(entries, "e_player"));
@@ -173,7 +171,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction run()\n{\n    self.n_health = 100;\n    |\n}\n");
 
         Assert.False(HasVariable(entries, "n_health"));
@@ -186,7 +184,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction first( str_theirs )\n{\n    n_theirs = 1;\n}\nfunction second()\n{\n    |\n}\n");
 
         Assert.False(HasVariable(entries, "n_theirs"));
@@ -204,7 +202,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\scene.gsc",
+            TestPaths.Raw(@"scripts\scene.gsc"),
             "class cScene\n{\n    function play( n_speed )\n    {\n        n_frame = 0;\n        |\n    }\n}\n");
 
         Assert.True(HasVariable(entries, "n_speed"));
@@ -222,7 +220,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "main( str_name )\n{\n    n_count = 0;\n    |\n}\n",
             inserts: null,
             profile: GameProfile.ByName("cod4")!);
@@ -238,7 +236,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\nfunction run( str_theirs )\n{\n}\n|\n");
 
         Assert.False(HasVariable(entries, "str_theirs"));
@@ -256,7 +254,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\fury.gsc",
+            TestPaths.Raw(@"scripts\fury.gsc"),
             "class AnimationInfo\n{\n    var startTime;\n    var stopTime;\n\n    function tick()\n    {\n        |\n    }\n}\n");
 
         Assert.NotNull(Entry(entries, "startTime"));
@@ -267,13 +265,13 @@ public class LocalScopeCompletionTests
     public void StatementScope_OffersAnInheritedMember()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\base.gsc", "class cBase\n{\n    var n_base_health;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\base.gsc"), "class cBase\n{\n    var n_base_health;\n}\n");
 
         CompletionEngine engine = BuildWorld(files);
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\derived.gsc",
+            TestPaths.Raw(@"scripts\derived.gsc"),
             "#using scripts\\base;\nclass cDerived : cBase\n{\n    function tick()\n    {\n        |\n    }\n}\n");
 
         Assert.Equal("member of cBase", Entry(entries, "n_base_health")!.Detail);
@@ -290,7 +288,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\fury.gsc",
+            TestPaths.Raw(@"scripts\fury.gsc"),
             "class AnimationInfo\n{\n    var b_started;\n\n    constructor()\n    {\n        b_started = false;\n        |\n    }\n}\n");
 
         Assert.Single(entries.Where(e => string.Equals(e.Label, "b_started", StringComparison.Ordinal)));
@@ -301,13 +299,13 @@ public class LocalScopeCompletionTests
     public void OutsideAClass_NoMembersAreOffered()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\info.gsc", "class AnimationInfo\n{\n    var startTime;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\info.gsc"), "class AnimationInfo\n{\n    var startTime;\n}\n");
 
         CompletionEngine engine = BuildWorld(files);
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#using scripts\\info;\n#namespace game;\nfunction run()\n{\n    |\n}\n");
 
         Assert.Null(Entry(entries, "startTime"));
@@ -323,7 +321,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#insert scripts\\shared\\shared.gsh;\n#namespace game;\nfunction run()\n{\n    |\n}\n",
             inserts);
 
@@ -344,7 +342,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#define ABS( n_value ) ( n_value )\n#namespace game;\nfunction run()\n{\n    n_x = |\n}\n");
 
         CompletionEntry? macro = Entry(entries, "ABS");
@@ -361,7 +359,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#define LOCAL_CAP 5\n#namespace game;\nfunction run()\n{\n    |\n}\n");
 
         Assert.NotNull(Entry(entries, "LOCAL_CAP"));
@@ -386,7 +384,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#insert scripts\\shared\\shared.gsh;\n#namespace game;\n|\nfunction run()\n{\n}\n",
             inserts);
 
@@ -412,11 +410,11 @@ public class LocalScopeCompletionTests
     public void FileScope_OffersTheFunctionsInScopeAndTheExpressionAtoms()
     {
         CompletionEngine engine = BuildWorld(new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\system.gsc", "#namespace game;\nfunction __init__()\n{\n}\n"));
+            .AddFile(TestPaths.Raw(@"scripts\system.gsc"), "#namespace game;\nfunction __init__()\n{\n}\n"));
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\n|\nfunction run()\n{\n}\n");
 
         Assert.Contains(
@@ -439,7 +437,7 @@ public class LocalScopeCompletionTests
 
         ImmutableArray<CompletionEntry> entries = CompleteAtCaret(
             engine,
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             "#namespace game;\n|\nfunction run()\n{\n}\n");
 
         Assert.False(HasVariable(entries, "self"));

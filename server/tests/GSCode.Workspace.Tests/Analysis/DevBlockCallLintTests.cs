@@ -11,7 +11,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -22,20 +21,19 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class DevBlockCallLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static ImmutableArray<Diagnostic> Lint(string askingSource, FakeFileSystem? extra = null)
     {
         FakeFileSystem files = extra ?? new FakeFileSystem();
-        files.AddFile(@$"{Raw}\scripts\placeholder.gsc", "function p()\n{\n}\n");
+        files.AddFile(TestPaths.Raw(@"scripts\placeholder.gsc"), "function p()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
         indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
 
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
 
@@ -108,7 +106,7 @@ public class DevBlockCallLintTests
     {
         // The callee's dev-ness is a stored fact, so the check crosses files.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\devtools.gsc", "#namespace devtools;\n/#\nfunction dump_state()\n{\n}\n#/\n");
+            .AddFile(TestPaths.Raw(@"scripts\devtools.gsc"), "#namespace devtools;\n/#\nfunction dump_state()\n{\n}\n#/\n");
 
         string source = "#using scripts\\devtools;\n#namespace game;\nfunction run()\n{\n    devtools::dump_state();\n}\n";
 
@@ -232,7 +230,7 @@ public class DevBlockCallLintTests
         // A same-named function that survives a release build makes the call safe, so the
         // dev-only declaration alone must not condemn it.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared.gsc", "#namespace shared;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared.gsc"), "#namespace shared;\nfunction helper()\n{\n}\n");
 
         string source = "#using scripts\\shared;\n#namespace shared;\n/#\nfunction helper()\n{\n}\n#/\n"
             + "function run()\n{\n    helper();\n}\n";
@@ -282,10 +280,10 @@ public class DevBlockCallLintTests
         // were reported as shipped-build failures against a function they never reach.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\bundle.gsc",
+                TestPaths.Raw(@"scripts\bundle.gsc"),
                 "#namespace bundle;\nclass cBundleBase\n{\n    function error( condition, msg )\n    {\n    }\n}\n")
             .AddFile(
-                @$"{Raw}\scripts\util.gsc",
+                TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\n/#\nfunction error( msg )\n{\n}\n#/\n");
 
         string source = "#using scripts\\bundle;\n#using scripts\\util;\n#namespace scene;\n"
@@ -319,7 +317,7 @@ public class DevBlockCallLintTests
         // class member — so this is the only shape a dev-only method comes in.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\devbase.gsc",
+                TestPaths.Raw(@"scripts\devbase.gsc"),
                 "#namespace devbase;\n/#\nclass cDevBase\n{\n    function dump_state()\n    {\n    }\n}\n#/\n");
 
         string source = "#using scripts\\devbase;\n#namespace game;\n"
@@ -340,10 +338,10 @@ public class DevBlockCallLintTests
         // there too: pairing the header-true range with the including file's path pointed the
         // relation at whatever text happens to sit at that line and column in devbase.gsc —
         // nothing to do with where `dump_state` is actually declared.
-        string headerPath = @$"{Raw}\scripts\devbase_impl.gsh";
+        string headerPath = TestPaths.Raw(@"scripts\devbase_impl.gsh");
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(headerPath, "#namespace devbase;\n/#\nfunction dump_state()\n{\n}\n#/\n")
-            .AddFile(@$"{Raw}\scripts\devbase.gsc", "#insert scripts\\devbase_impl.gsh;\n");
+            .AddFile(TestPaths.Raw(@"scripts\devbase.gsc"), "#insert scripts\\devbase_impl.gsh;\n");
 
         string source = "#using scripts\\devbase;\n#namespace game;\n"
             + "function run()\n{\n    devbase::dump_state();\n}\n";

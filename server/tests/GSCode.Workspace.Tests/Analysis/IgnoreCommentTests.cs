@@ -28,7 +28,7 @@ public class IgnoreCommentTests
     private static ImmutableArray<PragmaDirective> Scan(string source)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,

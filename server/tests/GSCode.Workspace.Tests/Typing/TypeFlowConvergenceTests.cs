@@ -34,7 +34,7 @@ public class TypeFlowConvergenceTests
     {
         string source = "function f()\n{\n" + body + "\n    sink = probe_target;\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         ImmutableArray<InferredAssignment> inferred = NewTyper().InferAssignments(result);
         foreach ( InferredAssignment assignment in inferred )

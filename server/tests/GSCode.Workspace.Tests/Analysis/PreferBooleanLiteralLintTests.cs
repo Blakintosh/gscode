@@ -26,7 +26,7 @@ public class PreferBooleanLiteralLintTests
     {
         string source = "function run()\n{\n    " + body + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         BuiltinApi api = builtins.For(ScriptLanguage.Gsc);

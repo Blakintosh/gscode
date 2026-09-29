@@ -23,8 +23,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class SignatureHelpCancellationTests
 {
-    private const string Raw = TestPaths.RawRoot;
-    private static string ScriptPath => Path.Combine(Raw, @"scripts\shared\sig_test.gsc");
+    private static string ScriptPath => Path.Combine(TestPaths.RawRoot, @"scripts\shared\sig_test.gsc");
 
     /// <summary>
     /// A call being written: the cursor sits in the first argument. A BUILTIN, so the signature

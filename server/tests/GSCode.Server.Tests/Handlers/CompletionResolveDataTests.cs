@@ -15,7 +15,7 @@ namespace GSCode.Server.Tests.Handlers;
 public class CompletionResolveDataTests
 {
     private static readonly DocumentUri s_uri =
-        DocumentUri.FromFileSystemPath(@"C:\bo3\share\raw\scripts\util.gsc");
+        DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\util.gsc"));
 
     [Fact]
     public void CarriesEverythingResolveNeedsToFindTheSymbol()

@@ -14,12 +14,11 @@ namespace GSCode.Workspace.Tests.Completion;
 
 public class SignatureEngineTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static SignatureEngine BuildEngine(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -41,12 +40,12 @@ public class SignatureEngineTests
     public void ScriptFunction_ShowsParametersAndActiveIndex()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction give( weapon, ammo )\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction give( weapon, ammo )\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         // Cursor after the comma -> active parameter 1 (ammo).
         string text = "function run()\n{\n    util::give( \"x\", \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterComma = new(2, 20);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterComma);
@@ -61,11 +60,11 @@ public class SignatureEngineTests
     [Fact]
     public void Builtin_ResolvesSignature()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "function run()\n{\n    x = Abs( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(2, 12);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
@@ -78,11 +77,11 @@ public class SignatureEngineTests
     [Fact]
     public void OutsideCall_ReturnsNull()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "function run()\n{\n    x = 1;\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position notInCall = new(2, 9);
 
         Assert.Null(engine.Resolve(result, "raw", notInCall));
@@ -97,11 +96,11 @@ public class SignatureEngineTests
     [Fact]
     public void Macro_ShowsParametersAndActiveIndex()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "#define GIVE( weapon, ammo ) self giveweapon( weapon )\nfunction run()\n{\n    GIVE( \"x\", \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterComma = new(3, 15);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterComma);
@@ -119,7 +118,7 @@ public class SignatureEngineTests
     [Fact]
     public void Macro_FromAnInsertedHeader_ResolvesAtFileScope()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
         FakeInserts inserts = new FakeInserts()
             .Add(
@@ -127,7 +126,7 @@ public class SignatureEngineTests
                 "#define REGISTER_SYSTEM( sys, func, reqs ) function autoexec __init__system__() { } // Registers a system.\n");
 
         string text = "#insert scripts\\shared\\shared.gsh;\n#namespace game;\nREGISTER_SYSTEM( \"aat\", \nfunction run()\n{\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text, inserts);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text, inserts);
         Position afterComma = new(2, 24);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterComma);
@@ -150,11 +149,11 @@ public class SignatureEngineTests
     [Fact]
     public void Macro_WithNoBody_ShowsTheCommentWithoutASeparator()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "#define NOOP( a ) // Does nothing.\nfunction run()\n{\n    NOOP( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(3, 10);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
@@ -172,11 +171,11 @@ public class SignatureEngineTests
     [Fact]
     public void ObjectLikeMacro_IsNotACall()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "#define MAX_PLAYERS 18\nfunction run()\n{\n    x = MAX_PLAYERS( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(3, 21);
 
         Assert.Null(engine.Resolve(result, "raw", afterParen));
@@ -190,11 +189,11 @@ public class SignatureEngineTests
     [Fact]
     public void Macro_LookupIsCaseSensitive()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "#define IS_TRUE( value ) isdefined( value ) && value\nfunction run()\n{\n    x = is_true( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(3, 17);
 
         Assert.Null(engine.Resolve(result, "raw", afterParen));
@@ -204,11 +203,11 @@ public class SignatureEngineTests
     [Fact]
     public void QualifiedName_DoesNotReachAMacro()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "#define IS_TRUE( value ) isdefined( value ) && value\nfunction run()\n{\n    x = util::IS_TRUE( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(3, 23);
 
         Assert.Null(engine.Resolve(result, "raw", afterParen));
@@ -223,11 +222,11 @@ public class SignatureEngineTests
     [Fact]
     public void WaittillKeyword_ResolvesSignature()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "function run()\n{\n    self waittill( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(2, 19);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterParen);
@@ -240,11 +239,11 @@ public class SignatureEngineTests
     [Fact]
     public void IsDefinedKeyword_ResolvesSignature()
     {
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\d.gsc", "function d()\n{\n}\n");
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"scripts\d.gsc"), "function d()\n{\n}\n");
         SignatureEngine engine = BuildEngine(files);
 
         string text = "function run()\n{\n    x = isdefined( \n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), text);
         Position afterParen = new(2, 19);
 
         SignatureResult? signature = engine.Resolve(result, "raw", afterParen);

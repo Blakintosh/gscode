@@ -9,22 +9,20 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class NamespaceUsageLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -36,7 +34,7 @@ public class NamespaceUsageLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
 
@@ -107,20 +105,20 @@ public class NamespaceUsageLintTests
     {
         const string utilitySource = "func()\n{\n}\n";
 
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\myutils.gsc", utilitySource);
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"myutils.gsc"), utilitySource);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
 
         ScriptDatabase database = new();
         database.Commit(
             ScriptAnalysis.Analyze(
-                @$"{Raw}\myutils.gsc", ScriptLanguage.Gsc, SourceText.From(utilitySource),
+                TestPaths.Raw(@"myutils.gsc"), ScriptLanguage.Gsc, SourceText.From(utilitySource),
                 NullInsertProvider.Instance, new NameTable(), s_cod4),
             ResolutionContext.RawContext,
             isDirty: false,
             @"myutils.gsc");
 
-        string askingPath = @$"{Raw}\maps\mp\_menus.gsc";
+        string askingPath = TestPaths.Raw(@"maps\mp\_menus.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
             NullInsertProvider.Instance, new NameTable(), s_cod4);

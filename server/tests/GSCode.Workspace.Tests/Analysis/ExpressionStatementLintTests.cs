@@ -40,7 +40,7 @@ public class ExpressionStatementLintTests
         string source = "function f( a, b )\n{\n" + body + "\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         // Several cases below are only interesting if they PARSED. `a + b;` yielding a parse error
         // would make Assert.Single fail loudly, but `foo();` yielding one would make Assert.Empty
@@ -137,7 +137,7 @@ public class ExpressionStatementLintTests
         string source = "function f( a, b )\n{\n    foo( ;\n    a + b;\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         // The premise: this file really did fail to parse.
         Assert.Contains(result.Tree.Diagnostics, d => (int)d.Code is >= 3000 and < 4000);

@@ -22,7 +22,7 @@ public class MacroArgumentSpanTests
     private static ParseResult Analyze(string source)
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
     }
 
     /// <summary>Mirrors the handler: find the invocation, then the spans of what it was passed.</summary>

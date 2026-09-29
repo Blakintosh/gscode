@@ -10,7 +10,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -22,17 +21,16 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class FunctionResolutionLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ScriptDatabase BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util.gsc",
+                TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction shown()\n{\n}\nfunction private hidden()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -41,8 +39,9 @@ public class FunctionResolutionLintTests
         return database;
     }
 
-    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingPath = @$"{Raw}\scripts\main.gsc")
+    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingRelativePath = @"scripts\main.gsc")
     {
+        string askingPath = TestPaths.Raw(askingRelativePath);
         ScriptDatabase database = BuildWorkspace();
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
@@ -121,7 +120,7 @@ public class FunctionResolutionLintTests
         Assert.False(waw.HasCompleteBuiltinLibrary);
 
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc,
             SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
@@ -146,7 +145,7 @@ public class FunctionResolutionLintTests
         // Built here rather than through Lint() so both halves of the rule can be asserted: the
         // missing FILE is reported by the preprocessor, and the lint adds nothing on top of it.
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
@@ -179,7 +178,7 @@ public class FunctionResolutionLintTests
     {
         // Without an API library every builtin call would look unresolved, so the lint stands down.
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
+        string path = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             path, ScriptLanguage.Gsc,
             SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
@@ -198,15 +197,14 @@ public class FunctionResolutionLintTests
     // and no builtin of that name. Every step is right and 5014's verdict is still the wrong thing
     // to tell someone whose real mistake was targeting the wrong game.
 
-    private const string Cod4Raw = @"C:\cod4\raw";
 
     private static ImmutableArray<Diagnostic> LintAsCod4(string source)
     {
         GameProfile cod4 = GameProfile.Cod4;
-        string askingPath = @$"{Cod4Raw}\maps\mp\test.gsc";
+        string askingPath = TestPaths.Raw(@"maps\mp\test.gsc");
 
         FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, source);
-        RootConfig config = RootConfig.Create(true, Cod4Raw, @"C:\cod4\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -313,13 +311,12 @@ public class FunctionResolutionLintTests
     // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
     // able to make a path call resolve on anyone else's say-so.
 
-    private const string Iw4Raw = @"C:\iw4";
 
     private static ImmutableArray<Diagnostic> LintPathCall(
         string askingSource, params (string Path, string Text)[] otherFiles)
     {
         GameProfile mw2 = GameProfile.ByName("mw2")!;
-        string askingPath = @$"{Iw4Raw}\maps\main.gsc";
+        string askingPath = TestPaths.Raw(@"maps\main.gsc");
 
         FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, askingSource);
         foreach ( (string path, string text) in otherFiles )
@@ -327,7 +324,7 @@ public class FunctionResolutionLintTests
             files.AddFile(path, text);
         }
 
-        RootConfig config = RootConfig.Create(true, Iw4Raw, null, [], files);
+        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable(), profile: mw2);
@@ -352,8 +349,8 @@ public class FunctionResolutionLintTests
 
         Diagnostic diagnostic = Assert.Single(LintPathCall(
             source,
-            (@$"{Iw4Raw}\maps\mp\_util.gsc", "bar()\n{\n}\n"),
-            (@$"{Iw4Raw}\scripts\unrelated.gsc", "foo()\n{\n}\n")));
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "bar()\n{\n}\n"),
+            (TestPaths.Raw(@"scripts\unrelated.gsc"), "foo()\n{\n}\n")));
 
         Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
         Assert.Contains("foo", diagnostic.Message, StringComparison.Ordinal);
@@ -364,7 +361,7 @@ public class FunctionResolutionLintTests
     {
         string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
 
-        Assert.Empty(LintPathCall(source, (@$"{Iw4Raw}\maps\mp\_util.gsc", "foo()\n{\n}\n")));
+        Assert.Empty(LintPathCall(source, (TestPaths.Raw(@"maps\mp\_util.gsc"), "foo()\n{\n}\n")));
     }
 
     [Fact]
@@ -376,7 +373,7 @@ public class FunctionResolutionLintTests
         string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\nfoo()\n{\n}\n";
 
         Diagnostic diagnostic = Assert.Single(LintPathCall(
-            source, (@$"{Iw4Raw}\maps\mp\_util.gsc", "bar()\n{\n}\n")));
+            source, (TestPaths.Raw(@"maps\mp\_util.gsc"), "bar()\n{\n}\n")));
 
         Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
     }

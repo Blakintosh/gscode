@@ -51,7 +51,7 @@ public class ReadOnlyWriteLintTests
     {
         string source = "function run()\n{\n    " + body + "\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         ObjectFields fields = ObjectFields.Create(s_fields, []);
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), fields);

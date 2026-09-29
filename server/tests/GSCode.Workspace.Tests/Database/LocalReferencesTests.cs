@@ -24,7 +24,7 @@ public class LocalReferencesTests
     private static ParseResult Analyze(string source, GameProfile? profile = null)
     {
         return ScriptAnalysis.Analyze(
-            @"C:\bo3\share\raw\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,

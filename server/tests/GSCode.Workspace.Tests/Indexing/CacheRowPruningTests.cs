@@ -4,7 +4,6 @@ using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -18,14 +17,13 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class CacheRowPruningTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string KeptPath = @$"{Raw}\scripts\kept.gsc";
-    private const string DeletedPath = @$"{Raw}\scripts\deleted.gsc";
+    private static readonly string KeptPath = TestPaths.Raw(@"scripts\kept.gsc");
+    private static readonly string DeletedPath = TestPaths.Raw(@"scripts\deleted.gsc");
 
     private static async Task<IReadOnlyDictionary<string, CachedEntry>> RunSessionAsync(
         FakeFileSystem files, SqliteCache cache)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

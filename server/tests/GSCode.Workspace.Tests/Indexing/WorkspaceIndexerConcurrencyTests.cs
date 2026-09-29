@@ -1,7 +1,6 @@
 using GSCode.Core;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -16,7 +15,6 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class WorkspaceIndexerConcurrencyTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     /// <summary>
     /// Wraps <see cref="FakeFileSystem"/> to make one enumeration call block on a gate the test
@@ -90,14 +88,14 @@ public class WorkspaceIndexerConcurrencyTests
     private static FakeFileSystem StandardTree()
     {
         return new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\b.gsc", "function b()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\a.gsc"), "function a()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\b.gsc"), "function b()\n{\n}\n");
     }
 
     private static (WorkspaceIndexer Indexer, GatedFileSystem FileSystem) BuildGated()
     {
         GatedFileSystem gated = new(StandardTree());
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], gated);
+        RootConfig config = TestPaths.Config(gated);
         PathResolver resolver = new(config, gated);
         GSCode.Workspace.Database.ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, gated, new NameTable());
@@ -113,7 +111,7 @@ public class WorkspaceIndexerConcurrencyTests
     private static WorkspaceIndexer BuildPlain()
     {
         FakeFileSystem files = StandardTree();
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         GSCode.Workspace.Database.ScriptDatabase database = new();
         return new WorkspaceIndexer(database, () => resolver, files, new NameTable());

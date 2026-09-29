@@ -19,7 +19,7 @@ public class PaddingOptionsTests
     private static string Format(string statement, FormatOptions options)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f( a, i )\n{\n\t" + statement + "\n}\n"),
             NullInsertProvider.Instance,

@@ -51,7 +51,7 @@ public class AnalysisCancellationTests
         using CancellationTokenSource cancellation = new();
 
         DocumentStore store = GatedStore(entered, release);
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", Source, version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), Source, version: 1);
 
         Task analysis = Task.Run(() => store.AnalyzeSnapshot(document, cancellation.Token));
         Assert.True(entered.Wait(s_patience), "the analysis never started");
@@ -74,7 +74,7 @@ public class AnalysisCancellationTests
         using ManualResetEventSlim release = new();
 
         DocumentStore store = GatedStore(entered, release);
-        OpenDocument document = store.Open(@"C:\bo3\share\raw\scripts\main.gsc", Source, version: 1);
+        OpenDocument document = store.Open(TestPaths.Raw(@"scripts\main.gsc"), Source, version: 1);
 
         Task analysis = Task.Run(() => store.AnalyzeSnapshot(document, CancellationToken.None));
         Assert.True(entered.Wait(s_patience), "the analysis never started");

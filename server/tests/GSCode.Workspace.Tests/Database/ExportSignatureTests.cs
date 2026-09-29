@@ -22,7 +22,7 @@ public class ExportSignatureTests
     private static ulong SignatureOf(string source, string relativePath = @"scripts\util.gsc")
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\util.gsc",
+            TestPaths.Raw(@"scripts\util.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(source),
             NullInsertProvider.Instance,
@@ -180,7 +180,7 @@ public class ExportSignatureTests
     private static ulong HeaderSignatureOf(string source)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\shared\shared.gsh",
+            TestPaths.Raw(@"scripts\shared\shared.gsh"),
             ScriptLanguage.Gsh,
             SourceText.From(source),
             NullInsertProvider.Instance,

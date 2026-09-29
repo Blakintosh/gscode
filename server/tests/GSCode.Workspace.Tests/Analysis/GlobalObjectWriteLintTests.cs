@@ -23,7 +23,7 @@ public class GlobalObjectWriteLintTests
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f()\n{\n" + body + "\n}\n"),
             NullInsertProvider.Instance,

@@ -7,7 +7,6 @@ using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -22,19 +21,18 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class WorkspaceIndexerOwnershipTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static (ScriptDatabase Database, WorkspaceIndexer Indexer, PathResolver Resolver, string OpenPath)
         BuildWorkspaceWithOneOpenFile()
     {
-        string openPath = @$"{Raw}\scripts\open.gsc";
+        string openPath = TestPaths.Raw(@"scripts\open.gsc");
 
         // Disk disagrees with the open buffer on purpose: disk says `stale_disk_only`, the
         // buffer (committed below, as the text-sync handler would) says `edited_in_buffer`.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(openPath, "function stale_disk_only()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

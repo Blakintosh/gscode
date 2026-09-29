@@ -23,7 +23,7 @@ public class AssignmentAlignerTests
     private static string Format(string source)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         return GscFormatter.Format(result, s_aligned)!;
     }
@@ -176,7 +176,7 @@ public class AssignmentAlignerTests
         string once = Format("function f()\n{\na = 1;\nbbbbbb = 2;\ncc = 3;\n}\n");
 
         ParseResult reparsed = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_aligned));
     }
@@ -186,7 +186,7 @@ public class AssignmentAlignerTests
     {
         // FormatOptions.Default has alignment off, so the same input keeps ordinary spacing.
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f()\n{\na = 1;\nbbbbbb = 2;\n}\n"),
             NullInsertProvider.Instance,

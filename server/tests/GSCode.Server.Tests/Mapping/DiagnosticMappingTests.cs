@@ -46,7 +46,7 @@ public class DiagnosticMappingTests
     public void RelatedInformation_CarriesPathAsUriAndKeepsMessage()
     {
         DiagnosticRelation relation = new(
-            @"C:\bo3\share\raw\scripts\util.gsc", TextRange.FromCoordinates(3, 2, 3, 8), "First defined here.");
+            TestPaths.Raw(@"scripts\util.gsc"), TextRange.FromCoordinates(3, 2, 3, 8), "First defined here.");
         Diagnostic related = Plain() with { RelatedInformation = [relation] };
 
         LspDiagnostic mapped = related.ToLsp();

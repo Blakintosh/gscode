@@ -25,7 +25,7 @@ public class DialectDependencyTests
     private static ParseResult Analyze()
     {
         return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\maps\mp\_utility.gsc",
+            TestPaths.Raw(@"scripts\maps\mp\_utility.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(Source),
             NullInsertProvider.Instance,

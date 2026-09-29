@@ -47,7 +47,7 @@ public class IndexProgressNotifierTests
         // missing implementation would break them rather than merely losing a log line.
         NullIndexProgressListener listener = NullIndexProgressListener.Instance;
 
-        listener.FileIndexed(@"C:\bo3\share\raw\scripts\main.gsc", TimeSpan.FromMilliseconds(12), restoredFromCache: false);
+        listener.FileIndexed(TestPaths.Raw(@"scripts\main.gsc"), TimeSpan.FromMilliseconds(12), restoredFromCache: false);
     }
 
     [Fact]

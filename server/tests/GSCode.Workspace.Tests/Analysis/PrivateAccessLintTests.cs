@@ -11,24 +11,22 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class PrivateAccessLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ScriptDatabase BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util.gsc",
+                TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -37,8 +35,9 @@ public class PrivateAccessLintTests
         return database;
     }
 
-    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingPath = @$"{Raw}\scripts\main.gsc")
+    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingRelativePath = @"scripts\main.gsc")
     {
+        string askingPath = TestPaths.Raw(askingRelativePath);
         ScriptDatabase database = BuildWorkspace();
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
@@ -69,7 +68,7 @@ public class PrivateAccessLintTests
         // which on a merge dialect at scale was the most expensive thing in the lint pass.
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
         ScriptDatabase database = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
@@ -140,7 +139,7 @@ public class PrivateAccessLintTests
         // Same path as the declaring file: privacy is per-file, not per-namespace.
         string source = "#namespace util;\nfunction private hidden()\n{\n}\nfunction run()\n{\n    hidden();\n}\n";
 
-        Assert.Empty(Lint(source, @$"{Raw}\scripts\util.gsc"));
+        Assert.Empty(Lint(source, @"scripts\util.gsc"));
     }
 
     [Fact]
@@ -193,18 +192,18 @@ public class PrivateAccessLintTests
         // too: pairing the header-true range with the including file's path pointed the relation
         // at whatever text happens to sit at that line and column in scripts\util.gsc — nothing
         // to do with where `hidden` is actually declared.
-        string headerPath = @$"{Raw}\scripts\util_impl.gsh";
+        string headerPath = TestPaths.Raw(@"scripts\util_impl.gsh");
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(headerPath, "#namespace util;\nfunction private hidden()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#insert scripts\\util_impl.gsh;\nfunction shown()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#insert scripts\\util_impl.gsh;\nfunction shown()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
-        string askingPath = @$"{Raw}\scripts\main.gsc";
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());

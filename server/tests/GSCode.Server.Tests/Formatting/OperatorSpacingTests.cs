@@ -24,7 +24,7 @@ public class OperatorSpacingTests
     private static string Body(string statement)
     {
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
+            TestPaths.Raw(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From("function f( a, b, level )\n{\n\t" + statement + "\n}\n"),
             NullInsertProvider.Instance,

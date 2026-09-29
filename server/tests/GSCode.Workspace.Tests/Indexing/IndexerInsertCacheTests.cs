@@ -4,7 +4,6 @@ using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -20,11 +19,10 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class IndexerInsertCacheTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static (WorkspaceIndexer Indexer, InsertCache Inserts) Build(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         InsertCache inserts = new();
@@ -34,8 +32,8 @@ public class IndexerInsertCacheTests
     private static FakeFileSystem Workspace()
     {
         return new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define CAP 5\n")
-            .AddFile(@$"{Raw}\scripts\uses_it.gsc", "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\shared.gsh"), "#define CAP 5\n")
+            .AddFile(TestPaths.Raw(@"scripts\uses_it.gsc"), "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
     }
 
     [Fact]
@@ -65,7 +63,7 @@ public class IndexerInsertCacheTests
 
         // The watcher's fast path when a header changes on disk. It used to drop the indexer's
         // private copy only, leaving the shared one to the timestamp check one call later.
-        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"));
+        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\shared.gsh")));
 
         Assert.Equal(0, inserts.Count);
     }
@@ -80,7 +78,7 @@ public class IndexerInsertCacheTests
         Assert.Equal(1, inserts.Count);
 
         indexer.RemoveFile(
-            PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"), ScriptLanguage.Gsh);
+            PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\shared.gsh")), ScriptLanguage.Gsh);
 
         Assert.Equal(0, inserts.Count);
     }
@@ -113,7 +111,7 @@ public class IndexerInsertCacheTests
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
         long before = inserts.Generation;
-        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"));
+        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\shared.gsh")));
 
         Assert.NotEqual(before, inserts.Generation);
     }
@@ -126,20 +124,20 @@ public class IndexerInsertCacheTests
         // macros. Dropping the inner one alone leaves those copies to be replayed, and a re-parse
         // reproduces the values it just discarded.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\base.gsh", "#define CAP 5\n")
-            .AddFile(@$"{Raw}\scripts\shared\wrapper.gsh", "#insert scripts\\shared\\base.gsh;\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\base.gsh"), "#define CAP 5\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\wrapper.gsh"), "#insert scripts\\shared\\base.gsh;\n")
             .AddFile(
-                @$"{Raw}\scripts\uses_it.gsc",
+                TestPaths.Raw(@"scripts\uses_it.gsc"),
                 "#insert scripts\\shared\\wrapper.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
 
         (WorkspaceIndexer indexer, InsertCache inserts) = Build(files);
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
-        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\base.gsh"));
+        indexer.InvalidateGsh(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\base.gsh")));
 
         // The wrapper keeps its lexed tokens — its own bytes did not change — and loses only what
         // it was found to contribute, which is the half the inner header decides.
-        Assert.False(inserts.TryGet(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\wrapper.gsh"), out _));
+        Assert.False(inserts.TryGet(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\wrapper.gsh")), out _));
     }
 
     [Fact]
@@ -150,7 +148,7 @@ public class IndexerInsertCacheTests
         InsertCache inserts = new();
         long before = inserts.Generation;
 
-        inserts.Invalidate(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh"));
+        inserts.Invalidate(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\shared.gsh")));
 
         Assert.Equal(before, inserts.Generation);
     }

@@ -8,7 +8,6 @@ using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -21,7 +20,6 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class RealisticKeystrokeTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private readonly ITestOutputHelper _output;
 
@@ -33,9 +31,9 @@ public class RealisticKeystrokeTests
     private static CompletionEngine Build()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foobar()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction foobar()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -52,7 +50,7 @@ public class RealisticKeystrokeTests
         string text = "#namespace util;\n\nfunction run()\n{\n" + line + "\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\scripts\main.gsc",
+            TestPaths.Raw(@"scripts\main.gsc"),
             ScriptLanguage.Gsc,
             SourceText.From(text),
             GSCode.Parser.Preprocessing.NullInsertProvider.Instance,

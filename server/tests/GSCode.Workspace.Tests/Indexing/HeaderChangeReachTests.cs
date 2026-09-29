@@ -3,7 +3,6 @@ using GSCode.Core.Paths;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -24,14 +23,13 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class HeaderChangeReachTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string BasePath = @$"{Raw}\scripts\shared\base.gsh";
-    private const string WrapperPath = @$"{Raw}\scripts\shared\wrapper.gsh";
-    private const string ScriptPath = @$"{Raw}\scripts\uses_it.gsc";
+    private static readonly string BasePath = TestPaths.Raw(@"scripts\shared\base.gsh");
+    private static readonly string WrapperPath = TestPaths.Raw(@"scripts\shared\wrapper.gsh");
+    private static readonly string ScriptPath = TestPaths.Raw(@"scripts\uses_it.gsc");
 
     private static (ScriptDatabase Database, WatchedFileUpdater Updater, InsertCache Inserts) Build(FakeFileSystem files)
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         InsertCache inserts = new();

@@ -16,7 +16,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class CallHierarchyGroupingTests
 {
-    private const string CallerPath = @"C:\bo3\share\raw\scripts\caller.gsc";
+    private static readonly string CallerPath = TestPaths.Raw(@"scripts\caller.gsc");
 
     private static FunctionSymbol Function(string name, int firstLine, int lastLine)
     {

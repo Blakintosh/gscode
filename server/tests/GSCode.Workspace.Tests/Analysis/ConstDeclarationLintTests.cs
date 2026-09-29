@@ -37,7 +37,7 @@ public class ConstDeclarationLintTests
         string source = "function f( a )\n{\n" + body + "\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         // A parse error would make every assertion below meaningless — an empty tree reports nothing
         // and every Assert.Empty passes. `const` is Black Ops III's, which is the test default.
@@ -100,7 +100,7 @@ public class ConstDeclarationLintTests
         string source = "#define LIMIT 8\nfunction f()\n{\n    const MAX = LIMIT;\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
             RunRule(result),
@@ -168,7 +168,7 @@ public class ConstDeclarationLintTests
             + "function b()\n{\n    duration = 60000;\n    use( duration );\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Assert.DoesNotContain(
             RunRule(result),
@@ -184,7 +184,7 @@ public class ConstDeclarationLintTests
             + "function b()\n{\n    duration = 60000;\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         Diagnostic reported = Assert.Single(
             RunRule(result),

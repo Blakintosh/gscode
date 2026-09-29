@@ -24,7 +24,7 @@ public class ArithmeticLintTests
         string source = "function f( n, d )\n{\n" + body + "\n}\n";
 
         ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
 
         // Without this a syntax slip in a test case yields an empty tree, and every Assert.Empty
         // below passes while proving nothing.

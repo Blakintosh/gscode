@@ -4,7 +4,6 @@ using GSCode.Workspace.Cache;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
@@ -22,9 +21,7 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class RestoredContextIdentityTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string Mods = @"C:\bo3\mods";
-    private const string ScriptPath = @$"{Mods}\zm_grief\maps\_util.gsc";
+    private const string ScriptPath = TestPaths.ModsRoot + @"\zm_grief\maps\_util.gsc";
 
     private static async Task<ScriptDatabase> RunSessionAsync(FakeFileSystem files, SqliteCache cache, RootConfig config)
     {
@@ -47,14 +44,14 @@ public class RestoredContextIdentityTests
         try
         {
             FakeFileSystem files = new FakeFileSystem()
-                .AddFile(@$"{Raw}\scripts\shared\placeholder.gsh", "")
+                .AddFile(TestPaths.Raw(@"scripts\shared\placeholder.gsh"), "")
                 .AddFile(ScriptPath, "function util()\n{\n}\n");
 
             // Session 1: raw/mods detection is off entirely, so this file resolves as an ordinary
             // open workspace folder rather than a mod — the "mods\<name>" shape of its path is not
             // even looked at.
             RootConfig sessionOneConfig = RootConfig.Create(
-                rawEnabled: false, rawPath: null, modsPath: null, [Mods + @"\zm_grief"], files);
+                rawEnabled: false, rawPath: null, modsPath: null, [TestPaths.ModsRoot + @"\zm_grief"], files);
             ScriptDatabase firstSession = await RunSessionAsync(files, cache, sessionOneConfig);
 
             firstSession.Gsc.TryGet(PathUtil.NormalizeAbsolute(ScriptPath), out ScriptRecord firstRecord);
@@ -63,7 +60,7 @@ public class RestoredContextIdentityTests
             // Session 2: the mods root is now configured (e.g. a setting changed), so the SAME file,
             // with the SAME bytes, is reclassified as belonging to mod "zm_grief" — but it restores
             // from cache since its content hash is unchanged.
-            RootConfig sessionTwoConfig = RootConfig.Create(true, Raw, Mods, [], files);
+            RootConfig sessionTwoConfig = TestPaths.Config(files);
             ScriptDatabase secondSession = await RunSessionAsync(files, cache, sessionTwoConfig);
 
             secondSession.Gsc.TryGet(PathUtil.NormalizeAbsolute(ScriptPath), out ScriptRecord secondRecord);

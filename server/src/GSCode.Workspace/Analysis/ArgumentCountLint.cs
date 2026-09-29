@@ -179,6 +179,21 @@ public static class ArgumentCountLint
 
         int supplied = call.Arguments.Length;
 
+        // `sys::` names the ENGINE function outright, so it is judged against the library and
+        // nothing else: not against a method of the enclosing class, and not against a script
+        // function of the same name, which is the one thing the qualifier exists to step past.
+        // Read as a namespace it fell through to a script lookup under `sys`, which nothing
+        // declares into, and the rule stood down on every such call.
+        if ( namespaceName is not null && BuiltinQualifier.Is(namespaceName) )
+        {
+            if ( game.HasReliableBuiltinSignatures && builtins.Find(name) is BuiltinFunction explicitBuiltin )
+            {
+                InspectBuiltin(explicitBuiltin, name, supplied, nameRange, diagnostics);
+            }
+
+            return;
+        }
+
         // METHODS BEFORE BUILTINS, and only for the shapes that can mean one. Inside a class body a
         // bare name is a method first — all 525 such calls in the stock scripts are — so consulting
         // the engine library first would judge `stop( a, b )` against a builtin named `stop` that

@@ -126,6 +126,36 @@ public class ArgumentCountLintTests
     }
 
     [Fact]
+    public void AnExplicitSysCallIsJudgedAgainstTheBuiltin()
+    {
+        // `sys::` names the engine function outright, so it owes the builtin's mandatory arguments
+        // exactly as the bare call above does. Extraction already reads it that way — it keys
+        // `sys::name` as the namespace-less builtin key — but this rule took `sys` for a script
+        // namespace, found nothing declared in it, and stood down.
+        string source = "#namespace zm;\nfunction respawn()\n{\n    self thread sys::spawnSpectator();\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.WrongBuiltinArgumentCount, reported.Code);
+        Assert.Contains("at least 2", reported.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnExplicitSysCallReachesPastAShadowingScriptFunction()
+    {
+        // The reason `sys::` exists: the file's own spawnSpectator() wins a bare call, and the
+        // qualifier is how a script asks for the engine's instead. Judging it against the script
+        // declaration — or not at all — ignores the one thing the author wrote to say which.
+        string source = "#namespace zm;\n"
+            + "function spawnSpectator()\n{\n}\n"
+            + "function respawn()\n{\n    self thread sys::spawnSpectator();\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.WrongBuiltinArgumentCount, reported.Code);
+    }
+
+    [Fact]
     public void TooManyArgumentsForTheShadowingScriptFunctionIsStillReported()
     {
         // Shadowing moves which declaration is authoritative; it does not switch the rule off. The

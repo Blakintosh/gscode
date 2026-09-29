@@ -1595,7 +1595,7 @@ public static class DatabaseQueries
         {
             foreach ( SymbolKey key in keyStore.ReferenceKeysNamed(name) )
             {
-                if ( !asked.Add(key) || DeclaresKey(store, askingContextId, key, game) )
+                if ( !asked.Add(key) || AnyScriptDeclares(store, askingContextId, key, game) )
                 {
                     continue;
                 }
@@ -1611,7 +1611,7 @@ public static class DatabaseQueries
     /// Whether a SCRIPT declares this exact function key, visibly from the asking context — the test
     /// that separates a call meaning the engine's function from one meaning a script's.
     /// </summary>
-    private static bool DeclaresKey(
+    private static bool AnyScriptDeclares(
         LanguageStore store, string askingContextId, SymbolKey key, GameProfile game)
     {
         if ( key.OwnerClass is not null )

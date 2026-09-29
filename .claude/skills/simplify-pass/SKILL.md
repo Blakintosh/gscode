@@ -270,7 +270,8 @@ Abandon a finding rather than force it:
 
 ## The verification gate
 
-Per project, Release, never solution-wide — a running server holds the Debug DLLs open:
+Per project, never solution-wide — a running server holds its DLLs open. Release unless the
+running server loaded Release; the `build-and-test` skill shows how to check:
 
 ```bash
 cd server

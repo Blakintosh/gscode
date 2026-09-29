@@ -13,12 +13,22 @@ dotnet build src/GSCode.Parser/GSCode.Parser.csproj -c Release --nologo
 dotnet test  tests/GSCode.Workspace.Tests/GSCode.Workspace.Tests.csproj -c Release --nologo
 ```
 
-**Why per project rather than the solution:** a running language server holds the Debug DLLs
-open, so a solution-wide build fails with MSB3027 partway through and leaves you guessing which
-project broke. Building the one project under change avoids the lock entirely.
+**Why per project rather than the solution:** a running language server holds its DLLs open, so a
+solution-wide build fails with MSB3027 partway through and leaves you guessing which project broke.
+Building the one project under change avoids the lock entirely.
 
-**Why Release:** the Debug output is what the extension host is using. Writing to it while the
-server runs is the same collision.
+**Which configuration:** the one the running server is NOT using. That is usually Debug, which is
+why Release is the default here, but it is not fixed: a session on 2026-09-29 found the editor's
+server running from `src\GSCode.Server\bin\Release`, and every Server.Tests Release build failed
+with MSB3027 ("The file is locked by: .NET Host"). Check before assuming:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Select-Object ProcessId, CommandLine
+```
+
+and build the other configuration — for BOTH the baseline and the verification run, since a test
+list from one and a pass count from the other are not a comparison. Never kill the process: it is
+the user's editor.
 
 The three suites:
 

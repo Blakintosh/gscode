@@ -52,6 +52,10 @@ rule that needs per-function state, a flag threaded down, or a cache carried alo
 `static Analyze(...)`, walks the tree itself, and is called from `WorkspaceLints` directly.
 `NodeLintPass`'s doc comment lists which rules are out and why; read it before choosing.
 
+A cross-file rule is tested against `TestWorkspace.Build(files, profile?)` from `GSCode.Testing`,
+with the asking file from `workspace.Analyze(relativePath, text)`. Name a game only when the rule
+behaves differently on it — see the `standard-tests` skill.
+
 **Decide what a macro-expanded reference means to your rule.** A reference with `FromMacro` set came
 from a macro body, and its range is the INVOCATION site. Most call-site rules still report it — a
 private or dev-only call a macro expands to breaks the build exactly as a written one does — and

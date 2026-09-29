@@ -10,6 +10,10 @@ description: How to confirm a bug in this repo before changing code, and how to 
 Not after. A test written once the fix is in proves the code passes its own test, which is a
 weaker claim than it looks.
 
+Build the reproduction on the standard setup (`HandlerWorkspace` for a handler, `TestWorkspace`
+below that, both in-memory under `TestPaths.RawRoot`; see the `standard-tests` skill). A report that
+only reproduces on one game is a dialect finding: pass that game to the harness, never `Select` it.
+
 The procedure, when a fix is already drafted:
 
 ```bash

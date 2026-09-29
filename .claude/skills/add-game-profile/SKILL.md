@@ -104,3 +104,8 @@ Worth checking against any new work in this area:
   includes the game for this reason.
 - **ScriptDoc.** BO3 uses `/@ … @/`; every earlier game fences a block inside an ordinary `/* */`
   with `///ScriptDocBegin`. `ScriptDocStyle` records which, and the extractor reads it.
+- **A test indexed as one game and queried as another.** Production reads `GameProfile.Active` at
+  request time, so a fixture indexed under CoD4 and asked about under the default BO3 comes back
+  empty and every "is it absent?" assertion passes. Pass the game to `TestWorkspace` /
+  `HandlerWorkspace`, which scope Active to it; never `GameProfile.Select` in a test. A dialect
+  test names its game in the fact that is about it and nowhere else — the `standard-tests` skill.

@@ -125,6 +125,16 @@ with the settings the session began with. `reloadPrompt.ts` offers a window relo
 
 If you add a setting in this category, add it to `RESTART_REQUIRED` in `client/src/reloadPrompt.ts`.
 
+## Testing a handler
+
+Drive it through `HandlerWorkspace.BuildAsync(files, profile?)` (Server.Tests/Handlers): an indexed
+in-memory workspace under `TestPaths.RawRoot`, wired like `ServerServices` — real insert provider,
+builtins in `NavigationSupport` — that holds `GameProfile.Active` on its game until disposed, since a
+handler reads Active while it answers. `workspace.Open(relative)` opens a file the way the editor
+does; `HandlerWorkspace.Identify(relative)` names it in a request. Build it per question with
+`using`. A test that deliberately seeds only some files, or passes an empty builtin library, builds
+its pieces by hand on `FakeFileSystem` instead — see the `standard-tests` skill.
+
 ## Client-side plumbing
 
 A setting reaches the server only if it is named in **both** `client/package.json`'s

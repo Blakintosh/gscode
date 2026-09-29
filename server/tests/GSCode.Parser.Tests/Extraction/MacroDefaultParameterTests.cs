@@ -29,7 +29,7 @@ public class MacroDefaultParameterTests
 
     private static bool HasDefaultValueError(ImmutableArray<Diagnostic> diagnostics)
     {
-        return diagnostics.Any(diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
+        return diagnostics.Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Theory]

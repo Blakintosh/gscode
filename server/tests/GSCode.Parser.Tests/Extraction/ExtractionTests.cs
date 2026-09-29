@@ -269,9 +269,7 @@ public class ExtractionTests
         // A default is evaluated in the function BODY when the argument arrives undefined, so
         // anything the body could contain is legal there. The old "literals and vectors only"
         // rule reported 21 errors across 8 shipped scripts, every one of them wrong.
-        Assert.DoesNotContain(
-            Analyze($"function f( {parameters} )\n{{\n}}").AllDiagnostics,
-            diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
+        Assert.Empty(Analyze($"function f( {parameters} )\n{{\n}}").AllDiagnostics);
     }
 
     [Fact]

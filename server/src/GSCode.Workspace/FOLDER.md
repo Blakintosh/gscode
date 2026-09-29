@@ -645,7 +645,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   than the snapshot already there. As separate fields they could interleave into a new version
   stamped on an old parse — a document reporting itself FRESH while holding replaced text.
 - `sealed class OpenDocument` — one open editor file: normalized path, language, live
-  SourceText, version, the latest `AnalysisSnapshot` (`LatestResult`/`AnalyzedVersion`/`IsStale`
+  SourceText, version, the latest `AnalysisSnapshot` (`LatestResult`/`IsStale`
   all read from it), and the pending-analysis CTS (newer edits cancel in-flight debounced runs).
 - `sealed class DocumentStore` — open-document tracking keyed by normalized path.
   `Open`/`Close`/`TryGet`, `ApplyChange` (LSP incremental splice or full replace), and

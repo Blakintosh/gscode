@@ -63,7 +63,7 @@ public class AnalysisCancellationTests
 
         // Nothing was published, so the document is still reported as never analysed rather than
         // holding a parse of text that has been superseded.
-        Assert.Equal(-1, document.AnalyzedVersion);
+        Assert.Null(document.Analysis);
     }
 
     [Fact]
@@ -82,6 +82,6 @@ public class AnalysisCancellationTests
         release.Set();
         await analysis.WaitAsync(s_patience);
 
-        Assert.Equal(1, document.AnalyzedVersion);
+        Assert.Equal(1, document.Analysis?.Version);
     }
 }

@@ -109,20 +109,6 @@ public static class GscFormatter
         return rebuilt.ToString();
     }
 
-    /// <summary>Whether the file carries any <c>#pragma disable format</c>.</summary>
-    private static bool HasFormatPragma(ParseResult result)
-    {
-        foreach ( PragmaDirective directive in PragmaDirectives.Scan(result.Lexed.Tokens, result.Text) )
-        {
-            if ( directive.Target == PragmaTarget.Format )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /// <summary>
     /// Drops any edit touching a region the author switched the formatter off for.
     ///

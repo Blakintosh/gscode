@@ -75,12 +75,6 @@ public sealed record BuiltinFunction(
     /// <summary>How far this entry's declared types can be trusted. See <see cref="BuiltinConfidence"/>.</summary>
     public BuiltinConfidence Confidence { get; init; }
 
-    /// <summary>True when any overload is called on an object (method-notation builtin).</summary>
-    public bool IsMethod
-    {
-        get { return Overloads.Any(static overload => overload.CalledOn is not null); }
-    }
-
     /// <summary>
     /// The return type across EVERY overload, as a union.
     ///

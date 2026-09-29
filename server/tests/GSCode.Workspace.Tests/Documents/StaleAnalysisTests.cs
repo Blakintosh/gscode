@@ -140,7 +140,7 @@ public class StaleAnalysisTests
         releaseFirst.Set();
         ParseResult olderResult = await older.WaitAsync(s_patience);
 
-        Assert.Equal(2, document.AnalyzedVersion);
+        Assert.Equal(2, document.Analysis?.Version);
         Assert.Equal("#pre\n", document.LatestResult!.Text.Text);
         Assert.False(document.IsStale);
 
@@ -204,7 +204,7 @@ public class StaleAnalysisTests
         await analysis.WaitAsync(s_patience);
 
         Assert.True(document.IsStale);
-        Assert.Equal(1, document.AnalyzedVersion);
+        Assert.Equal(1, document.Analysis?.Version);
         Assert.Equal("#p\n", document.LatestResult!.Text.Text);
     }
 }

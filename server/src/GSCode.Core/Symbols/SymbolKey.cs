@@ -57,11 +57,4 @@ public enum SymbolKind
 /// the file's own <c>ClassSymbol.FullRange</c> — it is a property of the call site, not of the
 /// symbol being called.
 /// </param>
-public readonly record struct SymbolKey(string? Namespace, string Name, SymbolKind Kind, string? OwnerClass = null)
-{
-    /// <summary>Whether a class scopes this name — i.e. it is a class method rather than a function.</summary>
-    public bool IsMethod
-    {
-        get { return OwnerClass is not null; }
-    }
-}
+public readonly record struct SymbolKey(string? Namespace, string Name, SymbolKind Kind, string? OwnerClass = null);

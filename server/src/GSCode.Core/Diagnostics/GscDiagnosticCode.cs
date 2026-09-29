@@ -101,7 +101,6 @@ public enum GscDiagnosticCode
     WrongPrecacheArgumentCount = 4001,
     ConstructorHasParameters = 4002,
     DestructorHasParameters = 4003,
-    NonValueDefaultParameter = 4004,
     DuplicateFunction = 4005,
     ClientOnlyPrecacheType = 4006,
     DuplicateParameter = 4007,

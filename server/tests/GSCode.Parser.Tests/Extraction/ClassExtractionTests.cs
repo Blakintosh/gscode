@@ -49,7 +49,7 @@ public class ClassExtractionTests
         Assert.Equal("cscene", key.OwnerClass);
         Assert.Null(key.Namespace);
         Assert.Equal(SymbolKind.Function, key.Kind);
-        Assert.True(key.IsMethod);
+        Assert.NotNull(key.OwnerClass);
     }
 
     [Fact]

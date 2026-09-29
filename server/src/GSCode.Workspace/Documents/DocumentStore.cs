@@ -56,12 +56,6 @@ public sealed class OpenDocument
         get { return Analysis?.Result; }
     }
 
-    /// <summary>The <see cref="Version"/> <see cref="LatestResult"/> was produced from, or -1 before the first run.</summary>
-    public int AnalyzedVersion
-    {
-        get { return Analysis?.Version ?? -1; }
-    }
-
     /// <summary>True when the text has moved on since the last completed analysis.</summary>
     public bool IsStale
     {

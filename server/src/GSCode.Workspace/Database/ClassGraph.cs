@@ -181,8 +181,9 @@ public sealed class ClassGraph
     }
 
     /// <summary>
-    /// Paths of every file declaring at least one class (snapshot). Lets a caller that wants all
-    /// visible classes iterate the ~20 files that have one instead of every record in the store.
+    /// Paths of every file declaring at least one class (snapshot). No production caller:
+    /// <c>AllVisibleClasses</c> reads the asking file's imports by path instead, and the corpus and
+    /// scale tests keep this as the walk that answer is checked against.
     /// </summary>
     public ImmutableArray<string> AllDeclaringPaths()
     {

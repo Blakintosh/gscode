@@ -63,7 +63,7 @@ public class ResolveFreshCancellationTests
         NavigationTarget? target = support.ResolveFresh(Uri, CancellationToken.None);
 
         Assert.NotNull(target);
-        Assert.Equal(2, document.AnalyzedVersion);
+        Assert.Equal(2, document.Analysis?.Version);
     }
 
     [Fact]

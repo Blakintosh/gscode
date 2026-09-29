@@ -5,7 +5,4 @@ public enum DiagnosticTag
 {
     /// <summary>Greys the range out; used for excluded #if branches and unused #using directives.</summary>
     Unnecessary = 1,
-
-    /// <summary>Strikes the range through.</summary>
-    Deprecated = 2,
 }

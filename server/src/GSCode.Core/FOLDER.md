@@ -154,7 +154,7 @@ needs to know WHY a type is unknown.
   and four rules suppressing wrong type names. Coercion is a relation in `ScrValues.IsAssignableTo`.
   `Universe` is an explicit OR of the members, never `~0`.
 - `enum ScrImprecision` — why a value is not exact: an untyped parameter, a script function's return,
-  a library spelling the lattice cannot express, an array element, a macro expansion, a branch
+  a library spelling the lattice cannot express, an array element, a branch
   disagreement. `None` with a single-bit set is the only state safe to rewrite blind.
 - `readonly record struct ScrConstant` / `Vec3` — a folded compile-time value. New here; v1.5 tracked
   only `bool? BooleanValue` and folded nothing.
@@ -258,7 +258,7 @@ needs to know WHY a type is unknown.
 
 ## Diagnostics/DiagnosticTag.cs
 
-- `enum DiagnosticTag` — editor presentation hints (`Unnecessary`, `Deprecated`), numbered to
+- `enum DiagnosticTag` — the editor presentation hint (`Unnecessary`), numbered to
   match the LSP wire encoding so mapping stays a cast. `Unnecessary` is what greys a range out,
   and drives both the excluded-`#if` branches and unused `#using` directives.
 

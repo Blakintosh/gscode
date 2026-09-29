@@ -112,9 +112,6 @@ public enum ScrImprecision
     /// <summary>The value came from a script function, whose body this pass does not re-type.</summary>
     ScriptFunctionReturn,
 
-    /// <summary>No entry for the called name in this game's builtin library.</summary>
-    BuiltinNotInLibrary,
-
     /// <summary>The library declared a type this lattice cannot express — <c>any</c>, <c>number</c>.</summary>
     BuiltinTypeUnmapped,
 
@@ -129,9 +126,6 @@ public enum ScrImprecision
 
     /// <summary>A field whose owner's entity kind was not inferred, so the declaring kind is unknown.</summary>
     UnknownFieldOwner,
-
-    /// <summary>The token came from a macro expansion, so its position is not what the author wrote.</summary>
-    MacroExpanded,
 
     /// <summary>
     /// A union produced by a control-flow join. The set is PRECISE — this is not a failure — but it

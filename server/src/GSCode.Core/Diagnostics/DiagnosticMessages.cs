@@ -72,7 +72,6 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
-        [GscDiagnosticCode.NonValueDefaultParameter] = "Default value for '{0}' must be a plain value (literals and vectors only).",
         [GscDiagnosticCode.DuplicateFunction] = "Function '{0}' is already defined in namespace '{1}'.",
         [GscDiagnosticCode.AmbiguousFunction] =
             "'{0}' is declared in {2} of the files this script imports, all in namespace '{1}' — which one this call reaches is undefined.",

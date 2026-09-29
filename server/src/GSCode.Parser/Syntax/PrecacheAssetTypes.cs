@@ -104,12 +104,6 @@ public static class PrecacheAssetTypes
             || language == ScriptLanguage.Gsh;
     }
 
-    /// <summary>All known type names, whatever world they belong to.</summary>
-    public static IEnumerable<string> AllNames
-    {
-        get { return s_types.Keys; }
-    }
-
     /// <summary>The type names a file of this language may actually use (completion source).</summary>
     public static IEnumerable<string> NamesFor(ScriptLanguage language)
     {

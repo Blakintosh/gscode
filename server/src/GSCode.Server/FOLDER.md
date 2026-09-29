@@ -784,7 +784,9 @@ that chose it. These are the pieces that implement it:
 - `CodeLensRefresh` — `ICodeLensRefreshSink`, the one thing the dependent refresher asks of the
   connection (tell the client its lenses are stale), plus the real and null sinks. A seam for the same
   reason `IDiagnosticsSink` is one: a test that only checks whether a refresh was asked for should not
-  implement `ILanguageServerFacade`.
+  implement `ILanguageServerFacade`. Also `ClientRefresh.Request(server, method)`, the one
+  fire-and-forget send behind every `workspace/*/refresh` request — the code-lens sink's and
+  `ConfigurationHandler`'s inlay-hint one — so a failure is observed the same way for each.
 - `ClearCacheHandler` — cancels the startup indexing task (`IndexingLifetime.CancelAndWaitAsync`,
   so it stops enqueueing into a cache about to close) THEN drains the cache and deletes only THIS
   workspace's database, server-side where the paths are known.

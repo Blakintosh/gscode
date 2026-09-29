@@ -90,23 +90,9 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         // the setting being ignored entirely.
         if ( !string.Equals(previousInlay, _settings.InlayFamilies, StringComparison.Ordinal) )
         {
-            RequestInlayHintRefresh();
+            ClientRefresh.Request(_server, "workspace/inlayHint/refresh");
         }
 
         return Unit.Task;
-    }
-
-    /// <summary>
-    /// Asks the client to re-request every inlay hint.
-    ///
-    /// A REQUEST per the spec, not a notification: the client answers with null. Fire-and-forget,
-    /// like the code-lens refresh — a client that does not support it just errors, and a failed
-    /// refresh costs nothing beyond the delay this exists to remove.
-    /// </summary>
-    private void RequestInlayHintRefresh()
-    {
-        _ = _server.SendRequest("workspace/inlayHint/refresh")
-            .ReturningVoid(CancellationToken.None)
-            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 }

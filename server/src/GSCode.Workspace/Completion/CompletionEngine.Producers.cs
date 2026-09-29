@@ -706,7 +706,7 @@ public sealed partial class CompletionEngine
             string label = mostUsed.Name;
             if ( seen.Add(label) )
             {
-                cut.Offer(new VocabularyCandidate(label, mostUsed.Files, spellings.DetailFor(label)));
+                cut.Offer(new VocabularyCandidate(label, mostUsed.Files, "field"));
             }
         }
 
@@ -738,10 +738,11 @@ public sealed partial class CompletionEngine
             cut.Offer(new VocabularyCandidate(key.Name, 0, key.Type + " (map key)", key.Comment));
         }
 
+        // The row's text is built only for the rows kept: it names the owner and lists spellings,
+        // and building it for all ~7,000 names to send 200 was the allocation the cut exists to avoid.
         foreach ( VocabularyCandidate candidate in cut.Best() )
         {
-            entries.Add(new CompletionEntry(
-                candidate.Name, CompletionKind.Field, candidate.Detail, "", candidate.Documentation, Narrowed: true));
+            entries.Add(FieldEntry(candidate.Name, candidate.Detail, candidate.Documentation, ownerName, spellings));
         }
 
         return entries.ToImmutable();
@@ -802,37 +803,80 @@ public sealed partial class CompletionEngine
         }
 
         /// <summary>
-        /// "field", naming every spelling of this field OTHER than <paramref name="label"/> —
-        /// <c>field, also written foo</c> on a row labelled <c>Foo</c>. The label need not be the
-        /// most-used spelling: a row for the edited file's own field is labelled the way that file
-        /// writes it, which can be a spelling nothing indexed uses at all.
+        /// Every spelling of this field OTHER than <paramref name="label"/>, most used first, or null
+        /// when there is none — the common case, for which nothing is built. The label need not be
+        /// the most-used spelling: a row for the edited file's own field is labelled the way that
+        /// file writes it, which can be a spelling nothing indexed uses at all.
         /// </summary>
-        public string DetailFor(string label)
+        public List<VocabularyName>? OtherSpellings(string label)
         {
-            // Nothing is built for the common case, a field with one spelling that is the label:
-            // this runs once per field in the workspace's vocabulary.
             if ( _several.TryGetValue(label, out List<VocabularyName>? written) )
             {
-                List<string> others = [];
+                List<VocabularyName> others = [];
                 foreach ( VocabularyName spelling in written )
                 {
                     if ( !string.Equals(spelling.Name, label, StringComparison.Ordinal) )
                     {
-                        others.Add(spelling.Name);
+                        others.Add(spelling);
                     }
                 }
 
-                return others.Count == 0 ? "field" : "field, also written " + string.Join(", ", others);
+                return others.Count == 0 ? null : others;
             }
 
             if ( _mostUsed.TryGetValue(label, out VocabularyName only)
                 && !string.Equals(only.Name, label, StringComparison.Ordinal) )
             {
-                return "field, also written " + only.Name;
+                return [only];
             }
 
-            return "field";
+            return null;
         }
+    }
+
+    /// <summary>
+    /// One field row. The detail names what is being completed — <c>level.foo · field</c>, or the
+    /// engine's type for one of its fields, <c>self.origin · vector</c> — with the owner left off
+    /// when the cursor has none to name. A field the workspace writes in more than one casing says so
+    /// twice: <c>+4 spellings</c> dimmed beside the label, where it can be seen without opening
+    /// anything, and each spelling with how many files write it in the documentation.
+    /// </summary>
+    /// <param name="kind">What the field is: "field" for one the workspace assigns, else a type.</param>
+    /// <param name="documentation">Documentation the field already has — a map key's comment.</param>
+    private static CompletionEntry FieldEntry(
+        string label, string kind, string documentation, string ownerName, FieldSpellings spellings)
+    {
+        string detail = ownerName.Length > 0 ? ownerName + "." + label + " · " + kind : kind;
+
+        List<VocabularyName>? others = spellings.OtherSpellings(label);
+        if ( others is null )
+        {
+            return new CompletionEntry(label, CompletionKind.Field, detail, "", documentation, Narrowed: true);
+        }
+
+        string written = SpellingsDocumentation(others);
+        return new CompletionEntry(
+            label,
+            CompletionKind.Field,
+            detail,
+            "",
+            documentation.Length > 0 ? written + "\n\n" + documentation : written,
+            LabelDetail: others.Count == 1 ? " +1 spelling" : $" +{others.Count} spellings",
+            Narrowed: true);
+    }
+
+    /// <summary>The other spellings of a field, each with how many files write it, as Markdown.</summary>
+    private static string SpellingsDocumentation(List<VocabularyName> others)
+    {
+        System.Text.StringBuilder markdown = new("Also written in this workspace as:\n\n");
+        foreach ( VocabularyName spelling in others )
+        {
+            markdown.Append("- `").Append(spelling.Name).Append("` — ")
+                .Append(spelling.Files).Append(spelling.Files == 1 ? " file\n" : " files\n");
+        }
+
+        markdown.Append("\nGSC field names ignore case, so these are one field.");
+        return markdown.ToString();
     }
 
     /// <summary>
@@ -864,11 +908,7 @@ public sealed partial class CompletionEngine
 
                 if ( seen.Add(assignment.Name) )
                 {
-                    entries.Add(new CompletionEntry(
-                        assignment.Name,
-                        CompletionKind.Field,
-                        spellings.DetailFor(assignment.Name),
-                        Narrowed: true));
+                    entries.Add(FieldEntry(assignment.Name, "field", "", ownerName, spellings));
                 }
             }
         }

@@ -302,7 +302,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments (from the stores' `PathTreeIndex`), `ns::` (that namespace's functions only), `owner.` fields
   (+ `.size`; also from `VocabularyIndex` — one row per field ignoring case, labelled in this file's
-  own spelling or else the most-used one, the detail naming any other spelling), and statement scope (keywords, the dialect's global objects and snippets,
+  own spelling or else the most-used one; the detail reads `level.foo · field`, and a field written
+  in more than one casing adds a dimmed `+N spellings` and lists them, with file counts, in the
+  documentation — `FieldEntry`), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
 - **Literal and field lists are cut to what has been typed.** The file's own literals / fields and

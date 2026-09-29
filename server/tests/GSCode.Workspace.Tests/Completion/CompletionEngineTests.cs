@@ -2057,7 +2057,27 @@ public class CompletionEngineTests
 
         CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
         Assert.Equal("Foo", foo.Label);
-        Assert.Equal("field, also written foo", foo.Detail);
+        Assert.Equal("level.Foo · field", foo.Detail);
+        Assert.Equal(" +1 spelling", foo.LabelDetail);
+        Assert.Contains("- `foo` — 1 file", foo.Documentation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MemberAccess_AFieldWithOneSpelling_NamesItsOwnerAndNothingElse()
+    {
+        // The ordinary row: the header says what is being completed, and there is no hint and no
+        // pane text, since there is no other spelling to point at.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.round_number = 1;\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.\n}\n");
+        CompletionEntry round = engine.Complete(result, "raw", new Position(2, 14)).First(entry => entry.Label == "round_number");
+
+        Assert.Equal("level.round_number · field", round.Detail);
+        Assert.Empty(round.LabelDetail);
+        Assert.Empty(round.Documentation);
     }
 
     [Fact]
@@ -2076,7 +2096,9 @@ public class CompletionEngineTests
 
         CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
         Assert.Equal("foo", foo.Label);
-        Assert.Equal("field, also written Foo", foo.Detail);
+        Assert.Equal("level.foo · field", foo.Detail);
+        Assert.Equal(" +1 spelling", foo.LabelDetail);
+        Assert.Contains("- `Foo` — 2 files", foo.Documentation, StringComparison.Ordinal);
     }
 
     [Fact]

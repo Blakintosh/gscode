@@ -1,12 +1,4 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -17,7 +9,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// The two navigation requests that answer what go-to-definition cannot: which subclasses override
 /// a method, and what a local actually holds.
 ///
-/// Driven through the handlers over a real two-file workspace on disk, because both answers come
+/// Driven through the handlers over a real two-file workspace, because both answers come
 /// from the indexed class graph rather than from the open file's own syntax — an override lives in
 /// another class, and often another file, which is the whole reason the request exists.
 ///
@@ -25,28 +17,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// rather than falling back to the declaration, and a handler that silently answers a different
 /// question is indistinguishable from one that works until someone checks.
 /// </summary>
-public sealed class ImplementationAndTypeDefinitionTests : IDisposable
+public sealed class ImplementationAndTypeDefinitionTests
 {
-    private readonly string _root;
-
-    public ImplementationAndTypeDefinitionTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-navigation-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     // class cScene declares play() on line 3; cAwarenessScene overrides it on line 9. Both names
     // start at character 13, and the class name of cScene at character 6 of line 1.
     private const string SceneSource =
@@ -76,54 +48,32 @@ public sealed class ImplementationAndTypeDefinitionTests : IDisposable
         + "}\n";
 
     /// <summary>
-    /// One indexed workspace, handed to whichever handler the test wants. The two files are written
-    /// and indexed for real: an override the store has not seen is an override the class graph
-    /// cannot report.
+    /// One indexed workspace, handed to whichever handler the test wants. The two files are indexed
+    /// for real: an override the store has not seen is an override the class graph cannot report.
     /// </summary>
-    private async Task<T> WithWorkspaceAsync<T>(Func<NavigationSupport, TextDocumentSelector, string, Task<T>> body, string openFile)
+    private static async Task<T> WithWorkspaceAsync<T>(
+        Func<HandlerWorkspace, TextDocumentIdentifier, Task<T>> body, string openFile)
     {
-        File.WriteAllText(Path.Combine(_root, @"scripts\scene.gsc"), SceneSource);
-        File.WriteAllText(Path.Combine(_root, @"scripts\main.gsc"), MainSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\scene.gsc", SceneSource),
+            new TestFile(@"scripts\main.gsc", MainSource),
+        ]);
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
-        {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
-
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            string path = Path.Combine(_root, @"scripts\" + openFile);
-            OpenDocument document = documents.Open(
-                path, openFile == "scene.gsc" ? SceneSource : MainSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            NavigationSupport support = new(documents, database, resolverHolder);
-            return await body(support, TextDocumentSelector.ForLanguage("gsc"), path);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        string relativePath = @"scripts\" + openFile;
+        workspace.Open(relativePath);
+        return await body(workspace, HandlerWorkspace.Identify(relativePath));
     }
 
-    private Task<LocationOrLocationLinks?> ImplementationAtAsync(string openFile, int line, int character)
+    private static Task<LocationOrLocationLinks?> ImplementationAtAsync(string openFile, int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                ImplementationHandler handler = new(support, selector);
+                ImplementationHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 ImplementationParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -132,18 +82,17 @@ public sealed class ImplementationAndTypeDefinitionTests : IDisposable
             openFile);
     }
 
-    private Task<LocationOrLocationLinks?> TypeDefinitionAtAsync(string openFile, int line, int character)
+    private static Task<LocationOrLocationLinks?> TypeDefinitionAtAsync(string openFile, int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                string api = Path.Combine(AppContext.BaseDirectory, "Api");
                 TypeDefinitionHandler handler = new(
-                    support, BuiltinApiSet.Load(api, GameProfile.BlackOps3), ObjectFields.Load(api), selector);
+                    workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
                 TypeDefinitionParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 

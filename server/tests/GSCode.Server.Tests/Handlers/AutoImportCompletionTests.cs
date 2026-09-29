@@ -1,14 +1,5 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Completion;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -23,28 +14,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// turns it into the `additionalTextEdits` that actually writes the directive. A candidate produced
 /// with no edit behind it is a suggestion that inserts a call which does not compile.
 /// </summary>
-public sealed class AutoImportCompletionTests : IDisposable
+public sealed class AutoImportCompletionTests
 {
-    private readonly string _root;
-
-    public AutoImportCompletionTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-auto-import-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     private const string LibSource = "#namespace lib;\nfunction get_players()\n{\n}\n";
 
     private static string CallerSource(string typed, bool importsLib)
@@ -54,59 +25,32 @@ public sealed class AutoImportCompletionTests : IDisposable
     }
 
     /// <summary>The completion list for a caller whose last line is <paramref name="typed"/>.</summary>
-    private async Task<CompletionList> CompleteAfterAsync(string typed, bool importsLib = false, bool autoImport = true)
+    private static async Task<CompletionList> CompleteAfterAsync(string typed, bool importsLib = false, bool autoImport = true)
     {
-        File.WriteAllText(Path.Combine(_root, @"scripts\lib.gsc"), LibSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\lib.gsc", LibSource),
+            new TestFile(@"scripts\caller.gsc", CallerSource(typed, importsLib)),
+        ]);
+        workspace.Open(@"scripts\caller.gsc");
 
-        string source = CallerSource(typed, importsLib);
-        string callerPath = Path.Combine(_root, @"scripts\caller.gsc");
-        File.WriteAllText(callerPath, source);
+        ServerSettings settings = new() { CompletionAutoImport = autoImport };
+        CompletionHandler handler = new(
+            workspace.Navigation,
+            workspace.Completion,
+            settings,
+            HandlerWorkspace.Selector,
+            workspace.Builtins);
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
+        // The caret sits at the end of the typed word, which is the line after the brace.
+        int line = importsLib ? 4 : 3;
+        CompletionParams request = new()
         {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
+            TextDocument = HandlerWorkspace.Identify(@"scripts\caller.gsc"),
+            Position = new Position(line, 4 + typed.Length),
+        };
 
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            OpenDocument document = documents.Open(callerPath, source, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            NavigationSupport support = new(documents, database, resolverHolder);
-            string api = Path.Combine(AppContext.BaseDirectory, "Api");
-            ServerSettings settings = new() { CompletionAutoImport = autoImport };
-
-            BuiltinApiSet builtins = BuiltinApiSet.Load(api, GameProfile.BlackOps3);
-            CompletionHandler handler = new(
-                support,
-                new CompletionEngine(database, builtins, ObjectFields.Load(api)),
-                settings,
-                TextDocumentSelector.ForLanguage("gsc"),
-                builtins);
-
-            // The caret sits at the end of the typed word, which is the line after the brace.
-            int line = importsLib ? 4 : 3;
-            CompletionParams request = new()
-            {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(callerPath) },
-                Position = new Position(line, 4 + typed.Length),
-            };
-
-            return await handler.Handle(request, CancellationToken.None);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        return await handler.Handle(request, CancellationToken.None);
     }
 
     /// <summary>

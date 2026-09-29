@@ -153,6 +153,16 @@ has a template.
 
 ---
 
+## GSCode.Testing
+
+Not a test project: the setup the other suites share, referenced by Workspace.Tests and Server.Tests
+with a global `using GSCode.Testing;`. `FakeFileSystem` the in-memory tree · `TestPaths` the one fake
+root, `c:\raw`, so a test names `scripts\lib.gsc` and never a drive · `TestFile` one script under
+it · `ProfileScope` selects a game and RESTORES the previous one, with BO3 as `Default`. How a test
+uses them, and when a named game or a real path is right instead, is the `standard-tests` skill.
+
+---
+
 ## GSCode.Workspace.Tests
 
 Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
@@ -294,6 +304,12 @@ dialect.
 ## GSCode.Server.Tests
 
 The LSP layer, the formatter, and the real-corpus sweeps.
+
+**Build a handler's workspace with `HandlerWorkspace.BuildAsync(files)`.** It is wired the way
+`ServerServices` wires the server — real insert provider over a shared `InsertCache`, builtins in
+`NavigationSupport` — over `FakeFileSystem`, and holds `GameProfile.Active` on its game until
+disposed, since handlers read Active while they answer. Handler tests used to build this by hand in
+a temp directory, only because `FakeFileSystem` lived in the other suite.
 
 **Corpus** (all `Category=Corpus`, all no-op without their game). `CorpusFixture` locates BO3 via
 `GSCODE_CORPUS_BO3`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`, built from

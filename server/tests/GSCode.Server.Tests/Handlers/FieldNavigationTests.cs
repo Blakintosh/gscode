@@ -1,12 +1,4 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -30,28 +22,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// cross-file by nature: a callback is assigned in one script and invoked in another, and a
 /// single-file fixture would pass while the feature stayed broken in the case that matters.
 /// </summary>
-public sealed class FieldNavigationTests : IDisposable
+public sealed class FieldNavigationTests
 {
-    private readonly string _root;
-
-    public FieldNavigationTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-field-nav-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     // cScene's name starts at character 6 of line 1; cAwarenessScene's at character 6 of line 7.
     private const string SceneSource =
         "#namespace scene;\n"
@@ -101,53 +73,31 @@ public sealed class FieldNavigationTests : IDisposable
         + "}\n";
 
     /// <summary>
-    /// One indexed workspace with both files written to disk, handed to whichever handler the test
-    /// wants. Indexed for real: a write the store has not seen is a write no handler can report.
+    /// One indexed workspace with both files in it, handed to whichever handler the test wants.
+    /// Indexed for real: a write the store has not seen is a write no handler can report.
     /// </summary>
-    private async Task<T> WithWorkspaceAsync<T>(
-        Func<NavigationSupport, TextDocumentSelector, string, Task<T>> body)
+    private static async Task<T> WithWorkspaceAsync<T>(
+        Func<HandlerWorkspace, TextDocumentIdentifier, Task<T>> body)
     {
-        File.WriteAllText(Path.Combine(_root, @"scripts\scene.gsc"), SceneSource);
-        File.WriteAllText(Path.Combine(_root, @"scripts\fields.gsc"), FieldsSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\scene.gsc", SceneSource),
+            new TestFile(@"scripts\fields.gsc", FieldsSource),
+        ]);
+        workspace.Open(@"scripts\fields.gsc");
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
-        {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
-
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            string path = Path.Combine(_root, @"scripts\fields.gsc");
-            OpenDocument document = documents.Open(path, FieldsSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            NavigationSupport support = new(documents, database, resolverHolder);
-            return await body(support, TextDocumentSelector.ForLanguage("gsc"), path);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        return await body(workspace, HandlerWorkspace.Identify(@"scripts\fields.gsc"));
     }
 
-    private Task<LocationOrLocationLinks?> DefinitionAtAsync(int line, int character)
+    private static Task<LocationOrLocationLinks?> DefinitionAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                DefinitionHandler handler = new(support, selector);
+                DefinitionHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 DefinitionParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -155,15 +105,15 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
-    private Task<DocumentHighlightContainer?> HighlightsAtAsync(int line, int character)
+    private static Task<DocumentHighlightContainer?> HighlightsAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                DocumentHighlightHandler handler = new(support, selector);
+                DocumentHighlightHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 DocumentHighlightParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -171,18 +121,17 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
-    private Task<LocationOrLocationLinks?> TypeDefinitionAtAsync(int line, int character)
+    private static Task<LocationOrLocationLinks?> TypeDefinitionAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                string api = Path.Combine(AppContext.BaseDirectory, "Api");
                 TypeDefinitionHandler handler = new(
-                    support, BuiltinApiSet.Load(api, GameProfile.BlackOps3), ObjectFields.Load(api), selector);
+                    workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
                 TypeDefinitionParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -190,15 +139,15 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
-    private Task<LocationOrLocationLinks?> ImplementationAtAsync(int line, int character)
+    private static Task<LocationOrLocationLinks?> ImplementationAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                ImplementationHandler handler = new(support, selector);
+                ImplementationHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 ImplementationParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -206,15 +155,15 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
-    private Task<Container<CallHierarchyItem>?> CallHierarchyAtAsync(int line, int character)
+    private static Task<Container<CallHierarchyItem>?> CallHierarchyAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                CallHierarchyHandler handler = new(support, selector);
+                CallHierarchyHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 CallHierarchyPrepareParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 
@@ -222,15 +171,15 @@ public sealed class FieldNavigationTests : IDisposable
             });
     }
 
-    private Task<Container<TypeHierarchyItem>?> TypeHierarchyAtAsync(int line, int character)
+    private static Task<Container<TypeHierarchyItem>?> TypeHierarchyAtAsync(int line, int character)
     {
         return WithWorkspaceAsync(
-            (support, selector, path) =>
+            (workspace, document) =>
             {
-                TypeHierarchyHandler handler = new(support, selector);
+                TypeHierarchyHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
                 TypeHierarchyPrepareParams request = new()
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 };
 

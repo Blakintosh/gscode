@@ -1,12 +1,5 @@
-using GSCode.Core;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Database;
-using GSCode.Parser.Preprocessing;
-using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -21,33 +14,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// SCOPING half of the fix — a call in another file must never appear in a highlight list — using a
 /// real two-file workspace, since references only exist once real parsing produces them.
 /// </summary>
-public sealed class DocumentHighlightSameFileTests : IDisposable
+public sealed class DocumentHighlightSameFileTests
 {
-    private readonly string _root;
-
-    public DocumentHighlightSameFileTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-highlight-scope-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
-    private void WriteFile(string relativePath, string content)
-    {
-        File.WriteAllText(Path.Combine(_root, relativePath), content);
-    }
-
     private const string LibSource = "#namespace lib;\nfunction helper()\n{\n}\n";
 
     // "helper();" call sits on line 3; the name starts at column 4.
@@ -60,55 +28,32 @@ public sealed class DocumentHighlightSameFileTests : IDisposable
     [Fact]
     public async Task AHighlightNeverIncludesACallFromAnotherFile()
     {
-        WriteFile(@"scripts\lib.gsc", LibSource);
-        WriteFile(@"scripts\caller.gsc", CallerSource);
-        WriteFile(@"scripts\other_caller.gsc", OtherCallerSource);
+        // Real indexing over all three files, so both the caller's and the other file's calls
+        // to helper() land in the database as real, parser-produced references.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [
+                new TestFile(@"scripts\lib.gsc", LibSource),
+                new TestFile(@"scripts\caller.gsc", CallerSource),
+                new TestFile(@"scripts\other_caller.gsc", OtherCallerSource),
+            ],
+            mode: IndexingMode.Partial);
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
+        // Opened and analysed with the SAME text just indexed, so the cursor position below lands
+        // on the same call the index already knows about.
+        workspace.Open(@"scripts\caller.gsc");
+
+        DocumentHighlightHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
+
+        DocumentHighlightParams request = new()
         {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
+            TextDocument = HandlerWorkspace.Identify(@"scripts\caller.gsc"),
+            Position = new Position(4, 6), // inside "helper" on line 5 (0-based line 4)
+        };
 
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
+        DocumentHighlightContainer? result = await handler.Handle(request, CancellationToken.None);
 
-            // Real indexing over all three files, so both the caller's and the other file's calls
-            // to helper() land in the database as real, parser-produced references.
-            await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            NavigationSupport support = new(documents, database, resolverHolder);
-
-            string callerPath = Path.Combine(_root, @"scripts\caller.gsc");
-
-            // Opened and analysed with the SAME text just indexed from disk, so the cursor position
-            // below lands on the same call the index already knows about.
-            OpenDocument document = documents.Open(callerPath, CallerSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            DocumentHighlightHandler handler = new(support, TextDocumentSelector.ForLanguage("gsc"));
-
-            DocumentHighlightParams request = new()
-            {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(callerPath) },
-                Position = new Position(4, 6), // inside "helper" on line 5 (0-based line 4)
-            };
-
-            DocumentHighlightContainer? result = await handler.Handle(request, CancellationToken.None);
-
-            Assert.NotNull(result);
-            DocumentHighlight highlight = Assert.Single(result!);
-            Assert.Equal(4, highlight.Range.Start.Line);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        Assert.NotNull(result);
+        DocumentHighlight highlight = Assert.Single(result!);
+        Assert.Equal(4, highlight.Range.Start.Line);
     }
 }

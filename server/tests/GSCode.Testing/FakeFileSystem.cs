@@ -1,7 +1,7 @@
 using GSCode.Core.Paths;
 using GSCode.Workspace.Resolution;
 
-namespace GSCode.Workspace.Tests.Resolution;
+namespace GSCode.Testing;
 
 /// <summary>An in-memory file tree for resolver tests: add files, directories are implied.</summary>
 public sealed class FakeFileSystem : IFileSystem

@@ -1,12 +1,4 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -35,28 +27,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// the old name. The other 7, which is what <c>scene_shared.gsc</c> is made of.</item>
 /// </list>
 /// </summary>
-public sealed class ClassMemberNavigationTests : IDisposable
+public sealed class ClassMemberNavigationTests
 {
-    private readonly string _root;
-
-    public ClassMemberNavigationTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-member-nav-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     // Landmarks, 0-based:
     //   3,8    `var _shared;`  — declared here, USED from the other file too
     //   4,8    `var _own;`     — declared and used only here
@@ -100,121 +72,97 @@ public sealed class ClassMemberNavigationTests : IDisposable
         + "    }\n"
         + "}\n";
 
-    private async Task<T> WithWorkspaceAsync<T>(
-        string openFile, Func<NavigationSupport, TextDocumentSelector, string, Task<T>> body)
+    private static async Task<T> WithWorkspaceAsync<T>(
+        string openFile, Func<HandlerWorkspace, TextDocumentIdentifier, Task<T>> body)
     {
-        File.WriteAllText(Path.Combine(_root, @"scripts\base.gsc"), BaseSource);
-        File.WriteAllText(Path.Combine(_root, @"scripts\derived.gsc"), DerivedSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\base.gsc", BaseSource),
+            new TestFile(@"scripts\derived.gsc", DerivedSource),
+        ]);
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
-        {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
-
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            string path = Path.Combine(_root, @"scripts\" + openFile);
-            OpenDocument document = documents.Open(
-                path, openFile == "base.gsc" ? BaseSource : DerivedSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            NavigationSupport support = new(documents, database, resolverHolder);
-            return await body(support, TextDocumentSelector.ForLanguage("gsc"), path);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        string relativePath = @"scripts\" + openFile;
+        workspace.Open(relativePath);
+        return await body(workspace, HandlerWorkspace.Identify(relativePath));
     }
 
-    private Task<LocationOrLocationLinks?> DefinitionAtAsync(string openFile, int line, int character)
+    private static Task<LocationOrLocationLinks?> DefinitionAtAsync(string openFile, int line, int character)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
-            new DefinitionHandler(support, selector).Handle(
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
+            new DefinitionHandler(workspace.Navigation, HandlerWorkspace.Selector).Handle(
                 new DefinitionParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 },
                 CancellationToken.None));
     }
 
-    private Task<LocationOrLocationLinks?> ImplementationAtAsync(string openFile, int line, int character)
+    private static Task<LocationOrLocationLinks?> ImplementationAtAsync(string openFile, int line, int character)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
-            new ImplementationHandler(support, selector).Handle(
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
+            new ImplementationHandler(workspace.Navigation, HandlerWorkspace.Selector).Handle(
                 new ImplementationParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 },
                 CancellationToken.None));
     }
 
-    private Task<LocationContainer?> ReferencesAtAsync(string openFile, int line, int character)
+    private static Task<LocationContainer?> ReferencesAtAsync(string openFile, int line, int character)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
-            new ReferencesHandler(support, selector).Handle(
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
+            new ReferencesHandler(workspace.Navigation, HandlerWorkspace.Selector).Handle(
                 new ReferenceParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                     Context = new ReferenceContext { IncludeDeclaration = true },
                 },
                 CancellationToken.None));
     }
 
-    private Task<DocumentHighlightContainer?> HighlightsAtAsync(string openFile, int line, int character)
+    private static Task<DocumentHighlightContainer?> HighlightsAtAsync(string openFile, int line, int character)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
-            new DocumentHighlightHandler(support, selector).Handle(
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
+            new DocumentHighlightHandler(workspace.Navigation, HandlerWorkspace.Selector).Handle(
                 new DocumentHighlightParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 },
                 CancellationToken.None));
     }
 
-    private Task<RangeOrPlaceholderRange?> PrepareRenameAtAsync(string openFile, int line, int character)
+    private static Task<RangeOrPlaceholderRange?> PrepareRenameAtAsync(string openFile, int line, int character)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
         {
-            string api = Path.Combine(AppContext.BaseDirectory, "Api");
             PrepareRenameHandler handler = new(
-                support, BuiltinApiSet.Load(api, GameProfile.BlackOps3), ObjectFields.Load(api), selector);
+                workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
             return handler.Handle(
                 new PrepareRenameParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                 },
                 CancellationToken.None);
         });
     }
 
-    private Task<WorkspaceEdit?> RenameAtAsync(string openFile, int line, int character, string newName)
+    private static Task<WorkspaceEdit?> RenameAtAsync(string openFile, int line, int character, string newName)
     {
-        return WithWorkspaceAsync(openFile, (support, selector, path) =>
+        return WithWorkspaceAsync(openFile, (workspace, document) =>
         {
-            string api = Path.Combine(AppContext.BaseDirectory, "Api");
             RenameHandler handler = new(
-                support, BuiltinApiSet.Load(api, GameProfile.BlackOps3), ObjectFields.Load(api), selector);
+                workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
             return handler.Handle(
                 new RenameParams
                 {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                    TextDocument = document,
                     Position = new Position(line, character),
                     NewName = newName,
                 },

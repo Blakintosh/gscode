@@ -1,13 +1,5 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Tests.Corpus;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -23,28 +15,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// functions, which finds no method at all.
 /// </summary>
 [Collection(GameProfileCollection.Name)]
-public sealed class CallHierarchyMethodTests : IDisposable
+public sealed class CallHierarchyMethodTests
 {
-    private readonly string _root;
-
-    public CallHierarchyMethodTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-call-hierarchy-method-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, "scripts"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     // `helper` is declared at line 3, character 13; `run` at line 6, character 13, and calls helper
     // on line 8.
     private const string ThingSource =
@@ -64,49 +36,27 @@ public sealed class CallHierarchyMethodTests : IDisposable
     /// Indexes the one file for real, opens it, prepares the hierarchy at a position and hands the
     /// single prepared item to the test with the handler that made it.
     /// </summary>
-    private async Task<T> PreparedAtAsync<T>(
+    private static async Task<T> PreparedAtAsync<T>(
         int line, int character, Func<CallHierarchyHandler, CallHierarchyItem, Task<T>> body)
     {
-        string path = Path.Combine(_root, "scripts", "thing.gsc");
-        File.WriteAllText(path, ThingSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\thing.gsc", ThingSource),
+        ]);
+        workspace.Open(@"scripts\thing.gsc");
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
-        {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
+        CallHierarchyHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
 
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+        Container<CallHierarchyItem>? prepared = await handler.Handle(
+            new CallHierarchyPrepareParams
+            {
+                TextDocument = HandlerWorkspace.Identify(@"scripts\thing.gsc"),
+                Position = new Position(line, character),
+            },
+            CancellationToken.None);
 
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-            OpenDocument document = documents.Open(path, ThingSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            CallHierarchyHandler handler = new(
-                new NavigationSupport(documents, database, resolverHolder), TextDocumentSelector.ForLanguage("gsc"));
-
-            Container<CallHierarchyItem>? prepared = await handler.Handle(
-                new CallHierarchyPrepareParams
-                {
-                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
-                    Position = new Position(line, character),
-                },
-                CancellationToken.None);
-
-            Assert.NotNull(prepared);
-            return await body(handler, Assert.Single(prepared));
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        Assert.NotNull(prepared);
+        return await body(handler, Assert.Single(prepared));
     }
 
     [Fact]

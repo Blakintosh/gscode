@@ -1,13 +1,4 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -27,28 +18,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// The qualified <c>zm::</c> call is the control: the fix must not stop a namespace-qualified call
 /// from reaching the script function it names.
 /// </summary>
-public sealed class SysQualifiedHoverTests : IDisposable
+public sealed class SysQualifiedHoverTests
 {
-    private readonly string _root;
-
-    public SysQualifiedHoverTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-sys-hover-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(_root, @"scripts\zm"));
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     // A stand-in for the shipped _zm.gsc, which declares its own spawnSpectator() taking nothing
     // alongside BO3's engine SpawnSpectator( origin, angles ).
     private const string ZmSource = "#namespace zm;\nfunction spawnSpectator()\n{\n}\n";
@@ -63,53 +34,26 @@ public sealed class SysQualifiedHoverTests : IDisposable
         + "    self thread zm::spawnSpectator();\n"
         + "}\n";
 
-    private async Task<string?> HoverAtAsync(int line, int character)
+    private static async Task<string?> HoverAtAsync(int line, int character)
     {
-        File.WriteAllText(Path.Combine(_root, @"scripts\zm\_zm.gsc"), ZmSource);
-        File.WriteAllText(Path.Combine(_root, @"scripts\caller.gsc"), CallerSource);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\zm\_zm.gsc", ZmSource),
+            new TestFile(@"scripts\caller.gsc", CallerSource),
+        ]);
+        workspace.Open(@"scripts\caller.gsc");
 
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select("bo3");
-        try
+        HoverHandler handler = new(
+            workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
+
+        HoverParams request = new()
         {
-            PhysicalFileSystem fileSystem = new();
-            RootConfig config = RootConfig.Create(
-                rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-            PathResolver resolver = new(config, fileSystem);
-            ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
+            TextDocument = HandlerWorkspace.Identify(@"scripts\caller.gsc"),
+            Position = new Position(line, character),
+        };
 
-            NameTable names = new();
-            ScriptDatabase database = new();
-            WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
-            await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
-
-            DocumentStore documents = new(_ => NullInsertProvider.Instance, names);
-
-            string callerPath = Path.Combine(_root, @"scripts\caller.gsc");
-            OpenDocument document = documents.Open(callerPath, CallerSource, version: 1);
-            documents.AnalyzeIfStale(document);
-
-            NavigationSupport support = new(documents, database, resolverHolder);
-            string api = Path.Combine(AppContext.BaseDirectory, "Api");
-            HoverHandler handler = new(
-                support,
-                BuiltinApiSet.Load(api, GameProfile.BlackOps3),
-                ObjectFields.Load(api),
-                TextDocumentSelector.ForLanguage("gsc"));
-
-            HoverParams request = new()
-            {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(callerPath) },
-                Position = new Position(line, character),
-            };
-
-            Hover? hover = await handler.Handle(request, CancellationToken.None);
-            return hover?.Contents.MarkupContent?.Value;
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        Hover? hover = await handler.Handle(request, CancellationToken.None);
+        return hover?.Contents.MarkupContent?.Value;
     }
 
     [Fact]

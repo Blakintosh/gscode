@@ -1,12 +1,4 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -22,26 +14,16 @@ public class BuiltinMacroHoverTests
 {
     private static async Task<Hover?> HoverAtAsync(string source, int line, int character)
     {
-        string path = @"c:\bo3\share\raw\scripts\main.gsc";
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [new TestFile(@"scripts\main.gsc", source)]);
+        workspace.Open(@"scripts\main.gsc");
 
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(path, source, 1);
-        documents.AnalyzeIfStale(document);
-
-        ScriptDatabase database = new();
-        ResolverHolder holder = new(new PhysicalFileSystem());
-        NavigationSupport support = new(documents, database, holder);
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
         HoverHandler handler = new(
-            support,
-            BuiltinApiSet.Load(api, GameProfile.BlackOps3),
-            ObjectFields.Load(api),
-            TextDocumentSelector.ForLanguage("gsc"));
+            workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
         HoverParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
             Position = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Position(line, character),
         };
 
@@ -72,7 +54,7 @@ public class BuiltinMacroHoverTests
         Hover? hover = await HoverAtAsync(source, 2, 9);
 
         Assert.NotNull(hover);
-        Assert.Contains(@"c:\bo3\share\raw\scripts\main.gsc", TextOf(hover!), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(TestPaths.Raw(@"scripts\main.gsc"), TextOf(hover!), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

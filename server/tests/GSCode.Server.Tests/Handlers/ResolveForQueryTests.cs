@@ -8,7 +8,6 @@ using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Xunit;
 
@@ -25,14 +24,14 @@ namespace GSCode.Server.Tests.Handlers;
 public class ResolveForQueryTests
 {
     private static readonly string s_indexedPath =
-        PathUtil.NormalizeAbsolute(@"C:\bo3\share\raw\scripts\shared\util_shared.gsc");
+        PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\util_shared.gsc"));
 
     private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
 
     private static NavigationSupport SupportOver(ScriptDatabase database)
     {
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        return new NavigationSupport(documents, database, new ResolverHolder(new PhysicalFileSystem()));
+        return new NavigationSupport(documents, database, new ResolverHolder(new FakeFileSystem()));
     }
 
     private static ScriptRecord IndexedRecord()

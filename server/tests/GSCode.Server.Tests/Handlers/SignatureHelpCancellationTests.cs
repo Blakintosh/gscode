@@ -6,7 +6,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -24,7 +23,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class SignatureHelpCancellationTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
+    private const string Raw = TestPaths.RawRoot;
     private static string ScriptPath => Path.Combine(Raw, @"scripts\shared\sig_test.gsc");
 
     /// <summary>
@@ -43,7 +42,7 @@ public class SignatureHelpCancellationTests
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
         documents.AnalyzeIfStale(documents.Open(ScriptPath, Source, 1));
 
-        NavigationSupport support = new(documents, database, new ResolverHolder(new PhysicalFileSystem()));
+        NavigationSupport support = new(documents, database, new ResolverHolder(new FakeFileSystem()));
 
         return new SignatureHelpHandler(
             support,

@@ -5,7 +5,6 @@ using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Typing;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -23,7 +22,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintTypeCacheTests
 {
-    private const string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
     private const string Source = "function main()\n{\n    x = 1;\n}\n";
 
     private static (InlayHintHandler Handler, NavigationSupport Support, DocumentStore Documents) Build()
@@ -31,7 +30,7 @@ public class InlayHintTypeCacheTests
         DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
         documents.Open(Path, Source, 1);
 
-        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new PhysicalFileSystem()));
+        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
         InlayHintHandler handler = new(
             support,
             new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),

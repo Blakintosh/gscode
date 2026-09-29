@@ -5,7 +5,6 @@ using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Xunit;
 
@@ -22,13 +21,13 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class ResolveFreshCancellationTests
 {
-    private const string Path = @"C:\bo3\share\raw\scripts\shared\resolve_fresh.gsc";
+    private static readonly string Path = TestPaths.Raw(@"scripts\shared\resolve_fresh.gsc");
     private const string Source = "#namespace resolve;\nfunction main()\n{\n    a = 1;\n}\n";
 
     private static NavigationSupport BuildSupport(out DocumentStore documents)
     {
         documents = new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
-        return new NavigationSupport(documents, new ScriptDatabase(), new ResolverHolder(new PhysicalFileSystem()));
+        return new NavigationSupport(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
     }
 
     private static DocumentUri Uri => DocumentUri.FromFileSystemPath(Path);

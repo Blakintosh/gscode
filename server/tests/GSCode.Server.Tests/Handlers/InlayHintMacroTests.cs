@@ -5,7 +5,6 @@ using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -20,7 +19,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintMacroTests
 {
-    private const string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
 
     private const string Source =
         "#define IS_TRUE(__a) (isdefined(__a) && __a)\n"
@@ -42,7 +41,7 @@ public class InlayHintMacroTests
         OpenDocument document = documents.Open(Path, Source, 1);
         documents.AnalyzeIfStale(document);
 
-        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new PhysicalFileSystem()));
+        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
 
         return new InlayHintHandler(
             support,

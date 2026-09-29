@@ -7,7 +7,6 @@ using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using System.Collections.Immutable;
 using Xunit;
 
@@ -29,7 +28,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class CodeActionLintReuseTests
 {
-    private const string AskingPath = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string AskingPath = TestPaths.Raw(@"scripts\main.gsc");
 
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
@@ -42,7 +41,7 @@ public class CodeActionLintReuseTests
 
         ParseResult result = document.LatestResult!;
         DocumentLinter linter = new(
-            database, new ResolverHolder(new PhysicalFileSystem()),
+            database, new ResolverHolder(new FakeFileSystem()),
             BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
 
         CodeActionHandler.RequestLints lints = new(linter, document, result);

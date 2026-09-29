@@ -2,14 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
-using GSCode.Workspace.Api;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
@@ -29,26 +22,19 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class GenerateScriptDocTests
 {
-    private const string ScriptPath = @"c:\bo3\share\raw\scripts\main.gsc";
-
     private static async Task<ImmutableArray<CodeAction>> ActionsAtAsync(string source, int line, int character)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(ScriptPath, source, 1);
-        documents.AnalyzeIfStale(document);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [new TestFile(@"scripts\main.gsc", source)]);
+        workspace.Open(@"scripts\main.gsc");
 
-        ScriptDatabase database = new();
-        ResolverHolder holder = new(new PhysicalFileSystem());
-        NavigationSupport support = new(documents, database, holder);
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        DocumentLinter linter = new(database, holder, BuiltinApiSet.Load(api), ObjectFields.Load(api));
-
-        CodeActionHandler handler = new(documents, support, linter, TextDocumentSelector.ForLanguage("gsc"));
+        DocumentLinter linter = new(
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
+        CodeActionHandler handler = new(workspace.Documents, workspace.Navigation, linter, HandlerWorkspace.Selector);
 
         CodeActionParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(ScriptPath) },
+            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
             Range = new LspRange(line, character, line, character),
             Context = new CodeActionContext { Diagnostics = new Container<Diagnostic>() },
         };
@@ -121,32 +107,25 @@ public class GenerateScriptDocTests
     [InlineData("cod4")]
     public void TheGeneratedBlockParsesBackAsDocumentation(string shortName)
     {
-        GameProfile previous = GameProfile.Active;
-        GameProfile.Select(shortName);
-        try
+        using ProfileScope scope = ProfileScope.Use(GameProfile.ByName(shortName));
+
+        string block = ScriptDocTemplate.Render(
+            "give",
+            [new ParameterSymbol("weapon", ByRef: false, DefaultValueText: "")],
+            hasVarargs: false,
+            GameProfile.Active.ScriptDocStyle);
+
+        // The pre-BO3 games have no doc delimiter of their own, so the fence is what makes this
+        // documentation rather than a comment above a function.
+        if ( GameProfile.Active.ScriptDocStyle == ScriptDocStyle.TripleSlash )
         {
-            string block = ScriptDocTemplate.Render(
-                "give",
-                [new ParameterSymbol("weapon", ByRef: false, DefaultValueText: "")],
-                hasVarargs: false,
-                GameProfile.Active.ScriptDocStyle);
-
-            // The pre-BO3 games have no doc delimiter of their own, so the fence is what makes this
-            // documentation rather than a comment above a function.
-            if ( GameProfile.Active.ScriptDocStyle == ScriptDocStyle.TripleSlash )
-            {
-                Assert.True(ScriptDocComment.HasTripleSlashFence(block));
-            }
-
-            ScriptDocComment parsed = ScriptDocComment.Parse(block);
-
-            Assert.False(parsed.IsNone);
-            Assert.Equal("give( <weapon> )", parsed.Name);
-            Assert.Equal("weapon", Assert.Single(parsed.Arguments).Name);
+            Assert.True(ScriptDocComment.HasTripleSlashFence(block));
         }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+
+        ScriptDocComment parsed = ScriptDocComment.Parse(block);
+
+        Assert.False(parsed.IsNone);
+        Assert.Equal("give( <weapon> )", parsed.Name);
+        Assert.Equal("weapon", Assert.Single(parsed.Arguments).Name);
     }
 }

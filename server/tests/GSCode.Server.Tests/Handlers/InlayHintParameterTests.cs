@@ -28,8 +28,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintParameterTests
 {
-    private const string MainPath = @"c:\bo3\share\raw\scripts\main.gsc";
-    private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
+    private static readonly string MainPath = TestPaths.Raw(@"scripts\main.gsc");
+    private static readonly string UtilPath = TestPaths.Raw(@"scripts\util.gsc");
 
     /// <summary>
     /// One file exercising each callee form the family resolves, plus the three shapes that used to
@@ -112,7 +112,7 @@ public class InlayHintParameterTests
         OpenDocument document = documents.Open(MainPath, MainSource, 1);
         documents.AnalyzeIfStale(document);
 
-        NavigationSupport support = new(documents, database, new ResolverHolder(new PhysicalFileSystem()));
+        NavigationSupport support = new(documents, database, new ResolverHolder(new FakeFileSystem()));
 
         return new InlayHintHandler(
             support, Builtins(), ObjectFields.Empty, settings, TextDocumentSelector.ForLanguage("gsc"));

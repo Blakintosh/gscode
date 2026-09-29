@@ -27,8 +27,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class NamespaceImportFixTests
 {
-    private const string AskingPath = @"c:\bo3\share\raw\scripts\main.gsc";
-    private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
+    private static readonly string AskingPath = TestPaths.Raw(@"scripts\main.gsc");
+    private static readonly string UtilPath = TestPaths.Raw(@"scripts\util.gsc");
 
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
@@ -60,7 +60,7 @@ public class NamespaceImportFixTests
         OpenDocument document = documents.Open(AskingPath, askingSource, 1);
         documents.AnalyzeIfStale(document);
 
-        ResolverHolder holder = new(new PhysicalFileSystem());
+        ResolverHolder holder = new(new FakeFileSystem());
         NavigationSupport support = new(documents, database, holder);
         DocumentLinter linter = new(
             database, holder, BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
@@ -196,7 +196,7 @@ public class NamespaceImportFixTests
         foreach ( string path in new[] { "scripts\\util.gsc", "scripts\\util_extra.gsc" } )
         {
             ParseResult contributor = AnalyzeAt(
-                "#namespace util;\nfunction helper()\n{\n}\n", @"c:\bo3\share\raw\" + path);
+                "#namespace util;\nfunction helper()\n{\n}\n", TestPaths.RawRoot + @"\" + path);
 
             database.Commit(contributor, ResolutionContext.RawContext, false, path);
         }

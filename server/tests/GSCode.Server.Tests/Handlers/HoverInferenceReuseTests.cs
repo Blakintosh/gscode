@@ -5,7 +5,6 @@ using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Typing;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -27,7 +26,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class HoverInferenceReuseTests
 {
-    private const string Path1 = @"c:\bo3\share\raw\scripts\fields.gsc";
+    private static readonly string Path1 = TestPaths.Raw(@"scripts\fields.gsc");
 
     private static string ApiDirectory => System.IO.Path.Combine(AppContext.BaseDirectory, "Api");
 
@@ -42,7 +41,7 @@ public class HoverInferenceReuseTests
         documents.AnalyzeIfStale(document);
 
         ScriptDatabase database = new();
-        ResolverHolder holder = new(new PhysicalFileSystem());
+        ResolverHolder holder = new(new FakeFileSystem());
         NavigationSupport support = new(documents, database, holder);
 
         HoverHandler handler = new(

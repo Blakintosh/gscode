@@ -81,23 +81,15 @@ public class SupportedGamesHandlerTests
     [Fact]
     public async Task TheSelectedGameIsTheActiveProfile()
     {
-        GameProfile previous = GameProfile.Active;
-        try
-        {
-            GameProfile.Select("cod4");
+        using ProfileScope scope = ProfileScope.Use(GameProfile.Cod4);
 
-            SupportedGamesResponse response = await AskAsync();
+        SupportedGamesResponse response = await AskAsync();
 
-            Assert.Equal("cod4", response.SelectedGame);
-            Assert.Equal(GameProfile.Cod4.DisplayName, response.SelectedDisplayName);
+        Assert.Equal("cod4", response.SelectedGame);
+        Assert.Equal(GameProfile.Cod4.DisplayName, response.SelectedDisplayName);
 
-            // The tick has to land on something the picker is showing, or it lands on nothing.
-            Assert.Contains(response.Games, game => game.Id == response.SelectedGame);
-        }
-        finally
-        {
-            GameProfile.Select(previous.ShortName);
-        }
+        // The tick has to land on something the picker is showing, or it lands on nothing.
+        Assert.Contains(response.Games, game => game.Id == response.SelectedGame);
     }
 
     /// <summary>

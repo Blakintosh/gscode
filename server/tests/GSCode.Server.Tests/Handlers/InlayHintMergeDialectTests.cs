@@ -1,16 +1,8 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Server.Tests.Corpus;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
@@ -32,8 +24,8 @@ namespace GSCode.Server.Tests.Handlers;
 [Collection(GameProfileCollection.Name)]
 public class InlayHintMergeDialectTests
 {
-    private const string MainPath = @"c:\cod4\raw\maps\mymap.gsc";
-    private const string UtilPath = @"c:\cod4\raw\maps\_utility.gsc";
+    private const string MainRelativePath = @"maps\mymap.gsc";
+    private const string UtilRelativePath = @"maps\_utility.gsc";
 
     private const string MainSource =
         "#include maps\\_utility;\n"                           // 0
@@ -66,46 +58,31 @@ public class InlayHintMergeDialectTests
 
     private static async Task<List<InlayHint>> HintsAsync()
     {
-        GameProfile previous = GameProfile.Active;
-        Assert.True(GameProfile.Select("cod4"));
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [
+                new TestFile(UtilRelativePath, UtilSource),
+                new TestFile(MainRelativePath, MainSource),
+            ],
+            GameProfile.Cod4);
+        workspace.Open(MainRelativePath);
 
-        try
+        // No engine library: every label below must come from a script declaration.
+        InlayHintHandler handler = new(
+            workspace.Navigation,
+            new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),
+            ObjectFields.Empty,
+            ParametersOnly(),
+            HandlerWorkspace.Selector);
+
+        InlayHintParams request = new()
         {
-            ScriptDatabase database = new();
-            database.Commit(Analyze(UtilSource, UtilPath), ResolutionContext.RawContext, false, "maps\\_utility.gsc");
-            database.Commit(Analyze(MainSource, MainPath), ResolutionContext.RawContext, false, "maps\\mymap.gsc");
+            TextDocument = HandlerWorkspace.Identify(MainRelativePath),
+            Range = new LspRange(0, 0, 20, 0),
+        };
 
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-            OpenDocument document = documents.Open(MainPath, MainSource, 1);
-            documents.AnalyzeIfStale(document);
+        InlayHintContainer? container = await handler.Handle(request, CancellationToken.None);
 
-            InlayHintHandler handler = new(
-                new NavigationSupport(documents, database, new ResolverHolder(new PhysicalFileSystem())),
-                new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),
-                ObjectFields.Empty,
-                ParametersOnly(),
-                TextDocumentSelector.ForLanguage("gsc"));
-
-            InlayHintParams request = new()
-            {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(MainPath) },
-                Range = new LspRange(0, 0, 20, 0),
-            };
-
-            InlayHintContainer? container = await handler.Handle(request, CancellationToken.None);
-
-            return [.. container ?? []];
-        }
-        finally
-        {
-            Assert.True(GameProfile.Select(previous.ShortName));
-        }
-    }
-
-    private static ParseResult Analyze(string source, string path)
-    {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        return [.. container ?? []];
     }
 
     private static string LabelAt(List<InlayHint> hints, int line, string argument)

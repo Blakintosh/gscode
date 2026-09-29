@@ -2166,6 +2166,8 @@ Same harness, same machine, one run of each. bo3 at all three sizes, cod4 at two
 \* Interference, not the code: the 25K cache populate is a cold index with a cache attached and
 took 5.1 s in the same run, and earlier runs put 25K cold between the 10K and 50K figures. The same
 thing produced a 37 s cold reading at 50K once. Read the cold row across sizes, not one cell.
+The per-request rows were timed in one pass and carry JIT noise; field completion's 0.8 ms does not
+reproduce on this commit — see 2026-09-28.
 
 Every per-request row is now flat in the workspace size, which was the property being bought. Each
 change, in the order it landed, with the figure that validated it BEFORE it was made:
@@ -2302,6 +2304,44 @@ differ. The indexes cost about 50 MB retained at bo3 50K, against 2.3 GB.
   is not these changes; it is the next thing to read on that row.
 - **Workspace symbol search** walks every record, but it is a substring match over every name: a
   different index (prefix or trigram), not a narrower key.
+
+### 2026-09-28: the request timings measured the JIT, not the request
+
+Field completion on bo3 at 50K read 7.5–11.3 ms p99, against the 0.8 ms recorded on 2026-09-21. The
+commit that recorded 0.8 ms, `37c6155e`, read 8.73–11.33 ms when rebuilt and rerun three times, and
+five builds between it and today all sat in the same 5.5–11.3 ms band. Nothing regressed; the 0.8 ms
+was most likely a run the spikes below happened to miss.
+
+The request itself costs about 1 ms. What the p99 caught was tier-1 promotion: each file's two lint
+passes promote hundreds of methods between requests, and installing the optimized code lands inside
+whichever request is being timed. Per-request warming (`TimeCompletion`'s untimed first call) cannot
+prevent that, because the promotion is triggered by the OTHER requests. bo3 50K, field completion p99:
+
+| | normal JIT | tiered compilation off |
+|---|---:|---:|
+| the request timed on its own (a probe, same 241 requests) | 2.53 ms | — |
+| timed between the file's other completions and lint passes, as the sweep does | 9.99 ms | 1.02 ms |
+| the same, with a full GC forced before each request | 7.96 ms | — |
+| the sweep | 7.5–11.3 ms | 0.97 ms |
+
+No GC counter moved during any slow request, and the slow ones allocated what the fast ones did.
+
+The sweep now parses its sample once, runs every request untimed, waits until the JIT has compiled
+nothing for half a second (ten seconds at most), and times a second pass. `TimedPassJitMethods`
+prints what the JIT still compiled during the timed pass — 18–24 methods in these runs — so a run the
+warm-up did not settle says so. p99, normal JIT:
+
+| | bo3 50K, two runs | cod4 50K, one run |
+|---|---:|---:|
+| completion | 1.55 / 1.60 ms | 0.75 ms |
+| field completion | 1.30 / 1.09 ms | 0.79 ms |
+| literal completion | 4.92 / 4.00 ms | 9.51 ms, one request at 101 ms |
+| one file's lint pass, max | 8.0 / 25.9 ms | 20.7 ms |
+
+Only the per-request rows changed method. CodeLens, references, rename, `.Lookups` and the lint sweep
+keep one pass; each is far inside its budget, and a single-pass figure is an upper bound. The
+per-request figures in the tables above were taken the old way, so read their p99s as ceilings with
+JIT noise in them, not as steady state.
 
 ## Results
 

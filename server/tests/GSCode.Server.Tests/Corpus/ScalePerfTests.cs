@@ -88,6 +88,9 @@ public partial class ScalePerfTests
         public double LintP99 { get; set; }
         public double LintMax { get; set; }
         public double LintSweepSeconds { get; set; }
+
+        /// <summary>Methods the JIT compiled during the timed request pass — near zero when the warm-up settled it.</summary>
+        public long TimedPassJitMethods { get; set; }
         public double PopulateSeconds { get; set; }
         public double DrainSeconds { get; set; }
         public int DroppedWrites { get; set; }
@@ -271,24 +274,29 @@ public partial class ScalePerfTests
     /// timed at file scope, at call sites, and — separately — inside a string literal, since that arm
     /// collects literals from every record in the workspace and is the one expected to grow with it.
     /// </summary>
+    /// <remarks>
+    /// Timed in a SECOND pass over the same requests, after the first has run untimed and the JIT has
+    /// gone quiet. A single pass measured the runtime's tiered compilation rather than the server: the
+    /// lint pass between requests promotes hundreds of methods, and installing the optimized code
+    /// lands inside whichever request is being timed. That put field completion's p99 at 8-11 ms on
+    /// bo3 at 50K with the request itself at about 1 ms — 0.97 ms with tiered compilation switched
+    /// off, which is what a server that has been running a while pays. Per-request warming alone
+    /// (<see cref="TimeCompletion"/>) cannot prevent it: the promotion is triggered by the OTHER
+    /// requests. <see cref="ScaleRow.TimedPassJitMethods"/> reports what the JIT still compiled
+    /// during the timed pass, so a run the warm-up did not settle says so.
+    /// </remarks>
     private static void MeasureRequests(
         ScaleRow row, ScaleCorpus corpus, List<string> sample, ScriptDatabase database, PathResolver resolver,
         NameTable names, InsertCache inserts, BuiltinApiSet builtins, ObjectFields objectFields)
     {
         CompletionEngine engine = new(database, builtins, objectFields);
-        List<double> completions = [];
-        List<double> literals = [];
-        List<double> fields = [];
-        List<double> lints = [];
-        Dictionary<string, List<double>> ruleTimes = new(StringComparer.Ordinal);
-        LintTimings ruleTimings = new();
+        List<(string Path, ParseResult Parsed)> files = [];
 
         foreach ( string path in sample )
         {
-            ParseResult parsed;
             try
             {
-                parsed = ScriptAnalysis.Analyze(
+                ParseResult parsed = ScriptAnalysis.Analyze(
                     path,
                     corpus.Profile.LanguageFromPath(path),
                     SourceText.From(File.ReadAllText(path)),
@@ -296,55 +304,36 @@ public partial class ScalePerfTests
                     names,
                     corpus.Profile,
                     inserts);
+
+                files.Add((path, parsed));
             }
             catch ( Exception )
             {
                 continue;
             }
-
-            string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
-            ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
-
-            foreach ( Position position in CallPositions(parsed) )
-            {
-                completions.Add(TimeCompletion(engine, parsed, contextId, position, corpus.Profile));
-            }
-
-            Position? literal = LiteralPosition(parsed);
-            if ( literal is not null )
-            {
-                literals.Add(TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile));
-            }
-
-            Position? field = FieldPosition(parsed);
-            if ( field is not null )
-            {
-                fields.Add(TimeCompletion(engine, parsed, contextId, field.Value, corpus.Profile));
-            }
-
-            if ( language is ScriptLanguage.Gsc or ScriptLanguage.Csc )
-            {
-                WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
-                ruleTimings.Clear();
-                Stopwatch lint = Stopwatch.StartNew();
-                WorkspaceLints.LintsOnly(
-                    parsed, language, path, database, resolver, builtins, objectFields,
-                    cancellationToken: CancellationToken.None, timings: ruleTimings);
-                lint.Stop();
-                lints.Add(lint.Elapsed.TotalMilliseconds);
-
-                foreach ( KeyValuePair<string, double> rule in ruleTimings.Milliseconds )
-                {
-                    if ( !ruleTimes.TryGetValue(rule.Key, out List<double>? times) )
-                    {
-                        times = [];
-                        ruleTimes[rule.Key] = times;
-                    }
-
-                    times.Add(rule.Value);
-                }
-            }
         }
+
+        RequestTimes warmUp = new();
+        foreach ( (string Path, ParseResult Parsed) file in files )
+        {
+            MeasureFile(file.Path, file.Parsed, corpus, engine, database, resolver, builtins, objectFields, warmUp);
+        }
+
+        WaitForJitToSettle();
+
+        long compiledBefore = System.Runtime.JitInfo.GetCompiledMethodCount();
+        RequestTimes timed = new();
+        foreach ( (string Path, ParseResult Parsed) file in files )
+        {
+            MeasureFile(file.Path, file.Parsed, corpus, engine, database, resolver, builtins, objectFields, timed);
+        }
+
+        row.TimedPassJitMethods = System.Runtime.JitInfo.GetCompiledMethodCount() - compiledBefore;
+
+        List<double> completions = timed.Completions;
+        List<double> literals = timed.Literals;
+        List<double> fields = timed.Fields;
+        List<double> lints = timed.Lints;
 
         completions.Sort();
         literals.Sort();
@@ -363,13 +352,101 @@ public partial class ScalePerfTests
         row.LintP99 = Percentile(lints, 0.99);
         row.LintMax = lints.Count == 0 ? 0 : lints[^1];
 
-        foreach ( KeyValuePair<string, List<double>> rule in ruleTimes )
+        foreach ( KeyValuePair<string, List<double>> rule in timed.RuleTimes )
         {
             rule.Value.Sort();
             row.LintRules.Add((rule.Key, rule.Value[^1], Percentile(rule.Value, 0.99)));
         }
 
         row.LintRules.Sort(static (left, right) => right.P99.CompareTo(left.P99));
+    }
+
+    /// <summary>One pass's timings. The warm-up pass fills one too and throws it away.</summary>
+    private sealed class RequestTimes
+    {
+        public List<double> Completions { get; } = [];
+
+        public List<double> Literals { get; } = [];
+
+        public List<double> Fields { get; } = [];
+
+        public List<double> Lints { get; } = [];
+
+        public Dictionary<string, List<double>> RuleTimes { get; } = new(StringComparer.Ordinal);
+
+        public LintTimings RuleTimings { get; } = new();
+    }
+
+    /// <summary>Every request the sweep times for one file, in the order an editor would make them.</summary>
+    private static void MeasureFile(
+        string path, ParseResult parsed, ScaleCorpus corpus, CompletionEngine engine, ScriptDatabase database,
+        PathResolver resolver, BuiltinApiSet builtins, ObjectFields objectFields, RequestTimes into)
+    {
+        string contextId = ScriptDatabase.ContextIdOf(resolver.GetContext(path));
+        ScriptLanguage language = ScriptAnalysis.LanguageFromPath(path);
+
+        foreach ( Position position in CallPositions(parsed) )
+        {
+            into.Completions.Add(TimeCompletion(engine, parsed, contextId, position, corpus.Profile));
+        }
+
+        Position? literal = LiteralPosition(parsed);
+        if ( literal is not null )
+        {
+            into.Literals.Add(TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile));
+        }
+
+        Position? field = FieldPosition(parsed);
+        if ( field is not null )
+        {
+            into.Fields.Add(TimeCompletion(engine, parsed, contextId, field.Value, corpus.Profile));
+        }
+
+        if ( language is ScriptLanguage.Gsc or ScriptLanguage.Csc )
+        {
+            WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+            into.RuleTimings.Clear();
+            Stopwatch lint = Stopwatch.StartNew();
+            WorkspaceLints.LintsOnly(
+                parsed, language, path, database, resolver, builtins, objectFields,
+                cancellationToken: CancellationToken.None, timings: into.RuleTimings);
+            lint.Stop();
+            into.Lints.Add(lint.Elapsed.TotalMilliseconds);
+
+            foreach ( KeyValuePair<string, double> rule in into.RuleTimings.Milliseconds )
+            {
+                if ( !into.RuleTimes.TryGetValue(rule.Key, out List<double>? times) )
+                {
+                    times = [];
+                    into.RuleTimes[rule.Key] = times;
+                }
+
+                times.Add(rule.Value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns once the JIT has compiled nothing for half a second, or after ten seconds regardless.
+    /// Tier-1 promotion runs on a background worker after a method's call count is reached, so the
+    /// warm-up pass returning is not the same as its promotions having landed.
+    /// </summary>
+    private static void WaitForJitToSettle()
+    {
+        Stopwatch waited = Stopwatch.StartNew();
+        long previous = System.Runtime.JitInfo.GetCompiledMethodCount();
+
+        while ( waited.Elapsed < TimeSpan.FromSeconds(10) )
+        {
+            Thread.Sleep(500);
+            long current = System.Runtime.JitInfo.GetCompiledMethodCount();
+            if ( current == previous )
+            {
+                return;
+            }
+
+            previous = current;
+        }
     }
 
     /// <summary>
@@ -597,6 +674,7 @@ public partial class ScalePerfTests
         _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms  ({row.ReferenceResults:N0} locations returned in all)");
         _output.WriteLine($"     rename p99        {row.RenameP99,8:F1} ms  max {row.RenameMax,7:F1} ms");
         _output.WriteLine($"     one-file lint max {row.LintMax,8:F1} ms  budget {s_lintBudgetMilliseconds,6:F1} ms  {Verdict(row.LintMax, s_lintBudgetMilliseconds)}  (p99 {row.LintP99:F1})");
+        _output.WriteLine($"     timed-pass JIT    {row.TimedPassJitMethods,8:N0} methods compiled while the requests above were timed");
         _output.WriteLine($"     cache populate    {row.PopulateSeconds,8:F1} s   + drain {row.DrainSeconds:F1} s, db {row.DatabaseMegabytes:F0} MB");
 
         foreach ( (string Rule, double Max, double P99) rule in row.LintRules.Take(6) )

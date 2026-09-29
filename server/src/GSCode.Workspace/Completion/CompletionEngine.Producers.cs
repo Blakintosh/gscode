@@ -69,7 +69,7 @@ public sealed partial class CompletionEngine
             }
         }
 
-        ImmutableArray<string> declaredNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> declaredNamespaces = result.Extraction.DeclaredNamespaces;
 
         foreach ( string ns in declaredNamespaces )
         {
@@ -337,7 +337,7 @@ public sealed partial class CompletionEngine
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
+        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, result.Extraction.DeclaredNamespaces) )
         {
             if ( seen.Add(function.KeyName) )
             {
@@ -947,7 +947,7 @@ public sealed partial class CompletionEngine
         // The declared set rather than the namespace spans, which carry a leading region named after
         // the file whenever its imports sit above its #namespace line — a phantom that cost a full
         // store scan per keystroke to return nothing.
-        ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> ownNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Functions reachable through an import, dialect-dependent. A namespace dialect (BO3) still
         // needs the qualifier at the call site even though only the bare name was typed — so these

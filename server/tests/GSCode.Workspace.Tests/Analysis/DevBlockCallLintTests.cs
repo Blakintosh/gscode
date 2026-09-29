@@ -50,7 +50,7 @@ public class DevBlockCallLintTests
             database.Gsc,
             "raw",
             askingPath,
-            DatabaseQueries.DeclaredNamespaces(result),
+            result.Extraction.DeclaredNamespaces,
             builtins.For(ScriptLanguage.Gsc));
     }
 

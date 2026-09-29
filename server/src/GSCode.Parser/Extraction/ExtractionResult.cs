@@ -32,6 +32,10 @@ public sealed record ExtractionResult(
     /// The namespaces this file declares into — the SET question, as opposed to the positional one
     /// <see cref="Namespaces"/> answers. See <see cref="NamespaceSpan"/> for why the two differ and
     /// why reading the spans as a set yields a phantom named after the file.
+    ///
+    /// What callers pass as <c>askingNamespaces</c> for the namespace-privacy rule, read from the
+    /// live parse so unsaved edits count at once. Counting the phantom span as declared handed a file
+    /// the private members of any namespace that happened to share its filename.
     /// </summary>
     public ImmutableArray<string> DeclaredNamespaces => DeclaredNamespaceSet.From(Functions, Classes);
 }

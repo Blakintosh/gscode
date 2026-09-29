@@ -150,7 +150,7 @@ public sealed class NavigationSupport
             _database.StoreFor(document.Language),
             _database.StoresFor(document.Language),
             ScriptDatabase.ContextIdOf(context),
-            DatabaseQueries.DeclaredNamespaces(result));
+            result.Extraction.DeclaredNamespaces);
     }
 
     /// <summary>

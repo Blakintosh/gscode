@@ -249,7 +249,7 @@ public static class WorkspaceLints
         using ( LintScope.For("lint.DevBlockCallLint", timings) )
         {
             lints.AddRange(DevBlockCallLint.Analyze(
-                result, store, contextId, path, DatabaseQueries.DeclaredNamespaces(result), languageBuiltins));
+                result, store, contextId, path, result.Extraction.DeclaredNamespaces, languageBuiltins));
         }
 
         return InReadingOrder(lints);

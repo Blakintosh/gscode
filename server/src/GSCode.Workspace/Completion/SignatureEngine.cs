@@ -256,7 +256,7 @@ public sealed class SignatureEngine
         if ( namespaceName is not null )
         {
             ImmutableArray<ResolvedFunction> qualified = DatabaseQueries.LookupFunctions(
-                store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result));
+                store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: result.Extraction.DeclaredNamespaces);
 
             return qualified.Length == 0 ? null : BuildSignature(qualified[0].Function, qualified[0].OwnerClass, activeParameter);
         }

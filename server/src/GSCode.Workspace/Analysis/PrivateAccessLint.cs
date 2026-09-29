@@ -46,7 +46,7 @@ public static class PrivateAccessLint
         }
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Two caches, because the two questions below differ in more than includePrivate: the second
         // deliberately passes NO asking namespaces, so that it sees private functions this file

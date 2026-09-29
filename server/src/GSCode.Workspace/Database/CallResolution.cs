@@ -83,7 +83,7 @@ public static class CallResolution
         // Each namespace the file participates in, in order, built once rather than per iteration,
         // and from the declarations: a namespace span list includes a phantom leading span whose
         // lookup scans the whole store to return nothing.
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
 
         foreach ( string declared in askingNamespaces )
         {

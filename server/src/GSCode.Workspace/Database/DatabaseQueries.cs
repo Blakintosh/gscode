@@ -279,20 +279,6 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The lowercase-canonical namespaces a file declares, for the namespace-privacy rule.
-    /// Taken from the live parse result so unsaved edits count immediately.
-    ///
-    /// Read from the declarations, not from the namespace SPANS: the spans answer a positional
-    /// question and cover the whole file, so a file whose imports sit above its <c>#namespace</c>
-    /// line has a leading span named after itself. Counting that as declared handed a file the
-    /// private members of any namespace that happened to share its filename.
-    /// </summary>
-    public static ImmutableArray<string> DeclaredNamespaces(ParseResult result)
-    {
-        return result.Extraction.DeclaredNamespaces;
-    }
-
-    /// <summary>
     /// Normalizes an asking path for same-file comparisons. Callers with no asking file pass
     /// an empty string, which must stay empty rather than resolving to the process directory.
     /// </summary>

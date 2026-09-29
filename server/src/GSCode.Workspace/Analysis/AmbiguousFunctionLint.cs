@@ -49,7 +49,7 @@ public static class AmbiguousFunctionLint
         FileImports? imports = null)
     {
         string askingNormalized = PathUtil.NormalizeAbsolute(askingPath);
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
         // back to resolving here keeps this callable on its own, which the tests rely on.

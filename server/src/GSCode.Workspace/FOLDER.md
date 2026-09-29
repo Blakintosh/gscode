@@ -440,7 +440,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   beats raw); `FindReferences` returns visible (record, entry) pairs for a key. Private functions
   follow NAMESPACE privacy, not file privacy — a namespace can be split across files, so any file
   declaring it may call in; callers pass their namespaces via `askingNamespaces`
-  (`DeclaredNamespaces(result)` reads them from the live parse result so unsaved edits count), and
+  (`result.Extraction.DeclaredNamespaces`, from the live parse so unsaved edits count), and
   one that cannot falls back to same-file visibility. `FindGshReferences` is the deliberate
   language-guard exception: a `.gsh` serves both languages, so macros declared in headers live in
   the shared GSH store and are unreachable from either LanguageStore; it reads the header store's

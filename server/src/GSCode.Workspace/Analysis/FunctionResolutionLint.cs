@@ -95,7 +95,7 @@ public static class FunctionResolutionLint
             && !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound);
 
         List<Diagnostic> diagnosticsForMissingFiles = [];
-        ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> ownNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Functions declared in THIS file, taken from the parse in hand rather than the store. The
         // store holds the last INDEXED copy, which lags the buffer being edited — so without this,

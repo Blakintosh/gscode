@@ -39,7 +39,7 @@ public static class ArgumentCountLint
         GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
         HashSet<string> ownNamespace = OwnNamespaceFunctions(result, store, contextId, path, askingNamespaces);
         FunctionLookupCache lookups = new(store, contextId, path, askingNamespaces);
 

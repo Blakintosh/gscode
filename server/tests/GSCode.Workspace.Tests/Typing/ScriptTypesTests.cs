@@ -12,11 +12,11 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Typing;
 
 /// <summary>
-/// The per-node query surface, which is what a rewriter consumes.
+/// The per-node query surface.
 ///
-/// The editor surfaces ask about one position or one assignment site. A transpiler walks the tree
-/// it is translating and has to ask about every node it passes, including the ones nothing was ever
-/// reported about — so the map has to be complete and it has to be keyed by identity.
+/// The type-mismatch lint and the inlay hints ask about nodes no assignment names — a foreach
+/// collection, a vector component, the pointer a call goes through — so the map has to cover every
+/// node the walk reaches, and it has to be keyed by identity.
 /// </summary>
 public class ScriptTypesTests
 {
@@ -38,7 +38,7 @@ public class ScriptTypesTests
         return result;
     }
 
-    /// <summary>Finds the first node of a kind, by walking the tree the way a rewriter would.</summary>
+    /// <summary>Finds the first node of a kind, walking the tree in source order.</summary>
     private static T FirstOf<T>(AstNode node) where T : ExprNode
     {
         return TryFirstOf<T>(node) ?? throw new InvalidOperationException($"no {typeof(T).Name} in the tree");
@@ -87,7 +87,7 @@ public class ScriptTypesTests
     public void TwoIdenticalLiteralsAreSeparateEntries()
     {
         // The reason the map is keyed by REFERENCE. Every AST node is a record, so structural
-        // equality would make the three zeroes in `( 0, 0, 0 )` one key — and a rewriter asking
+        // equality would make the three zeroes in `( 0, 0, 0 )` one key — and a caller asking
         // about the second would be answered about the first.
         ParseResult result = Parse("    v = ( 0, 0, 0 );");
         ScriptTypes types = NewTyper().InferValues(result);
@@ -129,20 +129,6 @@ public class ScriptTypesTests
 
         Assert.NotEmpty(types.Assignments);
         Assert.NotEmpty(types.FieldWrites);
-    }
-
-    [Fact]
-    public void ImprecisionIsCountedByReason()
-    {
-        // The coverage number a transpiler is budgeted against: not merely how much is unknown, but
-        // which unknown to attack next.
-        ScriptTypes types = NewTyper().InferValues(Parse("    x = a;\n    y = a[ 0 ];\n    z = 1;"));
-
-        Dictionary<ScrImprecision, int> histogram = types.ImprecisionHistogram();
-
-        Assert.True(histogram.ContainsKey(ScrImprecision.UntypedParameter));
-        Assert.True(histogram.ContainsKey(ScrImprecision.ArrayElement));
-        Assert.True(histogram.ContainsKey(ScrImprecision.None));
     }
 
     [Fact]
@@ -206,8 +192,8 @@ public class ScriptTypesTests
     [Fact]
     public void TheRicherValueIsAvailableAtAPosition()
     {
-        // TryGetLocalTypeAt gives an editor its coarse label; this gives a rewriter the union and
-        // the reason behind it.
+        // TryGetLocalTypeAt gives an editor its coarse label; this gives go-to-type-definition the
+        // union and the reason behind it.
         ParseResult result = Parse("    if ( a )\n    {\n        v = 1;\n    }\n    else\n    {\n        v = \"text\";\n    }\n    use( v );");
 
         // On the `v` inside `use( v )`. The body starts at line 2 of the wrapped source, so the

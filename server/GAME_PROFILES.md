@@ -209,9 +209,8 @@ translation in either direction. Everything else that aliases, aliases in *every
 Worth stating both halves, because "arrays copy" invites the assumption that structs copy too, and
 they do not — `spawnstruct` is used in all five corpora (cod4 117 files, waw 173, mw2 190, bo1 363,
 bo3 177), so both kinds sit side by side in real code. This changes aliasing analysis, not syntax:
-telling an array from a struct is what a rewriter has to get right, and it is why
-`Workspace/Typing` grew a union lattice that can answer "must this be an array" separately from
-"might it be".
+telling an array from a struct is what an aliasing rule has to get right, and the union lattice in
+`Workspace/Typing` answers "must this be an array" separately from "might it be".
 
 `HasMacros` and `HasHeaders` coincide today and are still separate flags, because they are separate
 claims: a header IS macros, but a dialect could define them in-file with nowhere to put them. What

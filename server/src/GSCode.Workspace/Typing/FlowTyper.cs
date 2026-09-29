@@ -288,9 +288,10 @@ public sealed class FlowTyper
     /// <summary>
     /// Every value the pass worked out for a file, keyed by the expression that produced it.
     ///
-    /// The transpiler entry point. Unlike <see cref="InferAssignments(ParseResult)"/>, which reports
-    /// the sites an editor wants to decorate, this keeps the value of EVERY expression walked —
-    /// including the ones nothing is reported about, which is most of them.
+    /// Unlike <see cref="InferAssignments(ParseResult)"/>, which reports the sites an editor wants to
+    /// decorate, this keeps the value of EVERY expression walked, so a rule or a hint can ask about a
+    /// node no assignment names — a <c>foreach</c> collection, a vector component, a pointer being
+    /// called.
     ///
     /// The answer is memoised per <c>ParseResult</c>, which is what makes it the entry point for the
     /// FIELD-WRITE lints as well: a <see cref="ScriptTypes"/> already carries the assignments and
@@ -608,8 +609,8 @@ public sealed class FlowTyper
 
     /// <summary>
     /// Whether two environments agree on every value — a false negative (two structurally equal
-    /// values compared unequal, e.g. over <see cref="ScrValue.EntityKinds"/>' array identity) only
-    /// costs one more warm-up pass, never an incorrect fixpoint, since the pass count is capped.
+    /// values compared unequal) only costs one more warm-up pass, never an incorrect fixpoint, since
+    /// the pass count is capped.
     /// </summary>
     private static bool EnvironmentsEqual(Dictionary<string, ScrValue> first, Dictionary<string, ScrValue> second)
     {
@@ -1167,8 +1168,8 @@ public sealed class FlowTyper
     /// Types one expression, recording the answer when a caller asked for the whole map.
     ///
     /// Wrapped rather than folded into the switch so every return path is captured — including the
-    /// early ones and the default — which is the difference between a map a rewriter can rely on
-    /// and one with holes wherever a case returns directly.
+    /// early ones and the default — which is the difference between a map a caller can rely on and
+    /// one with holes wherever a case returns directly.
     /// </summary>
     private ScrValue TypeOf(ExprNode expression, Dictionary<string, ScrValue> environment)
     {
@@ -1196,7 +1197,7 @@ public sealed class FlowTyper
                 return ScrValue.Of(ScrTypeSet.Array);
             case NewNode newNode:
                 // A class instance, not a bare struct: the class name is part of the value's
-                // identity and a rewriter lowering BO3 objects needs it.
+                // identity, and hovers, go-to-type-definition and `->` call hints use it.
                 return ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = newNode.ClassToken.Text };
             case IdentifierNode identifier:
                 return TypeOfIdentifier(identifier.Token.Text, environment);
@@ -1330,7 +1331,7 @@ public sealed class FlowTyper
         if ( fields.Length == 0 )
         {
             // A field the scripts invented, which is most of them. Named as such rather than left
-            // anonymously unknown, so a rewriter can tell it from a field we simply failed to type.
+            // anonymously unknown, to tell it from a field we simply failed to type.
             return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.StructField);
         }
 
@@ -1434,7 +1435,7 @@ public sealed class FlowTyper
                 return ScrValue.Of(ScrTypeSet.Array);
 
             // `world` where the dialect has none. Reported as a distinct reason rather than an
-            // anonymous unknown, since a transpiler re-homing world's fields needs to see it.
+            // anonymous unknown.
             case "world":
                 return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.DialectGlobalAbsent);
 
@@ -1497,7 +1498,7 @@ public sealed class FlowTyper
     ///
     /// Typed by the operator, so <c>vector * 0.5</c> stays a vector rather than every arithmetic operator
     /// yielding a number. The operand diagnosis is discarded here — this pass types expressions and
-    /// does not report — but it is what a rule or a rewriter would read.
+    /// does not report — but it is what a rule would read.
     /// </summary>
     private ScrValue TypeOfBinary(BinaryNode binary, Dictionary<string, ScrValue> environment)
     {
@@ -1555,9 +1556,8 @@ public sealed class FlowTyper
 
     private ScrValue TypeOfCall(CallNode call, Dictionary<string, ScrValue> environment)
     {
-        // The arguments are typed in their own right: a per-node map with holes wherever an argument
-        // sits is no use to a rewriter, and inferring a parameter from its call sites needs exactly
-        // these values.
+        // The arguments are typed in their own right, so the per-node map has no holes wherever an
+        // argument sits.
         //
         // Except `self waittill( "damage", attacker, amount );`, which BINDS its trailing
         // arguments — outputs the engine fills in, not reads (the same convention

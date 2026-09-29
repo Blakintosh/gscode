@@ -15,7 +15,7 @@ namespace GSCode.Workspace.Tests.Typing;
 /// Every one of these produced nothing before: `TypeOf` had no case for indexes, ternaries,
 /// postfixes, arrow calls, qualified names or pointer dereferences, and `WalkStatement` never
 /// entered a foreach's bindings, never walked a for-loop's condition or increment, and fell
-/// straight through `const`. A transpiler needs a value for every node, so the gaps are the work.
+/// straight through `const`. The per-node map is only as useful as the nodes it reaches.
 /// </summary>
 public class TypeCoverageTests
 {
@@ -144,7 +144,7 @@ public class TypeCoverageTests
         // it certainly is not is the int it held beforehand.
         //
         // Dropping the binding at the join claimed exactly that, and nothing caught it because both
-        // readings project to Unknown — the difference only shows in the union a rewriter reads.
+        // readings project to Unknown — the difference only shows in the union underneath.
         Assert.Equal(
             ScrType.Unknown,
             TypeOf("    item = 5;\n    foreach ( item in a )\n    {\n    }\n    after = item;", "after"));
@@ -202,7 +202,7 @@ public class TypeCoverageTests
         Assert.Equal(ScrType.Unknown, TypeOf("    v = a[ 0 ];", "v"));
     }
 
-    // --- the reference kinds, which are what the transpiler turns on ---
+    // --- the reference kinds ---
 
     [Fact]
     public void AnArrayLiteralIsAnArray()
@@ -255,7 +255,7 @@ public class TypeCoverageTests
     [Fact]
     public void ANewInstanceIsDistinctFromABareStruct()
     {
-        // A class instance carries its class name, which a rewriter lowering BO3 objects needs.
+        // A class instance carries its class name, which hovers and go-to-type-definition show.
         // It still projects onto Struct, since ScrType has no member for it.
         Assert.Equal(ScrType.Struct, TypeOf("    v = new Foo();", "v"));
     }

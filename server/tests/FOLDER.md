@@ -284,8 +284,7 @@ cannot hold — which class an instance is, which function a pointer holds — i
 no OTHER label moved when display stopped going through the projection · `DocumentStoreTests` a
 second `didOpen` for an open path · `AnalysisCancellationTests` a superseded analysis stops ·
 `HeaderEditRefreshTests` an open document going stale when a header it inserts changes ·
-`ParameterTypesTests` parameter types read off the arguments callers pass · `ScriptTypesTests` the
-per-node query surface a transpiler consumes · `TypeCoverageTests` the expression and statement
+`ScriptTypesTests` the per-node query surface · `TypeCoverageTests` the expression and statement
 forms the pass used not to reach · `VectorArithmeticTests` vector arithmetic end to end.
 `TestParallelism` serializes this assembly's collections, since one class switches the active
 dialect.

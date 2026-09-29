@@ -204,11 +204,12 @@ picture and no signal to keep reading. What follows is the current state.
   the change. What produces nothing is still UNCERTAINTY, but the reason moved down a layer:
   `ScrType.Join` collapses any disagreement to `Unknown` because it is a PROJECTION of a union, not
   because no union was computed.
-- The four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with `ScrValue.Union`;
-  constant values are `ScrConstant`; entity subtypes are `ScrValue.EntityKinds`, unioned at joins;
-  and the per-position environment is `InferValues` returning a `ScriptTypes` node map, with
+- Three of the four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with
+  `ScrValue.Union`; constant values are `ScrConstant`; and the per-position environment is `InferValues` returning a `ScriptTypes` node map, with
   `FlowTyper.TryGetValueAt(result, position, out ScrValue)` for a single query. `ScrValue` goes
-  further than 1.5 did in one respect it did not ask for — every imprecision carries a REASON.
+  further than 1.5 did in one respect it did not ask for — every imprecision carries a REASON. The
+  fourth, entity subtypes, was built as `ScrValue.EntityKinds` and removed: nothing in the pass ever
+  inferred an owner's kind, so the field was never filled outside its own tests.
 - The API data is on the lattice too. `ApiLoader.ParseType` maps each parameter's and return's
   declared type onto `ScrTypeSet` once at load, including the pipe-separated unions (`"int | string"`)
   and `number`, and `ApiLoader.ParseConfidence` keeps the per-entry `high`/`medium`/`low`.
@@ -240,10 +241,8 @@ result out is what 1.5 then had to do about it.
 
 ### Step 1 is done — the lattice exists, and nothing raises a diagnostic off it
 
-Built as infrastructure for a future dialect-to-dialect transpiler rather than for a rule, which is
-why it went in despite the family above staying shut. `ScrValue` (Core/Symbols) is a union lattice
-with disjoint bits, constant values, tri-state truthiness, entity kinds and — the piece no linter
-would have asked for — a REASON attached to every imprecision. `ScrOperators` is the operator table.
+`ScrValue` (Core/Symbols) is a union lattice with disjoint bits, constant values, tri-state
+truthiness and a REASON attached to every imprecision. `ScrOperators` is the operator table.
 `FlowTyper` carries it and projects to `ScrType` at its public boundary, so hover, inlay hints and
 the two typing lints are untouched and every one of the 42 typing tests passed unedited.
 
@@ -256,8 +255,8 @@ What that bought, none of it surfaced to a user:
 - `number` (349 declarations on BO3's GSC library) and pipe-separated unions (`"int | string"`) now
   parse, and `confidence` survives loading — which is where `ArgumentTypeMismatchUnverified` would
   get its severity split from, if that pair is ever restored.
-- `InferValues` gives a per-node map and `ImprecisionHistogram` a coverage count by reason, so "how
-  much of a file can be translated" is measurable rather than guessed.
+- `InferValues` gives a per-node map, which the field-write and type-mismatch lints have since
+  been built on.
 
 Two things it did NOT change, deliberately: no new diagnostic, and no movement in the corpus. Every
 sweep across the five games reported identical counts before and after.
@@ -375,32 +374,6 @@ earned.
 
 Recorded because each was a deliberate stopping point, not an oversight. P0, P1 and the
 hover/doc half of P2 are done; the remaining items below are the decisions still worth making.
-
-### Parameter inference stops at the file boundary
-
-`Typing/ParameterTypes.Infer` reads the arguments passed at every call site IN ONE FILE and unions
-them per position, which answers "is this parameter an array" — the question a dialect transpiler
-blocks on, since whether an array parameter is mutated by its callee is the only behavioural
-difference between BO3 and the earlier games. Two passes: the first types every expression with
-parameters unknown, which is enough to type the arguments; the second seeds the parameters from
-them. Not iterated to a fixpoint, so a parameter passed straight through to another call stays
-unknown and says so.
-
-**Cross-file is the part left, and the obstacle is structural rather than effort.** A call site's
-ARGUMENTS live in the caller's syntax tree, and `ScriptRecord` stores extraction output — symbols,
-references, dependencies — not trees. Reading arguments from another file means re-parsing it.
-This entry used to price that at ~44 ms per file, which was the corpus harness's own wall-clock
-rather than the analysis (PERF.md, 2026-09-15): analysis is ~0.4 ms a file across the indexing cores,
-so re-parsing a function's callers on demand is affordable at stock size. It stops being affordable
-for a shared utility in a large workspace, called from thousands of files — the scale sweep's
-workspaces are exactly that shape. The answer that scales is still an argument index built during
-indexing and persisted with the record: per call site, the callee key and the typed value of each
-argument. That is a record-format change (`RecordSerializer` + `RecordFormatVersion`), which is why
-it is not folded into this.
-
-Worth knowing before starting: the same-file half already covers a helper declared and called in one
-script, which is most of what a per-file rewrite reasons about. The cross-file half matters for
-shared utilities, where it matters most.
 
 The field half of the old entry here is done: `HoverHandler.InferredFieldType` reports an inferred
 type for a field the scripts invented, and `ScrValue` carries the reason when it cannot.

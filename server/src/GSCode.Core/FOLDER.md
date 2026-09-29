@@ -144,28 +144,28 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 
 ## Symbols/ScrValue.cs
 
-The richer lattice underneath `ScrType`, for a future dialect-to-dialect transpiler. A lint may stay
-silent on Unknown; a rewriter must emit something for every expression, so it needs unions and it
-needs to know WHY a type is unknown.
+The richer lattice underneath `ScrType`. A union that the projection calls Unknown is still enough
+for a rule to say what a value can never be, and every imprecision carries the reason it arose.
 
 - `[Flags] enum ScrTypeSet : ulong` — the set of types a value may hold, as DISJOINT bits. The
   reversal of v1.5's `ScrDataTypes`, which encoded coercions structurally (`Int = 1<<1 | Bool`) and
   paid for it with a subset test that matched ints against bool, an `IsExactly` written to undo it,
-  and four rules suppressing wrong type names. Coercion is a relation in `ScrValues.IsAssignableTo`.
-  `Universe` is an explicit OR of the members, never `~0`.
+  and four rules suppressing wrong type names. `Universe` is an explicit OR of the members, never
+  `~0`.
 - `enum ScrImprecision` — why a value is not exact: an untyped parameter, a script function's return,
   a library spelling the lattice cannot express, an array element, a branch
-  disagreement. `None` with a single-bit set is the only state safe to rewrite blind.
+  disagreement. No editor surface reads it; it takes part in equality.
 - `readonly record struct ScrConstant` / `Vec3` — a folded compile-time value. New here; v1.5 tracked
   only `bool? BooleanValue` and folded nothing.
 - `readonly record struct ScrFunctionRef` — which function a pointer holds, namespace and name, in
   the shape symbol keys use so a consumer can query the database without re-parsing a joined string.
-- `readonly record struct ScrValue` — types + constant + tri-state truthiness + entity kinds +
-  imprecision. `MustBe`/`MayBe` replace v1.5's single `Indeterminate` flag, which could say "do not
-  trust this" but not "it is one of exactly two things and one is unsafe" — the question array
-  pass-semantics turns on. `Union` never collapses; `ToScrType()` is the projection that keeps every
-  existing consumer unchanged. Structural equality with an agreeing order-independent hash, because
-  anything in a dataflow fixpoint needs it (v1.5's reference equality made worklists never converge).
+- `readonly record struct ScrValue` — types + constant + tri-state truthiness + imprecision.
+  `MustBe`/`MayBe` replace v1.5's single `Indeterminate` flag, which could say "do not trust this"
+  but not "it is one of exactly two things" — the difference between a rule firing and staying
+  silent. `Union` never collapses; `ToScrType()` is the projection that keeps every existing consumer
+  unchanged. Hand-written structural equality (a class name compares case-insensitively) with an
+  agreeing hash, because anything in a dataflow fixpoint needs it (v1.5's reference equality made
+  worklists never converge).
 
   Two fields carry a value's IDENTITY rather than its type, and neither survives the projection:
   `InstanceClass` (the class of a `new Foo()`) and `FunctionTarget` (the function behind a `&foo`).
@@ -174,22 +174,14 @@ needs to know WHY a type is unknown.
   `ToScrType().DisplayName()`; a caller JUDGING a type still asks `ToScrType`, which is what keeps
   the typing lints comparing exactly what they always compared.
 
-  `EntityKinds` empty means "entity, kind unknown" rather than "not an entity" — `Union` checks each
-  side's `Types` (via `MayBe(Entity)`) before touching its kind list, so a side that cannot be an
-  entity contributes nothing, and when both sides may be one, either having an unknown kind widens
-  the result to unknown rather than narrowing to the other side's specific kinds. `OfEntity`
-  deduplicates its kinds (case-insensitively) so the set never carries a repeat, which is what keeps
-  the order-independent XOR hash agreeing with equality.
-
   `Without(removed)` — the `isdefined`-style narrowing primitive; `Restrict(kept)` keeps only the
   given types. Removing bits recomputes EVERYTHING that depended on them rather than carrying it
   over: `Truthiness` is asked again for the narrower set (removing what made it UNCERTAIN can make
   it certain — `Struct|Undefined` narrowed to `Struct` alone is definitely truthy, not still `null`),
-  and `EntityKinds`/`InstanceClass`/`FunctionTarget` are cleared once their own type bit
-  (Entity/Instance/Function) is gone, since keeping them would answer an identity question about a
-  type the value no longer has.
-- `static class ScrValues` — `IsAssignableTo`, `IsByReference(type, arraysByReference)` (the dialect
-  fork in one predicate), and `Describe` for rendering.
+  and `InstanceClass`/`FunctionTarget` are cleared once their own type bit (Instance/Function) is
+  gone, since keeping them would answer an identity question about a type the value no longer has.
+- `static class ScrValues` — `Describe` for rendering, and `Members`, the single-bit types in display
+  order.
 
 ## Symbols/ScrOperators.cs
 

@@ -5,8 +5,7 @@ namespace GSCode.Core.Symbols;
 ///
 /// Deliberately not <c>TokenKind</c>: that lives in GSCode.Parser, which Core cannot reference, and
 /// the deeper reason is that this table answers "what does multiplication mean on these two types",
-/// a question with no tokens in it. A caller maps its own token kind onto this; a transpiler asking
-/// what an expression evaluates to needs no token stream at all.
+/// a question with no tokens in it. A caller maps its own token kind onto this.
 /// </summary>
 public enum ScrBinaryOp
 {

@@ -1,11 +1,10 @@
-using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using Xunit;
 
 namespace GSCode.Parser.Tests.Core;
 
 /// <summary>
-/// The union lattice the transpiler is built on.
+/// The union lattice the flow pass carries.
 ///
 /// Most of what is pinned here is a deliberate reversal of v1.5's design, so the tests are written
 /// against the mistakes rather than only the behaviour: disjoint bits (v1.5 had `Int = 1&lt;&lt;1 | Bool`),
@@ -90,8 +89,10 @@ public class ScrValueTests
     public void MustBeIsFalseForTheEmptySet()
     {
         // "no type at all" must not vacuously satisfy every query.
-        Assert.False(ScrValue.Nothing.MustBe(ScrTypeSet.Array));
-        Assert.False(ScrValue.Nothing.MayBe(ScrTypeSet.Array));
+        ScrValue empty = ScrValue.Of(ScrTypeSet.None);
+
+        Assert.False(empty.MustBe(ScrTypeSet.Array));
+        Assert.False(empty.MayBe(ScrTypeSet.Array));
     }
 
     // --- union ---
@@ -102,15 +103,15 @@ public class ScrValueTests
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.String));
 
         Assert.Equal(ScrTypeSet.Int | ScrTypeSet.String, joined.Types);
-        // The coarse projection says Unknown here, which a rewriter cannot act on.
+        // The coarse projection says Unknown here; the union still says which two it can be.
         Assert.Equal(ScrType.Unknown, joined.ToScrType());
     }
 
     [Fact]
     public void IntAndFloatDoNotWidenToFloat()
     {
-        // The coarse projection widens this pair, which is right for a hover label and wrong for emitting
-        // source: `1` and `1.0` are different text.
+        // The coarse projection widens this pair, which is right for a hover label; the lattice keeps
+        // what each branch produced.
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Float));
 
         Assert.Equal(ScrTypeSet.Number, joined.Types);
@@ -118,12 +119,13 @@ public class ScrValueTests
     }
 
     [Fact]
-    public void UnionWithNothingIsIdentity()
+    public void UnionWithTheEmptySetIsIdentity()
     {
         ScrValue value = ScrValue.Of(ScrTypeSet.Int);
+        ScrValue empty = ScrValue.Of(ScrTypeSet.None);
 
-        Assert.Equal(value, ScrValue.Union(value, ScrValue.Nothing));
-        Assert.Equal(value, ScrValue.Union(ScrValue.Nothing, value));
+        Assert.Equal(value, ScrValue.Union(value, empty));
+        Assert.Equal(value, ScrValue.Union(empty, value));
     }
 
     [Fact]
@@ -149,8 +151,8 @@ public class ScrValueTests
     [Fact]
     public void DisagreeingBranchesRecordWhyTheSetWidened()
     {
-        // The set is precise, not failed — but a rewriter may still want to know no single path
-        // produced it, so the reason is carried rather than the value being marked unknown.
+        // The set is precise, not failed — no single path produced it, so the reason is carried
+        // rather than the value being marked unknown.
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.String));
 
         Assert.Equal(ScrImprecision.BranchDisagreement, joined.Imprecision);
@@ -162,7 +164,6 @@ public class ScrValueTests
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Int));
 
         Assert.Equal(ScrImprecision.None, joined.Imprecision);
-        Assert.True(joined.IsExact);
     }
 
     // --- narrowing ---
@@ -202,18 +203,14 @@ public class ScrValueTests
     }
 
     /// <summary>
-    /// <see cref="ScrValue.EntityKinds"/>, <see cref="ScrValue.InstanceClass"/> and
-    /// <see cref="ScrValue.FunctionTarget"/> carry the IDENTITY of a value whose Types includes
-    /// Entity/Instance/Function respectively — and <c>Without</c> stripped the type bit while
-    /// leaving the identity field behind, so a value narrowed away from Entity could still answer
-    /// `EntityKinds == ["player"]` despite no longer being an entity at all.
+    /// <see cref="ScrValue.InstanceClass"/> and <see cref="ScrValue.FunctionTarget"/> carry the
+    /// IDENTITY of a value whose Types includes Instance/Function respectively — and <c>Without</c>
+    /// stripped the type bit while leaving the identity field behind, so a value narrowed away from
+    /// Instance could still answer a class name despite no longer being an instance at all.
     /// </summary>
     [Fact]
     public void WithoutClearsTheIdentityFieldItsTypeNoLongerAllows()
     {
-        ScrValue entity = ScrValue.OfEntity(["player"]);
-        Assert.True(entity.Without(ScrTypeSet.Entity).EntityKinds.IsDefaultOrEmpty);
-
         ScrValue instance = ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = "Foo" };
         Assert.Null(instance.Without(ScrTypeSet.Instance).InstanceClass);
 
@@ -279,73 +276,6 @@ public class ScrValueTests
         Assert.Equal("ab", ScrConstant.OfString("ab").Content);
     }
 
-    // --- the dialect fork ---
-
-    [Theory]
-    [InlineData(ScrTypeSet.Struct)]
-    [InlineData(ScrTypeSet.Entity)]
-    [InlineData(ScrTypeSet.Instance)]
-    public void StructsEntitiesAndInstancesAliasInEveryDialect(ScrTypeSet type)
-    {
-        Assert.True(ScrValues.IsByReference(type, arraysByReference: true));
-        Assert.True(ScrValues.IsByReference(type, arraysByReference: false));
-    }
-
-    [Fact]
-    public void AnArrayIsTheOnlyKindWhosePassSemanticsFork()
-    {
-        // BO3 aliases arrays; every earlier game copies them. This is the single behavioural
-        // difference a dialect transpiler has to reason about types for.
-        Assert.True(ScrValues.IsByReference(ScrTypeSet.Array, arraysByReference: true));
-        Assert.False(ScrValues.IsByReference(ScrTypeSet.Array, arraysByReference: false));
-    }
-
-    [Theory]
-    [InlineData(ScrTypeSet.Int)]
-    [InlineData(ScrTypeSet.Float)]
-    [InlineData(ScrTypeSet.Bool)]
-    [InlineData(ScrTypeSet.String)]
-    [InlineData(ScrTypeSet.Vector)]
-    public void ScalarsAreCopiedEverywhere(ScrTypeSet type)
-    {
-        Assert.False(ScrValues.IsByReference(type, arraysByReference: true));
-        Assert.False(ScrValues.IsByReference(type, arraysByReference: false));
-    }
-
-    [Fact]
-    public void TheAlwaysByReferenceAliasExcludesArray()
-    {
-        // Getting this wrong would mark every array parameter safe to translate, which is the exact
-        // failure the whole lattice exists to prevent.
-        Assert.Equal(ScrTypeSet.None, ScrTypeSet.AlwaysByReference & ScrTypeSet.Array);
-        Assert.True((ScrTypeSet.AlwaysByReference & ScrTypeSet.Struct) != ScrTypeSet.None);
-        Assert.True((ScrTypeSet.AlwaysByReference & ScrTypeSet.Entity) != ScrTypeSet.None);
-    }
-
-    // --- assignability ---
-
-    [Fact]
-    public void AnIStringIsUsableWhereAStringIsExpectedAndTheReverseHolds()
-    {
-        Assert.True(ScrValues.IsAssignableTo(ScrTypeSet.IString, ScrTypeSet.String));
-        Assert.True(ScrValues.IsAssignableTo(ScrTypeSet.String, ScrTypeSet.IString));
-    }
-
-    [Fact]
-    public void AnIntIsNotSilentlyAString()
-    {
-        // GSC will coerce it, but a transpiler emitting the coercion has to be able to see it —
-        // so the relation says no rather than hiding it in the encoding the way v1.5 did.
-        Assert.False(ScrValues.IsAssignableTo(ScrTypeSet.Int, ScrTypeSet.String));
-    }
-
-    [Fact]
-    public void AReferenceKindMayAlwaysBeUndefined()
-    {
-        Assert.True(ScrValues.IsAssignableTo(ScrTypeSet.Undefined, ScrTypeSet.Array));
-        Assert.False(ScrValues.IsAssignableTo(ScrTypeSet.Undefined, ScrTypeSet.Int));
-    }
-
     // --- projection onto the coarse lattice the editor speaks ---
 
     [Theory]
@@ -371,15 +301,14 @@ public class ScrValueTests
         // The compatibility contract: every existing consumer sees exactly what it saw before.
         Assert.Equal(ScrType.Unknown, ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.String)).ToScrType());
         Assert.Equal(ScrType.Unknown, ScrValue.Unknown.ToScrType());
-        Assert.Equal(ScrType.Unknown, ScrValue.Nothing.ToScrType());
+        Assert.Equal(ScrType.Unknown, ScrValue.Of(ScrTypeSet.None).ToScrType());
     }
 
     [Fact]
     public void AnIntFloatUnionProjectsToFloatBecauseTheCoarseLatticeWidened()
     {
         // The one union the coarse projection answers. It has to, or a genuine int/float join would
-        // hover as nothing — while the value underneath still says int|float, which is what a rewriter
-        // needs.
+        // hover as nothing — while the value underneath still says int|float.
         ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Float));
 
         Assert.Equal(ScrTypeSet.Number, joined.Types);
@@ -408,85 +337,17 @@ public class ScrValueTests
         // v1.5's equivalent carried an ImmutableHashSet with default equality, so two identical
         // values compared unequal by reference and any worklist carrying one inside a cycle never
         // converged. That was found end-to-end; this is the direct test it lacked.
-        ScrValue left = ScrValue.OfEntity(["player", "actor"]);
-        ScrValue right = ScrValue.OfEntity(["player", "actor"]);
+        ScrValue left = ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = "Foo" };
+        ScrValue right = ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = "Foo" };
 
         Assert.Equal(left, right);
         Assert.Equal(left.GetHashCode(), right.GetHashCode());
-    }
-
-    [Fact]
-    public void EntityKindOrderDoesNotAffectEqualityOrHash()
-    {
-        ScrValue left = ScrValue.OfEntity(["player", "actor"]);
-        ScrValue right = ScrValue.OfEntity(["actor", "player"]);
-
-        Assert.Equal(left, right);
-        Assert.Equal(left.GetHashCode(), right.GetHashCode());
-    }
-
-    [Fact]
-    public void DifferentKindsAreNotEqual()
-    {
-        Assert.NotEqual(ScrValue.OfEntity(["player"]), ScrValue.OfEntity(["actor"]));
-        Assert.NotEqual(ScrValue.OfEntity(["player"]), ScrValue.OfEntity(["player", "actor"]));
-    }
-
-    /// <summary>
-    /// An empty <see cref="ScrValue.EntityKinds"/> means "entity, kind unknown" — so a Union with a
-    /// branch that DOES know its kind must keep that uncertainty, never narrow to the other
-    /// branch's specific kinds. `Union` fell back to whichever side was non-empty, so
-    /// `Union(unknownKind, OfEntity(["player"]))` claimed "definitely player" even though the first
-    /// branch could have been any entity kind at all.
-    /// </summary>
-    [Fact]
-    public void UnionOfAnUnknownEntityKindWidensRatherThanNarrows()
-    {
-        ScrValue unknownKind = ScrValue.OfEntity([]);
-        ScrValue knownKind = ScrValue.OfEntity(["player"]);
-
-        ScrValue joined = ScrValue.Union(unknownKind, knownKind);
-
-        Assert.True(joined.EntityKinds.IsDefaultOrEmpty);
-    }
-
-    /// <summary>
-    /// A duplicate entry in <see cref="ScrValue.EntityKinds"/> must not change what the value means,
-    /// or the length+Contains check <c>KindsEqual</c> uses breaks: `["player","player"]` compared
-    /// unequal to `["player"]` (different lengths) and — worse — compared EQUAL to
-    /// `["player","actor"]` (same length, each element found via Contains, duplicates uncounted),
-    /// while their hash codes (XORed per element) legitimately differed — violating the
-    /// Equals/GetHashCode contract a dataflow fixpoint's worklist relies on.
-    /// </summary>
-    [Fact]
-    public void DuplicateEntityKindsCollapseRatherThanBreakingTheHashContract()
-    {
-        ScrValue withDuplicate = ScrValue.OfEntity(["player", "player"]);
-        ScrValue withoutDuplicate = ScrValue.OfEntity(["player"]);
-        ScrValue differentKind = ScrValue.OfEntity(["player", "actor"]);
-
-        Assert.Equal(withoutDuplicate, withDuplicate);
-        Assert.Equal(withoutDuplicate.GetHashCode(), withDuplicate.GetHashCode());
-        Assert.NotEqual(withDuplicate, differentKind);
-    }
-
-    [Fact]
-    public void ADefaultKindArrayEqualsAnEmptyOne()
-    {
-        // ImmutableArray's default is not the same object as an empty one, and a value built without
-        // kinds must still equal one built with none.
-        ScrValue defaulted = ScrValue.Of(ScrTypeSet.Entity);
-        ScrValue empty = ScrValue.Of(ScrTypeSet.Entity) with { EntityKinds = ImmutableArray<string>.Empty };
-
-        Assert.Equal(defaulted, empty);
-        Assert.Equal(defaulted.GetHashCode(), empty.GetHashCode());
     }
 
     [Fact]
     public void ValuesDifferingOnlyInImprecisionAreNotEqual()
     {
-        // They carry different information for a rewriter, so a fixpoint must not treat them as
-        // converged.
+        // They carry different reasons, so a fixpoint must not treat them as converged.
         Assert.NotEqual(
             ScrValue.Of(ScrTypeSet.Int),
             ScrValue.Of(ScrTypeSet.Int, ScrImprecision.UntypedParameter));

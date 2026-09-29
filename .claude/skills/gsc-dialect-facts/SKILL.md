@@ -56,9 +56,9 @@ The trap is assuming the `ArraysPassedByReference` flag means references arrived
 not: structs and entities have always aliased, and `spawnstruct` appears in all five corpora (cod4
 117 files, waw 173, mw2 190, bo1 363, bo3 177), so both kinds are everywhere in the same code.
 
-What that means for a rule or a rewriter: a struct or entity parameter behaves the same in every
-dialect and needs no thought, while an array parameter a callee MUTATES behaves differently after
-translation in either direction. So the only question worth answering precisely is "is this an
+What that means for a rule: a struct or entity parameter behaves the same in every dialect and
+needs no thought, while an array parameter a callee MUTATES behaves differently between BO3 and the
+earlier games. So the only question worth answering precisely is "is this an
 array", and it has three answers rather than two — certainly, certainly not, and cannot tell. The
 third is the one to escalate rather than guess, which is why `ScrValue` distinguishes `MustBe` from
 `MayBe` instead of carrying a single confidence flag.

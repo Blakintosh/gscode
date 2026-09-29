@@ -967,14 +967,6 @@ are out.
   `vectorscale` (vector) yield a value worth typing; the rest are statement-shaped, and in this
   lattice a void result is indistinguishable from Unknown.
 
-## Typing/ParameterTypes.cs
-
-- `static ParameterTypes` — what a function's parameters hold, inferred from the arguments its
-  callers pass (the flow pass types a function in isolation, so a parameter otherwise starts unknown).
-  SAME FILE ONLY, structurally: a call site's arguments live in the caller's syntax tree, and the
-  database stores records, not trees. The question it exists for is whether a parameter is an array,
-  which decides the one behavioural difference a dialect transpiler has to preserve.
-
 ## Typing/FlowTyper.cs
 
 - `readonly record struct InferredAssignment(NameRange, Value, Name, IsFirstForName, IsField)` — the
@@ -1013,14 +1005,13 @@ are out.
   with the per-language `BuiltinApi` and the shared `ObjectFields`.
 - **The environment holds `ScrValue`, not `ScrType`.** Everything above describes what the editor
   sees, which is the coarse `ScrType` projection at the public boundary. Underneath, the walk carries
-  unions (`int|string` where the projection says Unknown), folded constants, entity kinds and a
-  REASON for every imprecision. That exists for a future dialect-to-dialect transpiler, which unlike
-  a lint must emit something for every expression and so needs to know WHY a type is unknown.
-- `ScriptTypes` + `FlowTyper.InferValues(result)` — the transpiler-facing surface: the value of every
+  unions (`int|string` where the projection says Unknown), folded constants and a REASON for every
+  imprecision.
+- `ScriptTypes` + `FlowTyper.InferValues(result)` — the per-node surface: the value of every
   expression the walk touched, keyed by node REFERENCE (AST nodes are records, so structural equality
-  would make the three zeroes in `( 0, 0, 0 )` one key). `TryGetValueAt` is the position query that
-  returns the union rather than the label. `ImprecisionHistogram()` counts expressions by reason,
-  which is the coverage number a rewriter is budgeted against.
+  would make the three zeroes in `( 0, 0, 0 )` one key). The field-write and type-mismatch lints and
+  the pointer-call inlay hints read it. `TryGetValueAt` is the position query that returns the union
+  rather than the label, for go-to-type-definition.
 
 ## Api/
 

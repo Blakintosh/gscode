@@ -197,13 +197,13 @@ of those exist now, and the entry below on step 1 contradicted this one for week
 it. That is the failure mode this file keeps producing: a reader arriving here first gets the old
 picture and no signal to keep reading. What follows is the current state.
 
-- `Typing/FlowTyper.cs` (1,285 lines) — a forward per-function walk that types assignments from
-  literals, arithmetic, globals and builtin return types. It carries `ScrValue` internally and
-  projects to `ScrType` at its public boundary, so hover, inlay hints, `PreferBooleanLiteralLint`
-  (5002) and `ReadOnlyWriteLint` (5004/5005) still read the flat 12-value enum and were untouched by
-  the change. What produces nothing is still UNCERTAINTY, but the reason moved down a layer:
-  `ScrType.Join` collapses any disagreement to `Unknown` because it is a PROJECTION of a union, not
-  because no union was computed.
+- `Typing/FlowTyper.cs` — a forward per-function walk that types assignments from literals,
+  arithmetic, globals and builtin return types. It carries `ScrValue` internally and projects to
+  `ScrType` for hover and inlay-hint labels; the field-write lints (`PreferBooleanLiteralLint` 5002,
+  `ReadOnlyWriteLint` 5004/5005) and `TypeMismatchLint` (5033/5034) read the `ScrValue` union
+  directly. What produces nothing is still UNCERTAINTY, but the reason moved down a layer:
+  `ScrValue.ToScrType` collapses any disagreement to `Unknown` because it is a PROJECTION of a
+  union, not because no union was computed.
 - Three of the four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with
   `ScrValue.Union`; constant values are `ScrConstant`; and the per-position environment is
   `InferValues` returning a `ScriptTypes` node map, with
@@ -214,7 +214,7 @@ picture and no signal to keep reading. What follows is the current state.
 - The API data is on the lattice too. `ApiLoader.ParseType` maps each parameter's and return's
   declared type onto `ScrTypeSet` once at load, including the pipe-separated unions (`"int | string"`)
   and `number`, and `ApiLoader.ParseConfidence` keeps the per-entry `high`/`medium`/`low`.
-  `FlowTyper` reads the return types and the confidence; **nothing reads the parameter types**, which
+  `FlowTyper` reads the return types; **nothing reads the parameter types or the confidence**, which
   is `ArgumentTypeMismatch`'s row in the table below. `VoidResultLint` (5019) remains the standing
   proof that a rule can be driven off this data without a lattice at all.
 

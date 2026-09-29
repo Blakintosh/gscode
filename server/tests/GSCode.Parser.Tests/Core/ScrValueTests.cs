@@ -9,7 +9,8 @@ namespace GSCode.Parser.Tests.Core;
 /// Most of what is pinned here is a deliberate reversal of v1.5's design, so the tests are written
 /// against the mistakes rather than only the behaviour: disjoint bits (v1.5 had `Int = 1&lt;&lt;1 | Bool`),
 /// an explicit universe (v1.5's `~0u &amp; ~Error` carried junk bits), unions that do not collapse
-/// (`ScrType.Join` widens int+float to float), and must/may in place of a single trust flag.
+/// (the coarse `ScrType` projection widens int+float to float), and must/may in place of a single
+/// trust flag.
 /// </summary>
 public class ScrValueTests
 {

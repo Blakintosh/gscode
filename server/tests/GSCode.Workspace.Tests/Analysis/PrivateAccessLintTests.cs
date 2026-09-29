@@ -10,7 +10,6 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -26,11 +25,8 @@ public class PrivateAccessLintTests
                 TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction private hidden()\n{\n}\nfunction shown()\n{\n}\n");
 
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database;
     }
@@ -184,7 +180,7 @@ public class PrivateAccessLintTests
     }
 
     [Fact]
-    public async Task ARelation_PointsAtTheHeaderWhenThePrivateFunctionArrivedThroughAnInsert()
+    public void ARelation_PointsAtTheHeaderWhenThePrivateFunctionArrivedThroughAnInsert()
     {
         // scripts\util.gsc does not write `hidden` itself — it #inserts a header that does. The
         // resulting FunctionSymbol's NameRange is a TRUE position in THAT header, not in
@@ -197,11 +193,7 @@ public class PrivateAccessLintTests
             .AddFile(headerPath, "#namespace util;\nfunction private hidden()\n{\n}\n")
             .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#insert scripts\\util_impl.gsh;\nfunction shown()\n{\n}\n");
 
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
 
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
@@ -210,7 +202,7 @@ public class PrivateAccessLintTests
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         Diagnostic diagnostic = Assert.Single(PrivateAccessLint.Analyze(
-            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc)));
+            result, workspace.Database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc)));
 
         DiagnosticRelation relation = Assert.Single(diagnostic.RelatedInformation);
         Assert.Equal(PathUtil.NormalizeAbsolute(headerPath), relation.FilePath, ignoreCase: true);

@@ -30,11 +30,8 @@ public class FunctionResolutionLintTests
                 TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction shown()\n{\n}\nfunction private hidden()\n{\n}\n");
 
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database;
     }
@@ -204,12 +201,8 @@ public class FunctionResolutionLintTests
         string askingPath = TestPaths.Raw(@"maps\mp\test.gsc");
 
         FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, source);
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, cod4, IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), cod4);

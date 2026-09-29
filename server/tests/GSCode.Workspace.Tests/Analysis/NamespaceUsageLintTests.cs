@@ -22,11 +22,9 @@ public class NamespaceUsageLintTests
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
         return (database, resolver);
     }

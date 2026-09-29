@@ -28,11 +28,9 @@ public class UnusedUsingLintTests
             .AddFile(TestPaths.Raw(@"scripts\boot.gsc"), "#namespace boot;\nfunction autoexec start()\n{\n}\n")
             .AddFile(TestPaths.Raw(@"scripts\shapes.gsc"), "#namespace shapes;\nclass Circle\n{\n}\n");
 
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
         return (database, resolver);
     }

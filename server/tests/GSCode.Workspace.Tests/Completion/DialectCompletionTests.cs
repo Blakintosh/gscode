@@ -7,7 +7,6 @@ using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -366,12 +365,8 @@ public class DialectCompletionTests
 
     private static CompletionEngine BuildEngine()
     {
-        RootConfig config = TestPaths.Config(s_pathWorld);
-        PathResolver resolver = new(config, s_pathWorld);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, s_pathWorld, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(s_pathWorld, GameProfile.Cod4, IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
         return new CompletionEngine(database, BuiltinApiSet.Load(api), ObjectFields.Load(api));

@@ -31,8 +31,7 @@ public sealed class TestWorkspace : IDisposable
         Profile = profile;
         Files = files;
 
-        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files);
-        Resolver = new PathResolver(config, files);
+        Resolver = new PathResolver(TestPaths.Config(files), files);
         Database = new ScriptDatabase();
     }
 
@@ -46,24 +45,36 @@ public sealed class TestWorkspace : IDisposable
 
     /// <summary>
     /// Indexes <paramref name="files"/> under <paramref name="profile"/>, or
-    /// <see cref="ProfileScope.Default"/> when the game is not what the test is about.
+    /// <see cref="ProfileScope.Default"/> when the game is not what the test is about. Partial mode
+    /// is what startup runs: parse-level diagnostics only, no cross-file lints stored.
     /// </summary>
-    public static TestWorkspace Build(IEnumerable<TestFile> files, GameProfile? profile = null)
+    public static TestWorkspace Build(
+        IEnumerable<TestFile> files, GameProfile? profile = null, IndexingMode mode = IndexingMode.Full)
+    {
+        FakeFileSystem fileSystem = new();
+        foreach ( TestFile file in files )
+        {
+            fileSystem.AddFile(TestPaths.Raw(file.RelativePath), file.Text);
+        }
+
+        return Build(fileSystem, profile, mode);
+    }
+
+    /// <summary>
+    /// The same over a tree the test has already filled, for the suites whose facts each add their
+    /// own files to a <see cref="FakeFileSystem"/> before asking.
+    /// </summary>
+    public static TestWorkspace Build(
+        FakeFileSystem fileSystem, GameProfile? profile = null, IndexingMode mode = IndexingMode.Full)
     {
         GameProfile chosen = profile ?? ProfileScope.Default;
         ProfileScope scope = ProfileScope.Use(chosen);
         try
         {
-            FakeFileSystem fileSystem = new();
-            foreach ( TestFile file in files )
-            {
-                fileSystem.AddFile(TestPaths.Raw(file.RelativePath), file.Text);
-            }
-
             TestWorkspace workspace = new(scope, chosen, fileSystem);
             WorkspaceIndexer indexer = new(
                 workspace.Database, () => workspace.Resolver, fileSystem, new NameTable(), profile: chosen);
-            indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None)
+            indexer.IndexAsync(mode, NullIndexProgressListener.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
             return workspace;
         }

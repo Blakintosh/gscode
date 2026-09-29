@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
@@ -28,12 +26,8 @@ public class MethodResolutionTests
             system.AddFile(TestPaths.Raw(@$"scripts\{file.Name}.gsc"), file.Source);
         }
 
-        RootConfig config = TestPaths.Config(system);
-        PathResolver resolver = new(config, system);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, system, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(system, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database.Gsc;
     }

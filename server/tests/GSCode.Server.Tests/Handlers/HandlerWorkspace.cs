@@ -35,9 +35,7 @@ public sealed class HandlerWorkspace : IDisposable
         Profile = profile;
         Files = files;
 
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true, rawPath: TestPaths.RawRoot, modsPath: null, workspaceFolders: [], fileSystem: files);
-        Resolver = new PathResolver(config, files);
+        Resolver = new PathResolver(TestPaths.Config(files), files);
         ResolverHolder = new ResolverHolder(files) { Current = Resolver };
 
         Names = new NameTable();

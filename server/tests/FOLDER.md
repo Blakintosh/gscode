@@ -169,8 +169,9 @@ and when a named game or a real path is right instead, is the `standard-tests` s
 
 Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 
-**Build a workspace with `using TestWorkspace workspace = TestWorkspace.Build(files, profile?)`.**
-Files are `TestFile`s under `TestPaths.RawRoot`; `workspace.Analyze(relativePath)` gives the open
+**Build a workspace with `using TestWorkspace workspace = TestWorkspace.Build(files, profile?, mode?)`.**
+Files are `TestFile`s under `TestPaths.RawRoot`, or a `FakeFileSystem` the test filled itself, over
+`TestPaths.Config`; `workspace.Analyze(relativePath)` gives the open
 file's fresh analysis under the same game. It indexes through the real `WorkspaceIndexer` with the
 dialect pinned AND holds `GameProfile.Active` on it until disposed, which is the part that must not
 be left to chance: under BO3 a keyword-less `is_coop()` is not a declaration at all — so a workspace

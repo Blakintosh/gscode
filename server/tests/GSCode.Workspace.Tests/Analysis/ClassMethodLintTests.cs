@@ -35,12 +35,8 @@ public class ClassMethodLintTests
             system.AddFile(TestPaths.Raw(@$"scripts\{file.Name}.gsc"), file.Source);
         }
 
-        RootConfig config = TestPaths.Config(system);
-        PathResolver resolver = new(config, system);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, system, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(system, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database;
     }

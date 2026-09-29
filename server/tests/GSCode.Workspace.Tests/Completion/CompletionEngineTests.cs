@@ -17,11 +17,9 @@ public class CompletionEngineTests
 
     private static (CompletionEngine Engine, ScriptDatabase Db, PathResolver Resolver) BuildWorld(FakeFileSystem files)
     {
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
         CompletionEngine engine = new(database, BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
         return (engine, database, resolver);

@@ -466,35 +466,69 @@ public sealed class WorkspaceIndexer
     /// do not retain one) and must not perturb the database's structural state doing it. The
     /// sweep already knows the record it is refreshing; this only has to reproduce its parse.
     ///
-    /// Null on a read failure or an oversized file — the same two cases <see cref="ProcessFile"/>
-    /// treats as "nothing to analyse here" on the indexing path.
+    /// Null on a read failure or an oversized file — <see cref="TryReadForAnalysis"/>, the same test
+    /// the indexing path skips on.
     /// </summary>
     public ParseResult? AnalyzeForLintSweep(string path)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
 
-        string content;
+        if ( !TryReadForAnalysis(normalized, out string content, out bool _) )
+        {
+            return null;
+        }
+
+        return AnalyzeFromDisk(
+            normalized, ScriptAnalysis.LanguageFromPath(normalized), content, Resolver.GetContext(normalized));
+    }
+
+    /// <summary>
+    /// A file's text as the index reads it, or false when there is nothing to analyse: the read
+    /// failed, or the file is past <see cref="MaxAnalysedCharacters"/>. Reading is cheap; lex, parse
+    /// and extract on a file that size is not, and skipping keeps one pathological file from
+    /// dominating a cold index. Real scripts are orders of magnitude smaller.
+    ///
+    /// Shared by the index and the lint sweep, which must skip exactly the same files — a sweep
+    /// that analysed one the index refused would be linting something no record describes.
+    /// </summary>
+    /// <param name="oversized">True when the file was read and refused for its size, for the one
+    /// caller that counts those.</param>
+    private bool TryReadForAnalysis(string normalized, out string content, out bool oversized)
+    {
+        oversized = false;
+
         try
         {
             content = _fileSystem.ReadAllText(normalized);
         }
         catch ( IOException )
         {
-            return null;
+            content = "";
+            return false;
         }
         catch ( UnauthorizedAccessException )
         {
-            return null;
+            content = "";
+            return false;
         }
 
         if ( content.Length > MaxAnalysedCharacters )
         {
-            return null;
+            oversized = true;
+            return false;
         }
 
-        ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
-        ResolutionContext context = Resolver.GetContext(normalized);
+        return true;
+    }
 
+    /// <summary>
+    /// The analysis the index runs on a file read from disk: its context's insert provider, the
+    /// shared header cache, and this indexer's name table and profile. One construction for the
+    /// index and the lint sweep, since the sweep exists to lint exactly what the index sees.
+    /// </summary>
+    private ParseResult AnalyzeFromDisk(
+        string normalized, ScriptLanguage language, string content, ResolutionContext context)
+    {
         return ScriptAnalysis.Analyze(
             normalized,
             language,
@@ -530,32 +564,19 @@ public sealed class WorkspaceIndexer
         // blocking I/O inside the parallel body, analyse is the four-phase pipeline, commit is where
         // the store's single write gate is waited on, and enqueue hands off to the cache writer.
         // Every one is [Conditional] and absent from an ordinary build.
-        string content;
         PerfTracker.Begin("index.read");
-        try
-        {
-            content = _fileSystem.ReadAllText(normalized);
-        }
-        catch ( IOException )
-        {
-            PerfTracker.End();
-            return new FileOutcome(Restored: false, Record: null);
-        }
-        catch ( UnauthorizedAccessException )
-        {
-            PerfTracker.End();
-            return new FileOutcome(Restored: false, Record: null);
-        }
-
+        bool read = TryReadForAnalysis(normalized, out string content, out bool oversized);
         PerfTracker.End();
 
-        if ( content.Length > MaxAnalysedCharacters )
+        if ( !read )
         {
-            // Reading is cheap; lex/parse/extract on a file this size is not. Skipping keeps a
-            // single pathological file from dominating a cold index. Real scripts are orders of
-            // magnitude smaller, so this should never fire in practice. Counted rather than
-            // logged here: this layer has no logger by design, so the server reports it.
-            Interlocked.Increment(ref _skippedOversized);
+            // Counted rather than logged here: this layer has no logger by design, so the server
+            // reports it. The lint sweep skips the same files without counting them again.
+            if ( oversized )
+            {
+                Interlocked.Increment(ref _skippedOversized);
+            }
+
             return new FileOutcome(Restored: false, Record: null);
         }
 
@@ -616,14 +637,7 @@ public sealed class WorkspaceIndexer
         ResolutionContext context = Resolver.GetContext(normalized);
 
         PerfTracker.Begin("index.analyse");
-        ParseResult result = ScriptAnalysis.Analyze(
-            normalized,
-            language,
-            SourceText.From(content),
-            new ResolverInsertProvider(Resolver, context, _fileSystem, _inserts),
-            _names,
-            profile: _profile,
-            headerCache: _inserts);
+        ParseResult result = AnalyzeFromDisk(normalized, language, content, context);
         PerfTracker.End();
 
         // A header is an index target in its own right (it matches *.gsh) AND an insert source, and

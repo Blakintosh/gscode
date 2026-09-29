@@ -550,8 +550,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   applied to an on-disk change behind the editor's back.
 - `AnalyzeForLintSweep(path)` — read + analyse with NO commit, NO cache write, NO header seeding:
   purely a `ParseResult` for the `workspaceIndexingMode: full` lint sweep (`WorkspaceLintSweep`,
-  server-side), which needs one because records do not retain theirs. Null on the same two cases
-  `ProcessFile` treats as nothing-to-analyse (unreadable, oversized).
+  server-side), which needs one because records do not retain theirs. Reads and analyses through
+  the same two private steps `ProcessFile` does — `TryReadForAnalysis` (null when unreadable or
+  oversized) and `AnalyzeFromDisk` — so the sweep lints exactly what the index would see.
 
 ## Cache/CacheSchema.cs
 

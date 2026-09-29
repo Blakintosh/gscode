@@ -476,10 +476,8 @@ public sealed class NavigationSupport
                 target.Store, target.ContextId, key.OwnerClass, key.Name) is null;
         }
 
-        // The explicit `sys::` form on a namespace dialect: namespace-less by construction, and no
-        // script declaration can claim it. See DatabaseQueries.DeclaresKey, which makes the same
-        // call per candidate key.
-        if ( key.Namespace is null && GameProfile.Active.ResolvesByNamespace )
+        // The explicit `sys::` form: no script declaration can claim it.
+        if ( BuiltinQualifier.IsBuiltinKey(key, GameProfile.Active) )
         {
             return true;
         }

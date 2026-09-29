@@ -144,21 +144,14 @@ public static class MethodResolution
         ImmutableArray<string> askingNamespaces = default,
         string fileNamespace = "")
     {
-        // The explicit `sys::` form on a namespace dialect: extraction keys it with no namespace and
-        // no owner, and nothing else there does — an unqualified call is keyed under the file's own
-        // namespace. It names the engine's function, so no script declaration answers it, and the
-        // caller falls back to the builtin library. Asked of the key as WRITTEN, because Canonicalize
-        // below can itself produce a namespace-less key for a bare call inside a class, which is not
-        // this. Without it the fallback at the bottom read the null as "any namespace" and handed
-        // `sys::spawnSpectator()` to `zm::spawnSpectator` in a file that neither is in `zm` nor
-        // imports it. An arrow call is excluded: it keys the same shape and can reach a top-level
-        // function through a field holding a pointer (below). NavigationSupport.IsBuiltinCall and
-        // DatabaseQueries.DeclaresKey make the same call.
-        if ( key.Kind == SymbolKind.Function
-            && key.Namespace is null
-            && key.OwnerClass is null
-            && referenceKind != ReferenceKind.MethodCall
-            && GameProfile.Active.ResolvesByNamespace )
+        // The explicit `sys::` form names the engine's function, so no script declaration answers it
+        // and the caller falls back to the builtin library. Asked of the key as WRITTEN, because
+        // Canonicalize below can itself produce a namespace-less key for a bare call inside a class,
+        // which is not this. Without it the fallback at the bottom read the null as "any namespace"
+        // and handed `sys::spawnSpectator()` to `zm::spawnSpectator` in a file that neither is in
+        // `zm` nor imports it. An arrow call is excluded: it keys the same shape and can reach a
+        // top-level function through a field holding a pointer (below).
+        if ( referenceKind != ReferenceKind.MethodCall && BuiltinQualifier.IsBuiltinKey(key, GameProfile.Active) )
         {
             return [];
         }

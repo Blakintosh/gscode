@@ -60,7 +60,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   positionally from `ClassSymbol.FullRange` — it describes the call site, not the callee.
 - `BuiltinQualifier` — the written `sys::` qualifier, `Is(qualifier)` in any case. Such a call keys
   with a NULL namespace, the builtin key, never as a namespace called `sys`; every reader of a
-  written qualifier asks here rather than comparing its own literal.
+  written qualifier asks here rather than comparing its own literal. `IsBuiltinKey(key, game)` is the
+  same fact for a reader holding the KEY: a function with no namespace and no owner, on a namespace
+  dialect, where nothing else produces that key.
 
 ## Symbols/SymbolModels.cs
 

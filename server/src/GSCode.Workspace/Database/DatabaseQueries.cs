@@ -1619,12 +1619,11 @@ public static class DatabaseQueries
             return MethodResolution.FindDeclaringClass(store, askingContextId, key.OwnerClass, key.Name) is not null;
         }
 
-        // On a namespace dialect a namespace-less function key is the EXPLICIT builtin form,
-        // `sys::name` — `RecordCalleeReference` drops the qualifier precisely because builtins are
-        // namespace-less. No script declaration can claim it, and asking the question below would
-        // hand it to any namespace that happens to declare the name: without this, a workspace
-        // where one file declares `getentarray()` hid every `sys::getentarray()` in the rest of it.
-        if ( key.Namespace is null && game.ResolvesByNamespace )
+        // The explicit `sys::name` form. No script declaration can claim it, and asking the question
+        // below would hand it to any namespace that happens to declare the name: without this, a
+        // workspace where one file declares `getentarray()` hid every `sys::getentarray()` in the
+        // rest of it.
+        if ( BuiltinQualifier.IsBuiltinKey(key, game) )
         {
             return false;
         }

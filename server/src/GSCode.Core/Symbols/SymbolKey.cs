@@ -77,4 +77,22 @@ public static class BuiltinQualifier
     {
         return string.Equals(qualifier, Text, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Whether a key is the one a <c>sys::</c> call is keyed under: a function with no namespace and
+    /// no owning class, on a namespace dialect. Nothing else produces that key there — an unqualified
+    /// call is keyed under the file's own namespace and a method carries its class — so no script
+    /// declaration can answer it. On a merge dialect every unqualified call has this shape, so there
+    /// it proves nothing and the answer is false.
+    ///
+    /// The one test for readers holding a KEY. Readers holding only text — completion and signature
+    /// help, where <c>sys::</c> with nothing after it is not yet a call — ask <see cref="Is"/>.
+    /// </summary>
+    public static bool IsBuiltinKey(SymbolKey key, GameProfile game)
+    {
+        return key.Kind == SymbolKind.Function
+            && key.Namespace is null
+            && key.OwnerClass is null
+            && game.ResolvesByNamespace;
+    }
 }

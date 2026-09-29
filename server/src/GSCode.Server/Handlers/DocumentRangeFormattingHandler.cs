@@ -1,7 +1,4 @@
-using GSCode.Workspace.Api;
 using GSCode.Core.Text;
-using GSCode.Workspace.Documents;
-using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -17,21 +14,13 @@ namespace GSCode.Server.Handlers;
 /// </summary>
 public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHandlerBase
 {
-    private readonly DocumentStore _documents;
+    private readonly FormattingSupport _formatting;
     private readonly TextDocumentSelector _selector;
-    private readonly ServerSettings _settings;
-    private readonly ResolverHolder _resolver;
-    private readonly StockScripts _stockScripts;
 
-    public DocumentRangeFormattingHandler(
-        DocumentStore documents, TextDocumentSelector selector, ServerSettings settings,
-        ResolverHolder resolver, StockScripts stockScripts)
+    public DocumentRangeFormattingHandler(FormattingSupport formatting, TextDocumentSelector selector)
     {
-        _resolver = resolver;
-        _stockScripts = stockScripts;
-        _documents = documents;
+        _formatting = formatting;
         _selector = selector;
-        _settings = settings;
     }
 
     protected override DocumentRangeFormattingRegistrationOptions CreateRegistrationOptions(
@@ -44,11 +33,9 @@ public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHand
     {
         // Same reasoning as the on-type handler: a fragment format must not move the file's
         // directive block. Alignment is left to the setting.
-        FormatOptions options = FormatOptions.From(
-            (int)request.Options.TabSize, request.Options.InsertSpaces, _settings) with { SortDirectives = false };
+        FormatOptions options = _formatting.OptionsFor(request.Options) with { SortDirectives = false };
 
-        if ( FormattingSupport.Prepare(
-                _documents, _resolver, _stockScripts, request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
+        if ( _formatting.Prepare(request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
             || prepared.Edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer>(new TextEditContainer());

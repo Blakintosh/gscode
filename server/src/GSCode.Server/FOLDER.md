@@ -768,7 +768,10 @@ that chose it. These are the pieces that implement it:
   comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
   dropped). Keeping these in one place prevents the aligners and formatter scope logic from
   disagreeing.
-- `FormattingSupport` — the steps the three formatting handlers share before they diverge:
+- `FormattingSupport` — the steps the three formatting handlers share before they diverge. An
+  injected singleton, like `NavigationSupport`, owning the document store, resolver, stock-script
+  list and settings those steps need, so each handler takes only it and its selector:
+  `OptionsFor` builds the formatter options from the editor's indentation and the settings,
   `Prepare` resolves the open document and analyses it FRESH before diffing (a stale read here
   writes a corrupting edit rather than merely showing something wrong), `ToLspEdits` projects the
   formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its

@@ -1,6 +1,7 @@
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Server.Configuration;
+using GSCode.Server.Formatting;
 using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
 using GSCode.Server.Startup;
@@ -167,6 +168,7 @@ internal static class ServerServices
             provider.GetRequiredService<ScriptDatabase>(),
             provider.GetRequiredService<ResolverHolder>(),
             provider.GetRequiredService<BuiltinApiSet>()));
+        services.AddSingleton<FormattingSupport>();
         services.AddSingleton(provider => new CompletionEngine(
             provider.GetRequiredService<ScriptDatabase>(),
             provider.GetRequiredService<BuiltinApiSet>(),

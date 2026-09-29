@@ -1,6 +1,3 @@
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Documents;
-using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
@@ -20,21 +17,13 @@ namespace GSCode.Server.Handlers;
 /// </summary>
 public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHandlerBase
 {
-    private readonly DocumentStore _documents;
+    private readonly FormattingSupport _formatting;
     private readonly TextDocumentSelector _selector;
-    private readonly ServerSettings _settings;
-    private readonly ResolverHolder _resolver;
-    private readonly StockScripts _stockScripts;
 
-    public DocumentOnTypeFormattingHandler(
-        DocumentStore documents, TextDocumentSelector selector, ServerSettings settings,
-        ResolverHolder resolver, StockScripts stockScripts)
+    public DocumentOnTypeFormattingHandler(FormattingSupport formatting, TextDocumentSelector selector)
     {
-        _resolver = resolver;
-        _stockScripts = stockScripts;
-        _documents = documents;
+        _formatting = formatting;
         _selector = selector;
-        _settings = settings;
     }
 
     protected override DocumentOnTypeFormattingRegistrationOptions CreateRegistrationOptions(
@@ -54,11 +43,9 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
         // directive block out from under a partial edit would be startling. Alignment stays on —
         // the edits are then clipped to the group around the cursor, so a run re-aligns as you
         // type its next member without touching anything else.
-        FormatOptions options = FormatOptions.From(
-            (int)request.Options.TabSize, request.Options.InsertSpaces, _settings) with { SortDirectives = false };
+        FormatOptions options = _formatting.OptionsFor(request.Options) with { SortDirectives = false };
 
-        if ( FormattingSupport.Prepare(
-                _documents, _resolver, _stockScripts, request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
+        if ( _formatting.Prepare(request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
             || prepared.Edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer?>(null);

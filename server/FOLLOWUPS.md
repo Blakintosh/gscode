@@ -327,7 +327,7 @@ detail because the two causes are different traps:
 | `StoreFunctionAsPointer` | Not a type question: it needs to know a bare identifier names a function, which is resolution. Its complication is that `UnassignedVariableLint` already reports that identifier as `5016`, so it must REPLACE that diagnostic rather than stack a second one on the same range. |
 | `PredefinedFieldTypeMismatch` | The two causes above. |
 | `CannotAssignToImmutableEntity` | Not expressible in the data. `ObjectField` carries a per-FIELD `ReadOnly` flag and an `EntityKind`, and nothing marks a kind immutable as a whole. |
-| `ArgumentTypeMismatch` / `…Unverified` | Not the plumbing — a corpus sweep. See below; this pair had no row here at all until 2026-08-12. |
+| `ArgumentTypeMismatch` / `…Unverified` | The bundled library's parameter types. Measured 2026-09-28 at 211 findings on BO3 and 17 on CoD4, none real — see below. |
 
 **`ArgumentTypeMismatch` is the one of the twenty-one that went unaccounted for**, listed in the
 family table at the top and named in neither this table nor the ruled-out list. That was an
@@ -354,6 +354,46 @@ builtin upper bound 634 on BO3, `PredefinedFieldTypeMismatch` 46 and `OperatorNo
 that data harder than a count does, so this rule is the most likely of the family to end the same
 way. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
 earned.
+
+**Measured 2026-09-28, and it ended the same way.** An exploratory sweep over cod4 and bo3 reported
+an argument only when NO type the flow allows for it is accepted by ANY overload with a parameter at
+that position, after the obvious coercions (numbers and bools interchange, the three string kinds
+interchange, undefined is always allowed). Unqualified calls only, outside classes, skipping names
+the file declares and macro-sourced callees. The sweep was not kept; this is its record.
+
+| game | builtin calls | findings | real, of those sampled |
+|---|---|---|---|
+| cod4 | 39,426 | 17 | 0 |
+| bo3 | 31,640 | 211 (244 before `2a4fd572`) | 0 |
+
+The first run also found a real TYPING bug rather than a script bug: `"at " + self.origin` typed as
+a vector, because `ScrOperators.Additive` decided vector-with-scalar before concatenation. That was
+44 of the 244, and is fixed in `2a4fd572`. Every remaining finding sampled had one of three causes:
+
+1. **The engine coerces and the data does not say so** — about 160 of bo3's 211. An int, bool, float
+   or vector passed where the library declares `string`: `SetDvar( "ui_guncycle", 0 )` (78 of them),
+   `assert( cond, arr.size )`, `profilelog_endtiming( 4, ... )`. Accepting scalar-to-string as a
+   coercion leaves roughly 47 on bo3.
+2. **The library or field data is wrong**, and this is the worklist:
+   - `RecordSphere` parameter 4 is declared `bool`; the scripts pass `"Script"` (11).
+   - `GetDvarInt`'s default is declared `int`; the scripts pass `"7"` (10).
+   - `GetWeaponAmmoClip` declares `entity`; BO3 passes a weapon object (7), and the field it is
+     read from (`dualWieldWeapon`) is typed `string`.
+   - `IsWeapon` declares `entity`, but it is a type TEST and takes anything (2).
+   - `GroundTrace`'s ignore-entity parameter is declared `entity`; the scripts pass `false` (2).
+   - The object fields `team` (typed `int`, holds team strings — `GetPlayers( player.team )`,
+     `SetTeamForTrigger`, `Objective_Team`), `type` (`ToLower( s_obj.type )`) and `attachments`
+     (`GetArrayKeys( ...attachments )`), the first two already listed under
+     `PredefinedFieldTypeMismatch` above.
+   - CoD4: `AnimCustom` takes a function pointer, not a `string` (8); `SetGoalPos` takes a vector,
+     not an `entity` (5); `CheckGrenadeThrowPos` argument 2 is the string `"min energy"`, not a
+     vector (3).
+3. **Method form is not distinguished**: `self spawn( origin, angles )` was judged against the
+   global `Spawn( classname, ... )` (13). A real rule has to match `call.Target` against
+   `BuiltinOverload.CalledOn`.
+
+So the rule stays unshipped until the data is fixed per game, and the order is the list above: the
+coercion first (it is one decision, not a data edit), then the worklist, then a re-sweep.
 
 **Ruled out permanently**, with reasons, so they are not revisited as oversights:
 

@@ -58,6 +58,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   because the qualifier is the identity, and because a dialect may declare a namespace and a class
   with the same name and mean the namespace. The enclosing class of such a call is recovered
   positionally from `ClassSymbol.FullRange` — it describes the call site, not the callee.
+- `BuiltinQualifier` — the written `sys::` qualifier, `Is(qualifier)` in any case. Such a call keys
+  with a NULL namespace, the builtin key, never as a namespace called `sys`; every reader of a
+  written qualifier asks here rather than comparing its own literal.
 
 ## Symbols/SymbolModels.cs
 

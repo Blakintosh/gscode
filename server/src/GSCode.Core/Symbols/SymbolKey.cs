@@ -58,3 +58,23 @@ public enum SymbolKind
 /// symbol being called.
 /// </param>
 public readonly record struct SymbolKey(string? Namespace, string Name, SymbolKind Kind, string? OwnerClass = null);
+
+/// <summary>
+/// The written qualifier that names the engine's own library: <c>sys::name()</c>.
+///
+/// Builtins are namespace-less, so a call written this way is keyed with a NULL namespace — the key
+/// a builtin reached by a bare name carries — and never as a script namespace called <c>sys</c>. One
+/// spelling, because every reader of a written qualifier has to agree on it: a site that compares
+/// its own literal, or forgets to, reads <c>sys</c> as a namespace nothing declares into, and the
+/// call resolves to nothing, or to whichever script function shares the name.
+/// </summary>
+public static class BuiltinQualifier
+{
+    public const string Text = "sys";
+
+    /// <summary>Whether a written qualifier is <c>sys</c>, in any case.</summary>
+    public static bool Is(string qualifier)
+    {
+        return string.Equals(qualifier, Text, StringComparison.OrdinalIgnoreCase);
+    }
+}

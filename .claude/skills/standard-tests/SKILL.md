@@ -94,7 +94,7 @@ game passes it to the parser call.
 | `TestPaths` | `GSCode.Testing` | `RawRoot`, `ModsRoot`, `Raw(relative)`, `Config(files)` |
 | `TestFile` | `GSCode.Testing` | `(RelativePath, Text)` — one script under the raw root |
 | `ProfileScope` | `GSCode.Testing` | `Default`, `Use(profile?)` — select and restore `Active` |
-| `TestWorkspace` | `GSCode.Testing` | `Build(files, profile?)`: indexed store + resolver for lint, database and completion tests. `Analyze(relative)` for a file it holds, `Analyze(relative, text)` for one the index has not seen |
+| `TestWorkspace` | `GSCode.Testing` | `Build(files \| fakeFileSystem, profile?, mode)`: indexed store + resolver on `TestPaths.Config`, for lint, database and completion tests. `Analyze(relative)` for a file it holds, `Analyze(relative, text)` for one the index has not seen |
 | `HandlerWorkspace` | `GSCode.Server.Tests/Handlers` | `BuildAsync(files, profile?, mode)`: wired like `ServerServices` — real `ResolverInsertProvider` over a shared `InsertCache` (so `#insert` works from a `.gsh` in the file list), builtins in `NavigationSupport`, `CompletionEngine`. `Open(relative)`, `Identify(relative)`, `Selector` |
 
 `HandlerWorkspace.Selector` is `gsc`; no handler reads its selector while answering, so it serves
@@ -192,8 +192,16 @@ something "cannot be faked"; `HoverDefinitionLinkTests` said so about its macro 
 
 ## Doing a conversion pass
 
-All five areas were converted on 2026-09-29 (`test/standard-harness`). New tests start on the
-standard setup; a pass today is for drift, or for a file the list below names as still hand-built.
+Six areas were converted on 2026-09-29 (`test/standard-harness`): the temp-dir handler tests, the
+rest of the handlers, `TestWorkspace` itself, the incidental roots, the profile audit, and the
+Workspace.Tests helpers that wrote the resolver/database/indexer block by hand. New tests start on
+the standard setup; a pass today is for drift, or for a file the list below names as still
+hand-built.
+
+A helper may build a `TestWorkspace` with `using`, query it, and return plain results (a store, a
+diagnostic list) — but only on the DEFAULT game, where disposing restores the same Active the
+queries would have seen anyway. A helper on another game must keep the workspace alive for the
+caller's queries, or run them itself before it returns.
 
 1. **Baseline first.** Build and run the suite, then save the test-name list:
    `dotnet test <proj> -c <cfg> --nologo --no-build --list-tests | sed -n '/The following Tests are available/,$p' | sort`.
@@ -218,8 +226,12 @@ standard setup; a pass today is for drift, or for a file the list below names as
    ```
    Build first: on a project that does not compile, IDE0005 has nothing to go on.
 6. **Grep the area** for what the pass removes: `GetTempPath`, `GameProfile.Select`,
-   `new PhysicalFileSystem`, `RootConfig.Create`, `new WorkspaceIndexer`, drive letters. What is left
-   must be on the "stays on real disk" list, a root/data path from "The path", or a dialect test.
+   `new PhysicalFileSystem`, `RootConfig.Create`, `TestPaths.Config(`, `new PathResolver`,
+   `new WorkspaceIndexer`, `.Commit(`, drive letters. `TestPaths.Config(` is on the list because a
+   hand-built workspace spelled on the standard roots no longer matches `RootConfig.Create` — the
+   grep that stops finding a pattern is not proof the pattern is gone. What is left must be on the
+   "stays on real disk" list, in "What is still hand-built", a root/data path from "The path", or a
+   dialect test.
 7. **Commit** `[VC]`, prose body with the counts, no co-author line.
 
 **Writing the files.** C# test sources are full of `@"scripts\lib.gsc"` and `"#using scripts\\lib;"`.
@@ -234,11 +246,22 @@ path resolved inside the method. The compiler reports both (CS0133, CS1736).
 
 ## What is still hand-built, and why
 
-- `CompletionEngineTests.BuildWorld` indexes with the default game and returns a tuple its callers
-  deconstruct. Its CoD4 fact asserts on a builtin because a merge-dialect fixture "extracts to
-  nothing" — true of the old setup, not of `TestWorkspace`. A candidate for the next pass: 1,400
-  lines, so its own commit.
-- The category-2 handler tests above, by design.
+- **The indexer, resolver or cache is the subject:** `Indexing/*` (concurrency, ownership, watcher
+  races, restore, pruning, insert cache), `HeaderEditRefreshTests`, `DependencyRewriteTests`,
+  `PathResolverTests`, `ScriptDatabaseTests` (partial vs full passes over one fixture tree).
+- **Seeded by hand on purpose:** `ArgumentCountLintTests` (a hand-built builtin library),
+  `DialectIncludeScopeTests` and `ExportSignatureTests` (records committed per dialect),
+  `DevBlockCallLintTests` (commits the asking file beside the index), `ClassMethodLintTests`' and
+  `UsingNotFoundLintTests`' resolver-only helpers, and the category-2 handler tests above.
+- **Style, not setup:** `CompletionEngineTests.BuildWorld` now builds on `TestWorkspace` but still
+  returns a tuple its sixty callers deconstruct, against the house style. Its CoD4 fact asserts on
+  a builtin because a merge-dialect fixture "extracts to nothing" — true of the default-game
+  workspace it builds, and fixable by passing CoD4. A candidate for its own commit.
+
+The 2026-09-29 pass found two helpers indexing CoD4-syntax fixtures under the default BO3 — their
+stores held no declarations at all (`FunctionResolutionLintTests.LintAsCod4`,
+`DialectCompletionTests.BuildEngine`). Both now pass the game, and both still pass. Look for this
+whenever a fixture's source has no `function` keyword.
 
 ## Knowing the pass worked
 

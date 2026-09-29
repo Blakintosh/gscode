@@ -268,6 +268,23 @@ public class ScrOperatorsTests
         Assert.Equal("ab", Apply(ScrBinaryOp.Add, Str("a"), Str("b")).Value.Constant!.Value.Text);
     }
 
+    /// <summary>
+    /// A string on either side of <c>+</c> makes it a concatenation, and a vector is concatenated
+    /// like any other value — <c>"at " + self.origin</c> is how the stock scripts build messages.
+    /// The vector-with-scalar arm was decided first and typed that expression as a vector.
+    /// </summary>
+    [Fact]
+    public void AStringPlusAVectorIsAString()
+    {
+        ScrOperatorResult stringFirst = Apply(ScrBinaryOp.Add, Str("at "), Vector());
+        ScrOperatorResult vectorFirst = Apply(ScrBinaryOp.Add, Vector(), Str(" here"));
+
+        Assert.Equal(ScrTypeSet.String, stringFirst.Value.Types);
+        Assert.Equal(ScrOperandDiagnosis.Fine, stringFirst.Diagnosis);
+        Assert.Equal(ScrTypeSet.String, vectorFirst.Value.Types);
+        Assert.Equal(ScrOperandDiagnosis.Fine, vectorFirst.Diagnosis);
+    }
+
     [Fact]
     public void BitwiseOperationsFold()
     {

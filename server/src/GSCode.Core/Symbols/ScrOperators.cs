@@ -184,8 +184,10 @@ public static class ScrOperators
     }
 
     /// <summary>
-    /// <c>+</c> and <c>-</c>. Vector arithmetic is decided first, then string concatenation, then
-    /// numbers — the order is the fix for v1.5 typing <c>vector + float</c> as a string.
+    /// <c>+</c> and <c>-</c>. Two vectors first, then string concatenation, then a vector with a
+    /// scalar, then numbers. Checking concatenation by the STRING side is what keeps
+    /// <c>vector + float</c> from typing as a string, v1.5's bug, without also making
+    /// <c>"at " + vector</c> a vector.
     /// </summary>
     private static ScrOperatorResult Additive(ScrBinaryOp op, ScrValue left, ScrValue right)
     {
@@ -197,6 +199,23 @@ public static class ScrOperators
             // v1.5 handled `vector + vector` and simply had no arm for `vector - vector`, which fell
             // through to "any".
             return ScrOperatorResult.Ok(FoldVectorPair(op, left, right));
+        }
+
+        // A string on either side makes `+` a concatenation, and a vector concatenates like any
+        // other value — `"at " + self.origin` is how the stock scripts build messages. Decided
+        // before the vector-with-scalar arm below, which typed that expression as a vector.
+        if ( op == ScrBinaryOp.Add && (left.MustBe(ScrTypeSet.AnyString) || right.MustBe(ScrTypeSet.AnyString)) )
+        {
+            // Content rather than Text: a literal keeps its quotes, and concatenating those would
+            // produce `"a""b"`. The unquoting happens HERE, where a fold is rare, instead of on
+            // every literal read.
+            if ( left.Constant is { } a && right.Constant is { } b
+                && a.Content is string first && b.Content is string second )
+            {
+                return ScrOperatorResult.Ok(ScrValue.OfConstant(ScrConstant.OfString(first + second)));
+            }
+
+            return ScrOperatorResult.Ok(ScrValue.Of(ScrTypeSet.String));
         }
 
         // A vector CERTAINLY on exactly one side. Adding a scalar to a vector is not a thing the
@@ -217,20 +236,6 @@ public static class ScrOperators
             {
                 return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Vector), ScrOperandDiagnosis.UnsupportedOperands);
             }
-        }
-
-        if ( op == ScrBinaryOp.Add && (left.MustBe(ScrTypeSet.AnyString) || right.MustBe(ScrTypeSet.AnyString)) )
-        {
-            // Content rather than Text: a literal keeps its quotes, and concatenating those would
-            // produce `"a""b"`. The unquoting happens HERE, where a fold is rare, instead of on
-            // every literal read.
-            if ( left.Constant is { } a && right.Constant is { } b
-                && a.Content is string first && b.Content is string second )
-            {
-                return ScrOperatorResult.Ok(ScrValue.OfConstant(ScrConstant.OfString(first + second)));
-            }
-
-            return ScrOperatorResult.Ok(ScrValue.Of(ScrTypeSet.String));
         }
 
         return ScrOperatorResult.Ok(Arithmetic(op, left, right));

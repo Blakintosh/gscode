@@ -167,12 +167,14 @@ uses them, and when a named game or a real path is right instead, is the `standa
 
 Needs a database. Fixtures use `FakeFileSystem`, so no game install is involved.
 
-**Build a workspace with `TestWorkspace.Build(profile, rawRoot, files)`.** It indexes through the
-real `WorkspaceIndexer` with the dialect pinned, which is the part that must not be left to chance:
-`GameProfile.Active` is BO3 in a test run, and under BO3 a keyword-less `is_coop()` is not a
-declaration at all — so a workspace indexed for any other game comes back EMPTY rather than wrong,
-and assertions about what it contains pass without proving anything. Two test files worked around
-that by building `ScriptRecord`s by hand before the profile was a parameter.
+**Build a workspace with `using TestWorkspace workspace = TestWorkspace.Build(files, profile?)`.**
+Files are `TestFile`s under `TestPaths.RawRoot`; `workspace.Analyze(relativePath)` gives the open
+file's fresh analysis under the same game. It indexes through the real `WorkspaceIndexer` with the
+dialect pinned AND holds `GameProfile.Active` on it until disposed, which is the part that must not
+be left to chance: under BO3 a keyword-less `is_coop()` is not a declaration at all — so a workspace
+indexed for any other game comes back EMPTY rather than wrong, and assertions about what it contains
+pass without proving anything. Two test files worked around that by building `ScriptRecord`s by
+hand before the profile was a parameter.
 
 **Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
 rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests`

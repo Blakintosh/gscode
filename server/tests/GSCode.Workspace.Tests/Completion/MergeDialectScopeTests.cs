@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Tests.Resolution;
@@ -31,8 +28,6 @@ public class MergeDialectScopeTests
 {
     private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
-    private const string Raw = @"C:\iw4";
-
     private const string SameStemOtherFile = "is_coop()\n{\n}\n";
     private const string IncludedFile = "exploder_playSound()\n{\n}\n";
 
@@ -55,27 +50,23 @@ public class MergeDialectScopeTests
     /// </summary>
     private static ImmutableArray<CompletionEntry> CompleteInMpUtility()
     {
-        string editedPath = @$"{Raw}\maps\mp\_utility.gsc";
-
-        TestWorkspace.Built workspace = TestWorkspace.Build(
-            s_mw2,
-            Raw,
-            (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
-            (@$"{Raw}\common_scripts\utility.gsc", IncludedFile),
-            (editedPath, EditedFile));
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"maps\_utility.gsc", SameStemOtherFile),
+                new TestFile(@"common_scripts\utility.gsc", IncludedFile),
+                new TestFile(@"maps\mp\_utility.gsc", EditedFile),
+            ],
+            s_mw2);
 
         // Line 8 is the blank line inside exploder_sound's body.
-        return engine.Complete(
-            Analyze(editedPath, EditedFile), "raw", new Position(8, 4), profile: s_mw2);
+        return EngineOver(workspace).Complete(
+            workspace.Analyze(@"maps\mp\_utility.gsc"), "raw", new Position(8, 4), profile: s_mw2);
     }
 
-    private static ParseResult Analyze(string path, string text)
+    private static CompletionEngine EngineOver(TestWorkspace workspace)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, new NameTable(), s_mw2);
+        string api = Path.Combine(AppContext.BaseDirectory, "Api");
+        return new CompletionEngine(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
     }
 
     /// <summary>
@@ -130,22 +121,19 @@ public class MergeDialectScopeTests
     /// </summary>
     private static ImmutableArray<CompletionEntry> CompleteAfterInlinePathQualifier()
     {
-        string editedPath = @$"{Raw}\maps\mp\gametypes\_globallogic.gsc";
         const string editedFile = "run()\n{\n    maps\\_utility::\n}\n";
 
-        TestWorkspace.Built workspace = TestWorkspace.Build(
-            s_mw2,
-            Raw,
-            (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
-            (@$"{Raw}\maps\mp\_utility.gsc", IncludedFile),
-            (editedPath, editedFile));
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"maps\_utility.gsc", SameStemOtherFile),
+                new TestFile(@"maps\mp\_utility.gsc", IncludedFile),
+                new TestFile(@"maps\mp\gametypes\_globallogic.gsc", editedFile),
+            ],
+            s_mw2);
 
         // Line 2, right after "maps\_utility::".
-        return engine.Complete(
-            Analyze(editedPath, editedFile), "raw", new Position(2, 19), profile: s_mw2);
+        return EngineOver(workspace).Complete(
+            workspace.Analyze(@"maps\mp\gametypes\_globallogic.gsc"), "raw", new Position(2, 19), profile: s_mw2);
     }
 
     [Fact]

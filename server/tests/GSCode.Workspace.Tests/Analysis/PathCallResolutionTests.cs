@@ -2,13 +2,8 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
@@ -28,36 +23,27 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class PathCallResolutionTests
 {
-    private const string Raw = @"C:\cod4\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
     private static GameProfile Cod4 => GameProfile.ByName("cod4")!;
 
     /// <summary>
-    /// A workspace holding one real utility file, which declares exactly one function.
+    /// Lints <paramref name="source"/> as <c>maps\mp\caller.gsc</c>, in a workspace holding one real
+    /// utility file which declares exactly one function.
     ///
-    /// Indexed under CoD4 explicitly. Left to <c>GameProfile.Active</c> it would be BO3, where a
-    /// keyword-less <c>shown()</c> is not a declaration at all, and the store would come back empty
-    /// with every assertion here passing for the wrong reason.
+    /// Indexed under CoD4 explicitly. Left to the default it would be BO3, where a keyword-less
+    /// <c>shown()</c> is not a declaration at all, and the store would come back empty with every
+    /// assertion here passing for the wrong reason.
     /// </summary>
-    private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
-    {
-        TestWorkspace.Built workspace = TestWorkspace.Build(
-            Cod4, Raw, (@$"{Raw}\maps\mp\_utility.gsc", "shown()\n{\n}\n"));
-
-        return (workspace.Database, workspace.Resolver);
-    }
-
     private static ImmutableArray<Diagnostic> Lint(string source)
     {
-        (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string path = @$"{Raw}\maps\mp\caller.gsc";
-
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Cod4);
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [new TestFile(@"maps\mp\_utility.gsc", "shown()\n{\n}\n")], Cod4);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, Cod4);
         return FunctionResolutionLint.Analyze(
-            result, database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), Cod4, resolver: resolver);
+            workspace.Analyze(@"maps\mp\caller.gsc", source), workspace.Database.Gsc, "raw",
+            TestPaths.Raw(@"maps\mp\caller.gsc"), builtins.For(ScriptLanguage.Gsc), Cod4,
+            resolver: workspace.Resolver);
     }
 
     [Fact]

@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Tests.Resolution;
@@ -27,21 +24,16 @@ public class UnimportedFunctionCompletionTests
     private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
     private static ImmutableArray<CompletionEntry> CompleteIn(
-        GameProfile profile, string rawRoot, string editedPath, string editedText, Position position,
-        params (string Path, string Text)[] otherFiles)
+        GameProfile profile, string editedRelativePath, string editedText, Position position, TestFile otherFile)
     {
-        (string Path, string Text)[] files = [.. otherFiles, (editedPath, editedText)];
-        TestWorkspace.Built workspace = TestWorkspace.Build(profile, rawRoot, files);
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [otherFile, new TestFile(editedRelativePath, editedText)], profile);
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
         CompletionEngine engine = new(
             workspace.Database, BuiltinApiSet.Load(api, profile), ObjectFields.Load(api, profile));
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            editedPath, ScriptLanguage.Gsc, SourceText.From(editedText), NullInsertProvider.Instance,
-            new NameTable(), profile);
-
-        return engine.Complete(result, "raw", position, profile: profile);
+        return engine.Complete(workspace.Analyze(editedRelativePath), "raw", position, profile: profile);
     }
 
     private static CompletionEntry? EntryInserting(ImmutableArray<CompletionEntry> entries, string insertPrefix)
@@ -60,16 +52,14 @@ public class UnimportedFunctionCompletionTests
     [Fact]
     public void ANamespaceDialectOffersTheQualifiedCallAndTheUsingPath()
     {
-        const string raw = @"C:\bo3";
         const string edited = "#namespace caller;\nfunction run()\n{\n    get_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
             s_bo3,
-            raw,
-            @$"{raw}\scripts\caller.gsc",
+            @"scripts\caller.gsc",
             edited,
             new Position(3, 10),
-            (@$"{raw}\scripts\lib.gsc", "#namespace lib;\nfunction get_players()\n{\n}\n"));
+            new TestFile(@"scripts\lib.gsc", "#namespace lib;\nfunction get_players()\n{\n}\n"));
 
         CompletionEntry? entry = EntryInserting(entries, "lib::get_players");
         Assert.NotNull(entry);
@@ -79,16 +69,14 @@ public class UnimportedFunctionCompletionTests
     [Fact]
     public void AMergeDialectOffersTheBareCallAndTheIncludePath()
     {
-        const string raw = @"C:\iw4";
         const string edited = "run()\n{\n    exploder_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
             s_mw2,
-            raw,
-            @$"{raw}\maps\mp\caller.gsc",
+            @"maps\mp\caller.gsc",
             edited,
             new Position(2, 15),
-            (@$"{raw}\common_scripts\utility.gsc", "exploder_playSound()\n{\n}\n"));
+            new TestFile(@"common_scripts\utility.gsc", "exploder_playSound()\n{\n}\n"));
 
         CompletionEntry? entry = EntryInserting(entries, "exploder_playSound");
         Assert.NotNull(entry);
@@ -98,16 +86,14 @@ public class UnimportedFunctionCompletionTests
     [Fact]
     public void AFileAlreadyLinkedAgainstIsNotOfferedAsAnImport()
     {
-        const string raw = @"C:\bo3";
         const string edited = "#using scripts\\lib;\n#namespace caller;\nfunction run()\n{\n    get_pl\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
             s_bo3,
-            raw,
-            @$"{raw}\scripts\caller.gsc",
+            @"scripts\caller.gsc",
             edited,
             new Position(4, 10),
-            (@$"{raw}\scripts\lib.gsc", "#namespace lib;\nfunction get_players()\n{\n}\n"));
+            new TestFile(@"scripts\lib.gsc", "#namespace lib;\nfunction get_players()\n{\n}\n"));
 
         // Offered — through the ordinary imported-namespace arm — but with nothing to import.
         CompletionEntry? entry = EntryInserting(entries, "lib::get_players");
@@ -118,16 +104,14 @@ public class UnimportedFunctionCompletionTests
     [Fact]
     public void APrivateFunctionIsNeverOffered()
     {
-        const string raw = @"C:\bo3";
         const string edited = "#namespace caller;\nfunction run()\n{\n    hid\n}\n";
 
         ImmutableArray<CompletionEntry> entries = CompleteIn(
             s_bo3,
-            raw,
-            @$"{raw}\scripts\caller.gsc",
+            @"scripts\caller.gsc",
             edited,
             new Position(3, 7),
-            (@$"{raw}\scripts\lib.gsc", "#namespace lib;\nfunction private hidden_helper()\n{\n}\n"));
+            new TestFile(@"scripts\lib.gsc", "#namespace lib;\nfunction private hidden_helper()\n{\n}\n"));
 
         // Privacy is per namespace, and a file that has not imported the script is not in it by any
         // route that would make the call legal — so offering the import would offer an error.

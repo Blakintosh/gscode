@@ -1,4 +1,8 @@
 using GSCode.Core;
+using GSCode.Core.Symbols;
+using GSCode.Core.Text;
+using GSCode.Parser;
+using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -6,45 +10,92 @@ using GSCode.Workspace.Resolution;
 namespace GSCode.Workspace.Tests.Resolution;
 
 /// <summary>
-/// An indexed in-memory workspace for ONE dialect: files, a resolver over them, and a store holding
-/// every one of them parsed as that game.
+/// An indexed in-memory workspace for ONE dialect: files under <see cref="TestPaths.RawRoot"/>, a
+/// resolver over them, and a store holding every one of them parsed as that game.
 ///
 /// It exists because getting this wrong is silent. <see cref="WorkspaceIndexer"/> defers to
 /// <see cref="GameProfile.Active"/> when given no profile, and Active is BO3 in a test run — under
 /// which a keyword-less <c>is_coop()</c> is not a declaration at all. The store then comes back
 /// empty, every "is it offered?" assertion fails for a reason that looks like the thing under test,
-/// and every "is it absent?" assertion passes without proving anything. Two test files had already
-/// worked around it by building records by hand, which is the workaround this replaces.
+/// and every "is it absent?" assertion passes without proving anything. So the one profile goes to
+/// the indexer, to <see cref="Analyze(string)"/>, AND to Active for as long as the workspace lives, since
+/// the queries a test runs afterwards read Active for themselves. Dispose it.
 /// </summary>
-public static class TestWorkspace
+public sealed class TestWorkspace : IDisposable
 {
-    /// <summary>The pieces a query needs: what to ask, and what to ask it about.</summary>
-    public sealed record Built(ScriptDatabase Database, PathResolver Resolver, FakeFileSystem Files);
+    private readonly ProfileScope _profileScope;
+
+    private TestWorkspace(ProfileScope profileScope, GameProfile profile, FakeFileSystem files)
+    {
+        _profileScope = profileScope;
+        Profile = profile;
+        Files = files;
+
+        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files);
+        Resolver = new PathResolver(config, files);
+        Database = new ScriptDatabase();
+    }
+
+    public GameProfile Profile { get; }
+
+    public FakeFileSystem Files { get; }
+
+    public PathResolver Resolver { get; }
+
+    public ScriptDatabase Database { get; }
 
     /// <summary>
-    /// Indexes <paramref name="files"/> under <paramref name="profile"/>, rooted at
-    /// <paramref name="rawRoot"/>. Paths are normalized on the way in, since a raw spelling reaches
-    /// the resolver and comes back with an empty relative path.
+    /// Indexes <paramref name="files"/> under <paramref name="profile"/>, or
+    /// <see cref="ProfileScope.Default"/> when the game is not what the test is about.
     /// </summary>
-    public static Built Build(
-        GameProfile profile,
-        string rawRoot,
-        params (string Path, string Text)[] files)
+    public static TestWorkspace Build(IEnumerable<TestFile> files, GameProfile? profile = null)
     {
-        FakeFileSystem fileSystem = new();
-        foreach ( (string path, string text) in files )
+        GameProfile chosen = profile ?? ProfileScope.Default;
+        ProfileScope scope = ProfileScope.Use(chosen);
+        try
         {
-            fileSystem.AddFile(path, text);
+            FakeFileSystem fileSystem = new();
+            foreach ( TestFile file in files )
+            {
+                fileSystem.AddFile(TestPaths.Raw(file.RelativePath), file.Text);
+            }
+
+            TestWorkspace workspace = new(scope, chosen, fileSystem);
+            WorkspaceIndexer indexer = new(
+                workspace.Database, () => workspace.Resolver, fileSystem, new NameTable(), profile: chosen);
+            indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            return workspace;
         }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
+    }
 
-        RootConfig config = RootConfig.Create(true, rawRoot, null, [], fileSystem);
-        PathResolver resolver = new(config, fileSystem);
-        ScriptDatabase database = new();
+    /// <summary>
+    /// A fresh analysis of one of the workspace's scripts under its game, standing in for the file
+    /// the editor has open. No insert provider: the tests using this ask about functions, not macros.
+    /// </summary>
+    public ParseResult Analyze(string relativePath)
+    {
+        return Analyze(relativePath, Files.ReadAllText(TestPaths.Raw(relativePath)));
+    }
 
-        WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, new NameTable(), profile: profile);
-        indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+    /// <summary>
+    /// The same for a script the workspace does NOT hold: a file being written that the index has
+    /// not seen, which is a different question from one it has.
+    /// </summary>
+    public ParseResult Analyze(string relativePath, string text)
+    {
+        return ScriptAnalysis.Analyze(
+            TestPaths.Raw(relativePath), ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance,
+            new NameTable(), Profile);
+    }
 
-        return new Built(database, resolver, fileSystem);
+    public void Dispose()
+    {
+        _profileScope.Dispose();
     }
 }

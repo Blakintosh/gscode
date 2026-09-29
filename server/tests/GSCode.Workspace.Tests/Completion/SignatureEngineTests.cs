@@ -1,5 +1,4 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -275,23 +274,19 @@ public class SignatureEngineTests
             + "    exploder_playSound( \n"
             + "}\n";
 
-        string raw = @"C:\iw4";
-        string editedPath = @$"{raw}\maps\main.gsc";
-
-        TestWorkspace.Built workspace = TestWorkspace.Build(
-            s_mw2,
-            raw,
-            (@$"{raw}\common_scripts\utility.gsc", includedFile),
-            (editedPath, editedFile));
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"common_scripts\utility.gsc", includedFile),
+                new TestFile(@"maps\main.gsc", editedFile),
+            ],
+            s_mw2);
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
         SignatureEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, s_mw2));
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            editedPath, ScriptLanguage.Gsc, SourceText.From(editedFile), NullInsertProvider.Instance, new NameTable(), s_mw2);
-
         // Line 4, right after the open paren.
-        SignatureResult? signature = engine.Resolve(result, "raw", new Position(4, 24), s_mw2);
+        SignatureResult? signature = engine.Resolve(
+            workspace.Analyze(@"maps\main.gsc"), "raw", new Position(4, 24), s_mw2);
 
         Assert.NotNull(signature);
         Assert.Single(signature!.Parameters);

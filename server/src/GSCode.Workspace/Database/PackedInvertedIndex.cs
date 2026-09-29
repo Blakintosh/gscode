@@ -178,6 +178,23 @@ internal sealed class PackedInvertedIndex<TKey>
     /// </summary>
     public void CollectKeys(Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, List<TKey> into)
     {
+        Walk(keyFilter, fileFilter, (key, files) => into.Add(key));
+    }
+
+    /// <summary>
+    /// <see cref="CollectKeys"/>, with how many files carry each key — ALL of them, not only the ones
+    /// <paramref name="fileFilter"/> accepts. A ranking signal for a vocabulary list, where "how
+    /// widely is this used" matters and counting only the visible files would mean testing every
+    /// file of every key rather than stopping at the first visible one.
+    /// </summary>
+    public void CollectKeysWithFileCounts(
+        Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, List<(TKey Key, int Files)> into)
+    {
+        Walk(keyFilter, fileFilter, (key, files) => into.Add((key, files)));
+    }
+
+    private void Walk(Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, Action<TKey, int> found)
+    {
         foreach ( Shard shard in _shards )
         {
             lock ( shard.Gate )
@@ -195,14 +212,14 @@ internal sealed class PackedInvertedIndex<TKey>
                         {
                             if ( fileFilter(path) )
                             {
-                                into.Add(entry.Key);
+                                found(entry.Key, many.Count);
                                 break;
                             }
                         }
                     }
                     else if ( fileFilter((string)entry.Value) )
                     {
-                        into.Add(entry.Key);
+                        found(entry.Key, 1);
                     }
                 }
             }

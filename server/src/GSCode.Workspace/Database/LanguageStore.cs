@@ -391,7 +391,7 @@ public sealed class LanguageStore
     /// The distinct literals of one kind used in a file <paramref name="askingContextId"/> can see —
     /// see <see cref="VocabularyIndex"/>.
     /// </summary>
-    public List<string> VisibleLiterals(SymbolKind kind, string askingContextId)
+    public List<VocabularyName> VisibleLiterals(SymbolKind kind, string askingContextId)
     {
         return _vocabulary.Literals(kind, path => IsVisibleTo(path, askingContextId));
     }
@@ -400,7 +400,7 @@ public sealed class LanguageStore
     /// The distinct field names assigned in a file <paramref name="askingContextId"/> can see, on one
     /// owner when <paramref name="ownerName"/> is given — see <see cref="VocabularyIndex"/>.
     /// </summary>
-    public List<string> VisibleFieldNames(string? ownerName, string askingContextId)
+    public List<VocabularyName> VisibleFieldNames(string? ownerName, string askingContextId)
     {
         return _vocabulary.FieldNames(ownerName, path => IsVisibleTo(path, askingContextId));
     }

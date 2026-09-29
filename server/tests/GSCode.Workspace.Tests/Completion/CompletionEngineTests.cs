@@ -1973,6 +1973,46 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void MemberAccess_AFieldWrittenInTwoCasings_IsOneRowInTheMostUsedSpelling_NamingTheOther()
+    {
+        // GSC reads `level.Foo` and `level.foo` as one field. Both spellings are kept, but as ONE
+        // row: which one labelled it used to be an accident of index order, and the other spelling
+        // is context worth seeing rather than a second row to choose between.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.Foo = 1;\n}\n")
+            .AddFile(@$"{Raw}\scripts\b.gsc", "function b()\n{\n    level.Foo = 2;\n}\n")
+            .AddFile(@$"{Raw}\scripts\c.gsc", "function c()\n{\n    level.foo = 3;\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 14));
+
+        CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Foo", foo.Label);
+        Assert.Equal("field, also written foo", foo.Detail);
+    }
+
+    [Fact]
+    public void MemberAccess_ThisFilesOwnSpellingLabelsTheRow()
+    {
+        // The file being edited writes `level.foo`; the workspace writes `level.Foo` twice. The row
+        // reads the way this file already spells it, and still names the other.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function a()\n{\n    level.Foo = 1;\n}\n")
+            .AddFile(@$"{Raw}\scripts\b.gsc", "function b()\n{\n    level.Foo = 2;\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    level.foo = 0;\n    x = level.\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 14));
+
+        CompletionEntry foo = Assert.Single(entries, entry => string.Equals(entry.Label, "foo", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("foo", foo.Label);
+        Assert.Equal("field, also written Foo", foo.Detail);
+    }
+
+    [Fact]
     public void MemberAccess_AggregatesOwnerFieldsAcrossFiles()
     {
         // The GlobalObjectOwners scenario: a field assigned on `level` in one file is offered

@@ -85,15 +85,15 @@ public sealed class VocabularyIndex
     }
 
     /// <summary>The distinct literals of one kind used by at least one file <paramref name="visible"/> accepts.</summary>
-    public List<string> Literals(SymbolKind kind, Func<string, bool> visible)
+    public List<VocabularyName> Literals(SymbolKind kind, Func<string, bool> visible)
     {
-        List<SymbolKey> keys = [];
-        _literals.CollectKeys(key => key.Kind == kind, visible, keys);
+        List<(SymbolKey Key, int Files)> keys = [];
+        _literals.CollectKeysWithFileCounts(key => key.Kind == kind, visible, keys);
 
-        List<string> names = new(keys.Count);
-        foreach ( SymbolKey key in keys )
+        List<VocabularyName> names = new(keys.Count);
+        foreach ( (SymbolKey Key, int Files) key in keys )
         {
-            names.Add(key.Name);
+            names.Add(new VocabularyName(key.Key.Name, key.Files));
         }
 
         return names;
@@ -101,22 +101,40 @@ public sealed class VocabularyIndex
 
     /// <summary>
     /// The distinct field names assigned in at least one file <paramref name="visible"/> accepts —
-    /// on <paramref name="ownerName"/> only when one is given, compared ordinally.
+    /// on <paramref name="ownerName"/> only when one is given, compared ordinally. Spelled as WRITTEN:
+    /// <c>level.foo</c> and <c>level.Foo</c> are two names here, each counted on its own, and choosing
+    /// between them is the completion list's business, not the index's.
     /// </summary>
-    public List<string> FieldNames(string? ownerName, Func<string, bool> visible)
+    public List<VocabularyName> FieldNames(string? ownerName, Func<string, bool> visible)
     {
-        List<(string OwnerName, string Name)> keys = [];
-        _fields.CollectKeys(
+        List<((string OwnerName, string Name) Key, int Files)> keys = [];
+        _fields.CollectKeysWithFileCounts(
             key => ownerName is null || string.Equals(key.OwnerName, ownerName, StringComparison.Ordinal),
             visible,
             keys);
 
-        List<string> names = new(keys.Count);
-        foreach ( (string OwnerName, string Name) key in keys )
+        // Across every owner one spelling can arrive once per owner — `self.health` and
+        // `level.health` — so the counts are summed per spelling rather than listed twice.
+        Dictionary<string, int> files = new(StringComparer.Ordinal);
+        foreach ( ((string OwnerName, string Name) Key, int Files) key in keys )
         {
-            names.Add(key.Name);
+            files.TryGetValue(key.Key.Name, out int sum);
+            files[key.Key.Name] = sum + key.Files;
+        }
+
+        List<VocabularyName> names = new(files.Count);
+        foreach ( KeyValuePair<string, int> name in files )
+        {
+            names.Add(new VocabularyName(name.Key, name.Value));
         }
 
         return names;
     }
 }
+
+/// <summary>
+/// A name from the workspace's vocabulary, and how many files write it — all of them, not only the
+/// ones the asker can see: a measure of how widely it is used, for ranking a list, not a count of
+/// anything the asker could reach.
+/// </summary>
+public readonly record struct VocabularyName(string Name, int Files);

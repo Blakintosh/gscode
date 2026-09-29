@@ -206,9 +206,9 @@ public sealed partial class CompletionEngine
         // The workspace's DISTINCT literals, from the store's vocabulary, rather than every
         // reference of every record — see VocabularyIndex for what that walk cost at scale.
         string detail = LiteralDetail(literalKind);
-        foreach ( string name in store.VisibleLiterals(literalKind, contextId) )
+        foreach ( VocabularyName name in store.VisibleLiterals(literalKind, contextId) )
         {
-            AddLiteral(name, detail, seen, entries, quoted);
+            AddLiteral(name.Name, detail, seen, entries, quoted);
         }
 
         return entries.ToImmutable();
@@ -548,18 +548,24 @@ public sealed partial class CompletionEngine
         // Scope only when asked AND the owner is known; otherwise every owner contributes.
         bool scopeToOwner = fieldScope == FieldScope.Owner && ownerName.Length > 0;
 
-        // The live file first, so unsaved edits are offered immediately, then every visible
-        // record — a field assigned on `level` in one file is reachable from all of them.
-        CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, seen, entries);
-
-        // Then the workspace's distinct assigned fields, from the store's vocabulary rather than
-        // every function of every record — see VocabularyIndex.
+        // Every spelling the workspace writes, from the store's vocabulary rather than every
+        // function of every record — see VocabularyIndex — grouped by the name the engine sees.
         LanguageStore fieldStore = _database.StoreFor(result.Language);
-        foreach ( string fieldName in fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId) )
+        Dictionary<string, List<VocabularyName>> spellings =
+            SpellingsByName(fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId));
+
+        // The live file first, so unsaved edits are offered immediately and in the file's own
+        // spelling, then every visible record's — a field assigned on `level` in one file is
+        // reachable from all of them.
+        CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, spellings, seen, entries);
+
+        foreach ( KeyValuePair<string, List<VocabularyName>> name in spellings )
         {
-            if ( seen.Add(fieldName) )
+            // The most-used spelling labels the row; SpellingsByName put it first.
+            string label = name.Value[0].Name;
+            if ( seen.Add(label) )
             {
-                entries.Add(new CompletionEntry(fieldName, CompletionKind.Field, "field"));
+                entries.Add(new CompletionEntry(label, CompletionKind.Field, FieldDetail(name.Value, label)));
             }
         }
 
@@ -603,11 +609,73 @@ public sealed partial class CompletionEngine
         return entries.ToImmutable();
     }
 
-    /// <summary>Adds field names written as `owner.name = ...`, optionally only for one owner.</summary>
+    /// <summary>
+    /// The workspace's field spellings grouped by the name the engine sees, which ignores case, each
+    /// group most-used first — by files writing it, then ordinally, so the order never depends on
+    /// the index's.
+    ///
+    /// Kept as WRITTEN rather than folded to one case. A workspace that writes both <c>level.foo</c>
+    /// and <c>level.Foo</c> has one field, but which spelling a row shows was an accident of index
+    /// order, and the other spelling is worth seeing: it is how someone else wrote the same field.
+    /// </summary>
+    private static Dictionary<string, List<VocabularyName>> SpellingsByName(List<VocabularyName> names)
+    {
+        Dictionary<string, List<VocabularyName>> byName = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( VocabularyName name in names )
+        {
+            if ( !byName.TryGetValue(name.Name, out List<VocabularyName>? written) )
+            {
+                written = [];
+                byName[name.Name] = written;
+            }
+
+            written.Add(name);
+        }
+
+        foreach ( List<VocabularyName> written in byName.Values )
+        {
+            written.Sort(static (left, right) =>
+            {
+                int files = right.Files.CompareTo(left.Files);
+                return files != 0 ? files : string.CompareOrdinal(left.Name, right.Name);
+            });
+        }
+
+        return byName;
+    }
+
+    /// <summary>
+    /// "field", naming every OTHER spelling the workspace writes this field in —
+    /// <c>field, also written foo</c> on a row labelled <c>Foo</c>.
+    /// </summary>
+    private static string FieldDetail(List<VocabularyName>? written, string label)
+    {
+        if ( written is null )
+        {
+            return "field";
+        }
+
+        List<string> others = [];
+        foreach ( VocabularyName spelling in written )
+        {
+            if ( !string.Equals(spelling.Name, label, StringComparison.Ordinal) )
+            {
+                others.Add(spelling.Name);
+            }
+        }
+
+        return others.Count == 0 ? "field" : "field, also written " + string.Join(", ", others);
+    }
+
+    /// <summary>
+    /// Adds field names written as `owner.name = ...`, optionally only for one owner, in this file's
+    /// own spelling — the first it writes, where it writes more than one.
+    /// </summary>
     private static void CollectAssignedFields(
         ImmutableArray<FunctionSymbol> functions,
         bool scopeToOwner,
         string ownerName,
+        Dictionary<string, List<VocabularyName>> spellings,
         HashSet<string> seen,
         ImmutableArray<CompletionEntry>.Builder entries)
     {
@@ -628,7 +696,9 @@ public sealed partial class CompletionEngine
 
                 if ( seen.Add(assignment.Name) )
                 {
-                    entries.Add(new CompletionEntry(assignment.Name, CompletionKind.Field, "field"));
+                    spellings.TryGetValue(assignment.Name, out List<VocabularyName>? written);
+                    entries.Add(new CompletionEntry(
+                        assignment.Name, CompletionKind.Field, FieldDetail(written, assignment.Name)));
                 }
             }
         }

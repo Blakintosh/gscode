@@ -118,6 +118,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `FilesFor(key)` is the files behind one key; `CollectKeys(keyFilter, fileFilter, into)` is the
   other direction, the keys at least one accepted file carries — a vocabulary, read one shard at a
   time. Its file filter runs under the shard gate, so it must take no lock of its own.
+  `CollectKeysWithFileCounts` is the same walk with how many files carry each key — every file, not
+  only accepted ones, since it ranks a list and counting only visible files would test every file of
+  every key.
 - Packed: a bare `string` while exactly one file carries a key, promoted to a `HashSet<string>` only
   once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
   ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
@@ -243,7 +246,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   than every reference / assignment of every record per request. A literal is indexed only when
   literal completion could offer it (a plain `ReferenceKind.Literal`, not from a macro body); the
   name-shape filter stays at the query. Read through `LanguageStore.VisibleLiterals` /
-  `VisibleFieldNames`.
+  `VisibleFieldNames`, as `VocabularyName(Name, Files)`: each name with how many files write it.
+  Field names are kept as WRITTEN — `level.foo` and `level.Foo` are two names here, one spelling on
+  two owners is one name with both counted — and choosing a spelling is the completion list's call.
 
 ## Database/ScriptDatabase.cs
 
@@ -294,7 +299,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `VocabularyIndex` (gated by `includeLiterals` = the completion.literals setting; disabled →
   nothing, since statement scope makes no sense in a string); otherwise `#precache(` asset types,
   `#using`/`#insert` path segments (from the stores' `PathTreeIndex`), `ns::` (that namespace's functions only), `owner.` fields
-  (+ `.size`; also from `VocabularyIndex`), and statement scope (keywords, the dialect's global objects and snippets,
+  (+ `.size`; also from `VocabularyIndex` — one row per field ignoring case, labelled in this file's
+  own spelling or else the most-used one, the detail naming any other spelling), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
 - **File scope gets that same list.** None of the store's categories is a per-cursor fact — the

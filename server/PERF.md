@@ -2301,7 +2301,8 @@ differ. The indexes cost about 50 MB retained at bo3 50K, against 2.3 GB.
   in ONE namespace would change that; nothing measured here does.
 - **Literal completion on cod4 at 10K**, run in a fresh process, reads 16–27 ms p99 against its 10 ms
   budget, while 50K in the same runs reads 7–13 ms. Identical at the commit before any of this, so it
-  is not these changes; it is the next thing to read on that row.
+  is not these changes; it is the next thing to read on that row. *Done 2026-09-28 — see "literal
+  completion paid for its payload" below.*
 - **Workspace symbol search** walks every record, but it is a substring match over every name: a
   different index (prefix or trigram), not a narrower key.
 
@@ -2342,6 +2343,34 @@ Only the per-request rows changed method. CodeLens, references, rename, `.Lookup
 keep one pass; each is far inside its budget, and a single-pass figure is an upper bound. The
 per-request figures in the tables above were taken the old way, so read their p99s as ceilings with
 JIT noise in them, not as steady state.
+
+### 2026-09-28: literal completion paid for its payload, which the sweep does not time
+
+Settled, cod4 literal completion still read 9.51 ms p99 at 50K with one request at 101 ms. The
+request sent every visible distinct literal of its kind — 16,419 items on cod4 — and the scale sweep
+times `CompletionEngine.Complete` only, so what the handler and the wire did with them was never on
+its table. Timed end to end, cursor just inside the quote, after the JIT settled (p50 / p99,
+allocated per request):
+
+| cod4 50K, literal completion | before | after |
+|---|---:|---:|
+| engine | 6.65 / 8.36 ms, 5.0 MB | 2.75 / 6.09 ms, 73 KB |
+| handler, engine included | 6.55 / 38.9 ms, 9.0 MB | 2.79 / 5.05 ms, 122 KB |
+| JSON serialization | **70.4 / 86.7 ms, 16 MB** | 0.79 / 3.19 ms, 210 KB |
+| payload | **2,289 K chars** | 26 K chars |
+
+Serializing the list cost ten times what building it did, and the 101 ms request was a collection
+landing in one: 5 of 292 requests had one inside them, and they were four of the six slowest.
+
+Literal and field lists now keep the file's own names and `.size`, and of the workspace's vocabulary
+the best 200 containing the typed text — names it begins first, then by how many files write them —
+marked incomplete so the editor re-asks as the text changes (CompletionEntry.Narrowed). The cut is a
+heap fed straight from the index walk: sorting all 18,144 literals to keep 200 cost more than the walk.
+In the sweep, literal completion p99 went 9.51 → 4.43 ms on cod4 and ~4.5 → 2.40 ms on bo3.
+
+**The lesson for the harness:** a request that returns a large list has a cost the sweep cannot see.
+Before calling one flat, time it through its handler and serialize the result — the payload size is
+the number to watch, and it does not show up in any engine timing.
 
 ## Results
 

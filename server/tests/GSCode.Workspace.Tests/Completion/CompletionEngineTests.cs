@@ -152,6 +152,73 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void InsideStringLiteral_IsCutToWhatHasBeenTyped_NamesItBeginsFirst()
+    {
+        // Contains, not begins-with: literals are paths as often as names, and `misc` reaches for
+        // `fx/misc/smoke` as much as for `misc_model`. The one it begins still ranks first.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(
+                @$"{Raw}\scripts\events.gsc",
+                "#namespace ev;\nfunction fire()\n{\n    a = \"fx/misc/smoke\";\n    b = \"misc_model\";\n    c = \"other_event\";\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    x = \"misc\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 13));
+
+        List<string> labels = [.. entries.Select(static entry => entry.Label)];
+        Assert.Contains("misc_model", labels);
+        Assert.Contains("fx/misc/smoke", labels);
+        Assert.DoesNotContain("other_event", labels);
+        Assert.True(labels.IndexOf("misc_model") < labels.IndexOf("fx/misc/smoke"));
+        Assert.All(entries, static entry => Assert.True(entry.Narrowed));
+    }
+
+    [Fact]
+    public void InsideStringLiteral_NothingTyped_KeepsThisFilesOwnAndTheMostUsedOfTheRest()
+    {
+        // 250 workspace literals and one written in two files. With nothing typed, the cut keeps 200
+        // of the workspace's, most-used first, and always this file's own.
+        System.Text.StringBuilder many = new("#namespace ev;\nfunction fire()\n{\n");
+        for ( int index = 0; index < 250; index++ )
+        {
+            many.Append($"    a{index} = \"event_{index:D3}\";\n");
+        }
+
+        many.Append("    p = \"popular_event\";\n}\n");
+
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\events.gsc", many.ToString())
+            .AddFile(@$"{Raw}\scripts\more.gsc", "#namespace more;\nfunction f()\n{\n    p = \"popular_event\";\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(
+            @$"{Raw}\scripts\main.gsc", "#namespace game;\nfunction run()\n{\n    m = \"mine_own\";\n    x = \"\";\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(4, 9));
+
+        Assert.Contains(entries, static entry => entry.Label == "mine_own");
+        Assert.Contains(entries, static entry => entry.Label == "popular_event");
+        Assert.Equal(200, entries.Count(static entry => entry.Label != "mine_own"));
+    }
+
+    [Fact]
+    public void MemberAccess_IsCutToWhatHasBeenTyped()
+    {
+        // `level.rou` — the workspace's `round_number` matches, its `player_score` does not, and
+        // `.size` is offered whatever was typed, since it is what an array is asked for.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\other.gsc", "function setup()\n{\n    level.round_number = 1;\n    level.player_score = 0;\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = level.rou\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 17));
+
+        Assert.True(HasLabel(entries, "round_number"));
+        Assert.False(HasLabel(entries, "player_score"));
+        Assert.True(HasLabel(entries, "size"));
+        Assert.All(entries, static entry => Assert.True(entry.Narrowed));
+    }
+
+    [Fact]
     public void RightAfterAClosedStringLiteral_LiteralCompletionDoesNotFire()
     {
         // FindLiteralAtOffset accepted `offset <= token.End`, which is right for a still-OPEN
@@ -2052,14 +2119,16 @@ public class CompletionEngineTests
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        string text = "function run()\n{\n    x = self.\n}\n";
-        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
-        Position afterDot = new(2, 13); // just past "self."
-
-        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", afterDot);
+        // Each asked with the start of its name typed: the engine's ~600 fields and ~350 map keys
+        // carry no file count, so with nothing typed the 200-row cut keeps the workspace's own
+        // fields and an alphabetical run of the rest (see MemberAccess_IsCutToWhatHasBeenTyped).
+        ImmutableArray<CompletionEntry> origin = engine.Complete(
+            Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.ori\n}\n"), "raw", new Position(2, 16));
+        ImmutableArray<CompletionEntry> entries = engine.Complete(
+            Analyze(@$"{Raw}\scripts\main.gsc", "function run()\n{\n    x = self.amb\n}\n"), "raw", new Position(2, 16));
 
         // An engine object field.
-        Assert.True(HasLabel(entries, "origin"));
+        Assert.True(HasLabel(origin, "origin"));
 
         // "ambient" exists only as a radiant KVP, so it proves the map keys reach completion,
         // and its keys.txt comment becomes the item's documentation.
@@ -2075,10 +2144,10 @@ public class CompletionEngineTests
         FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\scripts\dummy.gsc", "function d()\n{\n}\n");
         (CompletionEngine engine, _, _) = BuildWorld(files);
 
-        string text = "function run()\n{\n    x = self.\n}\n";
+        string text = "function run()\n{\n    x = self.script_note\n}\n";
         ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
 
-        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 13));
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(2, 24));
 
         // script_noteworthy is both an engine field and a documented radiant key; the single
         // de-duplicated entry must still carry the key's comment.

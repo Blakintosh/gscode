@@ -84,19 +84,13 @@ public sealed class VocabularyIndex
         _fields.Apply(path, previous.Fields, next.Fields);
     }
 
-    /// <summary>The distinct literals of one kind used by at least one file <paramref name="visible"/> accepts.</summary>
-    public List<VocabularyName> Literals(SymbolKind kind, Func<string, bool> visible)
+    /// <summary>
+    /// The distinct literals of one kind used by at least one file <paramref name="visible"/> accepts,
+    /// each handed to <paramref name="found"/> — see <see cref="PackedInvertedIndex{TKey}.ForEachKey"/>.
+    /// </summary>
+    public void Literals(SymbolKind kind, Func<string, bool> visible, Action<VocabularyName> found)
     {
-        List<(SymbolKey Key, int Files)> keys = [];
-        _literals.CollectKeysWithFileCounts(key => key.Kind == kind, visible, keys);
-
-        List<VocabularyName> names = new(keys.Count);
-        foreach ( (SymbolKey Key, int Files) key in keys )
-        {
-            names.Add(new VocabularyName(key.Key.Name, key.Files));
-        }
-
-        return names;
+        _literals.ForEachKey(key => key.Kind == kind, visible, (key, files) => found(new VocabularyName(key.Name, files)));
     }
 
     /// <summary>
@@ -107,20 +101,17 @@ public sealed class VocabularyIndex
     /// </summary>
     public List<VocabularyName> FieldNames(string? ownerName, Func<string, bool> visible)
     {
-        List<((string OwnerName, string Name) Key, int Files)> keys = [];
-        _fields.CollectKeysWithFileCounts(
-            key => ownerName is null || string.Equals(key.OwnerName, ownerName, StringComparison.Ordinal),
-            visible,
-            keys);
-
         // Across every owner one spelling can arrive once per owner — `self.health` and
         // `level.health` — so the counts are summed per spelling rather than listed twice.
         Dictionary<string, int> files = new(StringComparer.Ordinal);
-        foreach ( ((string OwnerName, string Name) Key, int Files) key in keys )
-        {
-            files.TryGetValue(key.Key.Name, out int sum);
-            files[key.Key.Name] = sum + key.Files;
-        }
+        _fields.ForEachKey(
+            key => ownerName is null || string.Equals(key.OwnerName, ownerName, StringComparison.Ordinal),
+            visible,
+            (key, count) =>
+            {
+                files.TryGetValue(key.Name, out int sum);
+                files[key.Name] = sum + count;
+            });
 
         List<VocabularyName> names = new(files.Count);
         foreach ( KeyValuePair<string, int> name in files )

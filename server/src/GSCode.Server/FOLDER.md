@@ -340,10 +340,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `ImportEditFor(entry, result)` turns a `CompletionEntry.ImportPath` into the entry's
   `additionalTextEdits` — one `#using`/`#include` line at `ImportEdits.InsertionPoint`, the same
   helper the code actions write theirs with, so the two cannot spell one directive two ways. The
-  list comes back `isIncomplete` whenever anything in it needed an import: those candidates are
-  matched on the word typed so far and capped, so the page is true for that prefix only and the
-  editor has to re-ask rather than filter it client-side. Everything else in the list is
-  scope-derived and complete, which is why this is not simply always on.
+  list comes back `isIncomplete` whenever anything in it needed an import or is `Narrowed` (a literal
+  or field list cut to the typed text): those candidates are matched on the text typed so far and
+  capped, so the page is true for that text only and the editor has to re-ask rather than filter it
+  client-side. An empty list is incomplete too — no row is left to carry the flag, and an empty
+  complete page is cached for the rest of the word. Everything else is scope-derived and complete,
+  which is why this is not simply always on.
 
 ## Handlers/SignatureHelpHandler.cs
 

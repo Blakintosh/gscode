@@ -120,7 +120,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
         }
 
         List<CompletionItem> items = [];
-        bool offeredAnImport = false;
+        bool incomplete = false;
 
         foreach ( CompletionEntry entry in _engine.Complete(
             target.Result,
@@ -134,16 +134,21 @@ public sealed class CompletionHandler : CompletionHandlerBase
             autoImport: _settings.CompletionAutoImport) )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            offeredAnImport |= entry.ImportPath.Length > 0;
+            incomplete |= entry.ImportPath.Length > 0 || entry.Narrowed;
             items.Add(ToItem(entry, request.TextDocument.Uri, target.Result));
         }
 
-        // Incomplete once anything in the list needs an import. Those candidates are matched on the
-        // word typed SO FAR and capped, so the answer is only true for that prefix: the editor must
-        // come back on the next keystroke rather than filter this page client-side, which would
-        // leave a narrower word showing whatever the wider one happened to reach first. Everything
-        // else in the list is scope-derived and complete, which is why this is not simply always on.
-        return Task.FromResult(new CompletionList(items, isIncomplete: offeredAnImport));
+        // Incomplete once anything in the list needs an import, or came from a vocabulary list cut to
+        // what was typed (CompletionEntry.Narrowed). Both are matched on the text typed SO FAR and
+        // capped, so the answer is only true for that text: the editor must come back on the next
+        // keystroke rather than filter this page client-side, which would leave a narrower word
+        // showing whatever the wider one happened to reach first. Everything else in the list is
+        // scope-derived and complete, which is why this is not simply always on.
+        //
+        // An EMPTY list is incomplete too. No row is left to carry the flag, and the editor caches an
+        // empty complete answer for the rest of the word — so a cut list that matched nothing would
+        // stay empty after a backspace that widens it again.
+        return Task.FromResult(new CompletionList(items, isIncomplete: incomplete || items.Count == 0));
     }
 
     /// <summary>

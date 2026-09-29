@@ -80,7 +80,8 @@ public sealed partial class CompletionEngine
                 return [];
             }
 
-            return LiteralCompletions(result, contextId, LiteralKindOf(tokens[literalIndex].Kind));
+            return LiteralCompletions(
+                result, contextId, LiteralKindOf(tokens[literalIndex].Kind), LiteralTextBefore(result, tokens[literalIndex], offset));
         }
 
         // The token being typed (if the cursor sits in/just after an identifier) and the
@@ -160,7 +161,7 @@ public sealed partial class CompletionEngine
                 DirectiveCompletions(game, GscKeywords.BodyDirectives);
 
             return game.HasHashStrings && includeLiterals
-                ? directives.AddRange(LiteralCompletions(result, contextId, SymbolKind.HashString, quoted: true))
+                ? directives.AddRange(LiteralCompletions(result, contextId, SymbolKind.HashString, typed: "", quoted: true))
                 : directives;
         }
 
@@ -276,7 +277,8 @@ public sealed partial class CompletionEngine
         // owner. — offer fields.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
-            return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
+            return FieldCompletions(
+                result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope, WordBefore(result, tokens, currentIndex, offset));
         }
 
         return StatementScopeCompletions(
@@ -294,9 +296,9 @@ public sealed partial class CompletionEngine
     /// The part of the identifier under the cursor that has actually been TYPED — <c>get_pl</c> in
     /// <c>get_pl|ayers</c>, not the whole word.
     ///
-    /// Only the auto-import producer asks, and it needs the typed half specifically: the rest of the
-    /// token is text the user is editing over, so matching candidates against the whole word would
-    /// offer nothing the moment the cursor moved into the middle of one.
+    /// The auto-import producer and field completion ask, and both need the typed half specifically:
+    /// the rest of the token is text the user is editing over, so matching candidates against the
+    /// whole word would offer nothing the moment the cursor moved into the middle of one.
     /// </summary>
     private static string WordBefore(ParseResult result, ImmutableArray<Token> tokens, int currentIndex, int offset)
     {
@@ -312,5 +314,21 @@ public sealed partial class CompletionEngine
         }
 
         return result.Text.Text[start..offset];
+    }
+
+    /// <summary>
+    /// What has been typed inside the literal the cursor is in: everything after its opening quote up
+    /// to the cursor, whichever sigil comes before the quote — <c>fx/mi</c> in <c>"fx/mi|sc"</c>.
+    /// </summary>
+    private static string LiteralTextBefore(ParseResult result, Token literal, int offset)
+    {
+        string source = result.Text.Text;
+        int quote = source.IndexOf('"', literal.Start, literal.End - literal.Start);
+        if ( quote < 0 || offset <= quote + 1 )
+        {
+            return "";
+        }
+
+        return source[(quote + 1)..Math.Min(offset, literal.End)];
     }
 }

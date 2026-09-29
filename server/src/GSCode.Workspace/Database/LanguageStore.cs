@@ -388,12 +388,14 @@ public sealed class LanguageStore
     }
 
     /// <summary>
-    /// The distinct literals of one kind used in a file <paramref name="askingContextId"/> can see —
-    /// see <see cref="VocabularyIndex"/>.
+    /// The distinct literals of one kind used in a file <paramref name="askingContextId"/> can see,
+    /// each handed to <paramref name="found"/> as the walk reaches it — see <see cref="VocabularyIndex"/>.
+    /// A callback rather than a list because a string's list keeps 200 of cod4's 18,144, and building
+    /// the rest only to drop them was most of what the request allocated.
     /// </summary>
-    public List<VocabularyName> VisibleLiterals(SymbolKind kind, string askingContextId)
+    public void VisibleLiterals(SymbolKind kind, string askingContextId, Action<VocabularyName> found)
     {
-        return _vocabulary.Literals(kind, path => IsVisibleTo(path, askingContextId));
+        _vocabulary.Literals(kind, path => IsVisibleTo(path, askingContextId), found);
     }
 
     /// <summary>

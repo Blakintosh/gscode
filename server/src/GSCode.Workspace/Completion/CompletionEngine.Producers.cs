@@ -184,12 +184,17 @@ public sealed partial class CompletionEngine
         return _database.StoreFor(result.Language).PathChildren(directory, contextId);
     }
 
+    /// <summary>
+    /// The literals of one kind this file uses, and the workspace's cut to what has been typed — see
+    /// <see cref="VocabularyCut"/> for which ones and why a list of every one is not sent.
+    /// </summary>
+    /// <param name="typed">What has been typed inside the literal so far, or "" before any of it.</param>
     /// <param name="quoted">
     /// Whether to insert the surrounding quotes. True when only the sigil has been typed — at
     /// `notify(#` the cursor is not inside a string yet, so the entry has to supply them.
     /// </param>
     private ImmutableArray<CompletionEntry> LiteralCompletions(
-        ParseResult result, string contextId, SymbolKind literalKind, bool quoted = false)
+        ParseResult result, string contextId, SymbolKind literalKind, string typed, bool quoted = false)
     {
         LanguageStore store = _database.StoreFor(result.Language);
 
@@ -206,12 +211,134 @@ public sealed partial class CompletionEngine
         // The workspace's DISTINCT literals, from the store's vocabulary, rather than every
         // reference of every record — see VocabularyIndex for what that walk cost at scale.
         string detail = LiteralDetail(literalKind);
-        foreach ( VocabularyName name in store.VisibleLiterals(literalKind, contextId) )
+        VocabularyCut cut = new(typed);
+        store.VisibleLiterals(literalKind, contextId, name =>
         {
-            AddLiteral(name.Name, detail, seen, entries, quoted);
+            if ( IsNameLike(name.Name) && !seen.Contains(name.Name) )
+            {
+                cut.Offer(new VocabularyCandidate(name.Name, name.Files, detail));
+            }
+        });
+
+        foreach ( VocabularyCandidate candidate in cut.Best() )
+        {
+            AddLiteral(candidate.Name, detail, seen, entries, quoted);
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The most workspace names one literal or field list carries, beyond the file's own.
+    ///
+    /// Not a comfort setting. cod4 at 50,000 files has 18,144 distinct string literals, and sending
+    /// them all put 2.3 million characters of JSON on the wire for every completion inside a string:
+    /// 70 ms p50 to serialize and 16 MB of garbage, against 6.6 ms to build the list. The user picks
+    /// from what is on screen, and the list is marked incomplete (CompletionEntry.Narrowed), so the
+    /// next keystroke re-asks with more text rather than filtering this page.
+    /// </summary>
+    private const int MaximumVocabularyCandidates = 200;
+
+    /// <summary>A workspace name a literal or field list may offer, before the list is cut to what was typed.</summary>
+    private readonly record struct VocabularyCandidate(string Name, int Files, string Detail, string Documentation = "");
+
+    /// <summary>
+    /// The best <see cref="MaximumVocabularyCandidates"/> of the names offered to it that contain the
+    /// typed text, ignoring case. Names the text BEGINS come ahead of names it only appears in; then
+    /// the more files write a name the earlier it comes; then by name, so the cut never depends on the
+    /// index's order.
+    ///
+    /// Contains rather than begins-with because literals are paths as often as names: typing
+    /// <c>misc</c> is reaching for <c>fx/misc/smoke</c> as much as for <c>misc_model</c>. With nothing
+    /// typed every name matches and the ranking alone decides — the most widely used ones.
+    ///
+    /// Offered one name at a time, straight from the index walk, so a list of every candidate never
+    /// exists: a heap holds the best so far with the worst on top, and each newcomer either replaces
+    /// that one or is dropped. Sorting all of cod4's 18,144 literals to keep 200 cost more than the
+    /// walk that found them.
+    /// </summary>
+    private sealed class VocabularyCut
+    {
+        private readonly string _typed;
+        private readonly PriorityQueue<VocabularyCandidate, RankKey> _best = new(WorstFirst.Instance);
+
+        public VocabularyCut(string typed)
+        {
+            _typed = typed;
+        }
+
+        public void Offer(VocabularyCandidate candidate)
+        {
+            bool prefix = false;
+            if ( _typed.Length > 0 )
+            {
+                int at = candidate.Name.IndexOf(_typed, StringComparison.OrdinalIgnoreCase);
+                if ( at < 0 )
+                {
+                    return;
+                }
+
+                prefix = at == 0;
+            }
+
+            RankKey rank = new(prefix, candidate.Files, candidate.Name);
+            if ( _best.Count < MaximumVocabularyCandidates )
+            {
+                _best.Enqueue(candidate, rank);
+                return;
+            }
+
+            _best.TryPeek(out _, out RankKey worst);
+            if ( Compare(rank, worst) < 0 )
+            {
+                _best.DequeueEnqueue(candidate, rank);
+            }
+        }
+
+        /// <summary>The kept names, best first.</summary>
+        public List<VocabularyCandidate> Best()
+        {
+            List<VocabularyCandidate> kept = new(_best.Count);
+            while ( _best.TryDequeue(out VocabularyCandidate candidate, out _) )
+            {
+                kept.Add(candidate);
+            }
+
+            // Dequeued worst first.
+            kept.Reverse();
+            return kept;
+        }
+
+        /// <summary>Negative when <paramref name="left"/> ranks ahead of <paramref name="right"/>.</summary>
+        private static int Compare(RankKey left, RankKey right)
+        {
+            if ( left.Prefix != right.Prefix )
+            {
+                return left.Prefix ? -1 : 1;
+            }
+
+            int files = right.Files.CompareTo(left.Files);
+            if ( files != 0 )
+            {
+                return files;
+            }
+
+            int name = string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
+            return name != 0 ? name : string.CompareOrdinal(left.Name, right.Name);
+        }
+
+        private readonly record struct RankKey(bool Prefix, int Files, string Name);
+
+        /// <summary>Orders the heap so its top is the WORST kept name — the one a better newcomer evicts.</summary>
+        private sealed class WorstFirst : IComparer<RankKey>
+        {
+            public static readonly WorstFirst Instance = new();
+
+            public int Compare(RankKey left, RankKey right)
+            {
+                return VocabularyCut.Compare(right, left);
+            }
+        }
     }
 
     private static void CollectLiterals(
@@ -247,7 +374,8 @@ public sealed partial class CompletionEngine
             name,
             CompletionKind.Literal,
             detail,
-            quoted ? "\"" + name + "\"" : ""));
+            quoted ? "\"" + name + "\"" : "",
+            Narrowed: true));
     }
 
     /// <summary>The shortest run of letters and digits a literal must have to read as a name.</summary>
@@ -536,11 +664,18 @@ public sealed partial class CompletionEngine
         return entries.ToImmutable();
     }
 
+    /// <summary>
+    /// The fields this file assigns and <c>.size</c>, always; and the workspace's assigned fields, the
+    /// engine's object fields and the radiant map keys, cut to what has been typed after the dot —
+    /// see <see cref="VocabularyCut"/>.
+    /// </summary>
+    /// <param name="typed">What has been typed of the field name so far, or "" right after the dot.</param>
     private ImmutableArray<CompletionEntry> FieldCompletions(
         ParseResult result,
         string contextId,
         string ownerName,
-        FieldScope fieldScope)
+        FieldScope fieldScope,
+        string typed)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
@@ -559,24 +694,26 @@ public sealed partial class CompletionEngine
         // reachable from all of them.
         CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, spellings, seen, entries);
 
+        // The .size pseudo-member, whatever has been typed: it is what an array is asked for.
+        if ( seen.Add("size") )
+        {
+            entries.Add(new CompletionEntry("size", CompletionKind.Field, "int (read-only)", Narrowed: true));
+        }
+
+        VocabularyCut cut = new(typed);
         foreach ( KeyValuePair<string, List<VocabularyName>> name in spellings )
         {
             // The most-used spelling labels the row; SpellingsByName put it first.
             string label = name.Value[0].Name;
             if ( seen.Add(label) )
             {
-                entries.Add(new CompletionEntry(label, CompletionKind.Field, FieldDetail(name.Value, label)));
+                cut.Offer(new VocabularyCandidate(label, name.Value[0].Files, FieldDetail(name.Value, label)));
             }
         }
 
-        // The .size pseudo-member.
-        if ( seen.Add("size") )
-        {
-            entries.Add(new CompletionEntry("size", CompletionKind.Field, "int (read-only)"));
-        }
-
         // Engine object fields. The owner's entity kind isn't known at this point, so every
-        // documented field name is offered with its type when the declaring kinds agree.
+        // documented field name is offered with its type when the declaring kinds agree. No file
+        // count: they rank after the workspace's own fields unless the typed text reaches them.
         foreach ( string fieldName in _objectFields.FieldNames() )
         {
             if ( !seen.Add(fieldName) )
@@ -587,12 +724,8 @@ public sealed partial class CompletionEngine
             // A name can be both; take the radiant comment as documentation so the doc is not
             // lost to the de-duplication below.
             RadiantKey? alsoAKey = _objectFields.FindRadiantKey(fieldName, result.Language);
-            entries.Add(new CompletionEntry(
-                fieldName,
-                CompletionKind.Field,
-                DescribeField(_objectFields.FindField(fieldName)),
-                "",
-                alsoAKey?.Comment ?? ""));
+            cut.Offer(new VocabularyCandidate(
+                fieldName, 0, DescribeField(_objectFields.FindField(fieldName)), alsoAKey?.Comment ?? ""));
         }
 
         // Radiant map-entity KVP keys, which scripts read straight off spawned entities.
@@ -603,7 +736,13 @@ public sealed partial class CompletionEngine
                 continue;
             }
 
-            entries.Add(new CompletionEntry(key.Name, CompletionKind.Field, key.Type + " (map key)", "", key.Comment));
+            cut.Offer(new VocabularyCandidate(key.Name, 0, key.Type + " (map key)", key.Comment));
+        }
+
+        foreach ( VocabularyCandidate candidate in cut.Best() )
+        {
+            entries.Add(new CompletionEntry(
+                candidate.Name, CompletionKind.Field, candidate.Detail, "", candidate.Documentation, Narrowed: true));
         }
 
         return entries.ToImmutable();
@@ -698,7 +837,7 @@ public sealed partial class CompletionEngine
                 {
                     spellings.TryGetValue(assignment.Name, out List<VocabularyName>? written);
                     entries.Add(new CompletionEntry(
-                        assignment.Name, CompletionKind.Field, FieldDetail(written, assignment.Name)));
+                        assignment.Name, CompletionKind.Field, FieldDetail(written, assignment.Name), Narrowed: true));
                 }
             }
         }

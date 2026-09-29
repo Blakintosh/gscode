@@ -94,6 +94,12 @@ public enum CompletionKind
 /// question about the document the handler is answering for, not about the suggestion. The handler
 /// turns it into the `additionalTextEdits` the protocol carries.
 /// </param>
+/// <param name="Narrowed">
+/// Whether this row came from a list cut down to what had been typed — literal and field completion,
+/// which would otherwise send the workspace's whole vocabulary. Such a list is only true for the text
+/// typed SO FAR, so the handler marks it incomplete and the editor asks again as the text changes,
+/// rather than filtering a page that a wider or narrower question would have filled differently.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -113,4 +119,5 @@ public sealed record CompletionEntry(
     // the two it is gets whichever the NAME resolves to: the builtin row rendered
     // globallogic_spawn::spawnSpectator under a header reading "builtin".
     bool IsBuiltin = false,
-    string ImportPath = "");
+    string ImportPath = "",
+    bool Narrowed = false);

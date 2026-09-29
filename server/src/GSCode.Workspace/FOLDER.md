@@ -118,9 +118,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `FilesFor(key)` is the files behind one key; `CollectKeys(keyFilter, fileFilter, into)` is the
   other direction, the keys at least one accepted file carries — a vocabulary, read one shard at a
   time. Its file filter runs under the shard gate, so it must take no lock of its own.
-  `CollectKeysWithFileCounts` is the same walk with how many files carry each key — every file, not
-  only accepted ones, since it ranks a list and counting only visible files would test every file of
-  every key.
+  `ForEachKey` is the same walk handing each key to a callback with how many files carry it — every
+  file, not only accepted ones, since it ranks a list and counting only visible files would test every
+  file of every key. A callback so a caller keeping the best few of thousands never holds them all.
 - Packed: a bare `string` while exactly one file carries a key, promoted to a `HashSet<string>` only
   once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
   ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
@@ -246,7 +246,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   than every reference / assignment of every record per request. A literal is indexed only when
   literal completion could offer it (a plain `ReferenceKind.Literal`, not from a macro body); the
   name-shape filter stays at the query. Read through `LanguageStore.VisibleLiterals` /
-  `VisibleFieldNames`, as `VocabularyName(Name, Files)`: each name with how many files write it.
+  `VisibleFieldNames`, as `VocabularyName(Name, Files)`: each name with how many files write it
+  (literals handed to a callback, fields as a list).
   Field names are kept as WRITTEN — `level.foo` and `level.Foo` are two names here, one spelling on
   two owners is one name with both counted — and choosing a spelling is the completion list's call.
 
@@ -277,7 +278,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `CompletionKind` + `CompletionEntry` — the LSP-free completion suggestion model. `ImportPath`
   names the script an entry's symbol lives in when accepting it has to add an import first, and is
   "" for every entry already in scope. A PATH rather than an edit: where a directive goes is a
-  question about the document, which the handler answers.
+  question about the document, which the handler answers. `Narrowed` marks a row from a list cut to
+  the text typed so far (literal and field completion), which the handler turns into `isIncomplete`.
 
 ## Completion/GscKeywords.cs
 
@@ -303,6 +305,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   own spelling or else the most-used one, the detail naming any other spelling), and statement scope (keywords, the dialect's global objects and snippets,
   the enclosing function's parameters and locals, every macro in scope, namespace functions,
   visible classes, namespace-less builtins as call snippets).
+- **Literal and field lists are cut to what has been typed.** The file's own literals / fields and
+  `.size` always; of the workspace's vocabulary (and the engine fields and map keys), the best 200
+  containing the typed text, ignoring case — names it begins first, then by how many files write
+  them — kept by `VocabularyCut`, a bounded heap fed straight from the index walk. Every row is
+  `Narrowed`. Sending cod4's 18,144 literals whole was 2.3 million characters of JSON per request,
+  70 ms to serialize against 7 ms to build.
 - **File scope gets that same list.** None of the store's categories is a per-cursor fact — the
   macro table is per FILE and a function is in scope for the file — and `REGISTER_SYSTEM` alone is
   written at column 0 in 477 of the shipped BO3 scripts. File scope is also not declarations-only,

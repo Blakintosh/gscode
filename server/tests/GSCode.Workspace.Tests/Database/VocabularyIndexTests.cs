@@ -43,6 +43,13 @@ public class VocabularyIndexTests
         };
     }
 
+    private static List<VocabularyName> Literals(LanguageStore store, SymbolKind kind, string contextId)
+    {
+        List<VocabularyName> names = [];
+        store.VisibleLiterals(kind, contextId, names.Add);
+        return names;
+    }
+
     private static List<string> Names(List<VocabularyName> names)
     {
         return [.. names.Select(static name => name.Name)];
@@ -60,12 +67,12 @@ public class VocabularyIndexTests
         store.Upsert(Record(@"c:\raw\a.gsc", "raw", [Literal("raw_event"), Literal("macro_event", fromMacro: true)]));
         store.Upsert(Record(@"c:\mods\m\b.gsc", "mod:m", [Literal("mod_event")]));
 
-        List<string> fromRaw = Names(store.VisibleLiterals(SymbolKind.StringLiteral, "raw"));
-        List<string> fromMod = Names(store.VisibleLiterals(SymbolKind.StringLiteral, "mod:m"));
+        List<string> fromRaw = Names(Literals(store, SymbolKind.StringLiteral, "raw"));
+        List<string> fromMod = Names(Literals(store, SymbolKind.StringLiteral, "mod:m"));
 
         Assert.Equal(["raw_event"], fromRaw);
         Assert.Equal(["mod_event", "raw_event"], fromMod.Order());
-        Assert.Empty(store.VisibleLiterals(SymbolKind.HashString, "mod:m"));
+        Assert.Empty(Literals(store, SymbolKind.HashString, "mod:m"));
     }
 
     [Fact]
@@ -75,13 +82,13 @@ public class VocabularyIndexTests
         store.Upsert(Record(@"c:\raw\a.gsc", "raw", [Literal("shared_event")]));
         store.Upsert(Record(@"c:\raw\b.gsc", "raw", [Literal("shared_event")]));
 
-        Assert.Equal(["shared_event"], Names(store.VisibleLiterals(SymbolKind.StringLiteral, "raw")));
+        Assert.Equal(["shared_event"], Names(Literals(store, SymbolKind.StringLiteral, "raw")));
 
         store.Remove(@"c:\raw\a.gsc");
-        Assert.Equal(["shared_event"], Names(store.VisibleLiterals(SymbolKind.StringLiteral, "raw")));
+        Assert.Equal(["shared_event"], Names(Literals(store, SymbolKind.StringLiteral, "raw")));
 
         store.Upsert(Record(@"c:\raw\b.gsc", "raw", [Literal("renamed_event")]));
-        Assert.Equal(["renamed_event"], Names(store.VisibleLiterals(SymbolKind.StringLiteral, "raw")));
+        Assert.Equal(["renamed_event"], Names(Literals(store, SymbolKind.StringLiteral, "raw")));
     }
 
     [Fact]
@@ -119,7 +126,7 @@ public class VocabularyIndexTests
         store.Upsert(Record(@"c:\raw\b.gsc", "raw", [Literal("shared_event")], [new AssignmentSymbol("self", "Foo", "foo", s_someRange)]));
         store.Upsert(Record(@"c:\raw\c.gsc", "raw", assignments: [new AssignmentSymbol("level", "foo", "foo", s_someRange)]));
 
-        Assert.Equal([new VocabularyName("shared_event", 2)], store.VisibleLiterals(SymbolKind.StringLiteral, "raw"));
+        Assert.Equal([new VocabularyName("shared_event", 2)], Literals(store, SymbolKind.StringLiteral, "raw"));
 
         List<VocabularyName> everyOwner = store.VisibleFieldNames(null, "raw");
         Assert.Equal(2, everyOwner.Single(name => name.Name == "Foo").Files);

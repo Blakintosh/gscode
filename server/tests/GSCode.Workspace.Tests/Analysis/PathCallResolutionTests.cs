@@ -4,7 +4,6 @@ using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;

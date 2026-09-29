@@ -7,8 +7,6 @@ using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -17,9 +15,8 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// The #include counterpart to <see cref="NamespaceUsageLintTests"/>: a call that resolves to a
 /// function in a file this one never included.
 ///
-/// Built the way <see cref="UnusedIncludeLintTests"/> is — the workspace is committed directly
-/// rather than indexed, because the default indexer runs as BO3 and would not parse a bare CoD4
-/// function declaration.
+/// The workspace is indexed as CoD4, as <see cref="UnusedIncludeLintTests"/>' is: under the default
+/// BO3 a bare function declaration is not a declaration at all.
 /// </summary>
 public class IncludeUsageLintTests
 {
@@ -40,44 +37,32 @@ public class IncludeUsageLintTests
     private static readonly FrozenSet<string> s_engineNames =
         new[] { "println" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
-    {
-        FakeFileSystem files = new FakeFileSystem()
-            .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), UtilitySource)
-            .AddFile(TestPaths.Raw(@"maps\mp\_load.gsc"), LoadSource)
-            .AddFile(TestPaths.Raw(@"maps\_chain.gsc"), ChainSource);
-
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-
-        Commit(database, TestPaths.Raw(@"common_scripts\utility.gsc"), @"common_scripts\utility.gsc", UtilitySource);
-        Commit(database, TestPaths.Raw(@"maps\mp\_load.gsc"), @"maps\mp\_load.gsc", LoadSource);
-        Commit(database, TestPaths.Raw(@"maps\_chain.gsc"), @"maps\_chain.gsc", ChainSource);
-
-        return (database, resolver);
-    }
-
-    private static void Commit(ScriptDatabase database, string path, string relativePath, string source)
-    {
-        ParseResult parsed = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), s_cod4);
-
-        database.Commit(parsed, ResolutionContext.RawContext, isDirty: false, relativePath);
-    }
-
+    /// <summary>
+    /// Lints <paramref name="askingSource"/> as <c>maps\mp\gametypes\_menus.gsc</c> against a CoD4
+    /// workspace of utility, _load and _chain. The asking file is analysed as
+    /// <paramref name="profile"/>, and Active follows it for the lint, so a test can ask what
+    /// happens when the file is not a merge-dialect file at all.
+    /// </summary>
     private static ImmutableArray<Diagnostic> Lint(string askingSource, GameProfile? profile = null)
     {
-        (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        GameProfile game = profile ?? s_cod4;
-        string askingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"common_scripts\utility.gsc", UtilitySource),
+                new TestFile(@"maps\mp\_load.gsc", LoadSource),
+                new TestFile(@"maps\_chain.gsc", ChainSource),
+            ],
+            s_cod4);
 
+        GameProfile game = profile ?? s_cod4;
+        using ProfileScope asking = ProfileScope.Use(game);
+
+        string askingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
         ParseResult result = ScriptAnalysis.Analyze(
             askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
             NullInsertProvider.Instance, new NameTable(), game);
 
         return IncludeUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, s_engineNames, "raw", game);
+            result, workspace.Database.Gsc, ScriptLanguage.Gsc, workspace.Resolver, askingPath, s_engineNames, "raw", game);
     }
 
     [Fact]

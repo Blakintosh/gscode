@@ -2,21 +2,15 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 /// <summary>
 /// The #include counterpart to <see cref="UnusedUsingLintTests"/>: an #include contributing nothing
-/// this file calls is a greyed-out hint. Because #include is a merge dialect and the default indexer
-/// runs as BO3 (which would not parse a bare function), the included file is analysed as CoD4 and
-/// committed directly rather than indexed.
+/// this file calls is a greyed-out hint. #include is a merge-dialect import, so the workspace is
+/// indexed as CoD4: under the default BO3 a bare <c>helper()</c> is not a declaration at all.
 /// </summary>
 public class UnusedIncludeLintTests
 {
@@ -25,45 +19,21 @@ public class UnusedIncludeLintTests
     private const string ChainSource = "#include common_scripts\\utility;\n";
     private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
-    private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
-    {
-        FakeFileSystem files = new FakeFileSystem()
-            .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), "helper()\n{\n}\n")
-            .AddFile(TestPaths.Raw(@"maps\_chain.gsc"), ChainSource)
-            .AddFile(TestPaths.Raw(@"maps\_chain2.gsc"), ChainSource);
-
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-
-        string utilityPath = TestPaths.Raw(@"common_scripts\utility.gsc");
-        ParseResult utility = ScriptAnalysis.Analyze(
-            utilityPath, ScriptLanguage.Gsc, SourceText.From("helper()\n{\n}\n"), NullInsertProvider.Instance, new NameTable(), s_cod4);
-        database.Commit(utility, ResolutionContext.RawContext, isDirty: false, @"common_scripts\utility.gsc");
-
-        // A hub that declares nothing itself and exists only to pull utility in — the shape a
-        // marginal test has to get right.
-        ParseResult chain = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\_chain.gsc"), ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), s_cod4);
-        database.Commit(chain, ResolutionContext.RawContext, isDirty: false, @"maps\_chain.gsc");
-
-        ParseResult chain2 = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\_chain2.gsc"), ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), s_cod4);
-        database.Commit(chain2, ResolutionContext.RawContext, isDirty: false, @"maps\_chain2.gsc");
-
-        return (database, resolver);
-    }
-
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
-        (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), s_cod4);
+        // A hub that declares nothing itself and exists only to pull utility in — the shape a
+        // marginal test has to get right.
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"common_scripts\utility.gsc", "helper()\n{\n}\n"),
+                new TestFile(@"maps\_chain.gsc", ChainSource),
+                new TestFile(@"maps\_chain2.gsc", ChainSource),
+            ],
+            s_cod4);
 
-        return UnusedIncludeLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
+        return UnusedIncludeLint.Analyze(
+            workspace.Analyze(@"scripts\main.gsc", askingSource), workspace.Database.Gsc, ScriptLanguage.Gsc,
+            workspace.Resolver, TestPaths.Raw(@"scripts\main.gsc"));
     }
 
     [Fact]

@@ -7,7 +7,7 @@ using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 
-namespace GSCode.Workspace.Tests.Resolution;
+namespace GSCode.Testing;
 
 /// <summary>
 /// An indexed in-memory workspace for ONE dialect: files under <see cref="TestPaths.RawRoot"/>, a

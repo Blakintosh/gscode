@@ -157,9 +157,11 @@ has a template.
 
 Not a test project: the setup the other suites share, referenced by Workspace.Tests and Server.Tests
 with a global `using GSCode.Testing;`. `FakeFileSystem` the in-memory tree · `TestPaths` the one fake
-root, `c:\raw`, so a test names `scripts\lib.gsc` and never a drive · `TestFile` one script under
-it · `ProfileScope` selects a game and RESTORES the previous one, with BO3 as `Default`. How a test
-uses them, and when a named game or a real path is right instead, is the `standard-tests` skill.
+root, `c:\raw`, so a test names `scripts\lib.gsc` and never a drive, plus `ModsRoot` (`c:\mods`) and
+`Config(files)`, the standard `RootConfig` over both · `TestFile` one script under the raw root ·
+`ProfileScope` selects a game and RESTORES the previous one, with BO3 as `Default` ·
+`TestWorkspace` an indexed in-memory store and resolver for one game (below). How a test uses them,
+and when a named game or a real path is right instead, is the `standard-tests` skill.
 
 ---
 

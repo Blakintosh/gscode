@@ -98,17 +98,11 @@ public class GlobalObjectWriteLintTests
     {
         // The one portability trap here. Call of Duty 4 has no `world`, so a local called `world`
         // is a name like any other and reporting it would be a false Error on working code.
-        Assert.True(GameProfile.Select("cod4"));
-        try
-        {
-            Assert.Empty(Lint("    world = 1;"));
+        using ProfileScope scope = ProfileScope.Use(GameProfile.Cod4);
 
-            // The globals every dialect does have are still reported under it.
-            Assert.Single(Lint("    level = 1;"));
-        }
-        finally
-        {
-            GameProfile.Select("bo3");
-        }
+        Assert.Empty(Lint("    world = 1;"));
+
+        // The globals every dialect does have are still reported under it.
+        Assert.Single(Lint("    level = 1;"));
     }
 }

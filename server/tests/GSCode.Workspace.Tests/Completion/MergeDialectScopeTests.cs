@@ -3,7 +3,6 @@ using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;

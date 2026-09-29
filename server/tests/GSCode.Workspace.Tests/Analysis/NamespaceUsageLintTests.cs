@@ -96,35 +96,14 @@ public class NamespaceUsageLintTests
         Assert.Empty(diagnostics);
     }
 
-    /// <summary>
-    /// The same rule asked about a merge dialect, which has no <c>#using</c> to satisfy it. Built
-    /// the way <see cref="IncludeUsageLintTests"/> is — committed directly rather than indexed,
-    /// since the default indexer runs as BO3 and would not parse a bare CoD4 declaration.
-    /// </summary>
+    /// <summary>The same rule asked about a merge dialect, which has no <c>#using</c> to satisfy it.</summary>
     private static ImmutableArray<Diagnostic> LintAsCod4(string askingSource)
     {
-        const string utilitySource = "func()\n{\n}\n";
-
-        FakeFileSystem files = new FakeFileSystem().AddFile(TestPaths.Raw(@"myutils.gsc"), utilitySource);
-        RootConfig config = TestPaths.Config(files);
-        PathResolver resolver = new(config, files);
-
-        ScriptDatabase database = new();
-        database.Commit(
-            ScriptAnalysis.Analyze(
-                TestPaths.Raw(@"myutils.gsc"), ScriptLanguage.Gsc, SourceText.From(utilitySource),
-                NullInsertProvider.Instance, new NameTable(), s_cod4),
-            ResolutionContext.RawContext,
-            isDirty: false,
-            @"myutils.gsc");
-
-        string askingPath = TestPaths.Raw(@"maps\mp\_menus.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
-            NullInsertProvider.Instance, new NameTable(), s_cod4);
+        using TestWorkspace workspace = TestWorkspace.Build([new TestFile(@"myutils.gsc", "func()\n{\n}\n")], s_cod4);
 
         return NamespaceUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, "raw", s_cod4);
+            workspace.Analyze(@"maps\mp\_menus.gsc", askingSource), workspace.Database.Gsc, ScriptLanguage.Gsc,
+            workspace.Resolver, TestPaths.Raw(@"maps\mp\_menus.gsc"), "raw", s_cod4);
     }
 
     [Fact]

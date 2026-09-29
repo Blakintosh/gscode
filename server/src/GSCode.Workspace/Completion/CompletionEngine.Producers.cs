@@ -686,8 +686,7 @@ public sealed partial class CompletionEngine
         // Every spelling the workspace writes, from the store's vocabulary rather than every
         // function of every record — see VocabularyIndex — grouped by the name the engine sees.
         LanguageStore fieldStore = _database.StoreFor(result.Language);
-        Dictionary<string, List<VocabularyName>> spellings =
-            SpellingsByName(fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId));
+        FieldSpellings spellings = new(fieldStore.VisibleFieldNames(scopeToOwner ? ownerName : null, contextId));
 
         // The live file first, so unsaved edits are offered immediately and in the file's own
         // spelling, then every visible record's — a field assigned on `level` in one file is
@@ -701,13 +700,13 @@ public sealed partial class CompletionEngine
         }
 
         VocabularyCut cut = new(typed);
-        foreach ( KeyValuePair<string, List<VocabularyName>> name in spellings )
+        foreach ( VocabularyName mostUsed in spellings.MostUsed() )
         {
-            // The most-used spelling labels the row; SpellingsByName put it first.
-            string label = name.Value[0].Name;
+            // The most-used spelling labels the row.
+            string label = mostUsed.Name;
             if ( seen.Add(label) )
             {
-                cut.Offer(new VocabularyCandidate(label, name.Value[0].Files, FieldDetail(name.Value, label)));
+                cut.Offer(new VocabularyCandidate(label, mostUsed.Files, spellings.DetailFor(label)));
             }
         }
 
@@ -749,61 +748,91 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
-    /// The workspace's field spellings grouped by the name the engine sees, which ignores case, each
-    /// group most-used first — by files writing it, then ordinally, so the order never depends on
-    /// the index's.
+    /// The workspace's field spellings grouped by the name the engine sees, which ignores case: the
+    /// most-used spelling of each, and every spelling of the few written more than one way, most-used
+    /// first — by files writing it, then ordinally, so the order never depends on the index's.
     ///
     /// Kept as WRITTEN rather than folded to one case. A workspace that writes both <c>level.foo</c>
     /// and <c>level.Foo</c> has one field, but which spelling a row shows was an accident of index
     /// order, and the other spelling is worth seeing: it is how someone else wrote the same field.
+    ///
+    /// A list only for a name written more than one way. Nearly every field has one spelling, and a
+    /// list per name was 6,738 of them a request on bo3 at 50,000 files.
     /// </summary>
-    private static Dictionary<string, List<VocabularyName>> SpellingsByName(List<VocabularyName> names)
+    private sealed class FieldSpellings
     {
-        Dictionary<string, List<VocabularyName>> byName = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( VocabularyName name in names )
+        private readonly Dictionary<string, VocabularyName> _mostUsed = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<VocabularyName>> _several = new(StringComparer.OrdinalIgnoreCase);
+
+        public FieldSpellings(List<VocabularyName> names)
         {
-            if ( !byName.TryGetValue(name.Name, out List<VocabularyName>? written) )
+            foreach ( VocabularyName name in names )
             {
-                written = [];
-                byName[name.Name] = written;
+                if ( !_mostUsed.TryGetValue(name.Name, out VocabularyName first) )
+                {
+                    _mostUsed[name.Name] = name;
+                    continue;
+                }
+
+                if ( !_several.TryGetValue(name.Name, out List<VocabularyName>? written) )
+                {
+                    written = [first];
+                    _several[name.Name] = written;
+                }
+
+                written.Add(name);
             }
 
-            written.Add(name);
-        }
-
-        foreach ( List<VocabularyName> written in byName.Values )
-        {
-            written.Sort(static (left, right) =>
+            foreach ( KeyValuePair<string, List<VocabularyName>> name in _several )
             {
-                int files = right.Files.CompareTo(left.Files);
-                return files != 0 ? files : string.CompareOrdinal(left.Name, right.Name);
-            });
+                name.Value.Sort(static (left, right) =>
+                {
+                    int files = right.Files.CompareTo(left.Files);
+                    return files != 0 ? files : string.CompareOrdinal(left.Name, right.Name);
+                });
+
+                _mostUsed[name.Key] = name.Value[0];
+            }
         }
 
-        return byName;
-    }
-
-    /// <summary>
-    /// "field", naming every OTHER spelling the workspace writes this field in —
-    /// <c>field, also written foo</c> on a row labelled <c>Foo</c>.
-    /// </summary>
-    private static string FieldDetail(List<VocabularyName>? written, string label)
-    {
-        if ( written is null )
+        /// <summary>One spelling per field: the most used.</summary>
+        public IEnumerable<VocabularyName> MostUsed()
         {
+            return _mostUsed.Values;
+        }
+
+        /// <summary>
+        /// "field", naming every spelling of this field OTHER than <paramref name="label"/> —
+        /// <c>field, also written foo</c> on a row labelled <c>Foo</c>. The label need not be the
+        /// most-used spelling: a row for the edited file's own field is labelled the way that file
+        /// writes it, which can be a spelling nothing indexed uses at all.
+        /// </summary>
+        public string DetailFor(string label)
+        {
+            // Nothing is built for the common case, a field with one spelling that is the label:
+            // this runs once per field in the workspace's vocabulary.
+            if ( _several.TryGetValue(label, out List<VocabularyName>? written) )
+            {
+                List<string> others = [];
+                foreach ( VocabularyName spelling in written )
+                {
+                    if ( !string.Equals(spelling.Name, label, StringComparison.Ordinal) )
+                    {
+                        others.Add(spelling.Name);
+                    }
+                }
+
+                return others.Count == 0 ? "field" : "field, also written " + string.Join(", ", others);
+            }
+
+            if ( _mostUsed.TryGetValue(label, out VocabularyName only)
+                && !string.Equals(only.Name, label, StringComparison.Ordinal) )
+            {
+                return "field, also written " + only.Name;
+            }
+
             return "field";
         }
-
-        List<string> others = [];
-        foreach ( VocabularyName spelling in written )
-        {
-            if ( !string.Equals(spelling.Name, label, StringComparison.Ordinal) )
-            {
-                others.Add(spelling.Name);
-            }
-        }
-
-        return others.Count == 0 ? "field" : "field, also written " + string.Join(", ", others);
     }
 
     /// <summary>
@@ -814,7 +843,7 @@ public sealed partial class CompletionEngine
         ImmutableArray<FunctionSymbol> functions,
         bool scopeToOwner,
         string ownerName,
-        Dictionary<string, List<VocabularyName>> spellings,
+        FieldSpellings spellings,
         HashSet<string> seen,
         ImmutableArray<CompletionEntry>.Builder entries)
     {
@@ -835,9 +864,11 @@ public sealed partial class CompletionEngine
 
                 if ( seen.Add(assignment.Name) )
                 {
-                    spellings.TryGetValue(assignment.Name, out List<VocabularyName>? written);
                     entries.Add(new CompletionEntry(
-                        assignment.Name, CompletionKind.Field, FieldDetail(written, assignment.Name), Narrowed: true));
+                        assignment.Name,
+                        CompletionKind.Field,
+                        spellings.DetailFor(assignment.Name),
+                        Narrowed: true));
                 }
             }
         }

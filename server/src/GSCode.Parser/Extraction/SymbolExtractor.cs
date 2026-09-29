@@ -1175,7 +1175,7 @@ public sealed class SymbolExtractor
             {
                 // sys:: is the explicit builtin qualifier — builtins are namespace-less.
                 string namespaceText = _names.InternLower(qualified.NamespaceToken.Text);
-                string? namespaceKey = BuiltinQualifier.Is(namespaceText) ? null : namespaceText;
+                string? namespaceKey = BuiltinQualifier.Matches(namespaceText, _profile) ? null : namespaceText;
 
                 key = new SymbolKey(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
                 nameToken = qualified.NameToken;

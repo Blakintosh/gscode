@@ -97,7 +97,7 @@ public sealed class SignatureEngine
         }
 
         // Namespace-less builtins (sys:: aliases them; a plain name reaches them too).
-        if ( namespaceName is null || BuiltinQualifier.Is(namespaceName) )
+        if ( namespaceName is null || BuiltinQualifier.Matches(namespaceName, game) )
         {
             BuiltinFunction? builtin = _builtins.For(result.Language).Find(calleeName);
             if ( builtin is not null )

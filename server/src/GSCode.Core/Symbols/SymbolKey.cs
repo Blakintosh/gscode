@@ -72,10 +72,19 @@ public static class BuiltinQualifier
 {
     public const string Text = "sys";
 
-    /// <summary>Whether a written qualifier is <c>sys</c>, in any case.</summary>
-    public static bool Is(string qualifier)
+    /// <summary>
+    /// Whether a WRITTEN qualifier names the engine's library in this game: <c>sys</c>, in any case,
+    /// on a namespace dialect. Nowhere else — no shipped CoD4 or BO1 script writes <c>sys::</c>, and
+    /// on a merge dialect it keys like any other qualifier.
+    ///
+    /// The one test for readers holding TEXT: extraction, the argument-count lint, completion and
+    /// signature help, the last two because <c>sys::</c> with nothing after it is not yet a call.
+    /// There is deliberately no ungated form, so no reader can agree on the spelling and disagree on
+    /// the dialect.
+    /// </summary>
+    public static bool Matches(string qualifier, GameProfile game)
     {
-        return string.Equals(qualifier, Text, StringComparison.OrdinalIgnoreCase);
+        return game.ResolvesByNamespace && string.Equals(qualifier, Text, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -86,7 +95,7 @@ public static class BuiltinQualifier
     /// it proves nothing and the answer is false.
     ///
     /// The one test for readers holding a KEY. Readers holding only text — completion and signature
-    /// help, where <c>sys::</c> with nothing after it is not yet a call — ask <see cref="Is"/>.
+    /// help, where <c>sys::</c> with nothing after it is not yet a call — ask <see cref="Matches"/>.
     /// </summary>
     public static bool IsBuiltinKey(SymbolKey key, GameProfile game)
     {

@@ -308,6 +308,24 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_SysIsOnlyTheBuiltinQualifierWhereResolutionIsByNamespace()
+    {
+        // `sys::` belongs to the namespace dialects: no shipped CoD4 or BO1 script writes it, and on
+        // a merge dialect a key with no namespace is every unqualified call's key, so reading `sys`
+        // as the builtin form there would claim a meaning the engine never gave it. It keys like any
+        // other written qualifier instead, which is what `util::` does beside it.
+        GameProfile cod4 = GameProfile.ByName("cod4")!;
+        ParseResult result = Analyze("caller()\n{\n    sys::print( \"x\" );\n    util::assist();\n}\n", profile: cod4);
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        Assert.Contains(references, entry =>
+            entry.Key == new SymbolKey("sys", "print", SymbolKind.Function) && entry.Kind == ReferenceKind.Call);
+
+        Assert.Contains(references, entry =>
+            entry.Key == new SymbolKey("util", "assist", SymbolKind.Function) && entry.Kind == ReferenceKind.Call);
+    }
+
+    [Fact]
     public void References_ClassDefinitionAndUseShareOneKey()
     {
         // A class name is GLOBAL in T7 — `new Throttle()` names it bare, and the language has no

@@ -184,7 +184,7 @@ public static class ArgumentCountLint
         // function of the same name, which is the one thing the qualifier exists to step past.
         // Read as a namespace it fell through to a script lookup under `sys`, which nothing
         // declares into, and the rule stood down on every such call.
-        if ( namespaceName is not null && BuiltinQualifier.Is(namespaceName) )
+        if ( namespaceName is not null && BuiltinQualifier.Matches(namespaceName, game) )
         {
             if ( game.HasReliableBuiltinSignatures && builtins.Find(name) is BuiltinFunction explicitBuiltin )
             {

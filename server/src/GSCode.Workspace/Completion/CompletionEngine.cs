@@ -248,9 +248,9 @@ public sealed partial class CompletionEngine
 
                 // `sys::` names the engine's library, not a namespace: asked as one it finds
                 // nothing declared into `sys`, and the editor falls back to word matches from the
-                // buffer. Only where resolution is by namespace, the dialect the qualifier belongs
-                // to — the same gate MethodResolution.ResolveCall answers a `sys::` call under.
-                if ( game.ResolvesByNamespace && BuiltinQualifier.Is(ns) )
+                // buffer. Matches carries the dialect gate, so this agrees with extraction and
+                // resolution about where `sys::` means anything.
+                if ( BuiltinQualifier.Matches(ns, game) )
                 {
                     return BuiltinQualifiedCompletions(
                         result, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);

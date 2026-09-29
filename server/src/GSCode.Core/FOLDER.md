@@ -58,11 +58,13 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
   because the qualifier is the identity, and because a dialect may declare a namespace and a class
   with the same name and mean the namespace. The enclosing class of such a call is recovered
   positionally from `ClassSymbol.FullRange` — it describes the call site, not the callee.
-- `BuiltinQualifier` — the written `sys::` qualifier, `Is(qualifier)` in any case. Such a call keys
-  with a NULL namespace, the builtin key, never as a namespace called `sys`; every reader of a
-  written qualifier asks here rather than comparing its own literal. `IsBuiltinKey(key, game)` is the
-  same fact for a reader holding the KEY: a function with no namespace and no owner, on a namespace
-  dialect, where nothing else produces that key.
+- `BuiltinQualifier` — the `sys::` qualifier, which names the engine's library on a namespace
+  dialect only (no shipped CoD4 or BO1 script writes it). Two tests, one per kind of reader, both
+  carrying that gate so no reader can agree on the spelling and disagree on the dialect:
+  `Matches(qualifier, game)` for readers holding TEXT (extraction, the argument-count lint,
+  completion, signature help), and `IsBuiltinKey(key, game)` for readers holding the KEY a `sys::`
+  call is extracted to — a function with no namespace and no owner, which nothing else produces
+  there.
 
 ## Symbols/SymbolModels.cs
 

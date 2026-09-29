@@ -288,11 +288,23 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// </summary>
     private void ScheduleImmediateAnalysis(OpenDocument document)
     {
+        CancellationToken token = ReplacePendingAnalysis(document);
+
+        _ = Task.Run(() => RunImmediate(document, token), token);
+    }
+
+    /// <summary>
+    /// Cancels whatever analysis the document has queued and installs a new one in its place — the
+    /// first step of both schedules, so a newer open, edit or save always supersedes what was
+    /// waiting, including a run already past the debounce.
+    /// </summary>
+    private static CancellationToken ReplacePendingAnalysis(OpenDocument document)
+    {
         document.PendingAnalysis?.Cancel();
         CancellationTokenSource pending = new();
         document.PendingAnalysis = pending;
 
-        _ = Task.Run(() => RunImmediate(document, pending.Token), pending.Token);
+        return pending.Token;
     }
 
     private void RunImmediate(OpenDocument document, CancellationToken cancellationToken)
@@ -308,11 +320,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     private void ScheduleDebouncedAnalysis(OpenDocument document)
     {
-        document.PendingAnalysis?.Cancel();
-        CancellationTokenSource pending = new();
-        document.PendingAnalysis = pending;
-
-        _ = RunDebouncedAsync(document, pending.Token);
+        _ = RunDebouncedAsync(document, ReplacePendingAnalysis(document));
     }
 
     private async Task RunDebouncedAsync(OpenDocument document, CancellationToken cancellationToken)

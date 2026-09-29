@@ -1055,12 +1055,33 @@ public sealed partial class CompletionEngine
             entries.Add(new CompletionEntry(className, CompletionKind.Class, "class"));
         }
 
-        // Namespace-less builtins.
+        AddBuiltins(result, callSuffix, parameterHints, entries);
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// What may follow <c>sys::</c>: the engine's library and nothing else. Not the script functions
+    /// that share a builtin's name — stepping past those is the one thing the qualifier is for.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> BuiltinQualifiedCompletions(
+        ParseResult result, string callSuffix, bool parameterHints)
+    {
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        AddBuiltins(result, callSuffix, parameterHints, entries);
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The namespace-less builtins, for statement scope and for <c>sys::</c> alike, so the two lists
+    /// cannot come to differ in what they offer.
+    /// </summary>
+    private void AddBuiltins(
+        ParseResult result, string callSuffix, bool parameterHints, ImmutableArray<CompletionEntry>.Builder entries)
+    {
         foreach ( BuiltinFunction builtin in _builtins.For(result.Language).All )
         {
             entries.Add(BuiltinEntry(builtin, callSuffix, parameterHints));
         }
-
-        return entries.ToImmutable();
     }
 }

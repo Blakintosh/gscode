@@ -67,6 +67,29 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void SysQualified_OffersTheBuiltinLibraryAndNothingElse()
+    {
+        // `sys::` names the engine's library, not a script namespace. Asked as a namespace it found
+        // nothing declared into `sys` and returned an empty list, so the editor fell back to word
+        // matches from the buffer. A script function sharing a builtin's name is the trap: it is
+        // what the qualifier exists to step past, so it must not be offered here.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\zm\_zm.gsc", "#namespace zm;\nfunction spawnSpectator()\n{\n}\n");
+
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        string text = "#namespace game;\nfunction run()\n{\n    sys::\n}\n";
+        ParseResult result = Analyze(@$"{Raw}\scripts\main.gsc", text);
+        Position after = new(3, 9); // just past "sys::"
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", after);
+
+        Assert.NotEmpty(entries);
+        Assert.All(entries, e => Assert.True(e.IsBuiltin, $"'{e.Label}' is not a builtin"));
+        Assert.Contains(entries, e => string.Equals(e.Label, "SpawnSpectator", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void NamespaceQualified_OffersPrivateFunctions_ToFilesInTheSameNamespace()
     {
         FakeFileSystem files = new FakeFileSystem()

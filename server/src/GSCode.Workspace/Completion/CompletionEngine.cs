@@ -245,6 +245,17 @@ public sealed partial class CompletionEngine
                 }
 
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
+
+                // `sys::` names the engine's library, not a namespace: asked as one it finds
+                // nothing declared into `sys`, and the editor falls back to word matches from the
+                // buffer. Only where resolution is by namespace, the dialect the qualifier belongs
+                // to — the same gate MethodResolution.ResolveCall answers a `sys::` call under.
+                if ( game.ResolvesByNamespace && BuiltinQualifier.Is(ns) )
+                {
+                    return BuiltinQualifiedCompletions(
+                        result, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
+                }
+
                 return NamespaceFunctionCompletions(
                     result, contextId, ns, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
             }

@@ -145,21 +145,18 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
 ## Symbols/ScrValue.cs
 
 The richer lattice underneath `ScrType`. A union that the projection calls Unknown is still enough
-for a rule to say what a value can never be, and every imprecision carries the reason it arose.
+for a rule to say what a value can never be.
 
 - `[Flags] enum ScrTypeSet : ulong` — the set of types a value may hold, as DISJOINT bits. The
   reversal of v1.5's `ScrDataTypes`, which encoded coercions structurally (`Int = 1<<1 | Bool`) and
   paid for it with a subset test that matched ints against bool, an `IsExactly` written to undo it,
   and four rules suppressing wrong type names. `Universe` is an explicit OR of the members, never
   `~0`.
-- `enum ScrImprecision` — why a value is not exact: an untyped parameter, a script function's return,
-  a library spelling the lattice cannot express, an array element, a branch
-  disagreement. No editor surface reads it; it takes part in equality.
 - `readonly record struct ScrConstant` / `Vec3` — a folded compile-time value. New here; v1.5 tracked
   only `bool? BooleanValue` and folded nothing.
 - `readonly record struct ScrFunctionRef` — which function a pointer holds, namespace and name, in
   the shape symbol keys use so a consumer can query the database without re-parsing a joined string.
-- `readonly record struct ScrValue` — types + constant + tri-state truthiness + imprecision.
+- `readonly record struct ScrValue` — types + constant + tri-state truthiness.
   `MustBe`/`MayBe` replace v1.5's single `Indeterminate` flag, which could say "do not trust this"
   but not "it is one of exactly two things" — the difference between a rule firing and staying
   silent. `Union` never collapses; `ToScrType()` is the projection that keeps every existing consumer

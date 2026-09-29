@@ -1005,8 +1005,7 @@ are out.
   with the per-language `BuiltinApi` and the shared `ObjectFields`.
 - **The environment holds `ScrValue`, not `ScrType`.** Everything above describes what the editor
   sees, which is the coarse `ScrType` projection at the public boundary. Underneath, the walk carries
-  unions (`int|string` where the projection says Unknown), folded constants and a REASON for every
-  imprecision.
+  unions (`int|string` where the projection says Unknown) and folded constants.
 - `ScriptTypes` + `FlowTyper.InferValues(result)` — the per-node surface: the value of every
   expression the walk touched, keyed by node REFERENCE (AST nodes are records, so structural equality
   would make the three zeroes in `( 0, 0, 0 )` one key). The field-write and type-mismatch lints and

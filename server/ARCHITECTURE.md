@@ -83,8 +83,7 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
 
 Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass seeded
 with engine object-field types; it feeds inlay hints, hovers and two lints. It carries `ScrValue`
-(`Core/Symbols`) — a union lattice with constant folding and a reason attached to every imprecision —
-and projects onto the coarse `ScrType` at its public boundary, so those consumers see what they
+(`Core/Symbols`) — a union lattice with constant folding — and projects onto the coarse `ScrType` at its public boundary, so those consumers see what they
 always saw. The richer value is reached through `InferValues` and `TryGetValueAt`, which the
 field-write and type-mismatch lints, the pointer-call inlay hints and go-to-type-definition read.
 

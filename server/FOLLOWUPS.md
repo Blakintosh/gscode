@@ -205,11 +205,12 @@ picture and no signal to keep reading. What follows is the current state.
   `ScrType.Join` collapses any disagreement to `Unknown` because it is a PROJECTION of a union, not
   because no union was computed.
 - Three of the four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with
-  `ScrValue.Union`; constant values are `ScrConstant`; and the per-position environment is `InferValues` returning a `ScriptTypes` node map, with
-  `FlowTyper.TryGetValueAt(result, position, out ScrValue)` for a single query. `ScrValue` goes
-  further than 1.5 did in one respect it did not ask for — every imprecision carries a REASON. The
-  fourth, entity subtypes, was built as `ScrValue.EntityKinds` and removed: nothing in the pass ever
-  inferred an owner's kind, so the field was never filled outside its own tests.
+  `ScrValue.Union`; constant values are `ScrConstant`; and the per-position environment is
+  `InferValues` returning a `ScriptTypes` node map, with
+  `FlowTyper.TryGetValueAt(result, position, out ScrValue)` for a single query. The fourth, entity
+  subtypes, was built as `ScrValue.EntityKinds` and removed: nothing in the pass ever inferred an
+  owner's kind, so the field was never filled outside its own tests. A reason attached to every
+  imprecision was built and removed the same way, since nothing read it.
 - The API data is on the lattice too. `ApiLoader.ParseType` maps each parameter's and return's
   declared type onto `ScrTypeSet` once at load, including the pipe-separated unions (`"int | string"`)
   and `number`, and `ApiLoader.ParseConfidence` keeps the per-entry `high`/`medium`/`low`.
@@ -242,7 +243,7 @@ result out is what 1.5 then had to do about it.
 ### Step 1 is done — the lattice exists, and nothing raises a diagnostic off it
 
 `ScrValue` (Core/Symbols) is a union lattice with disjoint bits, constant values, tri-state
-truthiness and a REASON attached to every imprecision. `ScrOperators` is the operator table.
+truthiness. `ScrOperators` is the operator table.
 `FlowTyper` carries it and projects to `ScrType` at its public boundary, so hover, inlay hints and
 the two typing lints are untouched and every one of the 42 typing tests passed unedited.
 
@@ -341,8 +342,8 @@ Its plumbing is already finished, which is the surprising part:
 - `BuiltinFunction.Confidence` is loaded and carries `high`/`medium`/`low` (1,291 / 684 / 80 on
   BO3's GSC library). That is precisely where the `Unverified` twin's severity split comes from, and
   the reason 1.5 needed a whole second CODE is that it had nowhere to put the distinction. We do.
-- `FlowTyper` already reads `Confidence` for `ScrImprecision.BuiltinUnverified` and already reads
-  `ReturnTypes`, so both halves of the pattern are in service elsewhere.
+- `FlowTyper` already reads `ReturnTypes`, so the parsed-at-load half of the pattern is in service
+  elsewhere. Nothing reads `Confidence` yet; this rule is its only intended reader.
 
 So the blocker is step 2 of `add-diagnostic`, not step 1: **measure it over the five corpora before
 it is given a severity, and read the top reported NAMES rather than the count.** Treat a high count

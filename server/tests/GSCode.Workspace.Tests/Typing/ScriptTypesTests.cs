@@ -145,7 +145,7 @@ public class ScriptTypesTests
         IdentifierNode read = IdentifierNamed(result.Tree.Root, "a");
 
         Assert.True(types.TryGetValue(read, out ScrValue value));
-        Assert.Equal(ScrImprecision.UntypedParameter, value.Imprecision);
+        Assert.True(value.IsUnknown);
     }
 
     [Fact]

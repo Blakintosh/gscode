@@ -75,7 +75,7 @@ public static class ReadOnlyWriteLint
     /// excluded, and so is an owner the flow truly could not type at all (`IsUnknown`), which is
     /// the "silence beats a false error" case this rule exists to protect. `self` sits in between:
     /// it is never confirmed to be one specific thing (GSC allows threading onto an entity or a
-    /// struct — see `ScrImprecision.CallerBoundObject`), but it is also never the
+    /// struct — see FlowTyper's `self` case), but it is also never the
     /// TOTAL uncertainty an untyped parameter or an unresolved call result carries, so it still
     /// passes this gate. The field must also be read-only on EVERY entity kind that declares it:
     /// the owner's exact kind is not inferred, so disagreement between kinds means we cannot be sure.
@@ -98,7 +98,7 @@ public static class ReadOnlyWriteLint
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         // MayBe rather than exact equality, so `self` (Entity|Struct — see
-        // ScrImprecision.CallerBoundObject) still counts as a possible entity. IsUnknown excluded
+        // FlowTyper's `self` case) still counts as a possible entity. IsUnknown excluded
         // separately: an owner the flow truly could not type (mystery_function()'s return, an
         // untyped parameter) is the full universe too, and MayBe(Entity) would be trivially true
         // for it as well — the lint's whole design is silence on that genuine uncertainty, so it

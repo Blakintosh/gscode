@@ -73,9 +73,8 @@ public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrVa
 /// <summary>
 /// One write to `owner.field`, carrying the owner's inferred value AT THAT POINT. Lets a lint decide
 /// whether a field is read-only without re-deriving types: `SpawnStruct()` gives an exact Struct,
-/// `self` gives the honest `Entity|Struct` union (see
-/// <see cref="ScrImprecision.CallerBoundObject"/>), and an owner the flow truly cannot type gives
-/// the full Unknown union.
+/// `self` gives the honest `Entity|Struct` union (see the `self` case in <c>TypeOfIdentifier</c>),
+/// and an owner the flow truly cannot type gives the full Unknown union.
 ///
 /// Carries the whole <see cref="ScrValue"/> rather than the coarse <see cref="ScrType"/> precisely
 /// so a consumer can ask <c>MayBe</c> instead of exact equality — `self`'s union has no single
@@ -238,16 +237,14 @@ public sealed class FlowTyper
     /// Parameters seed it as unknown so that a name is at least KNOWN to be a local — an assignment
     /// to a parameter then types it from that point, which is exactly what the flow says, while an
     /// untyped parameter still reports nothing rather than a guess. Typing one properly needs
-    /// call-site analysis, which is a different pass — and the seed says so, carrying
-    /// <see cref="ScrImprecision.UntypedParameter"/> rather than an anonymous unknown.
+    /// call-site analysis, which is a different pass.
     /// </summary>
     private Dictionary<string, ScrValue> EnvironmentAt(FunctionNode function, Position position)
     {
         Dictionary<string, ScrValue> environment = new(StringComparer.OrdinalIgnoreCase);
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            environment[parameter.NameToken.Text] =
-                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
+            environment[parameter.NameToken.Text] = ScrValue.Unknown;
         }
 
         ImmutableArray<InferredAssignment>.Builder hints = ImmutableArray.CreateBuilder<InferredAssignment>();
@@ -277,8 +274,7 @@ public sealed class FlowTyper
         // pass could not tell an assignment to a parameter from one to a fresh local.
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            environment[parameter.NameToken.Text] =
-                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
+            environment[parameter.NameToken.Text] = ScrValue.Unknown;
         }
 
         HashSet<string> hinted = new(StringComparer.OrdinalIgnoreCase);
@@ -324,8 +320,8 @@ public sealed class FlowTyper
 
     /// <summary>
     /// The full value of the local under a cursor, where <see cref="TryGetLocalTypeAt"/> gives the
-    /// coarse projection an editor label needs. A caller deciding how to translate a parameter wants
-    /// the union and the reason, not a single name.
+    /// coarse projection an editor label needs. Go-to-type-definition wants the class or function
+    /// the value holds, which the projection drops.
     /// </summary>
     public bool TryGetValueAt(ParseResult result, Position position, out ScrValue value)
     {
@@ -633,12 +629,10 @@ public sealed class FlowTyper
     /// <summary>
     /// A <c>foreach</c>, whose BINDINGS were never entered into the environment — so
     /// <c>foreach ( item in items )</c> left <c>item</c> untracked and nothing downstream could say
-    /// anything about it. That is also the blocker for lowering a foreach into a <c>for</c> over
-    /// <c>getarraykeys</c>, which needs to know the collection is an array.
+    /// anything about it.
     ///
-    /// The collection is typed but its ELEMENT type is not modelled, so the value binding is an
-    /// unknown carrying <see cref="ScrImprecision.ArrayElement"/> — enough to say the name is a
-    /// local and to say why nothing more is known. A key, where the two-variable form is used, is a
+    /// The collection is typed but its ELEMENT type is not modelled, so the value binding is
+    /// unknown — enough to say the name is a local. A key, where the two-variable form is used, is a
     /// string or an int, which is the array-key rule rather than a guess.
     /// </summary>
     private void WalkForeach(
@@ -681,13 +675,11 @@ public sealed class FlowTyper
     /// </summary>
     private static void BindLoopVariables(ForeachNode foreachNode, Dictionary<string, ScrValue> environment)
     {
-        environment[foreachNode.ValueToken.Text] =
-            ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+        environment[foreachNode.ValueToken.Text] = ScrValue.Unknown;
 
         if ( foreachNode.KeyToken is PToken keyToken )
         {
-            environment[keyToken.Text] =
-                ScrValue.Of(ScrTypeSet.Int | ScrTypeSet.String, ScrImprecision.ArrayElement);
+            environment[keyToken.Text] = ScrValue.Of(ScrTypeSet.Int | ScrTypeSet.String);
         }
     }
 
@@ -1212,13 +1204,13 @@ public sealed class FlowTyper
 
             // `a[ i ]`. The element type is not modelled — neither did v1.5, whose indexer analysis
             // returned "any" unconditionally — but the BASE being indexed is the question that
-            // matters, and the reason says so rather than leaving an anonymous unknown.
+            // matters.
             //
             // This arm is what blocks v1.5's `CannotUseAsIndexer`: the INDEX expression is never
             // typed, so there is nothing for that rule to judge. Typing it is additive and belongs
             // in its own change — see FOLLOWUPS.md.
             case IndexNode:
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+                return ScrValue.Unknown;
 
             // Both arms are live, so the value is one or the other. The flat lattice had no way to
             // say that and returned Unknown.
@@ -1247,7 +1239,7 @@ public sealed class FlowTyper
                     TypeOf(argument, environment);
                 }
 
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
+                return ScrValue.Unknown;
 
             // A bare `ns::foo` or `path\to\file::foo` with no argument list is a function pointer;
             // the parser only produces these outside call position.
@@ -1330,9 +1322,8 @@ public sealed class FlowTyper
         ImmutableArray<ObjectField> fields = _objectFields.FindField(fieldName);
         if ( fields.Length == 0 )
         {
-            // A field the scripts invented, which is most of them. Named as such rather than left
-            // anonymously unknown, to tell it from a field we simply failed to type.
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.StructField);
+            // A field the scripts invented, which is most of them. The engine data says nothing.
+            return ScrValue.Unknown;
         }
 
         ScrTypeSet agreed = MapDeclaredType(fields[0].Type);
@@ -1342,12 +1333,12 @@ public sealed class FlowTyper
             {
                 // The declaring kinds disagree and the owner's kind is not inferred, so no
                 // declaration can be the one that applies.
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnknownFieldOwner);
+                return ScrValue.Unknown;
             }
         }
 
         return agreed == ScrTypeSet.None
-            ? ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped)
+            ? ScrValue.Unknown
             : ScrValue.Of(agreed);
     }
 
@@ -1402,7 +1393,7 @@ public sealed class FlowTyper
 
             default:
                 // Anim references and #animtree are literals too, and nothing here can type them.
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnsupportedExpression);
+                return ScrValue.Unknown;
         }
     }
 
@@ -1423,8 +1414,7 @@ public sealed class FlowTyper
             // MayBe(Entity), which is what ReadOnlyWriteLint/PreferBooleanLiteralLint need to keep
             // firing on self.field without falsely asserting self IS always an entity.
             case "self":
-                return ScrValue.Of(
-                    ScrTypeSet.Entity | ScrTypeSet.Struct, ScrImprecision.CallerBoundObject);
+                return ScrValue.Of(ScrTypeSet.Entity | ScrTypeSet.Struct);
             // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
             // name (the case falls through to default), so it isn't mistyped as the world struct.
             case "world" when _game.HasWorldObject:
@@ -1434,10 +1424,9 @@ public sealed class FlowTyper
             case "game":
                 return ScrValue.Of(ScrTypeSet.Array);
 
-            // `world` where the dialect has none. Reported as a distinct reason rather than an
-            // anonymous unknown.
+            // `world` where the dialect has none: an ordinary name, so nothing is known.
             case "world":
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.DialectGlobalAbsent);
+                return ScrValue.Unknown;
 
             default:
                 return ScrValue.Unknown;
@@ -1571,7 +1560,7 @@ public sealed class FlowTyper
         {
             if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
             {
-                environment[bound.Token.Text] = ScrValue.EngineBound;
+                environment[bound.Token.Text] = ScrValue.Unknown;
                 continue;
             }
 
@@ -1616,8 +1605,8 @@ public sealed class FlowTyper
         if ( builtin is null || builtin.Overloads.Length == 0 )
         {
             // Either a script function, whose body is not re-typed here, or a name the game's
-            // library does not carry. Both are worth telling apart from an untypeable expression.
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
+            // library does not carry.
+            return ScrValue.Unknown;
         }
 
         // The union across EVERY overload, parsed at load: a builtin whose overloads return different
@@ -1626,17 +1615,10 @@ public sealed class FlowTyper
 
         if ( mapped == ScrTypeSet.None )
         {
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped);
+            return ScrValue.Unknown;
         }
 
-        // A low-confidence entry is a weaker fact than a verified one, and saying so is what lets a
-        // consumer decide for itself — v1.5 shipped a whole second diagnostic code because it had
-        // nowhere to record this.
-        return ScrValue.Of(
-            mapped,
-            builtin.Confidence == BuiltinConfidence.Low
-                ? ScrImprecision.BuiltinUnverified
-                : ScrImprecision.None);
+        return ScrValue.Of(mapped);
     }
 
     /// <summary>
@@ -1645,9 +1627,7 @@ public sealed class FlowTyper
     ///
     /// Still text-driven and still dropping <c>any[]</c>, unions and <c>number</c> — the loader
     /// flattens the structured JSON to a display string before anything here can see it, and
-    /// unpicking that is its own change. What is different is that failure is now REPORTED as
-    /// <see cref="ScrImprecision.BuiltinTypeUnmapped"/> instead of being indistinguishable from
-    /// every other unknown.
+    /// unpicking that is its own change.
     /// </summary>
     private static ScrTypeSet MapDeclaredType(string typeText)
     {

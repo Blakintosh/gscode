@@ -43,7 +43,7 @@ public static class PreferBooleanLiteralLint
             // Value is null for `+=` and `++`, which have no single assigned value to judge.
             // MayBe rather than exact equality (with IsUnknown excluded separately) is the same
             // gate ReadOnlyWriteLint uses and for the same reason: `self` is never confirmed to be
-            // exactly Entity (see ScrImprecision.CallerBoundObject), but it is not the total
+            // exactly Entity (see FlowTyper's `self` case), but it is not the total
             // uncertainty of an untyped owner either, and must keep triggering this rule.
             if ( write.Value is null || !write.OwnerType.MayBe(ScrTypeSet.Entity) || write.OwnerType.IsUnknown )
             {

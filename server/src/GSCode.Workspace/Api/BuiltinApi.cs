@@ -7,10 +7,10 @@ namespace GSCode.Workspace.Api;
 /// <summary>How far the bundled data can be trusted about one entry.</summary>
 /// <remarks>
 /// Present in every bundled library: Black Ops III's GSC file alone carries 1,291 <c>high</c>, 684
-/// <c>medium</c> and 80 <c>low</c>. It is the honest source for
-/// <see cref="ScrImprecision.BuiltinUnverified"/> — a low-confidence declared type is not the same
-/// fact as a verified one — rather than a second diagnostic code, which is how v1.5 carried the
-/// distinction (<c>ArgumentTypeMismatchUnverified</c>).
+/// <c>medium</c> and 80 <c>low</c>. A low-confidence declared type is not the same fact as a
+/// verified one, and this is where a restored <c>ArgumentTypeMismatch</c> takes its severity from
+/// rather than a second diagnostic code, which is how v1.5 carried the distinction
+/// (<c>ArgumentTypeMismatchUnverified</c>).
 /// </remarks>
 public enum BuiltinConfidence
 {

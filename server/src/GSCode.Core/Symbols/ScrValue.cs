@@ -81,73 +81,6 @@ public enum ScrTypeSet : ulong
         | Vector | Struct | Array | Entity | Function | Instance,
 }
 
-/// <summary>Why a value is not an exact, single, known type.</summary>
-/// <remarks>
-/// Records where each unknown came from — a parameter nothing has told us about is a different gap
-/// from two branches that genuinely disagree. No editor surface reads it; the typing tests assert
-/// it, and it takes part in <see cref="ScrValue"/> equality.
-///
-/// Declaration order here IS the order <see cref="ScrValue.Union"/> picks between two disagreeing
-/// reasons (it keeps the larger raw enum value) — a deliberate tie-break, not a genuine severity
-/// ranking. No measurement backs one reason mattering more than another; a member's position is
-/// free to move without changing what any rule reports, since nothing reads the reason for its
-/// ORDER outside that one tie-break.
-/// </remarks>
-public enum ScrImprecision
-{
-    /// <summary>Exact: the value came from something this pass fully types.</summary>
-    None = 0,
-
-    /// <summary>A parameter, which nothing in this function types. Call-site inference is what lifts this.</summary>
-    UntypedParameter,
-
-    /// <summary>The value came from a script function, whose body this pass does not re-type.</summary>
-    ScriptFunctionReturn,
-
-    /// <summary>The library declared a type this lattice cannot express — <c>any</c>, <c>number</c>.</summary>
-    BuiltinTypeUnmapped,
-
-    /// <summary>The library entry is present but marked low-confidence or unverified.</summary>
-    BuiltinUnverified,
-
-    /// <summary>An element read out of an array. Element types are not modelled.</summary>
-    ArrayElement,
-
-    /// <summary>A field on a struct. Scripts invent these freely, so the engine data says nothing.</summary>
-    StructField,
-
-    /// <summary>A field whose owner's entity kind was not inferred, so the declaring kind is unknown.</summary>
-    UnknownFieldOwner,
-
-    /// <summary>
-    /// A union produced by a control-flow join. The set is PRECISE — this is not a failure — but it
-    /// records that no single path produced it.
-    /// </summary>
-    BranchDisagreement,
-
-    /// <summary>An expression form this pass does not type.</summary>
-    UnsupportedExpression,
-
-    /// <summary>A global the selected dialect does not have, e.g. <c>world</c> before Black Ops III.</summary>
-    DialectGlobalAbsent,
-
-    /// <summary>
-    /// An output the engine fills in — a <c>waittill</c>/<c>waittillmatch</c> bound argument. The
-    /// notify site decides the value, and may send fewer values than are bound, so undefined is
-    /// always among the possibilities.
-    /// </summary>
-    EngineBound,
-
-    /// <summary>
-    /// <c>self</c>: whichever object the current function was called or threaded ON, which this
-    /// pass does not track across call sites. GSC allows threading onto an entity (including a
-    /// sentient AI) or a struct — never an array, and never a primitive — so the type is that
-    /// union rather than the full universe; it is still imprecise because which ONE of the two a
-    /// given call site actually used is a fact this per-function pass has no way to see.
-    /// </summary>
-    CallerBoundObject,
-}
-
 /// <summary>
 /// A compile-time constant, carried when a value has exactly one type and that type's value is known.
 /// </summary>
@@ -371,8 +304,8 @@ public readonly record struct Vec3(double X, double Y, double Z)
 public readonly record struct ScrFunctionRef(string? Namespace, string Name);
 
 /// <summary>
-/// What is known about one value: which types it may hold, its constant value if it has one, its
-/// truthiness, and why it is not exact.
+/// What is known about one value: which types it may hold, its constant value if it has one, and
+/// its truthiness.
 ///
 /// The union is the point. <see cref="ScrType"/> collapses any disagreement to <c>Unknown</c>, which
 /// is right for a hover label and too coarse for a rule: two branches assigning an int and a string
@@ -385,21 +318,7 @@ public readonly record struct ScrFunctionRef(string? Namespace, string Name);
 public readonly record struct ScrValue
 {
     /// <summary>Nothing known. Every type is possible.</summary>
-    public static ScrValue Unknown { get; } = new()
-    {
-        Types = ScrTypeSet.Universe,
-        Imprecision = ScrImprecision.UnsupportedExpression,
-    };
-
-    /// <summary>
-    /// An output the engine fills in — a <c>waittill</c> bound argument. Every type is possible,
-    /// undefined included, because the notify site decides and may send fewer values than are bound.
-    /// </summary>
-    public static ScrValue EngineBound { get; } = new()
-    {
-        Types = ScrTypeSet.Universe,
-        Imprecision = ScrImprecision.EngineBound,
-    };
+    public static ScrValue Unknown { get; } = new() { Types = ScrTypeSet.Universe };
 
     public ScrTypeSet Types { get; init; }
 
@@ -426,15 +345,12 @@ public readonly record struct ScrValue
     /// </summary>
     public ScrFunctionRef? FunctionTarget { get; init; }
 
-    public ScrImprecision Imprecision { get; init; }
-
     /// <summary>A value of exactly one type, with no constant.</summary>
-    public static ScrValue Of(ScrTypeSet types, ScrImprecision imprecision = ScrImprecision.None)
+    public static ScrValue Of(ScrTypeSet types)
     {
         return new ScrValue
         {
             Types = types,
-            Imprecision = imprecision,
             Truthiness = TruthinessOf(types),
         };
     }
@@ -480,10 +396,7 @@ public readonly record struct ScrValue
     /// produced, and widening is the projection's job, not the lattice's.
     ///
     /// A constant survives only if both sides carry the same one. Truthiness survives only if both
-    /// agree. Imprecision takes the larger raw enum value as an arbitrary but
-    /// deterministic tie-break (see <see cref="ScrImprecision"/>'s own remarks — this is not a
-    /// severity ranking), and a disagreement in types is itself recorded as
-    /// <see cref="ScrImprecision.BranchDisagreement"/>.
+    /// agree.
     /// </summary>
     public static ScrValue Union(ScrValue left, ScrValue right)
     {
@@ -498,7 +411,6 @@ public readonly record struct ScrValue
         }
 
         ScrTypeSet types = left.Types | right.Types;
-        bool disagreed = left.Types != right.Types;
 
         return new ScrValue
         {
@@ -513,9 +425,6 @@ public readonly record struct ScrValue
             FunctionTarget = Nullable.Equals(left.FunctionTarget, right.FunctionTarget)
                 ? left.FunctionTarget
                 : null,
-            Imprecision = disagreed && left.Imprecision == ScrImprecision.None && right.Imprecision == ScrImprecision.None
-                ? ScrImprecision.BranchDisagreement
-                : (ScrImprecision)Math.Max((int)left.Imprecision, (int)right.Imprecision),
         };
     }
 
@@ -648,7 +557,6 @@ public readonly record struct ScrValue
         return Types == other.Types
             && Nullable.Equals(Constant, other.Constant)
             && Truthiness == other.Truthiness
-            && Imprecision == other.Imprecision
             && string.Equals(InstanceClass, other.InstanceClass, StringComparison.OrdinalIgnoreCase)
             && Nullable.Equals(FunctionTarget, other.FunctionTarget);
     }
@@ -659,7 +567,6 @@ public readonly record struct ScrValue
         hash.Add(Types);
         hash.Add(Constant);
         hash.Add(Truthiness);
-        hash.Add(Imprecision);
         hash.Add(InstanceClass, StringComparer.OrdinalIgnoreCase);
         hash.Add(FunctionTarget);
         return hash.ToHashCode();

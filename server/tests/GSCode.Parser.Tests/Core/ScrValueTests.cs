@@ -148,24 +148,6 @@ public class ScrValueTests
         Assert.Null(ScrValue.Union(four, eight).Constant);
     }
 
-    [Fact]
-    public void DisagreeingBranchesRecordWhyTheSetWidened()
-    {
-        // The set is precise, not failed — no single path produced it, so the reason is carried
-        // rather than the value being marked unknown.
-        ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.String));
-
-        Assert.Equal(ScrImprecision.BranchDisagreement, joined.Imprecision);
-    }
-
-    [Fact]
-    public void AgreeingBranchesStayExact()
-    {
-        ScrValue joined = ScrValue.Union(ScrValue.Of(ScrTypeSet.Int), ScrValue.Of(ScrTypeSet.Int));
-
-        Assert.Equal(ScrImprecision.None, joined.Imprecision);
-    }
-
     // --- narrowing ---
 
     [Fact]
@@ -342,15 +324,6 @@ public class ScrValueTests
 
         Assert.Equal(left, right);
         Assert.Equal(left.GetHashCode(), right.GetHashCode());
-    }
-
-    [Fact]
-    public void ValuesDifferingOnlyInImprecisionAreNotEqual()
-    {
-        // They carry different reasons, so a fixpoint must not treat them as converged.
-        Assert.NotEqual(
-            ScrValue.Of(ScrTypeSet.Int),
-            ScrValue.Of(ScrTypeSet.Int, ScrImprecision.UntypedParameter));
     }
 
     [Fact]

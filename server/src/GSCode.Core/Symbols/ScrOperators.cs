@@ -366,7 +366,7 @@ public static class ScrOperators
                 fallback |= ScrTypeSet.Vector;
             }
 
-            return ScrValue.Of(fallback, ScrImprecision.UnsupportedExpression);
+            return ScrValue.Of(fallback);
         }
 
         // Division always produces a float, even between two ints.
@@ -569,6 +569,6 @@ public static class ScrOperators
             fallback |= ScrTypeSet.Vector;
         }
 
-        return ScrValue.Of(fallback, ScrImprecision.UnsupportedExpression);
+        return ScrValue.Of(fallback);
     }
 }

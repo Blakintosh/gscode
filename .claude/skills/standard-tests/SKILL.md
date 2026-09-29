@@ -40,7 +40,10 @@ second default; a test on another game is a dialect test by definition.
 
 Production reads `Active` in forty-odd files, handlers included, at REQUEST time. So:
 
-- **Pass the game explicitly AND scope Active to it.** The harnesses do both from one field. A
+- **Pass the game explicitly AND scope Active to it.** `HandlerWorkspace` does both from one field.
+  `TestWorkspace` does NOT yet: it passes the profile to the indexer only, so a non-BO3 test built on
+  it still queries under BO3 wherever production reads `Active` — wrap it in `ProfileScope.Use` until
+  area 3 gives it the scope. A
   workspace whose indexer and `Active` disagree fails silently: the store comes back empty, every
   "is it offered?" assertion fails for a reason that looks like the thing under test, and every "is it
   absent?" assertion passes without proving anything.
@@ -52,9 +55,8 @@ Production reads `Active` in forty-odd files, handlers included, at REQUEST time
 - Leave `DisableTestParallelization` alone. Removing the production reads of `Active` is separate
   work, not part of a test pass.
 
-The only tests that call `Select` directly are the ones testing `Select` (`GameProfileTests`,
-`SupportedGamesHandlerTests`, `ConfigurationHandler`), and the corpus/sample sweeps under
-`GameProfileCollection`.
+The only tests that call `Select` directly are the ones testing selection itself (`GameProfileTests`,
+`SupportedGamesHandlerTests`), and the corpus/sample sweeps under `GameProfileCollection`.
 
 ## The path
 
@@ -80,7 +82,7 @@ it.
 | `TestFile` | `GSCode.Testing` | `(RelativePath, Text)` — one script under the raw root |
 | `ProfileScope` | `GSCode.Testing` | `Default`, `Use(profile?)` — select and restore `Active` |
 | `HandlerWorkspace` | `GSCode.Server.Tests/Handlers` | an indexed workspace wired like `ServerServices`: real insert provider with a shared `InsertCache`, builtins in `NavigationSupport`, `CompletionEngine`. `Open(relative)`, `Identify(relative)`, `Selector` |
-| `TestWorkspace` | `GSCode.Workspace.Tests/Resolution` | indexed store + resolver for database and completion tests. Still takes a root and a profile; converge it on `TestPaths`/`TestFile` when its area is converted |
+| `TestWorkspace` | `GSCode.Workspace.Tests/Resolution` | indexed store + resolver for database and completion tests. Still takes a root and a profile and does not scope `Active`; converge it on `TestPaths`/`TestFile`/`ProfileScope` when its area is converted |
 
 Extend a harness rather than working around it. If a test needs a piece the harness does not expose,
 add it to the harness — wired the way production wires it — so the next test gets it too.

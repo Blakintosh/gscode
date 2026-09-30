@@ -91,7 +91,7 @@ public static class ColumnAligner
                     }
                 }
 
-                List<int> rebuilding = tooWide ? new List<int>() : group;
+                List<int> rebuilding = tooWide ? [] : group;
                 foreach ( int line in rebuilding )
                 {
                     string rebuilt = Rebuild(lines[line], rows[line].Cells, maxWidth, baseGap);

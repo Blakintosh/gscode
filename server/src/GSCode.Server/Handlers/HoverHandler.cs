@@ -567,5 +567,4 @@ public sealed class HoverHandler : HoverHandlerBase
 
         return markdown.ToString();
     }
-
 }

@@ -18,7 +18,7 @@ namespace GSCode.Server.Tests.Formatting;
 /// </summary>
 public class StaleFormatEditTests
 {
-    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
+    private static readonly string s_path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static DocumentStore NewStore()
     {
@@ -50,7 +50,7 @@ public class StaleFormatEditTests
         // the TOP; the live text has had a long line inserted above it, so every offset has
         // shifted.
         DocumentStore store = NewStore();
-        OpenDocument document = store.Open(Path, "function f()\n{\nx = 1;\n}\n", version: 1);
+        OpenDocument document = store.Open(s_path, "function f()\n{\nx = 1;\n}\n", version: 1);
         ParseResult stale = store.Analyze(document);
 
         store.ApplyChange(document, range: null, "// a newly typed comment line\nfunction f()\n{\nx = 1;\n}\n", version: 2);
@@ -66,7 +66,7 @@ public class StaleFormatEditTests
     public void AnalyzingFirst_ProducesEditsThatApplyCleanly()
     {
         DocumentStore store = NewStore();
-        OpenDocument document = store.Open(Path, "function f()\n{\nx = 1;\n}\n", version: 1);
+        OpenDocument document = store.Open(s_path, "function f()\n{\nx = 1;\n}\n", version: 1);
         store.Analyze(document);
 
         store.ApplyChange(document, range: null, "// a newly typed comment line\nfunction f()\n{\nx = 1;\n}\n", version: 2);
@@ -84,7 +84,7 @@ public class StaleFormatEditTests
         // The concrete danger: a range past the end of the live document, or spanning characters
         // that moved. Offsets from a fresh analysis are always in bounds by construction.
         DocumentStore store = NewStore();
-        OpenDocument document = store.Open(Path, "function f()\n{\nx = 1;\n}\n\n\n\n\nfunction g()\n{\ny = 2;\n}\n", version: 1);
+        OpenDocument document = store.Open(s_path, "function f()\n{\nx = 1;\n}\n\n\n\n\nfunction g()\n{\ny = 2;\n}\n", version: 1);
         store.Analyze(document);
 
         store.ApplyChange(document, range: null, "function f()\n{\nx = 1;\n}\n", version: 2);

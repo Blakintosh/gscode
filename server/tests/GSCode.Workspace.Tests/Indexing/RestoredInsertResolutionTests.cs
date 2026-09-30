@@ -22,8 +22,8 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class RestoredInsertResolutionTests
 {
-    private static readonly string HeaderPath = TestPaths.Raw(@"scripts\shared\base.gsh");
-    private static readonly string ScriptPath = TestPaths.Raw(@"scripts\uses_it.gsc");
+    private static readonly string s_headerPath = TestPaths.Raw(@"scripts\shared\base.gsh");
+    private static readonly string s_scriptPath = TestPaths.Raw(@"scripts\uses_it.gsc");
 
     private static bool Declares(ScriptDatabase database, string functionName)
     {
@@ -53,7 +53,7 @@ public class RestoredInsertResolutionTests
         try
         {
             FakeFileSystem files = new FakeFileSystem()
-                .AddFile(ScriptPath, "#insert scripts\\shared\\base.gsh;\nfunction FN_NAME()\n{\n}\n");
+                .AddFile(s_scriptPath, "#insert scripts\\shared\\base.gsh;\nfunction FN_NAME()\n{\n}\n");
 
             // Session 1: base.gsh does not exist yet, so the insert never resolves and the name is
             // never macro-expanded. Its record — including the unresolved edge — is cached.
@@ -61,7 +61,7 @@ public class RestoredInsertResolutionTests
 
             // The header is created while the server is off (a branch switch, another tool, or
             // simply the file arriving after this workspace was last opened).
-            files.AddFile(HeaderPath, "#define FN_NAME arrived\n");
+            files.AddFile(s_headerPath, "#define FN_NAME arrived\n");
 
             // Session 2: uses_it.gsc's bytes are unchanged, so it restores from cache — but the
             // header it inserts now exists, and macro expansion should follow.
@@ -85,14 +85,14 @@ public class RestoredInsertResolutionTests
         try
         {
             FakeFileSystem files = new FakeFileSystem()
-                .AddFile(HeaderPath, "#define FN_NAME arrived\n")
-                .AddFile(ScriptPath, "#insert scripts\\shared\\base.gsh;\nfunction FN_NAME()\n{\n}\n");
+                .AddFile(s_headerPath, "#define FN_NAME arrived\n")
+                .AddFile(s_scriptPath, "#insert scripts\\shared\\base.gsh;\nfunction FN_NAME()\n{\n}\n");
 
             // Session 1: the header resolves and its macro expands into the script's declaration.
             await RunSessionAsync(files, cache);
 
             // The header is deleted while the server is off.
-            files.RemoveFile(HeaderPath);
+            files.RemoveFile(s_headerPath);
 
             // Session 2: uses_it.gsc's bytes are unchanged, so it restores from cache — but the
             // header it used to insert is gone, so the macro must stop applying.

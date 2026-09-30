@@ -403,16 +403,16 @@ public class CodeActionHandlerTests
     // lets qualifying be an insert at the range start and re-qualifying a replace of the scanned-back
     // qualifier.
 
-    private static readonly string AskingPath = TestPaths.Raw(@"scripts\main.gsc");
+    private static readonly string s_askingPath = TestPaths.Raw(@"scripts\main.gsc");
 
     private static List<CodeAction> CallFixes(string source, int line, int start, int end, ScriptDatabase? database = null)
     {
-        ParseResult result = TestParse.Analyze(source, AskingPath);
+        ParseResult result = TestParse.Analyze(source, s_askingPath);
 
-        CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", AskingPath);
+        CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", s_askingPath);
 
         return CodeActionHandler.UnresolvedCallFixes(
-            DocumentUri.FromFileSystemPath(AskingPath),
+            DocumentUri.FromFileSystemPath(s_askingPath),
             context,
             Reported(GscDiagnosticCode.BuiltinFunctionNotFound, line, start, end));
     }
@@ -551,7 +551,7 @@ public class CodeActionHandlerTests
 
     private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
-    private static readonly string Cod4AskingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
+    private static readonly string s_cod4AskingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
 
     /// <summary>A CoD4 workspace whose one file, common_scripts\utility.gsc, declares scriptPrintln.</summary>
     private static TestWorkspace WorkspaceWithCod4Utility()
@@ -568,7 +568,7 @@ public class CodeActionHandlerTests
     /// </summary>
     private static List<CodeAction> IncludeFixes(string source, TestWorkspace? workspace = null)
     {
-        ParseResult result = TestParse.Analyze(source, Cod4AskingPath, s_cod4);
+        ParseResult result = TestParse.Analyze(source, s_cod4AskingPath, s_cod4);
 
         const string called = "scriptPrintln";
         string[] lines = source.Split('\n');
@@ -576,10 +576,10 @@ public class CodeActionHandlerTests
         int start = lines[line].IndexOf(called, StringComparison.Ordinal);
 
         CodeActionHandler.CallFixContext context = new(
-            result, workspace?.Database.Gsc, "raw", Cod4AskingPath, s_cod4);
+            result, workspace?.Database.Gsc, "raw", s_cod4AskingPath, s_cod4);
 
         return CodeActionHandler.MissingIncludeFixes(
-            DocumentUri.FromFileSystemPath(Cod4AskingPath),
+            DocumentUri.FromFileSystemPath(s_cod4AskingPath),
             context,
             Reported(GscDiagnosticCode.FunctionNotIncluded, line, start, start + called.Length));
     }

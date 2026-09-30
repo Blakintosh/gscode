@@ -25,7 +25,7 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class WatcherRaceTests
 {
-    private static readonly string ScriptPath = TestPaths.Raw(@"scripts\util.gsc");
+    private static readonly string s_scriptPath = TestPaths.Raw(@"scripts\util.gsc");
     private const string BeforeEdit = "function util()\n{\n}\n";
     private const string AfterEdit = "function util()\n{\n}\nfunction other()\n{\n}\n";
 
@@ -37,7 +37,7 @@ public class WatcherRaceTests
     [Fact]
     public void ASlowIndexCallLosesToAFasterConcurrentEditOfTheSameFile()
     {
-        FakeFileSystem inner = new FakeFileSystem().AddFile(ScriptPath, BeforeEdit);
+        FakeFileSystem inner = new FakeFileSystem().AddFile(s_scriptPath, BeforeEdit);
         RootConfig config = TestPaths.Config(inner);
         PathResolver resolver = new(config, inner);
         ScriptDatabase database = new();
@@ -45,16 +45,16 @@ public class WatcherRaceTests
         WorkspaceIndexer? indexer = null;
         RaceFileSystem race = new(
             inner,
-            ScriptPath,
+            s_scriptPath,
             onFirstRead: () =>
             {
                 // The concurrent edit — happens strictly between the slow call's read (already
                 // captured BeforeEdit) and its eventual commit.
-                inner.AddFile(ScriptPath, AfterEdit);
+                inner.AddFile(s_scriptPath, AfterEdit);
 
                 // The watcher's own, independent, fully synchronous call for that same edit —
                 // runs to completion and commits AfterEdit before the slow call resumes.
-                indexer!.IndexFile(ScriptPath);
+                indexer!.IndexFile(s_scriptPath);
             });
 
         indexer = new WorkspaceIndexer(database, () => resolver, race, new NameTable());
@@ -62,7 +62,7 @@ public class WatcherRaceTests
         // The slow call: its read is intercepted above, so it analyses BeforeEdit while the
         // faster concurrent call (triggered from inside that very read) analyses and commits
         // AfterEdit first.
-        indexer.IndexFile(ScriptPath);
+        indexer.IndexFile(s_scriptPath);
 
         // AfterEdit must win: it is both the true current content of the file AND the fresher
         // commit. A stale write from the slow call clobbering it back to BeforeEdit is exactly

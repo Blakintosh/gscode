@@ -119,5 +119,4 @@ public static class TypeMismatchLint
                 ScrValues.Describe(value.Types)));
         }
     }
-
 }

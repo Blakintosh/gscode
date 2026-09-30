@@ -104,7 +104,6 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
         return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));
     }
 
-
     private static bool Matches(string name, string query)
     {
         return query.Length == 0 || name.Contains(query, StringComparison.OrdinalIgnoreCase);

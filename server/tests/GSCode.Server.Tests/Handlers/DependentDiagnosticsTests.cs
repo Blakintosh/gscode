@@ -77,8 +77,8 @@ public class DependentDiagnosticsTests
     private const string LibRelativePath = @"scripts\lib.gsc";
     private const string CallerRelativePath = @"scripts\caller.gsc";
 
-    private static readonly string LibPath = TestPaths.Raw(LibRelativePath);
-    private static readonly string CallerPath = TestPaths.Raw(CallerRelativePath);
+    private static readonly string s_libPath = TestPaths.Raw(LibRelativePath);
+    private static readonly string s_callerPath = TestPaths.Raw(CallerRelativePath);
 
     /// <summary>lib declares helper; caller imports lib and calls it. Neither is open.</summary>
     private static Task<HandlerWorkspace> TwoFileWorkspaceAsync()
@@ -92,7 +92,7 @@ public class DependentDiagnosticsTests
 
     private static ScriptRecord OriginIn(HandlerWorkspace workspace)
     {
-        Assert.True(workspace.Database.TryGetAnyRecord(LibPath, out ScriptRecord origin));
+        Assert.True(workspace.Database.TryGetAnyRecord(s_libPath, out ScriptRecord origin));
         return origin;
     }
 
@@ -104,7 +104,7 @@ public class DependentDiagnosticsTests
         HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
             OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
-        Assert.Contains(PathUtil.NormalizeAbsolute(CallerPath), dependents);
+        Assert.Contains(PathUtil.NormalizeAbsolute(s_callerPath), dependents);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class DependentDiagnosticsTests
         // The live-analysis path already covers an open file with the richer, real-time result —
         // re-linting it here from disk would describe whatever was last SAVED instead.
         using HandlerWorkspace workspace = await TwoFileWorkspaceAsync();
-        workspace.Documents.Open(CallerPath, "irrelevant buffer text", version: 1);
+        workspace.Documents.Open(s_callerPath, "irrelevant buffer text", version: 1);
 
         HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
             OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
@@ -129,7 +129,7 @@ public class DependentDiagnosticsTests
         HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
             OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
-        Assert.DoesNotContain(PathUtil.NormalizeAbsolute(LibPath), dependents);
+        Assert.DoesNotContain(PathUtil.NormalizeAbsolute(s_libPath), dependents);
     }
 
     private sealed class CountingCodeLensSink : ICodeLensRefreshSink

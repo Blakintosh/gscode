@@ -16,7 +16,7 @@ namespace GSCode.Server.Tests.Handlers;
 public class AnalysisGateTests
 {
     private const string Source = "function main()\n{\n}\n";
-    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
+    private static readonly string s_path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static DocumentStore NewStore()
     {
@@ -117,7 +117,7 @@ public class AnalysisGateTests
     public void AnOpenDocumentIsLive()
     {
         DocumentStore store = NewStore();
-        OpenDocument document = store.Open(Path, Source, version: 1);
+        OpenDocument document = store.Open(s_path, Source, version: 1);
 
         Assert.True(AnalysisGate.IsStillLive(store, document));
     }
@@ -126,9 +126,9 @@ public class AnalysisGateTests
     public void AClosedDocumentIsNoLongerLive()
     {
         DocumentStore store = NewStore();
-        OpenDocument document = store.Open(Path, Source, version: 1);
+        OpenDocument document = store.Open(s_path, Source, version: 1);
 
-        store.Close(Path);
+        store.Close(s_path);
 
         Assert.False(AnalysisGate.IsStillLive(store, document));
     }
@@ -139,8 +139,8 @@ public class AnalysisGateTests
         // Same path, different object. Reference equality is what separates them — the orphan and
         // its replacement agree about everything else.
         DocumentStore store = NewStore();
-        OpenDocument first = store.Open(Path, Source, version: 1);
-        OpenDocument second = store.Open(Path, Source, version: 1);
+        OpenDocument first = store.Open(s_path, Source, version: 1);
+        OpenDocument second = store.Open(s_path, Source, version: 1);
 
         Assert.False(AnalysisGate.IsStillLive(store, first));
         Assert.True(AnalysisGate.IsStillLive(store, second));

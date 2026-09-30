@@ -21,15 +21,15 @@ namespace GSCode.Workspace.Tests.Documents;
 /// </summary>
 public class HeaderEditRefreshTests
 {
-    private static readonly string GshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
-    private static readonly string GscPath = TestPaths.Raw(@"scripts\uses_it.gsc");
+    private static readonly string s_gshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
+    private static readonly string s_gscPath = TestPaths.Raw(@"scripts\uses_it.gsc");
     private const string Dependent = "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\n    x = CAP;\n}\n";
 
     private static (DocumentStore Store, InsertCache Inserts, FakeFileSystem Files) Build()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(GshPath, "#define CAP 5\n")
-            .AddFile(GscPath, Dependent);
+            .AddFile(s_gshPath, "#define CAP 5\n")
+            .AddFile(s_gscPath, Dependent);
 
         RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
@@ -54,7 +54,7 @@ public class HeaderEditRefreshTests
     public void TheOpenDependentSeesTheHeaderItWasAnalysedAgainst()
     {
         (DocumentStore store, _, _) = Build();
-        OpenDocument document = store.Open(GscPath, Dependent, version: 1);
+        OpenDocument document = store.Open(s_gscPath, Dependent, version: 1);
 
         Assert.Equal("5", MacroBody(store.Analyze(document), "CAP"));
     }
@@ -65,11 +65,11 @@ public class HeaderEditRefreshTests
         // The reported bug. Nothing about the GSC has changed — only the header under it — so the
         // document has to be re-analysed on the strength of the header alone.
         (DocumentStore store, InsertCache inserts, FakeFileSystem files) = Build();
-        OpenDocument document = store.Open(GscPath, Dependent, version: 1);
+        OpenDocument document = store.Open(s_gscPath, Dependent, version: 1);
         store.Analyze(document);
 
-        files.AddFile(GshPath, "#define CAP 99\n");
-        inserts.Invalidate(PathUtil.NormalizeAbsolute(GshPath));
+        files.AddFile(s_gshPath, "#define CAP 99\n");
+        inserts.Invalidate(PathUtil.NormalizeAbsolute(s_gshPath));
 
         Assert.Equal("99", MacroBody(store.AnalyzeIfStale(document), "CAP"));
     }
@@ -80,11 +80,11 @@ public class HeaderEditRefreshTests
         // Hover reads LatestResult, not the value AnalyzeIfStale returns, so the re-analysis has to
         // be PUBLISHED on the document rather than merely computed for the caller.
         (DocumentStore store, InsertCache inserts, FakeFileSystem files) = Build();
-        OpenDocument document = store.Open(GscPath, Dependent, version: 1);
+        OpenDocument document = store.Open(s_gscPath, Dependent, version: 1);
         store.Analyze(document);
 
-        files.AddFile(GshPath, "#define CAP 99\n");
-        inserts.Invalidate(PathUtil.NormalizeAbsolute(GshPath));
+        files.AddFile(s_gshPath, "#define CAP 99\n");
+        inserts.Invalidate(PathUtil.NormalizeAbsolute(s_gshPath));
         store.AnalyzeIfStale(document);
 
         Assert.Equal("99", MacroBody(document.LatestResult!, "CAP"));
@@ -103,7 +103,7 @@ public class HeaderEditRefreshTests
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(BasePath, "#define CAP 5\n")
             .AddFile(WrapperPath, "#insert scripts\\shared\\base.gsh;\n")
-            .AddFile(GscPath, ThroughWrapper);
+            .AddFile(s_gscPath, ThroughWrapper);
 
         RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
@@ -113,7 +113,7 @@ public class HeaderEditRefreshTests
             new NameTable(),
             inserts);
 
-        OpenDocument document = store.Open(GscPath, ThroughWrapper, version: 1);
+        OpenDocument document = store.Open(s_gscPath, ThroughWrapper, version: 1);
         Assert.Equal("5", MacroBody(store.Analyze(document), "CAP"));
 
         files.AddFile(BasePath, "#define CAP 99\n");
@@ -128,7 +128,7 @@ public class HeaderEditRefreshTests
         // The other half: the refresh must not turn every AnalyzeIfStale into a re-parse. Nothing
         // has changed here, so the cached result stands.
         (DocumentStore store, _, _) = Build();
-        OpenDocument document = store.Open(GscPath, Dependent, version: 1);
+        OpenDocument document = store.Open(s_gscPath, Dependent, version: 1);
         ParseResult first = store.Analyze(document);
 
         Assert.Same(first, store.AnalyzeIfStale(document));

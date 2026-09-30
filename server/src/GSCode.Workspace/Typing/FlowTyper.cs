@@ -716,7 +716,7 @@ public sealed class FlowTyper
             }
         }
 
-        List<Dictionary<string, ScrValue>> paths = new();
+        List<Dictionary<string, ScrValue>> paths = [];
         Dictionary<string, ScrValue>? previousExit = null;
         bool previousFallsThrough = false;
 
@@ -1259,8 +1259,10 @@ public sealed class FlowTyper
             // function the pointer holds, and a call site with no way to ask that can show nothing
             // about the function it is calling.
             case PointerDerefNode deref:
-                return ScrValue.Of(ScrTypeSet.Function)
-                    with { FunctionTarget = TypeOf(deref.Pointer, environment).FunctionTarget };
+                return ScrValue.Of(ScrTypeSet.Function) with
+                {
+                    FunctionTarget = TypeOf(deref.Pointer, environment).FunctionTarget,
+                };
 
             default:
                 return ScrValue.Unknown;

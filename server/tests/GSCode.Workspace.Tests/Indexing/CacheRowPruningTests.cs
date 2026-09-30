@@ -17,8 +17,8 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class CacheRowPruningTests
 {
-    private static readonly string KeptPath = TestPaths.Raw(@"scripts\kept.gsc");
-    private static readonly string DeletedPath = TestPaths.Raw(@"scripts\deleted.gsc");
+    private static readonly string s_keptPath = TestPaths.Raw(@"scripts\kept.gsc");
+    private static readonly string s_deletedPath = TestPaths.Raw(@"scripts\deleted.gsc");
 
     private static async Task<IReadOnlyDictionary<string, CachedEntry>> RunSessionAsync(
         FakeFileSystem files, SqliteCache cache)
@@ -43,22 +43,22 @@ public class CacheRowPruningTests
         try
         {
             FakeFileSystem files = new FakeFileSystem()
-                .AddFile(KeptPath, "function kept()\n{\n}\n")
-                .AddFile(DeletedPath, "function deleted()\n{\n}\n");
+                .AddFile(s_keptPath, "function kept()\n{\n}\n")
+                .AddFile(s_deletedPath, "function deleted()\n{\n}\n");
 
             // Session 1: both files are analysed and cached.
             IReadOnlyDictionary<string, CachedEntry> afterFirstSession = await RunSessionAsync(files, cache);
-            Assert.True(afterFirstSession.ContainsKey(PathUtil.NormalizeAbsolute(DeletedPath)));
+            Assert.True(afterFirstSession.ContainsKey(PathUtil.NormalizeAbsolute(s_deletedPath)));
 
             // The file is deleted while the server is off — no watcher event, so RemoveFile's
             // own EnqueueDelete never runs for it.
-            files.RemoveFile(DeletedPath);
+            files.RemoveFile(s_deletedPath);
 
             // Session 2: deleted.gsc is no longer among EnumerateIndexTargets' results.
             IReadOnlyDictionary<string, CachedEntry> afterSecondSession = await RunSessionAsync(files, cache);
 
-            Assert.False(afterSecondSession.ContainsKey(PathUtil.NormalizeAbsolute(DeletedPath)));
-            Assert.True(afterSecondSession.ContainsKey(PathUtil.NormalizeAbsolute(KeptPath)));
+            Assert.False(afterSecondSession.ContainsKey(PathUtil.NormalizeAbsolute(s_deletedPath)));
+            Assert.True(afterSecondSession.ContainsKey(PathUtil.NormalizeAbsolute(s_keptPath)));
         }
         finally
         {

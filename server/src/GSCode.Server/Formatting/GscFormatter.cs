@@ -24,7 +24,6 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static partial class GscFormatter
 {
-
     /// <summary>A single text edit: the source range to replace and its replacement text.</summary>
     public readonly record struct FormatEdit(TextRange Range, string NewText);
 
@@ -513,7 +512,7 @@ public static partial class GscFormatter
         // Whether each open parenthesis is a CALL's (`foo(`) or a control-flow/grouping one
         // (`if (`, `= (`), so its interior can take the padding rule the user chose for that kind.
         // The closer needs the same answer, hence a stack rather than a flag.
-        List<bool> callParens = new();
+        List<bool> callParens = [];
 
         // Whether each open parenthesis belongs to a control-flow header, directly or nested inside
         // one. A header split across lines lines its continuation lines up under the first
@@ -1373,7 +1372,7 @@ public static partial class GscFormatter
 
         if ( options.UseTabs )
         {
-            output.Append('	', levels);
+            output.Append('\t', levels);
             return;
         }
 
@@ -1606,7 +1605,6 @@ public static partial class GscFormatter
             or TokenKind.Foreach
             or TokenKind.Switch;
     }
-
 
     /// <summary>Refuses formatting when the file has lexer (1xxx) or parser (3xxx) errors.</summary>
     private static bool HasSyntaxErrors(ParseResult result)

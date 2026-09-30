@@ -16,7 +16,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class CallHierarchyGroupingTests
 {
-    private static readonly string CallerPath = TestPaths.Raw(@"scripts\caller.gsc");
+    private static readonly string s_callerPath = TestPaths.Raw(@"scripts\caller.gsc");
 
     private static FunctionSymbol Function(string name, int firstLine, int lastLine)
     {
@@ -32,7 +32,7 @@ public class CallHierarchyGroupingTests
 
     private static ScriptRecord Record(params FunctionSymbol[] functions)
     {
-        return TestRecords.At(CallerPath) with { ContentHash = 1, Functions = [.. functions] };
+        return TestRecords.At(s_callerPath) with { ContentHash = 1, Functions = [.. functions] };
     }
 
     private static ReferenceEntry CallAt(int line)

@@ -20,7 +20,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ArgumentCountLintTests
 {
-    private static readonly string AskingPath = TestPaths.Raw(@"scripts\zm\_zm.gsc");
+    private static readonly string s_askingPath = TestPaths.Raw(@"scripts\zm\_zm.gsc");
 
     /// <summary>
     /// A stand-in for BO3's <c>SpawnSpectator( origin, angles )</c>, both parameters mandatory —
@@ -56,14 +56,14 @@ public class ArgumentCountLintTests
             database.Commit(other, ResolutionContext.RawContext, isDirty: false, @"scripts\zm\_zm_utility.gsc");
         }
 
-        ParseResult result = TestParse.Analyze(askingSource, AskingPath);
+        ParseResult result = TestParse.Analyze(askingSource, s_askingPath);
 
         // The asking file is indexed too, as it is in a live workspace. It matters: the script half of
         // this rule reads declarations from the STORE, so an un-indexed asking file has no arity to
         // judge against and the rule stands down — silently passing a test that meant to exercise it.
         database.Commit(result, ResolutionContext.RawContext, isDirty: false, @"scripts\zm\_zm.gsc");
 
-        return ArgumentCountLint.Analyze(result, database.Gsc, "raw", AskingPath, Builtins());
+        return ArgumentCountLint.Analyze(result, database.Gsc, "raw", s_askingPath, Builtins());
     }
 
     [Fact]

@@ -326,7 +326,7 @@ public sealed class DependentDiagnosticsRefresher
     private void Refresh(IReadOnlySet<string> origins, CancellationToken cancellationToken)
     {
         long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-        List<string> refreshedPaths = new();
+        List<string> refreshedPaths = [];
 
         foreach ( OpenDocument document in _documents.OpenDocuments )
         {

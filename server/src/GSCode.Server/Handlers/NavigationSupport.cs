@@ -556,7 +556,6 @@ public sealed class NavigationSupport
             only = candidate.Record.RelativePath;
         }
 
-
         return only;
     }
 }

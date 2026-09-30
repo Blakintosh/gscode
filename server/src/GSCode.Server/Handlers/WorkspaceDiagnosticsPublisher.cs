@@ -208,5 +208,4 @@ public sealed class WorkspaceDiagnosticsPublisher
 
         _publisher.Clear(key);
     }
-
 }

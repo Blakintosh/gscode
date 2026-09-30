@@ -162,13 +162,7 @@ public static partial class GscFormatter
 
         ImmutableArray<FormatEdit>.Builder edits = ImmutableArray.CreateBuilder<FormatEdit>();
 
-        // Too different to line up, which the formatter's own output never is: one edit for all of it.
-        List<LinePair>? pairs = LineDiff.Match(originalKeys, formattedKeys);
-        if ( pairs is null )
-        {
-            AddEdit(edits, text, originalLines, formattedLines, 0, originalLines.Count, 0, formattedLines.Count);
-            return edits.ToImmutable();
-        }
+        List<LinePair> pairs = LineDiff.Match(originalKeys, formattedKeys);
 
         int originalPosition = 0;
         int formattedPosition = 0;
@@ -177,7 +171,7 @@ public static partial class GscFormatter
             // Lines between two matches were added, removed or split by the formatter: one edit.
             if ( pair.Original > originalPosition || pair.Formatted > formattedPosition )
             {
-                AddEdit(
+                AddUnpairedRun(
                     edits, text, originalLines, formattedLines,
                     originalPosition, pair.Original, formattedPosition, pair.Formatted);
             }
@@ -195,12 +189,48 @@ public static partial class GscFormatter
 
         if ( originalLines.Count > originalPosition || formattedLines.Count > formattedPosition )
         {
-            AddEdit(
+            AddUnpairedRun(
                 edits, text, originalLines, formattedLines,
                 originalPosition, originalLines.Count, formattedPosition, formattedLines.Count);
         }
 
         return edits.ToImmutable();
+    }
+
+    /// <summary>
+    /// Emits the edit for a run of lines left unpaired, less any lines at either end that read the
+    /// same on both sides. Blank lines all share one key, so the pairing can leave a blank line
+    /// unpaired on both sides at once; replacing it with itself would swallow a line the caret may
+    /// rest on.
+    /// </summary>
+    private static void AddUnpairedRun(
+        ImmutableArray<FormatEdit>.Builder edits,
+        SourceText text,
+        List<LineSpan> originalLines,
+        List<string> formattedLines,
+        int originalStart,
+        int originalEnd,
+        int formattedStart,
+        int formattedEnd)
+    {
+        while ( originalStart < originalEnd && formattedStart < formattedEnd
+            && string.Equals(originalLines[originalStart].Text, formattedLines[formattedStart], StringComparison.Ordinal) )
+        {
+            originalStart++;
+            formattedStart++;
+        }
+
+        while ( originalStart < originalEnd && formattedStart < formattedEnd
+            && string.Equals(originalLines[originalEnd - 1].Text, formattedLines[formattedEnd - 1], StringComparison.Ordinal) )
+        {
+            originalEnd--;
+            formattedEnd--;
+        }
+
+        if ( originalStart < originalEnd || formattedStart < formattedEnd )
+        {
+            AddEdit(edits, text, originalLines, formattedLines, originalStart, originalEnd, formattedStart, formattedEnd);
+        }
     }
 
     /// <summary>

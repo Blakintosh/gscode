@@ -98,6 +98,28 @@ public class LocalFormatEditTests
     }
 
     [Fact]
+    public void AFileWhoseEveryBlockSplitsStillGetsLocalEdits()
+    {
+        // Every `if(x>1){y=x*2;}` splits into five lines: thousands of added lines, which put a line
+        // diff past its budget and returned one edit for the whole file.
+        StringBuilder source = new();
+        for ( int index = 0; index < 600; index++ )
+        {
+            source.Append("function f").Append(index).Append("(a,b)\n{\nx=a+b;\nif(x>1){y=x*2;}\nreturn x;\n}\n");
+        }
+
+        ParseResult result = TestParse.Analyze(source.ToString());
+
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
+
+        Assert.Equal(GscFormatter.Format(result, s_tabs), Apply(result.Text, edits));
+        Assert.True(edits.Length > 1000, $"only {edits.Length} edits");
+        Assert.All(edits, edit => Assert.True(
+            edit.Range.End.Line - edit.Range.Start.Line <= 2,
+            $"an edit spans lines {edit.Range.Start.Line}-{edit.Range.End.Line}"));
+    }
+
+    [Fact]
     public void NoTwoEditsTouch()
     {
         // With a thousand edits or more, VS Code's buffer collapses every edit into one replacement

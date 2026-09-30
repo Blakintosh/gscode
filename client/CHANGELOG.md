@@ -80,6 +80,9 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   rename refuses a name that is not a valid identifier.
 - Argument counts, ambiguous-call and unused-binding lints: several false positives on shipped
   scripts, including `waittillmatch`'s trailing argument read as an output.
+- Renaming or moving a folder updates the `#using` and `#insert` paths that name the scripts inside
+  it, as renaming a single script already did. Moving a `.gsc` and its `.csc` together no longer
+  loses the update either.
 
 ## 2.0.2
 

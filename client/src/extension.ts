@@ -362,24 +362,38 @@ function registerRenameDirectiveFixup(
 
     context.subscriptions.push(
         vscode.workspace.onWillRenameFiles((event) => {
-            const scripts = event.files.filter((file) => /\.(gsc|csc|gsh)$/i.test(file.oldUri.fsPath));
-            if (scripts.length === 0) {
-                return;
-            }
-
             // waitUntil defers the rename until the edit resolves, so both apply together.
             event.waitUntil(
                 (async () => {
-                    const edit = new vscode.WorkspaceEdit();
-                    let total = 0;
+                    const moves = await scriptMoves(event.files);
+                    if (moves.length === 0) {
+                        return undefined;
+                    }
 
-                    for (const file of scripts) {
-                        const response = await languageClient.sendRequest<{ edits: PlanRenameEdit[] }>(
+                    // One request per script, all at once: planning reads the database and changes
+                    // nothing, so the order they are answered in does not matter.
+                    const responses = await Promise.all(moves.map((move) =>
+                        languageClient.sendRequest<{ edits: PlanRenameEdit[] }>(
                             "gscode/planRename",
-                            { oldPath: file.oldUri.fsPath, newPath: file.newUri.fsPath },
-                        );
+                            { oldPath: move.oldUri.fsPath, newPath: move.newUri.fsPath },
+                            event.token,
+                        )));
 
+                    const edit = new vscode.WorkspaceEdit();
+                    // The same directive can be planned twice. `#using scripts\foo` names foo.gsc
+                    // and foo.csc alike, so moving both plans that edit once for each, and VS Code
+                    // refuses a workspace edit that replaces one range twice — the whole rename
+                    // would lose its fixup.
+                    const seen = new Set<string>();
+
+                    for (const response of responses) {
                         for (const planned of response?.edits ?? []) {
+                            const key = `${planned.path}|${planned.startLine}:${planned.startCharacter}-${planned.endLine}:${planned.endCharacter}`;
+                            if (seen.has(key)) {
+                                continue;
+                            }
+
+                            seen.add(key);
                             edit.replace(
                                 vscode.Uri.file(planned.path),
                                 new vscode.Range(
@@ -390,12 +404,11 @@ function registerRenameDirectiveFixup(
                                 ),
                                 planned.newText,
                             );
-                            total++;
                         }
                     }
 
-                    if (total > 0) {
-                        log.info(`Rename: updating ${total} directive path(s) across the workspace`);
+                    if (seen.size > 0) {
+                        log.info(`Rename: updating ${seen.size} directive path(s) across the workspace`);
                     }
 
                     return edit;
@@ -403,6 +416,58 @@ function registerRenameDirectiveFixup(
             );
         }),
     );
+}
+
+const SCRIPT_FILE = /\.(gsc|csc|gsh)$/i;
+
+/**
+ * Every script a rename moves, with where it ends up.
+ *
+ * A renamed FOLDER arrives as one entry for the folder itself, so filtering the entries by
+ * extension skipped it, and moving a folder of scripts updated no directive that named them. Each
+ * script under it is its own move as far as the server is concerned: it plans by file, and a
+ * directive path names a file.
+ *
+ * The folder is expanded while it is still at its old location — this runs before the rename.
+ */
+async function scriptMoves(
+    files: ReadonlyArray<{ readonly oldUri: vscode.Uri; readonly newUri: vscode.Uri }>,
+): Promise<{ oldUri: vscode.Uri; newUri: vscode.Uri }[]> {
+    const moves = new Map<string, { oldUri: vscode.Uri; newUri: vscode.Uri }>();
+
+    for (const file of files) {
+        if (SCRIPT_FILE.test(file.oldUri.path)) {
+            moves.set(file.oldUri.toString(), file);
+            continue;
+        }
+
+        let stat: vscode.FileStat;
+        try {
+            stat = await vscode.workspace.fs.stat(file.oldUri);
+        } catch {
+            continue;
+        }
+
+        if ((stat.type & vscode.FileType.Directory) === 0) {
+            continue;
+        }
+
+        const scripts = await vscode.workspace.findFiles(
+            new vscode.RelativePattern(file.oldUri, "**/*.{gsc,csc,gsh}"),
+        );
+        for (const script of scripts) {
+            // The part of the path below the folder, which is what moves with it.
+            const below = script.path.slice(file.oldUri.path.length).replace(/^\/+/, "");
+            // Keyed by the old location, so a script both inside a moved folder and listed on its
+            // own is planned once.
+            moves.set(script.toString(), {
+                oldUri: script,
+                newUri: vscode.Uri.joinPath(file.newUri, below),
+            });
+        }
+    }
+
+    return [...moves.values()];
 }
 
 /**

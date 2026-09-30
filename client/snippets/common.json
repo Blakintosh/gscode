@@ -4,8 +4,8 @@
 // games. VS Code merges these into the completion list unconditionally and nothing can withdraw
 // one, so a snippet here MUST be valid in all five. That is the whole entry rule for this file.
 //
-// Anything dialect-specific - foreach, class, new, the function declaration, the ScriptDoc forms,
-// #precache, and every import directive - is served by the SERVER instead, which is the only side
+// Anything dialect-specific - foreach, class, new, the ScriptDoc forms, #precache, and every
+// import directive - is served by the SERVER instead, which is the only side
 // that knows the active game. See GscSnippets in GSCode.Workspace/Completion. Those used to live
 // here and were offered while editing CoD4, which has none of them.
 //

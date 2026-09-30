@@ -1050,11 +1050,6 @@ public sealed partial class CompletionEngine
             words.AddRange(GscKeywords.StatementKeywords);
         }
 
-        if ( !insideFunction )
-        {
-            entries.Add(FunctionDeclarationSnippet(game));
-        }
-
         // The parameter pack is offered per-FUNCTION rather than from the keyword list, because
         // unlike every other keyword its availability depends on the declaration this cursor sits
         // in and not on the dialect alone. It is a Variable rather than a Keyword because that is
@@ -1126,15 +1121,12 @@ public sealed partial class CompletionEngine
             // cases the snippet is the bare word plus the punctuation that follows it every time —
             // there is nothing the plain keyword does that it does not.
             //
-            // `function` at top level is the same rule, spelled separately because its snippet is
-            // FunctionDeclarationSnippet above: that one is built per dialect rather than listed,
-            // since the merge games declare with a bare name and have no `function` keyword to hide.
+            // `function` is deliberately NOT a snippet. A declaration may carry `private` and
+            // `autoexec` between the keyword and the name, and a snippet that wrote the name and
+            // braces in one go left no room for them — the modifiers had to be typed back in after
+            // the fact. The bare keyword leaves the caret where DeclarationNameCompletions offers
+            // them.
             if ( snippetLabels.Contains(keyword) )
-            {
-                continue;
-            }
-
-            if ( !insideFunction && string.Equals(keyword, "function", StringComparison.Ordinal) )
             {
                 continue;
             }

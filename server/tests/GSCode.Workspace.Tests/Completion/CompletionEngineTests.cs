@@ -1439,24 +1439,15 @@ public class CompletionEngineTests
     }
 
     [Fact]
-    public void TopLevelOffersAWholeFunctionDeclaration()
+    public void TopLevelOffersTheFunctionKeywordAlone()
     {
-        // The punctuation is identical every time — parentheses, braces, brace on its own line —
-        // so the snippet writes it and leaves the caret on the name, the only part that varies.
-        CompletionEntry snippet = Entry(CompleteAfter(""), "function");
+        // A snippet that wrote the name and braces left no room for `private` or `autoexec`, which
+        // go between the keyword and the name — writing a private autoexec meant going back to
+        // type them in. The bare word leaves the caret where the modifiers are offered.
+        CompletionEntry function = Entry(CompleteAfter(""), "function");
 
-        Assert.Equal("function ${1:name}()\n{\n\t$0\n}", snippet.InsertText);
-    }
-
-    [Fact]
-    public void TheDeclarationSnippetFollowsTheFormattersLayout()
-    {
-        // Allman and a tab, measured at 51,048 Allman against 37 same-line across the stock
-        // scripts. A snippet that had to be reformatted the moment it landed would be odd to ship.
-        CompletionEntry snippet = Entry(CompleteAfter(""), "function");
-
-        Assert.Contains("()\n{\n", snippet.InsertText, StringComparison.Ordinal);
-        Assert.Contains("\n\t$0", snippet.InsertText, StringComparison.Ordinal);
+        Assert.Equal(CompletionKind.Keyword, function.Kind);
+        Assert.Equal("", function.InsertText);
     }
 
     [Fact]

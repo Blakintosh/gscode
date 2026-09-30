@@ -98,34 +98,6 @@ public sealed partial class CompletionEngine
         }
     }
 
-    /// <summary>
-    /// A whole function declaration, not just the word that starts one.
-    ///
-    /// Writing one by hand is four pieces of punctuation that are the same every time — the
-    /// parentheses, the braces, and getting the brace onto its own line — so the snippet does them
-    /// and leaves the caret on the NAME, which is the only part that varies.
-    ///
-    /// Laid out the way the formatter would: Allman braces and a tab, measured at 51,048 Allman
-    /// against 37 same-line and 247,613 tab-led lines against 886 space-led across the stock
-    /// scripts. A snippet that had to be reformatted the moment it landed would be a strange thing
-    /// to ship.
-    ///
-    /// The dialect decides the opening: BO3 declares with the `function` keyword, while the merge
-    /// dialects open with the bare name. The label stays "function" either way — it is what the
-    /// user is looking for, not what gets inserted.
-    /// </summary>
-    private static CompletionEntry FunctionDeclarationSnippet(GameProfile game)
-    {
-        string opening = game.HasFunctionKeyword ? "function " : "";
-
-        return new CompletionEntry(
-            "function",
-            CompletionKind.Snippet,
-            "declaration",
-            opening + "${1:name}()\n{\n\t$0\n}",
-            "Declares a function, with the caret on the name.");
-    }
-
     /// <summary>How much parameter text a label may carry before it is cut short.</summary>
     /// <remarks>
     /// A row that runs past the popup's width is truncated by the editor anyway, at whatever

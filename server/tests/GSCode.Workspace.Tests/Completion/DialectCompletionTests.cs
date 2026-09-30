@@ -220,8 +220,6 @@ public class DialectCompletionTests
     [Theory]
     [InlineData("class")]
     [InlineData("new")]
-    [InlineData("funcauto")]
-    [InlineData("funcpriv")]
     [InlineData("using")]
     [InlineData("insert")]
     [InlineData("namespace")]

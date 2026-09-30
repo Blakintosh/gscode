@@ -17,9 +17,10 @@ namespace GSCode.Workspace.Completion;
 /// for, while, switch, waittill, notify, the dev block — stay in `client/snippets/common.json`,
 /// where they cost nothing and work offline before the server has started.
 ///
-/// The function declaration is not here either: <c>CompletionEngine.FunctionDeclarationSnippet</c>
-/// already writes it the way the dialect declares one, which is what the client's `func`/`funciw`
-/// pair was doing by hand.
+/// The function declaration has no snippet in either place. Its modifiers — `private`, `autoexec`,
+/// or both — sit between the keyword and the name, and one snippet per combination still left
+/// every other combination to be typed back in by hand. The user writes the declaration; the
+/// completion after `function` offers the modifiers.
 /// </summary>
 public static class GscSnippets
 {
@@ -78,18 +79,6 @@ public static class GscSnippets
             "class ${1:Name}\n{\n\tvar ${2:member};\n\n\tconstructor()\n\t{\n\t\t$0\n\t}\n\n\tdestructor()\n\t{\n\t}\n}",
             "Class with a constructor and destructor.",
             "class",
-            InsideFunction: false),
-        new Entry(
-            "funcauto",
-            "function autoexec ${1:name}()\n{\n\t$0\n}",
-            "Function that runs once on load.",
-            "autoexec",
-            InsideFunction: false),
-        new Entry(
-            "funcpriv",
-            "function private ${1:name}( ${2} )\n{\n\t$0\n}",
-            "Function visible only to files declaring the same namespace.",
-            "private",
             InsideFunction: false),
         new Entry(
             "using",

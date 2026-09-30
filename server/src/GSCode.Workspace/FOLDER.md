@@ -374,8 +374,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Completion/GscSnippets.cs
 
-- The snippets whose construct only SOME dialects have — `foreach`, `class`, `new`, the BO3
-  function modifiers, every import directive, `#precache`, and the two ScriptDoc forms. They cannot
+- The snippets whose construct only SOME dialects have — `foreach`, `class`, `new`, every import
+  directive, `#precache`, and the two ScriptDoc forms. They cannot
   be contributed by the extension: a contributed snippet is registered per language id, one id
   covers five games, and VS Code merges them in unconditionally with no way to withdraw one. That is
   how CoD4 came to be offered a `foreach` loop it cannot run.
@@ -393,8 +393,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   applied to it twice — so the body leaves a tab stop inside the quotes and `AssetTypeCompletions`
   answers, which is the same arm a typed `#` retriggers into.
 - The UNIVERSAL snippets stay in `client/snippets/common.json`, where they cost nothing and work
-  before the server has started. The function declaration is neither: `FunctionDeclarationSnippet`
-  builds it per dialect, since the merge games declare with a bare name.
+  before the server has started. The function declaration has no snippet anywhere: `private` and
+  `autoexec` go between the keyword and the name, and a snippet that wrote the name and braces left
+  them to be typed back in. `function` completes as the bare keyword, and
+  `DeclarationNameCompletions` offers the modifiers after it.
 
 ## Completion/SignatureEngine.cs
 

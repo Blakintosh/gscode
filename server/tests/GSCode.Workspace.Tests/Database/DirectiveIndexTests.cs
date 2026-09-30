@@ -33,15 +33,7 @@ public class DirectiveIndexTests
             ? ScriptLanguage.Gsh
             : path.EndsWith(".csc", StringComparison.Ordinal) ? ScriptLanguage.Csc : ScriptLanguage.Gsc;
 
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = language,
-            ContextId = "raw",
-            ContentHash = 0,
-            RelativePath = relativePath,
-            Dependencies = [.. edges],
-        };
+        return TestRecords.At(path, "raw", relativePath, language) with { Dependencies = [.. edges] };
     }
 
     private const string Base = @"c:\raw\scripts\shared\base.gsh";

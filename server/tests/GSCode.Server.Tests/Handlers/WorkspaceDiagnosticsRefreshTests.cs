@@ -33,11 +33,8 @@ public class WorkspaceDiagnosticsRefreshTests
 
     private static ScriptRecord WithProblem(string path, string message)
     {
-        return new ScriptRecord
+        return TestRecords.At(path, @"workspace:c:\ws") with
         {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = @"workspace:c:\ws",
             ContentHash = 7,
             Diagnostics = [new Diagnostic(s_someRange, DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedLocal, message)],
         };

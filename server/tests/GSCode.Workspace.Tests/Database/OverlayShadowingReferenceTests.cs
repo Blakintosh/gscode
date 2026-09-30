@@ -60,34 +60,15 @@ public class OverlayShadowingReferenceTests
         Assert.Equal("mod:zm_grief", kept.ContextId);
     }
 
-    private static readonly GSCode.Core.Text.TextRange s_someRange =
-        new(new GSCode.Core.Text.Position(1, 1), new GSCode.Core.Text.Position(1, 5));
-
     private static ScriptRecord FunctionRecord(
         string path, string contextId, string relativePath, string keyName, int paramCount)
     {
         ImmutableArray<ParameterSymbol> parameters =
             [.. Enumerable.Range(0, paramCount).Select(static i => new ParameterSymbol("p" + i, false, ""))];
 
-        return new ScriptRecord
+        return TestRecords.At(path, contextId, relativePath) with
         {
-            Path = path,
-            ContextId = contextId,
-            ContentHash = 0,
-            Language = ScriptLanguage.Gsc,
-            RelativePath = relativePath,
-            Functions =
-            [
-                new FunctionSymbol
-                {
-                    Name = keyName,
-                    KeyName = keyName,
-                    Namespace = "",
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                    Parameters = parameters,
-                },
-            ],
+            Functions = [TestRecords.Function(keyName) with { Parameters = parameters }],
         };
     }
 
@@ -140,25 +121,9 @@ public class OverlayShadowingReferenceTests
     private static ScriptRecord ClassRecord(
         string path, string contextId, string relativePath, string keyName, string? parentKeyName)
     {
-        return new ScriptRecord
+        return TestRecords.At(path, contextId, relativePath) with
         {
-            Path = path,
-            ContextId = contextId,
-            ContentHash = 0,
-            Language = ScriptLanguage.Gsc,
-            RelativePath = relativePath,
-            Classes =
-            [
-                new ClassSymbol
-                {
-                    Name = keyName,
-                    KeyName = keyName,
-                    Namespace = "",
-                    ParentKeyName = parentKeyName,
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                },
-            ],
+            Classes = [TestRecords.Class(keyName) with { ParentKeyName = parentKeyName }],
         };
     }
 

@@ -1,7 +1,5 @@
-using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Core.Paths;
-using GSCode.Core.Text;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -25,29 +23,12 @@ public class ResolveForQueryTests
 
     private static DocumentUri IndexedUri => HandlerWorkspace.Identify(IndexedRelativePath).Uri;
 
-    private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
-
     private static ScriptRecord IndexedRecord()
     {
-        return new ScriptRecord
+        return TestRecords.At(s_indexedPath, "raw", IndexedRelativePath) with
         {
-            Path = s_indexedPath,
-            ContextId = "raw",
-            ContentHash = 0,
-            Language = ScriptLanguage.Gsc,
-            RelativePath = IndexedRelativePath,
-            DeclaredNamespaces = ImmutableArray.Create("util_shared"),
-            Functions =
-            [
-                new FunctionSymbol
-                {
-                    Name = "helper",
-                    KeyName = "helper",
-                    Namespace = "util_shared",
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                },
-            ],
+            DeclaredNamespaces = ["util_shared"],
+            Functions = [TestRecords.Function("helper", "util_shared")],
         };
     }
 

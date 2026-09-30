@@ -21,25 +21,10 @@ public class VocabularyIndexTests
         ImmutableArray<ReferenceEntry> references = default,
         ImmutableArray<AssignmentSymbol> assignments = default)
     {
-        return new ScriptRecord
+        return TestRecords.At(path, contextId) with
         {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
             References = references.IsDefault ? [] : references,
-            Functions =
-            [
-                new FunctionSymbol
-                {
-                    Name = "f",
-                    KeyName = "f",
-                    Namespace = "ns",
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                    Assignments = assignments.IsDefault ? [] : assignments,
-                },
-            ],
+            Functions = [TestRecords.Function("f", "ns") with { Assignments = assignments.IsDefault ? [] : assignments }],
         };
     }
 

@@ -24,15 +24,8 @@ public class HeaderReferenceIndexTests
 
     private static ScriptRecord Header(string path, string contextId, params ReferenceEntry[] references)
     {
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = ScriptLanguage.Gsh,
-            ContextId = contextId,
-            ContentHash = 0,
-            RelativePath = path[(path.IndexOf(@"\scripts\", StringComparison.Ordinal) + 1)..],
-            References = [.. references],
-        };
+        string relativePath = path[(path.IndexOf(@"\scripts\", StringComparison.Ordinal) + 1)..];
+        return TestRecords.At(path, contextId, relativePath, ScriptLanguage.Gsh) with { References = [.. references] };
     }
 
     private static ScriptDatabase Workspace()

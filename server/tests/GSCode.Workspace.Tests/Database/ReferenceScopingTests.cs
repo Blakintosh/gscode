@@ -39,13 +39,8 @@ public class ReferenceScopingTests
             edges.Add(new DependencyEdge(include, "", false, new TextRange()));
         }
 
-        return new ScriptRecord
+        return TestRecords.At(TestPaths.Raw(relativePath + ".gsc"), "raw", relativePath) with
         {
-            Path = @"C:\raw\" + relativePath + ".gsc",
-            ContextId = "raw",
-            ContentHash = 0,
-            Language = ScriptLanguage.Gsc,
-            RelativePath = relativePath,
             Dependencies = edges.ToImmutable(),
             Functions = functions.IsDefault ? [] : functions,
             PathCallTargets = pathCalls.IsDefault

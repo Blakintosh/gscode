@@ -12,33 +12,21 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class PathTreeIndexTests
 {
-    private static ScriptRecord Record(string path, string contextId, string relativePath)
-    {
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
-            RelativePath = relativePath,
-        };
-    }
-
     private static List<ScriptRecord> Records()
     {
         return
         [
-            Record(@"c:\raw\scripts\shared\util.gsc", "raw", @"scripts\shared\util.gsc"),
-            Record(@"c:\raw\scripts\shared\math.gsc", "raw", @"scripts/shared/math.gsc"),
-            Record(@"c:\raw\scripts\shared\ai\zombie.gsc", "raw", @"scripts\shared\ai\zombie.gsc"),
-            Record(@"c:\raw\scripts\shared\ai.gsc", "raw", @"scripts\shared\ai.gsc"),
-            Record(@"c:\raw\scripts\mp\gametype.gsc", "raw", @"Scripts\MP\gametype.gsc"),
-            Record(@"c:\mods\m\scripts\shared\util.gsc", "mod:m", @"scripts\shared\util.gsc"),
-            Record(@"c:\mods\m\scripts\m_only\thing.gsc", "mod:m", @"scripts\m_only\thing.gsc"),
-            Record(@"c:\mods\n\scripts\n_only\thing.gsc", "mod:n", @"scripts\n_only\thing.gsc"),
-            Record(@"c:\ws\scripts\ws_only.gsc", @"workspace:c:\ws", @"scripts\ws_only.gsc"),
-            Record(@"c:\outside\loose.gsc", "raw", ""),
-            Record(@"c:\raw\odd\\double.gsc", "raw", @"odd\\double.gsc"),
+            TestRecords.At(@"c:\raw\scripts\shared\util.gsc", "raw", @"scripts\shared\util.gsc"),
+            TestRecords.At(@"c:\raw\scripts\shared\math.gsc", "raw", @"scripts/shared/math.gsc"),
+            TestRecords.At(@"c:\raw\scripts\shared\ai\zombie.gsc", "raw", @"scripts\shared\ai\zombie.gsc"),
+            TestRecords.At(@"c:\raw\scripts\shared\ai.gsc", "raw", @"scripts\shared\ai.gsc"),
+            TestRecords.At(@"c:\raw\scripts\mp\gametype.gsc", "raw", @"Scripts\MP\gametype.gsc"),
+            TestRecords.At(@"c:\mods\m\scripts\shared\util.gsc", "mod:m", @"scripts\shared\util.gsc"),
+            TestRecords.At(@"c:\mods\m\scripts\m_only\thing.gsc", "mod:m", @"scripts\m_only\thing.gsc"),
+            TestRecords.At(@"c:\mods\n\scripts\n_only\thing.gsc", "mod:n", @"scripts\n_only\thing.gsc"),
+            TestRecords.At(@"c:\ws\scripts\ws_only.gsc", @"workspace:c:\ws", @"scripts\ws_only.gsc"),
+            TestRecords.At(@"c:\outside\loose.gsc", "raw", ""),
+            TestRecords.At(@"c:\raw\odd\\double.gsc", "raw", @"odd\\double.gsc"),
         ];
     }
 
@@ -153,7 +141,7 @@ public class PathTreeIndexTests
         LanguageStore store = Store(records);
 
         // The only file under ai\ moves out, and the only file under mp\ goes away.
-        store.Upsert(Record(@"c:\raw\scripts\shared\ai\zombie.gsc", "raw", @"scripts\shared\zombie.gsc"));
+        store.Upsert(TestRecords.At(@"c:\raw\scripts\shared\ai\zombie.gsc", "raw", @"scripts\shared\zombie.gsc"));
         store.Remove(@"c:\raw\scripts\mp\gametype.gsc");
         store.Remove(@"c:\mods\m\scripts\m_only\thing.gsc");
 

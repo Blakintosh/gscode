@@ -32,14 +32,7 @@ public class CallHierarchyGroupingTests
 
     private static ScriptRecord Record(params FunctionSymbol[] functions)
     {
-        return new ScriptRecord
-        {
-            Path = CallerPath,
-            Language = ScriptLanguage.Gsc,
-            ContextId = "raw",
-            ContentHash = 1,
-            Functions = [.. functions],
-        };
+        return TestRecords.At(CallerPath) with { ContentHash = 1, Functions = [.. functions] };
     }
 
     private static ReferenceEntry CallAt(int line)

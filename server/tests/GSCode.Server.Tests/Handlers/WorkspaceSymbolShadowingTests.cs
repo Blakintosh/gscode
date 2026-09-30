@@ -1,10 +1,7 @@
-using GSCode.Core.Symbols;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
-using TextRange = GSCode.Core.Text.TextRange;
-using Position = GSCode.Core.Text.Position;
 
 namespace GSCode.Server.Tests.Handlers;
 
@@ -15,29 +12,9 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class WorkspaceSymbolShadowingTests
 {
-    private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
-
     private static ScriptRecord FunctionRecord(string path, string contextId, string relativePath, string name)
     {
-        return new ScriptRecord
-        {
-            Path = path,
-            ContextId = contextId,
-            ContentHash = 0,
-            Language = ScriptLanguage.Gsc,
-            RelativePath = relativePath,
-            Functions =
-            [
-                new FunctionSymbol
-                {
-                    Name = name,
-                    KeyName = name,
-                    Namespace = "",
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                },
-            ],
-        };
+        return TestRecords.At(path, contextId, relativePath) with { Functions = [TestRecords.Function(name)] };
     }
 
     [Fact]

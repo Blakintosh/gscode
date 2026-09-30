@@ -30,12 +30,8 @@ public class SqliteCacheTests : IDisposable
 
     private static ScriptRecord SampleRecord(string path, ulong hash)
     {
-        return new ScriptRecord
+        return TestRecords.At(path, "raw", @"scripts\sample.gsc") with
         {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = "raw",
-            RelativePath = @"scripts\sample.gsc",
             ContentHash = hash,
             Functions =
             [

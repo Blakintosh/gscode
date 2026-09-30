@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -15,31 +14,12 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class VisibleClassesTests
 {
-    private static readonly TextRange s_anywhere = new(new Position(1, 1), new Position(1, 5));
 
     private static ScriptRecord Record(string path, string contextId, string relativePath, params string[] classes)
     {
-        ImmutableArray<ClassSymbol>.Builder symbols = ImmutableArray.CreateBuilder<ClassSymbol>();
-        foreach ( string name in classes )
+        return TestRecords.At(path, contextId, relativePath) with
         {
-            symbols.Add(new ClassSymbol
-            {
-                Name = name,
-                KeyName = name.ToLowerInvariant(),
-                Namespace = "",
-                NameRange = s_anywhere,
-                FullRange = s_anywhere,
-            });
-        }
-
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
-            RelativePath = relativePath,
-            Classes = symbols.ToImmutable(),
+            Classes = [.. classes.Select(static name => TestRecords.Class(name))],
         };
     }
 

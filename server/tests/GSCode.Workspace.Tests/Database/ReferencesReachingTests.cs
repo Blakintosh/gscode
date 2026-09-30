@@ -37,14 +37,7 @@ public class ReferencesReachingTests
 
         if ( declaresMain )
         {
-            functions.Add(new FunctionSymbol
-            {
-                Name = "main",
-                KeyName = "main",
-                Namespace = "",
-                NameRange = At(0),
-                FullRange = At(0),
-            });
+            functions.Add(TestRecords.Function("main") with { NameRange = At(0), FullRange = At(0) });
             references.Add(new ReferenceEntry(s_main, At(0), ReferenceKind.Definition));
         }
 
@@ -66,13 +59,8 @@ public class ReferencesReachingTests
             edges.Add(new DependencyEdge(include, "", IsInsert: false, At(0)));
         }
 
-        return new ScriptRecord
+        return TestRecords.At(path, contextId, relativePath) with
         {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
-            RelativePath = relativePath,
             Functions = functions.ToImmutable(),
             References = references.ToImmutable(),
             Dependencies = edges.ToImmutable(),

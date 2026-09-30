@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -12,18 +11,10 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class ClassGraphTests
 {
-    private static readonly TextRange s_anywhere = new(new Position(1, 1), new Position(1, 5));
 
     private static FunctionSymbol Method(string name)
     {
-        return new FunctionSymbol
-        {
-            Name = name,
-            KeyName = name.ToLowerInvariant(),
-            Namespace = "",
-            NameRange = s_anywhere,
-            FullRange = s_anywhere,
-        };
+        return TestRecords.Function(name.ToLowerInvariant()) with { Name = name };
     }
 
     /// <summary>
@@ -38,15 +29,10 @@ public class ClassGraphTests
 
     private static ClassSymbol Class(string name, string? parent = null, params string[] methods)
     {
-        return new ClassSymbol
+        return TestRecords.Class(name) with
         {
-            Name = name,
-            KeyName = name.ToLowerInvariant(),
-            Namespace = "",
             ParentKeyName = parent?.ToLowerInvariant(),
             Methods = [.. methods.Select(Method)],
-            NameRange = s_anywhere,
-            FullRange = s_anywhere,
         };
     }
 

@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -16,30 +15,12 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DeclarationIndexTests
 {
-    private static readonly TextRange s_someRange = TextRange.FromCoordinates(1, 0, 1, 4);
 
     private static ScriptRecord Declaring(string path, params (string Namespace, string KeyName)[] functions)
     {
-        ImmutableArray<FunctionSymbol>.Builder symbols = ImmutableArray.CreateBuilder<FunctionSymbol>();
-        foreach ( (string Namespace, string KeyName) function in functions )
+        return TestRecords.At(path) with
         {
-            symbols.Add(new FunctionSymbol
-            {
-                Name = function.KeyName,
-                KeyName = function.KeyName,
-                Namespace = function.Namespace,
-                NameRange = s_someRange,
-                FullRange = s_someRange,
-            });
-        }
-
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = "raw",
-            ContentHash = 0,
-            Functions = symbols.ToImmutable(),
+            Functions = [.. functions.Select(static function => TestRecords.Function(function.KeyName, function.Namespace))],
         };
     }
 
@@ -94,15 +75,7 @@ public class DeclarationIndexTests
             Functions = [devFunction, record.Functions[1]],
             Classes =
             [
-                new ClassSymbol
-                {
-                    Name = "cthing",
-                    KeyName = "cthing",
-                    Namespace = "alpha",
-                    Methods = [devMethod],
-                    NameRange = s_someRange,
-                    FullRange = s_someRange,
-                },
+                TestRecords.Class("cthing", "alpha") with { Methods = [devMethod] },
             ],
         });
 

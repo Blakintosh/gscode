@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -14,31 +13,10 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class QualifiedClassLookupTests
 {
-    private static readonly TextRange s_anywhere = new(new Position(1, 1), new Position(1, 5));
-
-    private static ClassSymbol Class(string namespaceName, string name)
-    {
-        return new ClassSymbol
-        {
-            Name = name,
-            KeyName = name.ToLowerInvariant(),
-            Namespace = namespaceName,
-            NameRange = s_anywhere,
-            FullRange = s_anywhere,
-        };
-    }
 
     private static ScriptRecord Record(string path, string contextId, string relativePath, params ClassSymbol[] classes)
     {
-        return new ScriptRecord
-        {
-            Path = path,
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
-            RelativePath = relativePath,
-            Classes = [.. classes],
-        };
+        return TestRecords.At(path, contextId, relativePath) with { Classes = [.. classes] };
     }
 
     /// <summary>
@@ -48,11 +26,11 @@ public class QualifiedClassLookupTests
     private static LanguageStore Workspace()
     {
         LanguageStore store = new();
-        store.Upsert(Record(@"c:\raw\scripts\a.gsc", "raw", @"scripts\a.gsc", Class("scene", "cScene"), Class("scene", "cOther")));
-        store.Upsert(Record(@"c:\raw\scripts\b.gsc", "raw", @"scripts\b.gsc", Class("scene_b", "cScene")));
-        store.Upsert(Record(@"c:\raw\scripts\c.gsc", "raw", @"scripts\c.gsc", Class("scene", "cScene")));
-        store.Upsert(Record(@"c:\mods\m\scripts\a.gsc", "mod:m", @"scripts\a.gsc", Class("scene", "cScene")));
-        store.Upsert(Record(@"c:\mods\n\scripts\d.gsc", "mod:n", @"scripts\d.gsc", Class("scene_d", "cScene")));
+        store.Upsert(Record(@"c:\raw\scripts\a.gsc", "raw", @"scripts\a.gsc", TestRecords.Class("cScene", "scene"), TestRecords.Class("cOther", "scene")));
+        store.Upsert(Record(@"c:\raw\scripts\b.gsc", "raw", @"scripts\b.gsc", TestRecords.Class("cScene", "scene_b")));
+        store.Upsert(Record(@"c:\raw\scripts\c.gsc", "raw", @"scripts\c.gsc", TestRecords.Class("cScene", "scene")));
+        store.Upsert(Record(@"c:\mods\m\scripts\a.gsc", "mod:m", @"scripts\a.gsc", TestRecords.Class("cScene", "scene")));
+        store.Upsert(Record(@"c:\mods\n\scripts\d.gsc", "mod:n", @"scripts\d.gsc", TestRecords.Class("cScene", "scene_d")));
         return store;
     }
 
@@ -124,7 +102,7 @@ public class QualifiedClassLookupTests
     public void AClassMovedToAnotherNamespace_LeavesItsOldBucket()
     {
         LanguageStore store = Workspace();
-        store.Upsert(Record(@"c:\raw\scripts\c.gsc", "raw", @"scripts\c.gsc", Class("scene_c", "cScene")));
+        store.Upsert(Record(@"c:\raw\scripts\c.gsc", "raw", @"scripts\c.gsc", TestRecords.Class("cScene", "scene_c")));
 
         Assert.Equal([@"c:\mods\m\scripts\a.gsc", @"c:\raw\scripts\a.gsc"], store.Classes.PathsDeclaring("scene", "cscene").Order().ToArray());
         Assert.Equal([@"c:\raw\scripts\c.gsc"], store.Classes.PathsDeclaring("scene_c", "cscene").ToArray());

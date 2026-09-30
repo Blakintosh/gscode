@@ -7,7 +7,12 @@ vsc-extension-quickstart.md
 **/tsconfig.json
 **/.eslintrc.json
 eslint.config.mjs
+esbuild.mjs
 **/*.map
+
+# The client is bundled into out/extension.js (see esbuild.mjs), so its dependencies are already
+# inside it. `npm run package` passes --no-dependencies as well; this covers a bare `vsce package`.
+node_modules/**
 **/*.ts
 .env
 .env.example

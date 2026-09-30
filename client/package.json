@@ -510,20 +510,22 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
+		"vscode:prepublish": "npm run bundle",
 		"compile": "tsc -p ./",
+		"bundle": "tsc -p ./ --noEmit && node esbuild.mjs",
 		"watch": "tsc -watch -p ./",
 		"lint": "eslint src",
 		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
 		"bundle-server-win": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r win-x64 -o ./service",
 		"bundle-server-linux": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r linux-x64 -o ./service",
 		"bundle-server-osx": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r osx-arm64 -o ./service",
-		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
+		"package": "npm run bundle-server && npx --yes @vscode/vsce package --no-dependencies"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",
 		"@types/node": "^20.17.0",
 		"@types/vscode": "^1.85.0",
+		"esbuild": "^0.25.12",
 		"eslint": "^9.15.0",
 		"typescript": "^5.6.3",
 		"typescript-eslint": "^8.15.0"

@@ -44,7 +44,7 @@ public class BlankLineAfterBlockTests
     {
         string source = "function f()\n{\nswitch ( v )\n{\ncase 0:\n{\na();\n}\nbreak;\ncase 1:\nbreak;\n}\n}\n";
 
-        Assert.Contains("\t\t\t}\n\t\t\tbreak;\n\t\tcase 1:", Format(source, s_tabs), StringComparison.Ordinal);
+        Assert.Contains("\t\t}\n\t\tbreak;\n\t\tcase 1:", Format(source, s_tabs), StringComparison.Ordinal);
     }
 
     [Fact]

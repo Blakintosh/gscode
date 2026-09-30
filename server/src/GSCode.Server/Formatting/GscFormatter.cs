@@ -632,6 +632,15 @@ public static partial class GscFormatter
                 blocks[^1].CaseOpen = true;
             }
 
+            // A label whose body is a braced block takes no case indent: the braces supply the
+            // level, so `{`, `}` and the `break;` after them sit in the label's column. Stock
+            // writes it that way 59 times against 47, and every time with the break beside them.
+            bool bracedCaseBody = roles.LabelColon[index] && NextIsOpenBrace(significant, index);
+            if ( bracedCaseBody && blocks.Count > 0 && blocks[^1].IsSwitch )
+            {
+                blocks[^1].CaseOpen = false;
+            }
+
             if ( token.Kind is TokenKind.OpenParen or TokenKind.OpenBracket )
             {
                 openGroups++;
@@ -1009,6 +1018,21 @@ public static partial class GscFormatter
         }
 
         return total;
+    }
+
+    /// <summary>Whether the next token past any comments is a `{`.</summary>
+    private static bool NextIsOpenBrace(List<SignificantToken> significant, int index)
+    {
+        for ( int next = index + 1; next < significant.Count; next++ )
+        {
+            TokenKind kind = significant[next].Token.Kind;
+            if ( !LineFacts.IsComment(kind) )
+            {
+                return kind == TokenKind.OpenBrace;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>How many of the open braces are switch bodies.</summary>

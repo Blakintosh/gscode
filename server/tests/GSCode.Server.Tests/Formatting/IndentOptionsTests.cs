@@ -51,6 +51,28 @@ public class IndentOptionsTests
     }
 
     [Fact]
+    public void ABracedCaseBodySitsInTheLabelsColumn()
+    {
+        // The braces supply the case body's level, so the block and the break after it take none.
+        string source = "function f()\n{\nswitch ( v )\n{\ncase \"helicopter\":\n{\nreturn true;\n}\ncase 1:\n{\na();\n}\nbreak;\ndefault:\nb();\nbreak;\n}\n}\n";
+
+        Assert.Equal(
+            "function f()\n{\n\tswitch ( v )\n\t{\n"
+            + "\t\tcase \"helicopter\":\n\t\t{\n\t\t\treturn true;\n\t\t}\n"
+            + "\t\tcase 1:\n\t\t{\n\t\t\ta();\n\t\t}\n\t\tbreak;\n"
+            + "\t\tdefault:\n\t\t\tb();\n\t\t\tbreak;\n\t}\n}\n",
+            Format(source, s_tabs));
+    }
+
+    [Fact]
+    public void ABracedCaseBodyWithACommentedLabelSitsInTheLabelsColumn()
+    {
+        string source = "function f()\n{\nswitch ( v )\n{\ncase 0: // why\n{\na();\n}\nbreak;\n}\n}\n";
+
+        Assert.Contains("\t\tcase 0: // why\n\t\t{\n\t\t\ta();\n\t\t}\n\t\tbreak;\n", Format(source, s_tabs), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ADevBlockBodyStaysFlushByDefault()
     {
         Assert.Equal(

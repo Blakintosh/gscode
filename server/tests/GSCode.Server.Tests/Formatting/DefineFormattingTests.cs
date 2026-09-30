@@ -48,6 +48,29 @@ public class DefineFormattingTests
             Format("#using scripts\\shared\\util_shared;\n\n#define MULTI( _a )\\\nbaz( _a )\nfunction f()\n{\n\tx = MULTI( 1 );\n}\n"));
     }
 
+    [Theory]
+    [InlineData("#define WAIT_SERVER_FRAME {wait(0.05);}", "#define WAIT_SERVER_FRAME { wait( 0.05 ); }")]
+    [InlineData("#define TWO_CALLS a(); b();", "#define TWO_CALLS a(); b();")]
+    [InlineData("#define PICK( _v ) switch ( _v ) { case 0: a(); break; }", "#define PICK( _v ) switch ( _v ) { case 0: a(); break; }")]
+    [InlineData("#define IF_DEV if ( level.dev )", "#define IF_DEV if ( level.dev )")]
+    public void AMacroBodyIsNeverSplitAcrossLines(string define, string expected)
+    {
+        // Allman braces and one statement per line broke these at the first '{' or ';', which ends
+        // the macro there and leaves the rest of its body as top-level code.
+        string formatted = Format(define + "\n\nfunction f()\n{\n\tx = 1;\n}\n");
+
+        Assert.StartsWith(expected + "\n\nfunction f()\n{\n\tx = 1;\n}\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AContinuedMacroBodyKeepsItsOwnBreaksOnly()
+    {
+        Assert.StartsWith(
+            "#define BLOCK( _a ) \\\n\t{ foo( _a ); \\\n\tbar(); }\n",
+            Format("#define BLOCK( _a ) \\\n{foo(_a); \\\nbar();}\nfunction f()\n{\n\tx = 1;\n}\n"),
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DefineFormattingIsIdempotent()
     {

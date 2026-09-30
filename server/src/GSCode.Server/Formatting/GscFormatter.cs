@@ -468,11 +468,16 @@ public static class GscFormatter
             // Asked before the closer below is popped, so a header's own ')' is joined too.
             bool insideHeader = headerParens.Count > 0 && headerParens[^1];
 
+            // A #define's body is one logical line of text for the preprocessor, not statements:
+            // its braces open no block and its ';' ends nothing, so none of them move a line.
+            bool inDirective = roles.InDirective[index];
+            bool structuralBrace = !inDirective && (token.Kind is TokenKind.OpenBrace or TokenKind.CloseBrace);
+
             // Closers dedent before this line's indent is computed. A dev block only counts when
             // the setting asks for it: `/# … #/` is a compile-time switch, not a scope -- the
             // engine jumps over it when dev script is off -- and stock keeps it flush 316 times
             // to 194, but that is a split rather than a rule.
-            if ( token.Kind == TokenKind.CloseBrace
+            if ( (token.Kind == TokenKind.CloseBrace && structuralBrace)
                 || (token.Kind == TokenKind.DevBlockClose && options.IndentDevBlocks) )
             {
                 depth = Math.Max(0, depth - 1);
@@ -495,7 +500,7 @@ public static class GscFormatter
             }
 
             bool closesDoBody = false;
-            if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
+            if ( token.Kind == TokenKind.CloseBrace && structuralBrace && blocks.Count > 0 )
             {
                 closesDoBody = blocks[^1].IsDo;
                 blocks.RemoveAt(blocks.Count - 1);
@@ -520,7 +525,7 @@ public static class GscFormatter
                 openGroups = Math.Max(0, openGroups - 1);
             }
 
-            if ( token.Kind is TokenKind.OpenBrace or TokenKind.CloseBrace )
+            if ( structuralBrace )
             {
                 openGroups = 0;
                 headerParens.Clear();
@@ -537,7 +542,10 @@ public static class GscFormatter
                 caseIndents -= OpenSwitches(blocks);
             }
 
-            unbraced.BeforeToken(token.Kind);
+            if ( !inDirective )
+            {
+                unbraced.BeforeToken(token.Kind);
+            }
 
             if ( index == 0 )
             {
@@ -553,7 +561,7 @@ public static class GscFormatter
                     insideCallParen = callParens[^1];
                 }
 
-                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], insideHeader) )
+                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], insideHeader, inDirective) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     if ( blankOwed && !HugsTheBlockAbove(token.Kind) )
@@ -586,7 +594,7 @@ public static class GscFormatter
             }
 
             // Openers indent everything that follows -- again, dev blocks only by setting.
-            if ( token.Kind == TokenKind.OpenBrace )
+            if ( token.Kind == TokenKind.OpenBrace && structuralBrace )
             {
                 depth++;
                 blocks.Add(new SwitchBlock { IsSwitch = switchHeaderSeen, IsDo = doSeen });
@@ -624,7 +632,10 @@ public static class GscFormatter
                 headerParens.Add(opensHeader || (headerParens.Count > 0 && headerParens[^1]));
             }
 
-            unbraced.AfterToken(token.Kind);
+            if ( !inDirective )
+            {
+                unbraced.AfterToken(token.Kind);
+            }
 
             // A trailing comment on the '}' line leaves the blank owed to the line after it.
             bool trailing = index > 0 && LineFacts.IsComment(token.Kind) && newlinesBefore == 0;
@@ -647,7 +658,7 @@ public static class GscFormatter
                 }
             }
 
-            if ( token.Kind == TokenKind.CloseBrace )
+            if ( token.Kind == TokenKind.CloseBrace && structuralBrace )
             {
                 if ( closesDoBody )
                 {
@@ -682,6 +693,9 @@ public static class GscFormatter
         /// <summary>This token starts the line after a '\' continuation, so it is indented one level.</summary>
         public required bool[] ContinuesLine { get; init; }
 
+        /// <summary>This token is part of a <c>#define</c>'s logical line, after the directive itself.</summary>
+        public required bool[] InDirective { get; init; }
+
         public static TokenRoles Of(List<SignificantToken> significant)
         {
             TokenRoles roles = new()
@@ -690,6 +704,7 @@ public static class GscFormatter
                 SpaceBefore = new bool[significant.Count],
                 LabelColon = new bool[significant.Count],
                 ContinuesLine = new bool[significant.Count],
+                InDirective = new bool[significant.Count],
             };
 
             MarkFunctionPointers(significant, roles);
@@ -706,6 +721,7 @@ public static class GscFormatter
                 {
                     case TokenKind.DefineDirective:
                         MarkDefine(significant, index, roles);
+                        MarkDirectiveLine(significant, index, roles);
                         break;
                     case TokenKind.Backslash:
                         // A '\' that ends its line continues a directive, not a path: set it off
@@ -757,6 +773,24 @@ public static class GscFormatter
             }
 
             return roles;
+        }
+
+        /// <summary>
+        /// The tokens of a <c>#define</c>'s logical line: everything up to the first line break
+        /// that is not escaped by a '\' at the end of the line before it.
+        /// </summary>
+        private static void MarkDirectiveLine(List<SignificantToken> significant, int directive, TokenRoles roles)
+        {
+            for ( int index = directive + 1; index < significant.Count; index++ )
+            {
+                bool escaped = significant[index - 1].Token.Kind == TokenKind.Backslash;
+                if ( significant[index].NewlinesBefore > 0 && !escaped )
+                {
+                    return;
+                }
+
+                roles.InDirective[index] = true;
+            }
         }
 
         /// <summary>
@@ -1071,11 +1105,19 @@ public static class GscFormatter
     /// </summary>
     private static bool ShouldBreak(
         TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth, bool afterLabel,
-        bool insideHeader)
+        bool insideHeader, bool inDirective)
     {
         if ( trailingComment )
         {
             return false;
+        }
+
+        // Inside a #define only the author's own '\'-continued breaks exist. Forcing Allman or
+        // one-statement-per-line there ended the macro at the first '{' or ';' and left the rest
+        // of its body as top-level code: `#define WAIT {wait(0.05);}` became an empty macro.
+        if ( inDirective )
+        {
+            return newlinesBefore > 0;
         }
 
         // A `case` or `default` label is a line of its own, and so is each of a stacked pair: stock

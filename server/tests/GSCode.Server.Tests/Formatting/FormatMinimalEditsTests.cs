@@ -139,8 +139,9 @@ public class FormatMinimalEditsTests
 
         ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
 
+        // Only the indent is inserted; the line's own CRLF is never part of an edit.
         GscFormatter.FormatEdit edit = Assert.Single(edits);
-        Assert.Equal("\ta = 1;\r\n", edit.NewText);
+        Assert.Equal("\t", edit.NewText);
         Assert.Equal("function f()\r\n{\r\n\ta = 1;\r\n}\r\n", Apply(text.Text, edits, text));
     }
 

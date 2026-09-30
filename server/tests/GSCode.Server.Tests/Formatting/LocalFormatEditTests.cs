@@ -69,6 +69,35 @@ public class LocalFormatEditTests
     }
 
     [Fact]
+    public void EditsStayLocalEvenAfterTheEditorMergesTheOnesThatTouch()
+    {
+        // VS Code joins every pair of formatting edits that touch end to start before applying
+        // them, and applies a joined edit over 100,000 characters whole. Whole-line edits touched
+        // on every pair of adjacent changed lines, so a reindented file joined back into one edit
+        // and the caret jumped to its end. Replayed here: after joining, every edit is still small.
+        ParseResult result = TestParse.Analyze(LargeUnformattedFile(1000));
+
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
+
+        List<GscFormatter.FormatEdit> joined = [];
+        foreach ( GscFormatter.FormatEdit edit in edits )
+        {
+            if ( joined.Count > 0 && joined[^1].Range.End == edit.Range.Start )
+            {
+                joined[^1] = new GscFormatter.FormatEdit(
+                    new TextRange(joined[^1].Range.Start, edit.Range.End), joined[^1].NewText + edit.NewText);
+                continue;
+            }
+
+            joined.Add(edit);
+        }
+
+        Assert.All(joined, edit => Assert.True(
+            edit.Range.End.Line - edit.Range.Start.Line <= 3,
+            $"joined edit spans lines {edit.Range.Start.Line}-{edit.Range.End.Line}"));
+    }
+
+    [Fact]
     public void EditsNeverOverlap()
     {
         ParseResult result = TestParse.Analyze(LargeUnformattedFile(50));

@@ -585,9 +585,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Formatting/GscFormatter.cs
 
-- `FormatMinimalEdits(ParseResult)` returns the formatting result as local `FormatEdit`s — one per
-  changed line, plus one per run of lines the formatter added, removed or split; unchanged lines
-  are left out entirely — which all three formatting handlers share. The lines are paired by
+- `FormatMinimalEdits(ParseResult)` returns the formatting result as local `FormatEdit`s — within
+  each changed line, only the characters that differ and never the line ending, plus one per run of
+  lines the formatter added, removed or split; unchanged lines are left out entirely — which all
+  three formatting handlers share. Staying inside the line matters: VS Code merges edits that touch
+  end to start before applying them, and whole-line edits on adjacent lines merged back into one. The lines are paired by
   `LineDiff`, a Myers diff over each line's content with whitespace removed and case folded, so
   the pairing stays nearly one-to-one however much of the file was reindented. The on-type and
   range handlers keep only edits wholly inside their scope (`FormattingSupport.WithinLines`).

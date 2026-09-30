@@ -186,9 +186,7 @@ public static partial class GscFormatter
             // stay where they are rather than joining into one region across unchanged lines.
             if ( !string.Equals(originalLines[pair.Original].Text, formattedLines[pair.Formatted], StringComparison.Ordinal) )
             {
-                AddEdit(
-                    edits, text, originalLines, formattedLines,
-                    pair.Original, pair.Original + 1, pair.Formatted, pair.Formatted + 1);
+                AddLineEdit(edits, text, originalLines[pair.Original], formattedLines[pair.Formatted]);
             }
 
             originalPosition = pair.Original + 1;
@@ -203,6 +201,65 @@ public static partial class GscFormatter
         }
 
         return edits.ToImmutable();
+    }
+
+    /// <summary>
+    /// Emits the edit for one line the formatter changed in place: only the characters between the
+    /// part the two versions share at the start and the part they share at the end, and never the
+    /// line ending.
+    /// </summary>
+    /// <remarks>
+    /// Before applying a formatter's edits VS Code merges every pair that TOUCHES, end to start, and
+    /// gives up diffing a merged edit past 100,000 characters. Whole-line edits touch whenever two
+    /// changed lines are adjacent, so a file reindented throughout became one edit again on the
+    /// editor's side, applied whole, with the caret thrown to its end. Kept inside the line, an edit
+    /// is separated from the next line's by at least the line break, and nothing merges.
+    /// </remarks>
+    private static void AddLineEdit(
+        ImmutableArray<FormatEdit>.Builder edits, SourceText text, LineSpan originalLine, string formattedLine)
+    {
+        string originalContent = WithoutLineEnding(originalLine.Text);
+        string formattedContent = WithoutLineEnding(formattedLine);
+
+        // A changed line ending is a change to the whole line; replace it outright.
+        bool sameEnding = originalLine.Text.Length - originalContent.Length == formattedLine.Length - formattedContent.Length
+            && originalLine.Text.EndsWith(formattedLine[formattedContent.Length..], StringComparison.Ordinal);
+        if ( !sameEnding )
+        {
+            TextRange whole = new(
+                text.GetPosition(originalLine.Offset), text.GetPosition(originalLine.Offset + originalLine.Text.Length));
+            AppendEdit(edits, new FormatEdit(whole, formattedLine));
+            return;
+        }
+
+        int shorter = Math.Min(originalContent.Length, formattedContent.Length);
+        int prefix = 0;
+        while ( prefix < shorter && originalContent[prefix] == formattedContent[prefix] )
+        {
+            prefix++;
+        }
+
+        int suffix = 0;
+        while ( suffix < shorter - prefix
+            && originalContent[originalContent.Length - 1 - suffix] == formattedContent[formattedContent.Length - 1 - suffix] )
+        {
+            suffix++;
+        }
+
+        int start = originalLine.Offset + prefix;
+        int end = originalLine.Offset + originalContent.Length - suffix;
+        string replacement = formattedContent.Substring(prefix, formattedContent.Length - suffix - prefix);
+        AppendEdit(edits, new FormatEdit(new TextRange(text.GetPosition(start), text.GetPosition(end)), replacement));
+    }
+
+    private static string WithoutLineEnding(string line)
+    {
+        if ( line.EndsWith("\r\n", StringComparison.Ordinal) )
+        {
+            return line[..^2];
+        }
+
+        return line.EndsWith('\n') ? line[..^1] : line;
     }
 
     /// <summary>
@@ -230,18 +287,25 @@ public static partial class GscFormatter
         }
 
         TextRange range = new(text.GetPosition(startOffset), text.GetPosition(endOffset));
+        AppendEdit(edits, new FormatEdit(range, replacement.ToString()));
+    }
 
-        // A pure insertion that meets another edit at the same point has no order an editor must
-        // honour between the two, so it joins that edit instead of standing beside it.
-        if ( edits.Count > 0 && edits[^1].Range.End == range.Start
-            && (edits[^1].Range.Start == edits[^1].Range.End || range.Start == range.End) )
+    /// <summary>
+    /// Adds an edit after the ones before it. A pure insertion that meets another edit at the same
+    /// point has no order an editor must honour between the two, so it joins that edit instead of
+    /// standing beside it.
+    /// </summary>
+    private static void AppendEdit(ImmutableArray<FormatEdit>.Builder edits, FormatEdit edit)
+    {
+        if ( edits.Count > 0 && edits[^1].Range.End == edit.Range.Start
+            && (edits[^1].Range.Start == edits[^1].Range.End || edit.Range.Start == edit.Range.End) )
         {
             FormatEdit previous = edits[^1];
-            edits[^1] = new FormatEdit(new TextRange(previous.Range.Start, range.End), previous.NewText + replacement);
+            edits[^1] = new FormatEdit(new TextRange(previous.Range.Start, edit.Range.End), previous.NewText + edit.NewText);
             return;
         }
 
-        edits.Add(new FormatEdit(range, replacement.ToString()));
+        edits.Add(edit);
     }
 
     /// <summary>A source line and its start offset. The text keeps its trailing newline, if any.</summary>

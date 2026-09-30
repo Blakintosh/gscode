@@ -7,9 +7,9 @@ namespace GSCode.Parser.Tests.Core;
 /// Operator semantics over the union lattice.
 ///
 /// The vector rows exist because both prior attempts got them wrong in opposite ways. v1.5 typed
-/// `vector + float` as a STRING and had no arm at all for `vector - vector`; this tree's
-/// `NumericResult` takes no operator and knows only Int/Float/Unknown, so `vector * 0.5` comes out
-/// `float` — a wrong hover today, and one of the two causes that got PredefinedFieldTypeMismatch
+/// `vector + float` as a STRING and had no arm at all for `vector - vector`; this tree's earlier
+/// `NumericResult` took no operator and knew only Int/Float/Unknown, so `vector * 0.5` came out
+/// `float` — a wrong hover, and one of the two causes that got PredefinedFieldTypeMismatch
 /// withdrawn after 46 unreal findings on Black Ops III.
 /// </summary>
 public class ScrOperatorsTests
@@ -66,7 +66,7 @@ public class ScrOperatorsTests
     [InlineData(ScrBinaryOp.Divide)]
     public void AVectorScaledByANumberIsAVector(ScrBinaryOp op)
     {
-        // The live bug: NumericResult answers `float` for this today.
+        // The bug this replaced: NumericResult answered `float` here.
         ScrOperatorResult result = Apply(op, Vector(), Float(0.5));
 
         Assert.Equal(ScrTypeSet.Vector, result.Value.Types);

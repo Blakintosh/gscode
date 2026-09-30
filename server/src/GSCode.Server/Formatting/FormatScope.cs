@@ -110,7 +110,8 @@ public static class FormatScope
         string indent = LineFacts.LeadingWhitespace(lineText);
 
         // A top-level assignment operator with something before it makes this an assignment — the
-        // same test the assignment aligner makes, so the scope holds exactly what it would change.
+        // aligner's own test without its one-statement check, so the scope holds everything the
+        // aligner would change, plus any assignment line carrying a second statement.
         if ( LineFacts.TopLevelAssignment(code) > 0 )
         {
             return new LineKind(Role.Assignment, indent, "");

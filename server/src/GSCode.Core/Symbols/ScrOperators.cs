@@ -58,8 +58,8 @@ public enum ScrOperandDiagnosis
 /// v1.5 spread this over 536 lines in which the four equality operators and two logicals were six
 /// near-identical 36-line bodies and the five bitwise operators were five copies of a three-line
 /// function — so its vector rules were buried inside a shared numeric helper and its holes were
-/// invisible. This tree's version is smaller but wrong in a way that ships today: <c>NumericResult</c>
-/// takes no operator and knows only Int/Float/Unknown, so <c>vector * 0.5</c> types as
+/// invisible. This tree's version before this table was smaller but wrong: its <c>NumericResult</c>
+/// took no operator and knew only Int/Float/Unknown, so <c>vector * 0.5</c> typed as
 /// <c>float</c>, which is one of the two causes that got <c>PredefinedFieldTypeMismatch</c>
 /// withdrawn after it reported 46 findings on Black Ops III with none of them real.
 ///

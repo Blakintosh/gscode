@@ -9,8 +9,8 @@ namespace GSCode.Server.Handlers;
 
 /// <summary>
 /// Range ("Format Selection") formatting. GSC formatting is holistic (whitespace-only, whole
-/// document), so this runs the same formatter and returns the minimal edit only when the
-/// changed region overlaps the requested range — a clean selection then does nothing.
+/// document), so this runs the same formatter and keeps only the edits that lie wholly within the
+/// selected lines — a clean selection then does nothing.
 /// </summary>
 public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHandlerBase
 {

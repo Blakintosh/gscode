@@ -358,7 +358,7 @@ public sealed class DependentDiagnosticsRefresher
     /// ("after  changed its exports"), which read like a missing value rather than the documented
     /// no-origin case. Startup's own no-origin <c>Schedule()</c> call, once indexing completes,
     /// prints the same "on-disk change" label — the reasoning is identical (see the call site in
-    /// <c>StartupIndex</c>), not a second unlabelled case.
+    /// <c>StartupIndexRunner</c>), not a second unlabelled case.
     /// </summary>
     private static string DescribeOrigins(IReadOnlySet<string> origins)
     {

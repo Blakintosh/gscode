@@ -490,21 +490,22 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/DocumentFormattingHandler.cs
 
 - Whole-document formatting: runs `GscFormatter.FormatMinimalEdits` over the open document and
-  returns its per-region edits (one small edit per run of changed lines, so a caret on an
-  unchanged line stays put rather than snapping to the end of one giant replacement). Syntax
-  errors or an unsafe reflow (see the formatter's corruption guard) yield no edits.
+  returns its local edits (one inside each line changed in place, one per run of split, joined or
+  moved lines, so a caret on an unchanged line stays put rather than snapping to the end of one
+  giant replacement). Syntax errors or an unsafe reflow (see the formatter's corruption guard)
+  yield no edits.
 
 ## Handlers/DocumentRangeFormattingHandler.cs
 
-- "Format Selection". GSC formatting is holistic, so this runs the same formatter and returns
-  the minimal edit only when the changed region overlaps the requested range — formatting an
-  already-clean selection does nothing.
+- "Format Selection". GSC formatting is holistic, so this runs the same formatter and keeps only
+  the edits lying wholly within the selected lines (`FormattingSupport.WithinLines`) — formatting
+  an already-clean selection does nothing.
 
 ## Handlers/DocumentOnTypeFormattingHandler.cs
 
-- On-type formatting after `}` or `;`. Reuses the whole-document formatter's minimal edit;
-  because the formatter refuses files with syntax errors, a half-typed document is left alone
-  until it parses again.
+- On-type formatting after `}` or `;`. Runs the whole-document formatter and keeps only the edits
+  within the alignment group around the cursor (`FormatScope.GroupAround`); because the formatter
+  refuses files with syntax errors, a half-typed document is left alone until it parses again.
 
 ## Handlers/ImportEdits.cs
 
@@ -789,7 +790,7 @@ that chose it. These are the pieces that implement it:
   `OptionsFor` builds the formatter options from the editor's indentation and the settings,
   `Prepare` resolves the open document and analyses it FRESH before diffing (a stale read here
   writes a corrupting edit rather than merely showing something wrong), `ToLspEdits` projects the
-  formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its
+  formatter's local edits onto the protocol. Each handler then keeps whichever edits its
   feature is scoped to. With `fixCasing` on it also resolves the document through
   `NavigationSupport` and hands the formatter a `CallCasing` lookup.
 - `GscFormatter.Casing.cs` — the `fixCasing` pass: which tokens are keywords, functions (bare,

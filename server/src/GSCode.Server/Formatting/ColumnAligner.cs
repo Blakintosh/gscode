@@ -18,12 +18,12 @@ namespace GSCode.Server.Formatting;
 /// </code>
 ///
 /// It is the same engine for both: two lines share a group when their token SKELETON is identical
-/// — the same delimiters and the same fixed anchors (base name, callee, operator) — and only the
-/// values in the slots differ. Each slot is a cell; a cell followed by <c>]</c> or <c>,</c> is
-/// aligned (its column is padded to the widest), a cell followed by <c>[</c> or <c>(</c> is an
-/// anchor that must match, and a cell followed by <c>)</c>, <c>;</c> or an assignment operator is
-/// free — it varies but is not padded, which is why the last argument and the right-hand side are
-/// left alone.
+/// — the same delimiters, the same operator and the same callee — and only the values in the slots
+/// differ. Each slot is a cell; a cell followed by <c>]</c>, <c>,</c> or <c>[</c> is aligned (its
+/// column is padded to the widest, so a subscript's base name is padded too), a cell followed by
+/// <c>(</c> is the callee, an anchor that must match, and a cell followed by <c>)</c>, <c>;</c> or
+/// an assignment operator is free — it varies but is not padded, which is why the last argument and
+/// the right-hand side are left alone.
 ///
 /// Like the other aligners this is a whitespace-only post-pass over already-formatted text, run
 /// after the token gate. It REPLACES the gap between a cell and its delimiter rather than inserting

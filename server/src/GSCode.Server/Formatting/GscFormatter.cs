@@ -28,8 +28,8 @@ public static partial class GscFormatter
     public readonly record struct FormatEdit(TextRange Range, string NewText);
 
     /// <summary>
-    /// The formatting result as a set of PER-REGION edits — one small edit for each run of changed
-    /// lines, with unchanged lines left out entirely, so edits stay small and churn-free. All three
+    /// The formatting result as LOCAL edits — one inside each line the formatter changed in place,
+    /// one for each run of lines it split, joined or moved, and none for an unchanged line. All three
     /// formatting requests (whole, range, on-type) share this.
     ///
     /// Diffing by LINES rather than returning one edit spanning the first change to the last: a
@@ -39,7 +39,7 @@ public static partial class GscFormatter
     /// keeps a caret resting on one untouched.
     ///
     /// The edits together reproduce <see cref="Format"/>'s output exactly, are ordered, and never
-    /// overlap — a matched (unchanged) line always sits between two hunks — so they satisfy the
+    /// overlap or touch — <see cref="AppendEdit"/> joins any two that would — so they satisfy the
     /// LSP's requirements for a multi-edit response.
     /// </summary>
     /// <param name="casing">
@@ -1229,9 +1229,6 @@ public static partial class GscFormatter
             BodyEnded = false;
             EndedDoBody = false;
 
-            // A statement terminator ends every unbraced body stacked above it. `}` is reset
-            // rather than decremented: a brace closing here means the body was braced after all,
-            // or the tracker is out of step, and dropping to zero is the safe direction.
             // A ';' inside a header's parentheses separates the clauses of a `for` rather than
             // ending a statement. As a terminator it would tear down the header mid-flight, and the
             // ')' would never arm the body of an unbraced `for ( … )`. Same root cause as the
@@ -1241,6 +1238,9 @@ public static partial class GscFormatter
                 return;
             }
 
+            // A statement terminator ends every unbraced body stacked above it. `}` is reset
+            // rather than decremented: a brace closing here means the body was braced after all,
+            // or the tracker is out of step, and dropping to zero is the safe direction.
             if ( kind == TokenKind.Semicolon || kind == TokenKind.CloseBrace )
             {
                 BodyEnded = kind == TokenKind.Semicolon && PendingIndents > 0;

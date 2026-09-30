@@ -214,7 +214,6 @@ public static class DirectiveSorter
             return null;
         }
 
-        // Comments trailing the block belong to whatever follows it, not to the last directive.
         List<Entry> ordered = [.. entries];
         ordered.Sort(static (left, right) =>
         {
@@ -254,7 +253,8 @@ public static class DirectiveSorter
             previousGroup = entry.Group;
         }
 
-        // Whatever came after the block, with exactly one blank line before it.
+        // Whatever came after the block, with exactly one blank line before it. Comments trailing
+        // the block are part of this, not of the last directive: they belong to what follows.
         string remainder = string.Join('\n', lines.Skip(consumedThrough + 1)).TrimStart('\n');
         if ( remainder.Length > 0 )
         {

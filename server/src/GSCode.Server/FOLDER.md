@@ -589,10 +589,14 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   each changed line, only the characters that differ and never the line ending, plus one per run of
   lines the formatter added, removed or split; unchanged lines are left out entirely — which all
   three formatting handlers share. Staying inside the line matters: VS Code merges edits that touch
-  end to start before applying them, and whole-line edits on adjacent lines merged back into one. The lines are paired by
-  `LineDiff`, a Myers diff over each line's content with whitespace removed and case folded, so
-  the pairing stays nearly one-to-one however much of the file was reindented. The on-type and
-  range handlers keep only edits wholly inside their scope (`FormattingSupport.WithinLines`).
+  end to start before applying them, and whole-line edits on adjacent lines merged back into one.
+  The lines are paired by `LineDiff`, over each line's content with whitespace removed and case
+  folded: joined end to end, the original and formatted keys spell the same string, so lines pair
+  where their intervals of it coincide, in one pass however much was split. Only the leading
+  directive block, which sorting reorders, goes through a Myers diff. The on-type and range
+  handlers keep only edits wholly inside their scope (`FormattingSupport.WithinLines`); the
+  client's `caretRestore.ts` puts the caret back after Format Document, since VS Code applies a
+  thousand edits or more as one.
   `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman

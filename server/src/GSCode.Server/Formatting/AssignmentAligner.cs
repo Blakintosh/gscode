@@ -56,28 +56,8 @@ public static class AssignmentAligner
 
             // Gather a run of assignments at this indent, letting comment lines pass through.
             string indent = kinds[index].Indent;
-            List<int> group = [];
-            int scan = index;
-            int lastAssignment = index;
-            while ( scan < lines.Length )
-            {
-                LineKind kind = kinds[scan];
-                if ( kind.Kind == LineRole.Assignment && string.Equals(kind.Indent, indent, StringComparison.Ordinal) )
-                {
-                    group.Add(scan);
-                    lastAssignment = scan;
-                    scan++;
-                }
-                else if ( kind.Kind == LineRole.Comment )
-                {
-                    // Transparent: it neither aligns nor breaks the run.
-                    scan++;
-                }
-                else
-                {
-                    break;
-                }
-            }
+            List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(kinds[line], indent));
+            int lastAssignment = group[^1];
 
             int target = 0;
             foreach ( int line in group )
@@ -118,6 +98,16 @@ public static class AssignmentAligner
         }
 
         return changed ? output.ToString() : formatted;
+    }
+
+    private static LineFacts.RunStep StepOf(LineKind kind, string indent)
+    {
+        if ( kind.Kind == LineRole.Assignment && string.Equals(kind.Indent, indent, StringComparison.Ordinal) )
+        {
+            return LineFacts.RunStep.Member;
+        }
+
+        return kind.Kind == LineRole.Comment ? LineFacts.RunStep.Transparent : LineFacts.RunStep.End;
     }
 
     private static string Repad(string line, LineKind kind, int target)
@@ -171,44 +161,18 @@ public static class AssignmentAligner
             return new LineKind(LineRole.Other, "", 0, 0);
         }
 
-        // The statement must be exactly one: a single terminating semicolon, and no braces or
-        // stray semicolons that would mean this line is something other than `lhs op rhs;`.
-        int depth = 0;
-        int operatorIndex = -1;
-        for ( int i = 0; i < code.Count; i++ )
+        // The statement must be exactly one: a second semicolon means this line is something other
+        // than `lhs op rhs;`.
+        for ( int i = 0; i < code.Count - 1; i++ )
         {
-            TokenKind kind = code[i].Kind;
-            switch ( kind )
+            if ( code[i].Kind == TokenKind.Semicolon )
             {
-                case TokenKind.OpenParen:
-                case TokenKind.OpenBracket:
-                case TokenKind.OpenBrace:
-                    depth++;
-                    break;
-                case TokenKind.CloseParen:
-                case TokenKind.CloseBracket:
-                case TokenKind.CloseBrace:
-                    depth--;
-                    break;
-                case TokenKind.Semicolon:
-                    if ( i != code.Count - 1 )
-                    {
-                        // A second statement on the line: not our shape.
-                        return new LineKind(LineRole.Other, "", 0, 0);
-                    }
-
-                    break;
-                default:
-                    if ( depth == 0 && operatorIndex < 0 && TokenFacts.IsAssignmentOperator(kind) )
-                    {
-                        operatorIndex = i;
-                    }
-
-                    break;
+                return new LineKind(LineRole.Other, "", 0, 0);
             }
         }
 
         // Need an assignment operator at top level, with a left-hand side before it.
+        int operatorIndex = LineFacts.TopLevelAssignment(code);
         if ( operatorIndex <= 0 )
         {
             return new LineKind(LineRole.Other, "", 0, 0);

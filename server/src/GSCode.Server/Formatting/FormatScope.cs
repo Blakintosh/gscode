@@ -109,41 +109,16 @@ public static class FormatScope
 
         string indent = LineFacts.LeadingWhitespace(lineText);
 
-        // A top-level assignment operator with something before it makes this an assignment.
-        int depth = 0;
-        int firstParen = -1;
-        for ( int i = 0; i < code.Count; i++ )
+        // A top-level assignment operator with something before it makes this an assignment — the
+        // same test the assignment aligner makes, so the scope holds exactly what it would change.
+        if ( LineFacts.TopLevelAssignment(code) > 0 )
         {
-            TokenKind kind = code[i].Kind;
-            switch ( kind )
-            {
-                case TokenKind.OpenParen:
-                case TokenKind.OpenBracket:
-                case TokenKind.OpenBrace:
-                    if ( kind == TokenKind.OpenParen && firstParen < 0 && depth == 0 )
-                    {
-                        firstParen = i;
-                    }
-
-                    depth++;
-                    break;
-                case TokenKind.CloseParen:
-                case TokenKind.CloseBracket:
-                case TokenKind.CloseBrace:
-                    depth--;
-                    break;
-                default:
-                    if ( depth == 0 && i > 0 && TokenFacts.IsAssignmentOperator(kind) )
-                    {
-                        return new LineKind(Role.Assignment, indent, "");
-                    }
-
-                    break;
-            }
+            return new LineKind(Role.Assignment, indent, "");
         }
 
         // Otherwise a statement with a top-level call is grouped by its callee — the text up to the
         // opening parenthesis. Anything else (return, break) is scoped to itself.
+        int firstParen = FirstTopLevelParen(code);
         if ( firstParen > 0 )
         {
             int keyEnd = code[firstParen].Range.Start.Character;
@@ -152,5 +127,30 @@ public static class FormatScope
         }
 
         return new LineKind(Role.Other, "", "");
+    }
+
+    /// <summary>The index of the first '(' outside every bracket, or -1.</summary>
+    private static int FirstTopLevelParen(List<Token> code)
+    {
+        int depth = 0;
+        for ( int i = 0; i < code.Count; i++ )
+        {
+            TokenKind kind = code[i].Kind;
+            if ( kind == TokenKind.OpenParen && depth == 0 )
+            {
+                return i;
+            }
+
+            if ( kind is TokenKind.OpenParen or TokenKind.OpenBracket or TokenKind.OpenBrace )
+            {
+                depth++;
+            }
+            else if ( kind is TokenKind.CloseParen or TokenKind.CloseBracket or TokenKind.CloseBrace )
+            {
+                depth--;
+            }
+        }
+
+        return -1;
     }
 }

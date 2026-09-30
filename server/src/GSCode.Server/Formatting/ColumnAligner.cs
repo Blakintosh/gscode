@@ -54,29 +54,8 @@ public static class ColumnAligner
             }
 
             // Gather a run of the same shape at this indent; comments pass through.
-            string indent = rows[index].Indent;
-            string signature = rows[index].Signature;
-            List<int> group = [];
-            int scan = index;
-            while ( scan < lines.Length )
-            {
-                Row row = rows[scan];
-                if ( row.Role == RowRole.Alignable
-                    && string.Equals(row.Indent, indent, StringComparison.Ordinal)
-                    && string.Equals(row.Signature, signature, StringComparison.Ordinal) )
-                {
-                    group.Add(scan);
-                    scan++;
-                }
-                else if ( row.Role == RowRole.Comment )
-                {
-                    scan++;
-                }
-                else
-                {
-                    break;
-                }
-            }
+            Row first = rows[index];
+            List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(rows[line], first));
 
             int columns = rows[index].Cells.Count;
             if ( group.Count >= 2 && columns > 0 )
@@ -109,10 +88,22 @@ public static class ColumnAligner
                 }
             }
 
-            index = scan;
+            index = group[^1] + 1;
         }
 
         return changed ? string.Join('\n', lines) : formatted;
+    }
+
+    private static LineFacts.RunStep StepOf(Row row, Row first)
+    {
+        if ( row.Role == RowRole.Alignable
+            && string.Equals(row.Indent, first.Indent, StringComparison.Ordinal)
+            && string.Equals(row.Signature, first.Signature, StringComparison.Ordinal) )
+        {
+            return LineFacts.RunStep.Member;
+        }
+
+        return row.Role == RowRole.Comment ? LineFacts.RunStep.Transparent : LineFacts.RunStep.End;
     }
 
     /// <summary>
@@ -255,8 +246,6 @@ public static class ColumnAligner
     {
         return lineText.Substring(token.Range.Start.Character, token.Range.End.Character - token.Range.Start.Character);
     }
-
-
 
     private static bool IsStructural(TokenKind kind)
     {

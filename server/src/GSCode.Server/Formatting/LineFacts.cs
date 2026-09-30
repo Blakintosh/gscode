@@ -54,6 +54,80 @@ internal static class LineFacts
     }
 
     /// <summary>
+    /// The index of the first assignment operator outside every parenthesis, bracket and brace, or
+    /// -1. An operator inside a subscript or an argument list belongs to that expression, not to
+    /// the statement.
+    /// </summary>
+    public static int TopLevelAssignment(List<Token> code)
+    {
+        int depth = 0;
+        for ( int i = 0; i < code.Count; i++ )
+        {
+            TokenKind kind = code[i].Kind;
+            switch ( kind )
+            {
+                case TokenKind.OpenParen:
+                case TokenKind.OpenBracket:
+                case TokenKind.OpenBrace:
+                    depth++;
+                    break;
+                case TokenKind.CloseParen:
+                case TokenKind.CloseBracket:
+                case TokenKind.CloseBrace:
+                    depth--;
+                    break;
+                default:
+                    if ( depth == 0 && TokenFacts.IsAssignmentOperator(kind) )
+                    {
+                        return i;
+                    }
+
+                    break;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>What a line does to a run of lines an aligner is gathering.</summary>
+    public enum RunStep
+    {
+        /// <summary>The line belongs to the run.</summary>
+        Member,
+
+        /// <summary>The line neither joins the run nor ends it: a comment on its own line.</summary>
+        Transparent,
+
+        /// <summary>The line ends the run.</summary>
+        End,
+    }
+
+    /// <summary>
+    /// The lines of the run starting at <paramref name="start"/>, which the caller has already
+    /// found to be a member. Transparent lines are stepped over but not returned, so the run ends
+    /// at its last member even when comments follow it.
+    /// </summary>
+    public static List<int> GatherRun(int start, int lineCount, Func<int, RunStep> step)
+    {
+        List<int> members = [start];
+        for ( int line = start + 1; line < lineCount; line++ )
+        {
+            RunStep answer = step(line);
+            if ( answer == RunStep.End )
+            {
+                break;
+            }
+
+            if ( answer == RunStep.Member )
+            {
+                members.Add(line);
+            }
+        }
+
+        return members;
+    }
+
+    /// <summary>
     /// The significant tokens of each line, indexed by line number. Every line gets a list, empty
     /// or not, so callers can index straight into it without a bounds check.
     /// </summary>

@@ -57,14 +57,15 @@ public static class GscFormatter
             return [];
         }
 
-        formatted = RestoreProtectedLines(result, original, formatted, out bool lineCountMatched);
+        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
+        formatted = RestoreProtectedLines(directives, original, formatted, out bool lineCountMatched);
 
         ImmutableArray<FormatEdit> edits = DiffByLines(result.Text, original, formatted);
 
         // The line-for-line restore is exact when the formatter kept the line count, which is the
         // ordinary case for a whitespace-only pass. When it did not — blank-line capping removes
         // lines — the lines no longer correspond and the coarser filter takes over.
-        return lineCountMatched ? edits : DropEditsInProtectedRegions(result, edits);
+        return lineCountMatched ? edits : DropEditsInProtectedRegions(directives, edits);
     }
 
     /// <summary>
@@ -78,11 +79,10 @@ public static class GscFormatter
     /// the region ends.
     /// </summary>
     private static string RestoreProtectedLines(
-        ParseResult result, string original, string formatted, out bool lineCountMatched)
+        ImmutableArray<PragmaDirective> directives, string original, string formatted, out bool lineCountMatched)
     {
         lineCountMatched = false;
 
-        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
         if ( directives.IsEmpty )
         {
             return formatted;
@@ -122,9 +122,8 @@ public static class GscFormatter
     /// what was asked for.
     /// </summary>
     private static ImmutableArray<FormatEdit> DropEditsInProtectedRegions(
-        ParseResult result, ImmutableArray<FormatEdit> edits)
+        ImmutableArray<PragmaDirective> directives, ImmutableArray<FormatEdit> edits)
     {
-        ImmutableArray<PragmaDirective> directives = PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
         if ( directives.IsEmpty || edits.IsEmpty )
         {
             return edits;

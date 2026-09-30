@@ -291,14 +291,20 @@ public static partial class GscFormatter
     }
 
     /// <summary>
-    /// Adds an edit after the ones before it. A pure insertion that meets another edit at the same
-    /// point has no order an editor must honour between the two, so it joins that edit instead of
-    /// standing beside it.
+    /// Adds an edit after the ones before it, joining it to the previous edit when the two touch —
+    /// so no two edits handed to the editor ever share an end and a start.
     /// </summary>
+    /// <remarks>
+    /// VS Code joins a formatter's edits that touch before applying them, and whole-line edits on
+    /// adjacent lines joined back into one replacement spanning thousands of lines. The one shape
+    /// still able to touch is a run of added or split lines followed by an edit at column 0 of the
+    /// next line; joining it here costs a few lines, and leaves nothing for the editor to join.
+    /// The caret's own position across a large format is restored by the client — see
+    /// client/src/caretRestore.ts for why VS Code cannot keep it there by itself.
+    /// </remarks>
     private static void AppendEdit(ImmutableArray<FormatEdit>.Builder edits, FormatEdit edit)
     {
-        if ( edits.Count > 0 && edits[^1].Range.End == edit.Range.Start
-            && (edits[^1].Range.Start == edits[^1].Range.End || edit.Range.Start == edit.Range.End) )
+        if ( edits.Count > 0 && edits[^1].Range.End == edit.Range.Start )
         {
             FormatEdit previous = edits[^1];
             edits[^1] = new FormatEdit(new TextRange(previous.Range.Start, edit.Range.End), previous.NewText + edit.NewText);

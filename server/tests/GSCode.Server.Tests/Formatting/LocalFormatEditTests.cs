@@ -34,7 +34,7 @@ public class LocalFormatEditTests
         {
             source.Append("function f").Append(index).Append("( v )\n{\n");
             source.Append("a = 1;\nb = 2;\n");
-            source.Append("switch ( v )\n{\ncase 0: c();\nbreak;\n}\n");
+            source.Append("switch ( v )\n{\ncase 0: c();\n  break;\n}\n");
             source.Append("}\n");
         }
 
@@ -95,6 +95,24 @@ public class LocalFormatEditTests
         Assert.All(joined, edit => Assert.True(
             edit.Range.End.Line - edit.Range.Start.Line <= 3,
             $"joined edit spans lines {edit.Range.Start.Line}-{edit.Range.End.Line}"));
+    }
+
+    [Fact]
+    public void NoTwoEditsTouch()
+    {
+        // With a thousand edits or more, VS Code's buffer collapses every edit into one replacement
+        // as soon as any two touch, and the caret goes to its end. So none may.
+        ParseResult result = TestParse.Analyze(LargeUnformattedFile(1000));
+
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
+
+        Assert.True(edits.Length > 1000, $"only {edits.Length} edits; the case needs a thousand or more");
+        for ( int index = 1; index < edits.Length; index++ )
+        {
+            Assert.True(
+                edits[index - 1].Range.End != edits[index].Range.Start,
+                $"edits {index - 1} and {index} touch at line {edits[index].Range.Start.Line}");
+        }
     }
 
     [Fact]

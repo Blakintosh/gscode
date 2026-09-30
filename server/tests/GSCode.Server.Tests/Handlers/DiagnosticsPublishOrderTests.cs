@@ -4,7 +4,6 @@ using GSCode.Core.Paths;
 using GSCode.Core.Text;
 using GSCode.Server.Handlers;
 using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using Diagnostic = GSCode.Core.Diagnostics.Diagnostic;
 using DiagnosticSeverity = GSCode.Core.Diagnostics.DiagnosticSeverity;
@@ -24,16 +23,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DiagnosticsPublishOrderTests
 {
-    private sealed class RecordingSink : IDiagnosticsSink
-    {
-        public List<PublishDiagnosticsParams> Sent { get; } = [];
-
-        public void Send(PublishDiagnosticsParams parameters)
-        {
-            Sent.Add(parameters);
-        }
-    }
-
     private static readonly string s_path = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_menus.gsc");
 
     private static ImmutableArray<Diagnostic> Diagnostics(int count)
@@ -57,7 +46,7 @@ public class DiagnosticsPublishOrderTests
     {
         // The reported shape, from the user's own log: v53 and v54 analysed back to back, then a
         // slower run stamped v38 finishing last and putting six problems back where five stood.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 53, Diagnostics(6));
@@ -71,7 +60,7 @@ public class DiagnosticsPublishOrderTests
     [Fact]
     public void AnOlderVersionArrivingLateIsDropped()
     {
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 53, Diagnostics(6));
@@ -87,7 +76,7 @@ public class DiagnosticsPublishOrderTests
         // Equal must PASS, not be treated as stale. The dependent refresher republishes the same
         // version with a RICHER set once a neighbour's exports move, and that is the whole reason
         // it exists — muting it would reintroduce the bug it was written to fix.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 54, Diagnostics(5));
@@ -102,7 +91,7 @@ public class DiagnosticsPublishOrderTests
     {
         // A reopened document starts again at version 0 or 1. Remembering that v68 was once on
         // screen would silence it for the rest of the session.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 68, Diagnostics(6));
@@ -117,7 +106,7 @@ public class DiagnosticsPublishOrderTests
     public void AWorkspacePublishWithNoVersionAlwaysGoesThrough()
     {
         // The workspace publisher speaks for CLOSED files, where a document version means nothing.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: null, Diagnostics(3));
@@ -130,7 +119,7 @@ public class DiagnosticsPublishOrderTests
     public void ANullVersionDoesNotMuteALaterRealOne()
     {
         // Nor is it muted BY one: a versionless set must neither join the ordering nor block it.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 9, Diagnostics(3));
@@ -144,7 +133,7 @@ public class DiagnosticsPublishOrderTests
     [Fact]
     public void TwoDocumentsDoNotShareALedger()
     {
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
         string other = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_utility.gsc");
 
@@ -162,7 +151,7 @@ public class DiagnosticsPublishOrderTests
         // didClose landing between them runs Clear and Forget FIRST, and this publish then puts
         // diagnostics back on a closed file under the normalized URI, where nothing takes them away
         // again — the file shows problems for the rest of the session.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Remember(s_path, DocumentUri.FromFileSystemPath(s_path));
@@ -182,7 +171,7 @@ public class DiagnosticsPublishOrderTests
     {
         // The control. A close is remembered only until the document comes back, or reopening a
         // file would leave it permanently silent.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Remember(s_path, DocumentUri.FromFileSystemPath(s_path));
@@ -202,7 +191,7 @@ public class DiagnosticsPublishOrderTests
     {
         // Only a CLOSE is evidence that a versioned publish is stale. Silence is not: a path the
         // publisher has never seen is not a closed one.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         publisher.Publish(s_path, version: 1, Diagnostics(1));

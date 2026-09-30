@@ -4,7 +4,6 @@ using GSCode.Core.Paths;
 using GSCode.Core.Text;
 using GSCode.Server.Handlers;
 using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using Diagnostic = GSCode.Core.Diagnostics.Diagnostic;
 using DiagnosticSeverity = GSCode.Core.Diagnostics.DiagnosticSeverity;
@@ -23,17 +22,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DiagnosticsUriTests
 {
-    /// <summary>Records what reached the client, so a publish can be asserted on at all.</summary>
-    private sealed class RecordingSink : IDiagnosticsSink
-    {
-        public List<PublishDiagnosticsParams> Sent { get; } = [];
-
-        public void Send(PublishDiagnosticsParams parameters)
-        {
-            Sent.Add(parameters);
-        }
-    }
-
     private static ImmutableArray<Diagnostic> OneDiagnostic()
     {
         return
@@ -51,7 +39,7 @@ public class DiagnosticsUriTests
     {
         // The reported shape: the edit path and the fan-out path disagreed about the spelling,
         // and close only took back one of the two.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         DocumentUri clientUri = DocumentUri.From(@"G:\Games\Black Ops\raw\maps\_Menus.gsc");
@@ -68,7 +56,7 @@ public class DiagnosticsUriTests
     [Fact]
     public void TheClientsCaseIsPreserved()
     {
-        DiagnosticsPublisher publisher = new(new RecordingSink());
+        DiagnosticsPublisher publisher = new(new RecordingDiagnosticsSink());
 
         DocumentUri clientUri = DocumentUri.From(@"G:\Games\Black Ops\raw\maps\_Menus.gsc");
         string path = PathUtil.NormalizeAbsolute(clientUri.GetFileSystemPath());
@@ -95,7 +83,7 @@ public class DiagnosticsUriTests
     {
         // The workspace publisher's case: its files are closed by definition, so the on-disk
         // spelling is the only one anybody knows.
-        DiagnosticsPublisher publisher = new(new RecordingSink());
+        DiagnosticsPublisher publisher = new(new RecordingDiagnosticsSink());
         string path = PathUtil.NormalizeAbsolute(@"G:\Games\Black Ops\raw\maps\_utility.gsc");
 
         Assert.Equal(DocumentUri.FromFileSystemPath(path), publisher.UriFor(path));
@@ -104,7 +92,7 @@ public class DiagnosticsUriTests
     [Fact]
     public void ClosingForgetsTheUri()
     {
-        DiagnosticsPublisher publisher = new(new RecordingSink());
+        DiagnosticsPublisher publisher = new(new RecordingDiagnosticsSink());
 
         DocumentUri clientUri = DocumentUri.From(@"G:\Games\Black Ops\raw\maps\_Menus.gsc");
         string path = PathUtil.NormalizeAbsolute(clientUri.GetFileSystemPath());
@@ -120,7 +108,7 @@ public class DiagnosticsUriTests
     {
         // An untitled buffer's path is synthetic — a name resolved against the process directory.
         // Publishing to a file: URI built from that names a file nothing has open.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         DiagnosticsPublisher publisher = new(sink);
 
         DocumentUri clientUri = DocumentUri.Parse("untitled:Untitled-1.gsc");

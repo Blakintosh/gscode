@@ -25,21 +25,6 @@ public sealed class DependentRefreshStampTests
     /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>
     private static readonly TimeSpan s_patience = TimeSpan.FromSeconds(30);
 
-    private sealed class RecordingSink : IDiagnosticsSink
-    {
-        private readonly object _gate = new();
-
-        public List<PublishDiagnosticsParams> Sent { get; } = [];
-
-        public void Send(PublishDiagnosticsParams parameters)
-        {
-            lock ( _gate )
-            {
-                Sent.Add(parameters);
-            }
-        }
-    }
-
     /// <summary>
     /// A document store whose SECOND analysis parks inside the insert-provider factory — the one
     /// place a test can hold an analysis open while an edit lands on the same document. The first
@@ -66,7 +51,7 @@ public sealed class DependentRefreshStampTests
     }
 
     private static DependentDiagnosticsRefresher RefresherOver(
-        HandlerWorkspace workspace, DocumentStore documents, RecordingSink sink)
+        HandlerWorkspace workspace, DocumentStore documents, RecordingDiagnosticsSink sink)
     {
         DocumentLinter linter = new(
             workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
@@ -84,7 +69,7 @@ public sealed class DependentRefreshStampTests
     [Fact]
     public async Task RefreshOneStampsTheWinningSnapshotsVersion_NotTheLiveOne()
     {
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         using ManualResetEventSlim entered = new();
         using ManualResetEventSlim release = new();
 
@@ -116,7 +101,7 @@ public sealed class DependentRefreshStampTests
         // One token source served every origin, so scheduling B cancelled A's pass outright and
         // A's dependents were never refreshed — the callers of the file edited first kept
         // diagnostics computed against exports it no longer has.
-        RecordingSink sink = new();
+        RecordingDiagnosticsSink sink = new();
         using ManualResetEventSlim entered = new();
         using ManualResetEventSlim release = new();
         release.Set();

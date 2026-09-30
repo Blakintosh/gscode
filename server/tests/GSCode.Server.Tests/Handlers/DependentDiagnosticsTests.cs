@@ -1,6 +1,5 @@
 using GSCode.Core.Paths;
 using GSCode.Server.Handlers;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
@@ -133,13 +132,6 @@ public class DependentDiagnosticsTests
         Assert.DoesNotContain(PathUtil.NormalizeAbsolute(LibPath), dependents);
     }
 
-    private sealed class DiscardingSink : IDiagnosticsSink
-    {
-        public void Send(PublishDiagnosticsParams parameters)
-        {
-        }
-    }
-
     private sealed class CountingCodeLensSink : ICodeLensRefreshSink
     {
         public int Requests { get; private set; }
@@ -165,7 +157,7 @@ public class DependentDiagnosticsTests
         DocumentLinter linter = new(
             workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
 
-        DiagnosticsPublisher publisher = new(new DiscardingSink());
+        DiagnosticsPublisher publisher = new(DiscardingDiagnosticsSink.Instance);
         WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(
             workspace.Database, workspace.Documents, publisher, new ServerSettings());
         WorkspaceLintSweep sweep = new(workspace.Database, workspace.Documents, workspace.Indexer, linter);

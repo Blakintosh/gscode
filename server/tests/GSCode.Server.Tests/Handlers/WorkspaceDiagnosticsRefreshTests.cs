@@ -19,16 +19,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class WorkspaceDiagnosticsRefreshTests
 {
-    private sealed class CountingSink : IDiagnosticsSink
-    {
-        public List<PublishDiagnosticsParams> Sent { get; } = [];
-
-        public void Send(PublishDiagnosticsParams parameters)
-        {
-            Sent.Add(parameters);
-        }
-    }
-
     private static readonly TextRange s_someRange = TextRange.FromCoordinates(0, 0, 0, 1);
 
     private static ScriptRecord WithProblem(string path, string message)
@@ -43,7 +33,7 @@ public class WorkspaceDiagnosticsRefreshTests
     private sealed class Fixture
     {
         public ScriptDatabase Database { get; } = new();
-        public CountingSink Sink { get; } = new();
+        public RecordingDiagnosticsSink Sink { get; } = new();
         public WorkspaceDiagnosticsPublisher Publisher { get; }
 
         public Fixture()
@@ -59,7 +49,7 @@ public class WorkspaceDiagnosticsRefreshTests
         Fixture fixture = new();
         ScriptDatabase database = fixture.Database;
         WorkspaceDiagnosticsPublisher publisher = fixture.Publisher;
-        CountingSink sink = fixture.Sink;
+        RecordingDiagnosticsSink sink = fixture.Sink;
         database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "a"));
         database.CommitRecord(WithProblem(@"c:\ws\b.gsc", "b"));
 
@@ -77,7 +67,7 @@ public class WorkspaceDiagnosticsRefreshTests
         Fixture fixture = new();
         ScriptDatabase database = fixture.Database;
         WorkspaceDiagnosticsPublisher publisher = fixture.Publisher;
-        CountingSink sink = fixture.Sink;
+        RecordingDiagnosticsSink sink = fixture.Sink;
         database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "a"));
         database.CommitRecord(WithProblem(@"c:\ws\b.gsc", "b"));
         publisher.Refresh();
@@ -98,7 +88,7 @@ public class WorkspaceDiagnosticsRefreshTests
         Fixture fixture = new();
         ScriptDatabase database = fixture.Database;
         WorkspaceDiagnosticsPublisher publisher = fixture.Publisher;
-        CountingSink sink = fixture.Sink;
+        RecordingDiagnosticsSink sink = fixture.Sink;
         database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "a"));
         publisher.Refresh();
         sink.Sent.Clear();

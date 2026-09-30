@@ -8,9 +8,9 @@ using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
+using GSCode.Server.Tests.Handlers;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Documents;
-using PublishDiagnosticsParams = OmniSharp.Extensions.LanguageServer.Protocol.Models.PublishDiagnosticsParams;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -239,7 +239,7 @@ public partial class ScalePerfTests
     {
         DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
         WorkspaceDiagnosticsPublisher publisher = new(
-            database, noOpenDocuments, new DiagnosticsPublisher(new DiscardingSink()), new ServerSettings { DiagnosticsScope = "all" });
+            database, noOpenDocuments, new DiagnosticsPublisher(DiscardingDiagnosticsSink.Instance), new ServerSettings { DiagnosticsScope = "all" });
 
         publisher.Refresh();
         for ( int run = 0; run < 10; run++ )
@@ -247,13 +247,6 @@ public partial class ScalePerfTests
             long started = Stopwatch.GetTimestamp();
             publisher.Refresh();
             lookups.WorkspaceDiagnosticsRefresh.Times.Add(Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        }
-    }
-
-    private sealed class DiscardingSink : IDiagnosticsSink
-    {
-        public void Send(PublishDiagnosticsParams parameters)
-        {
         }
     }
 

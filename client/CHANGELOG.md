@@ -83,6 +83,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Renaming or moving a folder updates the `#using` and `#insert` paths that name the scripts inside
   it, as renaming a single script already did. Moving a `.gsc` and its `.csc` together no longer
   loses the update either.
+- Typing `;` in front of another `;` no longer deletes one inside a string or a comment, and undo
+  and redo no longer trigger that clean-up.
 
 ## 2.0.2
 

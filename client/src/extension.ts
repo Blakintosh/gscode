@@ -280,6 +280,12 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
                 return;
             }
 
+            // Undo and redo replay edits rather than type them. Redoing a typed ';' that sat
+            // before another one would otherwise delete a semicolon the user never typed again.
+            if (event.reason !== undefined) {
+                return;
+            }
+
             const change = event.contentChanges[0];
             // A single typed ';' — not a paste, not a replacement.
             if (change.text !== ";" || !change.range.isEmpty) {
@@ -295,6 +301,11 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
             // `for ( ;; )` is the language, not a mistake.
             const line = event.document.lineAt(after.line).text;
             if (isInsideForHeader(line, after.character)) {
+                return;
+            }
+
+            // Nor is ";;" inside a string or a comment, which is text rather than a statement end.
+            if (isInsideStringOrComment(line, change.range.start.character)) {
                 return;
             }
 
@@ -317,6 +328,44 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
             }
         }),
     );
+}
+
+/**
+ * Whether `character` sits inside a string or a comment, judged from this line alone.
+ *
+ * GSC strings cannot span lines, so the line is enough for them. A block comment can, and one
+ * opened on an earlier line is missed; that costs one surviving duplicate semicolon inside a
+ * comment, where re-scanning the document on every ';' typed would cost far more.
+ */
+function isInsideStringOrComment(line: string, character: number): boolean {
+    let inString = false;
+    let inBlockComment = false;
+
+    for (let index = 0; index < character; index++) {
+        const c = line[index];
+        if (inBlockComment) {
+            if (c === "*" && line[index + 1] === "/") {
+                inBlockComment = false;
+                index++;
+            }
+        } else if (inString) {
+            if (c === "\\") {
+                // The escaped character cannot close the string.
+                index++;
+            } else if (c === '"') {
+                inString = false;
+            }
+        } else if (c === '"') {
+            inString = true;
+        } else if (c === "/" && line[index + 1] === "/") {
+            return true;
+        } else if (c === "/" && line[index + 1] === "*") {
+            inBlockComment = true;
+            index++;
+        }
+    }
+
+    return inString || inBlockComment;
 }
 
 /** Whether `character` sits inside a `for ( … )` header on this line. */

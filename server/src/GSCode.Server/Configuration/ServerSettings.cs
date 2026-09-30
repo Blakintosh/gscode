@@ -45,6 +45,7 @@ public sealed class ServerSettings
         public bool FormatAlignConsecutive { get; init; } = true;
         public bool FormatIndentCaseLabels { get; init; } = true;
         public bool FormatIndentDevBlocks { get; init; }
+        public bool FormatFixCasing { get; init; } = true;
         public string Game { get; init; } = "bo3";
     }
 
@@ -244,6 +245,13 @@ public sealed class ServerSettings
         set { _current = _current with { FormatIndentDevBlocks = value }; }
     }
 
+    /// <summary>Whether formatting lowercases keywords and gives calls their function's spelling.</summary>
+    public bool FormatFixCasing
+    {
+        get { return _current.FormatFixCasing; }
+        set { _current = _current with { FormatFixCasing = value }; }
+    }
+
     /// <summary>The game whose dialect the workspace targets, by short name (e.g. "bo3", "cod4").</summary>
     public string Game
     {
@@ -401,6 +409,9 @@ public sealed class ServerSettings
             FormatIndentDevBlocks = section.Value<bool?>("format.indentDevBlocks")
                 ?? section["format"]?.Value<bool?>("indentDevBlocks")
                 ?? current.FormatIndentDevBlocks,
+            FormatFixCasing = section.Value<bool?>("format.fixCasing")
+                ?? section["format"]?.Value<bool?>("fixCasing")
+                ?? current.FormatFixCasing,
         };
     }
 }

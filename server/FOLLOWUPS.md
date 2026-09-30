@@ -442,6 +442,31 @@ first token is a macro invocation, or ask the preprocessed stream whether the ex
 `;` or `}`. The first is local and safe; the second is exact but gives the formatter a
 dependency on the preprocessor it does not have today.
 
+### Should `fixCasing` reach variables, fields and everything else?
+
+`gscode.format.fixCasing` covers keywords and calls, because both have one authoritative spelling
+— the keyword table, and a function's declaration or the builtin library. Extending it to every
+identifier would make a file read consistently throughout, but each kind needs its own answer to
+"what is the right spelling", and some have none:
+
+- **Locals and parameters.** Case-insensitive, scoped to one function. A parameter's declaration
+  is an obvious source; a local has no declaration, only its first assignment, which is a weaker
+  claim (the first write may be the typo). Needs the function's scope analysis, not a token pass.
+- **Fields** (`self.health`, `level.wasp_enabled`). Case-insensitive, but they have no declaration
+  at all: every file that writes one is equally authoritative. Engine fields do have a spelling in
+  the object-field data (`origin`, `angles`), which would cover the common ones; script-defined
+  fields would need a majority rule across the workspace, and the reference index does not keep
+  spellings today.
+- **Namespaces and class names.** A namespace has its `#namespace` directive and a class its
+  declaration, so both have a source; `util::` against `Util::` is common in mods.
+- **Macros stay excluded whatever else is added.** They are the case-sensitive exception: changing
+  a macro reference's case changes whether it expands. Anything wider must keep the current guard.
+- **Strings stay excluded.** Notify names, struct keys and asset names are compared by the engine
+  as written.
+
+Worth measuring first: how often the stock scripts and a real mod spell the same local or field two
+ways. If that is rare, the churn of a wider fix may not pay for itself.
+
 ---
 
 ## Known limitations from the triage pass

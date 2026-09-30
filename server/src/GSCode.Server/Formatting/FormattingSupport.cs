@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Parser;
 using GSCode.Server.Mapping;
 using GSCode.Server.Configuration;
+using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -36,14 +37,23 @@ public sealed class FormattingSupport
     private readonly ResolverHolder _resolver;
     private readonly StockScripts _stockScripts;
     private readonly ServerSettings _settings;
+    private readonly NavigationSupport _navigation;
+    private readonly BuiltinApiSet _builtins;
 
     public FormattingSupport(
-        DocumentStore documents, ResolverHolder resolver, StockScripts stockScripts, ServerSettings settings)
+        DocumentStore documents,
+        ResolverHolder resolver,
+        StockScripts stockScripts,
+        ServerSettings settings,
+        NavigationSupport navigation,
+        BuiltinApiSet builtins)
     {
         _documents = documents;
         _resolver = resolver;
         _stockScripts = stockScripts;
         _settings = settings;
+        _navigation = navigation;
+        _builtins = builtins;
     }
 
     /// <summary>
@@ -95,7 +105,15 @@ public sealed class FormattingSupport
 
         ParseResult analysis = _documents.AnalyzeIfStale(document, cancellationToken);
 
-        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options));
+        // Fixing a call's casing asks the workspace what it resolves to, which the formatter
+        // itself cannot see. Without a target the keywords are still fixed; the calls are not.
+        Func<string?, string, string?>? canonicalFunction = null;
+        if ( options.FixCasing && _navigation.ResolveFresh(uri, cancellationToken) is NavigationTarget target )
+        {
+            canonicalFunction = new CallCasing(target, _builtins).SpellingFor;
+        }
+
+        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options, canonicalFunction));
     }
 
     private bool IsStockScript(string path)

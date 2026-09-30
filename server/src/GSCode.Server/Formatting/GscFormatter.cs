@@ -22,7 +22,7 @@ namespace GSCode.Server.Formatting;
 /// with lex/parse errors, and it re-lexes its own output and returns the original unchanged
 /// if the non-trivia token stream is not byte-for-byte identical to the input's.
 /// </summary>
-public static class GscFormatter
+public static partial class GscFormatter
 {
 
     /// <summary>A single text edit: the source range to replace and its replacement text.</summary>
@@ -43,9 +43,15 @@ public static class GscFormatter
     /// overlap — a matched (unchanged) line always sits between two hunks — so they satisfy the
     /// LSP's requirements for a multi-edit response.
     /// </summary>
-    public static ImmutableArray<FormatEdit> FormatMinimalEdits(ParseResult result, FormatOptions? options = null)
+    /// <param name="canonicalFunction">
+    /// The spelling a call should have, for <see cref="FormatOptions.FixCasing"/>: given a callee's
+    /// qualifier (or null) and name, the declaration's or builtin's spelling, or null to leave it.
+    /// The formatter cannot see the workspace, so the caller answers. Null skips calls entirely.
+    /// </param>
+    public static ImmutableArray<FormatEdit> FormatMinimalEdits(
+        ParseResult result, FormatOptions? options = null, Func<string?, string, string?>? canonicalFunction = null)
     {
-        string? formatted = Format(result, options);
+        string? formatted = Format(result, options, canonicalFunction);
         if ( formatted is null )
         {
             return [];
@@ -310,7 +316,8 @@ public static class GscFormatter
     /// errors) or would not be safe (the token stream would change). A null result means
     /// "make no edits".
     /// </summary>
-    public static string? Format(ParseResult result, FormatOptions? requested = null)
+    public static string? Format(
+        ParseResult result, FormatOptions? requested = null, Func<string?, string, string?>? canonicalFunction = null)
     {
         // Nullable rather than a `default` struct sentinel: default(FormatOptions) is all-zero,
         // which reads as a perfectly valid "no indent, no padding" configuration and silently
@@ -329,10 +336,20 @@ public static class GscFormatter
             return null;
         }
 
-        string formatted = Reflow(significant, result.Text, options);
+        // Spacing that depends on more than the two tokens either side of the gap.
+        TokenRoles roles = TokenRoles.Of(significant);
 
-        // Corruption guard: the reflow must preserve the exact non-trivia token stream.
-        if ( !TokenStreamMatches(significant, result.Text, formatted) )
+        // The spelling each token is written with: null keeps the source's. Only casing ever
+        // differs, and only when FixCasing asks for it.
+        string?[] spellings = options.FixCasing
+            ? CasingFixes(significant, result, roles, canonicalFunction)
+            : new string?[significant.Count];
+
+        string formatted = Reflow(significant, result.Text, options, roles, spellings);
+
+        // Corruption guard: the reflow must preserve the exact non-trivia token stream, with the
+        // casing fixes as the only permitted difference.
+        if ( !TokenStreamMatches(significant, result.Text, formatted, spellings) )
         {
             return null;
         }
@@ -416,7 +433,8 @@ public static class GscFormatter
         return significant;
     }
 
-    private static string Reflow(List<SignificantToken> significant, SourceText text, FormatOptions options)
+    private static string Reflow(
+        List<SignificantToken> significant, SourceText text, FormatOptions options, TokenRoles roles, string?[] spellings)
     {
         StringBuilder output = new();
         int depth = 0;
@@ -455,9 +473,6 @@ public static class GscFormatter
         // parenthesis in GSC, so an unbalanced pair in a disabled #if branch cannot push the
         // whole rest of the file one level right.
         int openGroups = 0;
-
-        // Spacing that depends on more than the two tokens either side of the gap.
-        TokenRoles roles = TokenRoles.Of(significant);
 
         for ( int index = 0; index < significant.Count; index++ )
         {
@@ -549,7 +564,7 @@ public static class GscFormatter
 
             if ( index == 0 )
             {
-                output.Append(token.GetText(text));
+                AppendToken(output, token, text, spellings[index]);
             }
             else
             {
@@ -590,7 +605,7 @@ public static class GscFormatter
                     }
                 }
 
-                output.Append(token.GetText(text));
+                AppendToken(output, token, text, spellings[index]);
             }
 
             // Openers indent everything that follows -- again, dev blocks only by setting.
@@ -688,6 +703,18 @@ public static class GscFormatter
 
         output.Append('\n');
         return output.ToString();
+    }
+
+    /// <summary>Writes a token with its casing fix, when it has one.</summary>
+    private static void AppendToken(StringBuilder output, Token token, SourceText text, string? spelling)
+    {
+        if ( spelling is not null )
+        {
+            output.Append(spelling);
+            return;
+        }
+
+        output.Append(token.GetText(text));
     }
 
     /// <summary>
@@ -1481,14 +1508,16 @@ public static class GscFormatter
     {
         SourceText beforeText = SourceText.From(before);
         List<SignificantToken> beforeTokens = CollectSignificant(Lexer.Lex(beforeText).Tokens, beforeText);
-        return TokenStreamMatches(beforeTokens, beforeText, after);
+        return TokenStreamMatches(beforeTokens, beforeText, after, new string?[beforeTokens.Count]);
     }
 
     /// <summary>
     /// Verifies the formatted output lexes to the same non-trivia token stream (kinds and
     /// exact text) as the input. This is the corruption guard — any mismatch aborts the edit.
+    /// A token with a spelling in <paramref name="spellings"/> must come out with that spelling.
     /// </summary>
-    private static bool TokenStreamMatches(List<SignificantToken> input, SourceText inputText, string formatted)
+    private static bool TokenStreamMatches(
+        List<SignificantToken> input, SourceText inputText, string formatted, string?[] spellings)
     {
         SourceText formattedText = SourceText.From(formatted);
         List<SignificantToken> output = CollectSignificant(Lexer.Lex(formattedText).Tokens, formattedText);
@@ -1507,7 +1536,10 @@ public static class GscFormatter
                 return false;
             }
 
-            if ( !before.GetText(inputText).SequenceEqual(after.GetText(formattedText)) )
+            ReadOnlySpan<char> expected = spellings[index] is string spelling
+                ? spelling.AsSpan()
+                : before.GetText(inputText);
+            if ( !expected.SequenceEqual(after.GetText(formattedText)) )
             {
                 return false;
             }

@@ -65,6 +65,12 @@ namespace GSCode.Server.Formatting;
 /// compile-time switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
 /// a real split, so the other answer is a setting rather than a bug.
 /// </param>
+/// <param name="FixCasing">
+/// Whether keywords are lowercased and calls take their function's declared or documented
+/// spelling. The one option that changes token TEXT rather than whitespace, so it is off here —
+/// the default the corpus gates measure — and on in the client, the split
+/// <see cref="AlignConsecutive"/> uses. See <c>GscFormatter.Casing.cs</c> for what it never touches.
+/// </param>
 public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
@@ -76,7 +82,8 @@ public readonly record struct FormatOptions(
     bool SortDirectives = true,
     bool AlignConsecutive = false,
     bool IndentCaseLabels = true,
-    bool IndentDevBlocks = false)
+    bool IndentDevBlocks = false,
+    bool FixCasing = false)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -90,7 +97,7 @@ public readonly record struct FormatOptions(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false,
-        IndentCaseLabels: true, IndentDevBlocks: false);
+        IndentCaseLabels: true, IndentDevBlocks: false, FixCasing: false);
 
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
@@ -115,6 +122,7 @@ public readonly record struct FormatOptions(
             SortDirectives: settings.FormatSortDirectives,
             AlignConsecutive: settings.FormatAlignConsecutive,
             IndentCaseLabels: settings.FormatIndentCaseLabels,
-            IndentDevBlocks: settings.FormatIndentDevBlocks);
+            IndentDevBlocks: settings.FormatIndentDevBlocks,
+            FixCasing: settings.FormatFixCasing);
     }
 }

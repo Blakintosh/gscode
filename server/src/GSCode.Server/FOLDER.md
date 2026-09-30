@@ -780,7 +780,14 @@ that chose it. These are the pieces that implement it:
   `Prepare` resolves the open document and analyses it FRESH before diffing (a stale read here
   writes a corrupting edit rather than merely showing something wrong), `ToLspEdits` projects the
   formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its
-  feature is scoped to.
+  feature is scoped to. With `fixCasing` on it also resolves the document through
+  `NavigationSupport` and hands the formatter a `CallCasing` lookup.
+- `GscFormatter.Casing.cs` — the `fixCasing` pass: which tokens are keywords or callees, and the
+  macro guard (macro names are case-sensitive, so a macro is never recased and no fix may spell
+  one). Its fixes are the only difference the token gate permits.
+- `CallCasing` — the spelling a call should have: this file's or the index's declaration, else the
+  builtin's documented name, else nothing. A name that is both a script function and a builtin
+  answers nothing, because the spelling picks which one runs.
 
 ## Handlers/ — the remainder
 

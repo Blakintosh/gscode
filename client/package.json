@@ -422,6 +422,12 @@
 						"default": false,
 						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a compile-time switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
 						"scope": "window"
+					},
+					"gscode.format.fixCasing": {
+						"type": "boolean",
+						"default": true,
+						"description": "Fix the casing of keywords and calls while formatting: keywords are lowercased ('isDefined' becomes 'isdefined') and a call takes the spelling of the function it resolves to ('FOo()' becomes 'foo()' when the script declares 'function foo()', 'getplayers()' becomes 'GetPlayers()'). Macro names are case-sensitive, so they are never recased, and a call whose name is both a script function and a builtin keeps its spelling, because the spelling picks which one runs.",
+						"scope": "window"
 					}
 				}
 			},

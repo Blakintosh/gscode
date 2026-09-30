@@ -34,6 +34,7 @@ export interface GscodeSettings {
     "format.alignConsecutive": boolean;
     "format.indentCaseLabels": boolean;
     "format.indentDevBlocks": boolean;
+    "format.fixCasing": boolean;
     "game": string;
 }
 
@@ -67,6 +68,7 @@ export function readSettings(): GscodeSettings {
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
         "format.indentCaseLabels": config.get<boolean>("format.indentCaseLabels", true),
         "format.indentDevBlocks": config.get<boolean>("format.indentDevBlocks", false),
+        "format.fixCasing": config.get<boolean>("format.fixCasing", true),
         "game": config.get<string>("game", "bo3"),
     };
 }

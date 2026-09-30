@@ -357,13 +357,38 @@ function flop()
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; on-type is clipped to the group around the cursor, range to the selection |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
+| `gscode.format.fixCasing` | `true` | Lowercase keywords and give calls their function's spelling (§10) |
 
 ## 9. What the formatter will not do
 
 - Reflow or wrap long lines. Stock has no width discipline and breaking a line changes how it reads.
 - Reorder anything except the leading directive block, and that only under §5's conditions.
-- Change identifier or keyword case. GSC is case-insensitive, so `Break` and `break` are the same
-  token — but casing is the author's, and rewriting it would churn diffs for no semantic gain.
+- Change the case of anything but keywords and calls (§10). Variables, fields, namespaces and
+  class names keep the author's spelling.
 - Touch the contents of strings, comments or `/@ @/` doc blocks.
-- Emit output whose token stream differs from the input's. That gate is what makes the formatter
-  safe to run on a 4,000-line stock file without reading the diff.
+- Emit output whose token stream differs from the input's, except by the casing fixes of §10. That
+  gate is what makes the formatter safe to run on a 4,000-line stock file without reading the diff.
+
+## 10. Casing
+
+`gscode.format.fixCasing` (on) is the one setting that changes token text rather than whitespace.
+GSC resolves keywords and function names case-insensitively, so it changes how code reads, not
+what runs:
+
+- Keywords are lowercased: `IsDefined( x )` becomes `isdefined( x )`, `WAIT` becomes `wait`.
+- A call or function reference takes the spelling of what it resolves to: a script function's
+  declaration, in this file or any other (`FOo()` becomes `foo()` when the script declares
+  `function foo()`), or failing that the builtin's documented spelling (`getplayers()` becomes
+  `GetPlayers()`). A declaration's own name is the source of that spelling and is never changed.
+
+Two things are case-sensitive, and the setting leaves both exactly as written:
+
+- **Macros.** The preprocessor matches macro names case-sensitively, so `scale( 2 )` is not a use
+  of `#define SCALE`. A token spelled exactly like a macro is never recased, no fix may produce a
+  macro's name, and nothing inside a `#define` line is touched.
+- **A name that is both a script function and a builtin.** Stock declares `function earthquake()`
+  and, in the same file, calls the engine's `Earthquake( … )`: the spelling picks which one runs.
+  Such a call keeps its spelling, and so does a name declared with two different spellings.
+
+The token gate checks the output against these fixes, and each may differ from the source only in
+case.

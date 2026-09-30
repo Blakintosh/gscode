@@ -187,9 +187,9 @@ public sealed class ObjectFields
             return;
         }
 
-        foreach ( (string kind, List<RawField> entries) in kinds )
+        foreach ( KeyValuePair<string, List<RawField>> kind in kinds )
         {
-            foreach ( RawField entry in entries )
+            foreach ( RawField entry in kind.Value )
             {
                 if ( entry.Name is null || entry.Type is null )
                 {
@@ -202,7 +202,7 @@ public sealed class ObjectFields
                     byName[entry.Name] = list;
                 }
 
-                list.Add(new ObjectField(entry.Name, entry.Type, entry.ReadOnly, kind));
+                list.Add(new ObjectField(entry.Name, entry.Type, entry.ReadOnly, kind.Key));
             }
         }
     }

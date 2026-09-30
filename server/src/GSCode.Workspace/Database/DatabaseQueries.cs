@@ -792,11 +792,11 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
-            if ( MeansDeclaringFile(game, record, entry, declaring) )
+            if ( MeansDeclaringFile(game, reference.Record, reference.Entry, declaring) )
             {
-                kept.Add((record, entry));
+                kept.Add(reference);
             }
         }
 
@@ -1180,10 +1180,10 @@ public static class DatabaseQueries
         // #include-relative path, and without this a bare Dictionary.TryAdd kept whichever one
         // enumerated first — dead-code raw signature or live overlay one, by dictionary luck.
         Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
-        foreach ( (ScriptRecord _, FunctionSymbol function) in ApplyShadowing(
+        foreach ( (ScriptRecord Record, FunctionSymbol Function) match in ApplyShadowing(
             matches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName, store, askingContextId) )
         {
-            byName.TryAdd(function.KeyName, function);
+            byName.TryAdd(match.Function.KeyName, match.Function);
         }
 
         return [.. byName.Values];
@@ -1243,10 +1243,10 @@ public static class DatabaseQueries
         // Overlay shadowing, as above: without it a mod's own override of a class is one arbitrary
         // pick away from offering the raw base's members instead of the ones the mod actually ships.
         Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
-        foreach ( (ScriptRecord _, ClassSymbol classSymbol) in ApplyShadowing(
+        foreach ( (ScriptRecord Record, ClassSymbol Class) match in ApplyShadowing(
             matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName, store, askingContextId) )
         {
-            byName.TryAdd(classSymbol.KeyName, classSymbol);
+            byName.TryAdd(match.Class.KeyName, match.Class);
         }
 
         return [.. byName.Values];

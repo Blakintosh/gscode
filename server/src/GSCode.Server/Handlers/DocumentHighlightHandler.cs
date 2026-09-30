@@ -51,12 +51,12 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
         // the scale section) — on every cursor move. The narrowing is a parameter on the same query,
         // so the key derivation, the method union, the scoping and the shadow rule are the same code.
         List<DocumentHighlight> highlights = [];
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in
             _support.FindReferencesInFile(target, hit.Key, hit.ReferenceKind) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ( record.Path != target.Path )
+            if ( reference.Record.Path != target.Path )
             {
                 continue;
             }
@@ -66,11 +66,11 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
             // `= 1` that set it. A compound update counts too: the editor colours `x += 1` as a
             // write, and the distinction that separates the two kinds is go-to-implementation's,
             // not this one's.
-            bool isWrite = entry.Kind == ReferenceKind.Definition || entry.IsFieldWrite;
+            bool isWrite = reference.Entry.Kind == ReferenceKind.Definition || reference.Entry.IsFieldWrite;
 
             highlights.Add(new DocumentHighlight
             {
-                Range = entry.Range.ToLsp(),
+                Range = reference.Entry.Range.ToLsp(),
                 Kind = isWrite ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
             });
         }

@@ -82,12 +82,12 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Anchor the item at the function's definition.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
         {
-            if ( entry.Kind == ReferenceKind.Definition )
+            if ( reference.Entry.Kind == ReferenceKind.Definition )
             {
                 return Task.FromResult<Container<CallHierarchyItem>?>(
-                    new Container<CallHierarchyItem>(MakeItem(hit.Key, record, entry.Range)));
+                    new Container<CallHierarchyItem>(MakeItem(hit.Key, reference.Record, reference.Entry.Range)));
             }
         }
 
@@ -261,25 +261,25 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         // keeps only in order to compare it. A caller nothing contains groups by path alone, which
         // the default position stands in for — no real declaration's name starts before (0,0).
         Dictionary<(string Path, Position Caller), IncomingGroup> byCaller = [];
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
-            if ( entry.Kind == ReferenceKind.Definition )
+            if ( reference.Entry.Kind == ReferenceKind.Definition )
             {
                 continue;
             }
 
-            FunctionSymbol? caller = EnclosingFunction.At(record.Functions, record.Classes, entry.Range.Start);
+            FunctionSymbol? caller = EnclosingFunction.At(reference.Record.Functions, reference.Record.Classes, reference.Entry.Range.Start);
             (string Path, Position Caller) groupKey = caller is null
-                ? (record.Path, default)
-                : (record.Path, caller.NameRange.Start);
+                ? (reference.Record.Path, default)
+                : (reference.Record.Path, caller.NameRange.Start);
 
             if ( !byCaller.TryGetValue(groupKey, out IncomingGroup group) )
             {
-                group = new IncomingGroup(record, caller, []);
+                group = new IncomingGroup(reference.Record, caller, []);
                 byCaller[groupKey] = group;
             }
 
-            group.Ranges.Add(entry.Range.ToLsp());
+            group.Ranges.Add(reference.Entry.Range.ToLsp());
         }
 
         return [.. byCaller.Values];

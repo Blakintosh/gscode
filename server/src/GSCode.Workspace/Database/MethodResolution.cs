@@ -557,16 +557,16 @@ public static class MethodResolution
 
         while ( pending.Count > 0 )
         {
-            (string name, int depth) = pending.Dequeue();
-            if ( depth > MaxDepth || !seen.Add(name) )
+            (string Name, int Depth) next = pending.Dequeue();
+            if ( next.Depth > MaxDepth || !seen.Add(next.Name) )
             {
                 continue;
             }
 
-            all.Add(name);
-            foreach ( string child in store.Classes.DirectChildren(name) )
+            all.Add(next.Name);
+            foreach ( string child in store.Classes.DirectChildren(next.Name) )
             {
-                pending.Enqueue((child, depth + 1));
+                pending.Enqueue((child, next.Depth + 1));
             }
         }
 

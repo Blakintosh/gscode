@@ -125,9 +125,9 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         // single-store count under-reported a function called from CSC or a macro used from a
         // header, while clicking the lens went through the client's reference provider.
         int count = 0;
-        foreach ( (ScriptRecord _, ReferenceEntry entry) in _support.FindAllReferences(target, key) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, key) )
         {
-            if ( entry.Kind != ReferenceKind.Definition )
+            if ( reference.Entry.Kind != ReferenceKind.Definition )
             {
                 count++;
             }

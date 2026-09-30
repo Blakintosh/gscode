@@ -55,10 +55,10 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
         // actually re-flow together when this one is edited. Editing an assignment tidies its run
         // of assignments and stops at the next statement of a different kind, rather than the whole
         // function body. An edit that reaches outside the group is dropped, not applied whole.
-        (int top, int bottom) = FormatScope.GroupAround(prepared.Document.Text.Text, request.Position.Line);
+        (int Top, int Bottom) group = FormatScope.GroupAround(prepared.Document.Text.Text, request.Position.Line);
 
         List<TextEdit> textEdits = FormattingSupport.ToLspEdits(
-            prepared.Edits.Where(edit => FormattingSupport.WithinLines(edit, top, bottom)));
+            prepared.Edits.Where(edit => FormattingSupport.WithinLines(edit, group.Top, group.Bottom)));
 
         if ( textEdits.Count == 0 )
         {

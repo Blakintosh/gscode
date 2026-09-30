@@ -81,24 +81,24 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
             classMatches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName);
 
         List<WorkspaceSymbol> results = [];
-        foreach ( (ScriptRecord record, FunctionSymbol function) in functions )
+        foreach ( (ScriptRecord Record, FunctionSymbol Function) match in functions )
         {
             if ( results.Count >= MaxResults )
             {
                 break;
             }
 
-            results.Add(Make(function.Name, SymbolKind.Function, record, function.NameRange));
+            results.Add(Make(match.Function.Name, SymbolKind.Function, match.Record, match.Function.NameRange));
         }
 
-        foreach ( (ScriptRecord record, ClassSymbol classSymbol) in classes )
+        foreach ( (ScriptRecord Record, ClassSymbol Class) match in classes )
         {
             if ( results.Count >= MaxResults )
             {
                 break;
             }
 
-            results.Add(Make(classSymbol.Name, SymbolKind.Class, record, classSymbol.NameRange));
+            results.Add(Make(match.Class.Name, SymbolKind.Class, match.Record, match.Class.NameRange));
         }
 
         return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));

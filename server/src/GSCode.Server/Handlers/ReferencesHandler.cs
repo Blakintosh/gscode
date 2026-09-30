@@ -61,16 +61,16 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
 
         // Per entry, because each builds a DocumentUri: the shared query's own comment names a
         // 1,970-reference case, and find-references is one of the requests a client re-sends.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in found )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in found )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ( !includeDeclaration && entry.Kind == ReferenceKind.Definition )
+            if ( !includeDeclaration && reference.Entry.Kind == ReferenceKind.Definition )
             {
                 continue;
             }
 
-            locations.Add(LspMapping.LocationAt(record.Path, entry.Range));
+            locations.Add(LspMapping.LocationAt(reference.Record.Path, reference.Entry.Range));
         }
 
         return Task.FromResult<LocationContainer?>(new LocationContainer(locations));

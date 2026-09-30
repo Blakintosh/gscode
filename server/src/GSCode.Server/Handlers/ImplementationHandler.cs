@@ -142,13 +142,13 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
 
         // The assignments themselves. FieldWrite alone, so a compound update is left out — see
         // the class comment.
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ( entry.Kind == ReferenceKind.FieldWrite && emitted.Add((record.Path, entry.Range.Start)) )
+            if ( reference.Entry.Kind == ReferenceKind.FieldWrite && emitted.Add((reference.Record.Path, reference.Entry.Range.Start)) )
             {
-                implementations.Add(LspMapping.LocationAt(record.Path, entry.Range));
+                implementations.Add(LspMapping.LocationAt(reference.Record.Path, reference.Entry.Range));
             }
         }
 
@@ -198,20 +198,20 @@ public sealed class ImplementationHandler : ImplementationHandlerBase
 
         while ( pending.Count > 0 )
         {
-            (string current, int depth) = pending.Dequeue();
-            if ( depth >= MaxDepth )
+            (string ClassKeyName, int Depth) next = pending.Dequeue();
+            if ( next.Depth >= MaxDepth )
             {
                 continue;
             }
 
-            foreach ( string childKeyName in target.Store.Classes.DirectChildren(current) )
+            foreach ( string childKeyName in target.Store.Classes.DirectChildren(next.ClassKeyName) )
             {
                 if ( !visited.Add(childKeyName) )
                 {
                     continue;
                 }
 
-                pending.Enqueue((childKeyName, depth + 1));
+                pending.Enqueue((childKeyName, next.Depth + 1));
 
                 foreach ( ResolvedClass child in DatabaseQueries.LookupClasses(
                     target.Store, target.ContextId, namespaceName: null, childKeyName) )

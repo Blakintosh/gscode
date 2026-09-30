@@ -131,18 +131,18 @@ internal static class FieldTargets
         HashSet<SymbolKey> seen = [];
         ImmutableArray<SymbolKey>.Builder found = ImmutableArray.CreateBuilder<SymbolKey>();
 
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             // Only a file that WRITES the field can bind it, and a file is read once however many
             // times it writes.
-            if ( entry.Kind != ReferenceKind.FieldWrite || !visited.Add(record.Path) )
+            if ( reference.Entry.Kind != ReferenceKind.FieldWrite || !visited.Add(reference.Record.Path) )
             {
                 continue;
             }
 
-            foreach ( FieldBinding binding in record.FieldBindings )
+            foreach ( FieldBinding binding in reference.Record.FieldBindings )
             {
                 if ( binding.Field != field || binding.Target.Kind != kind )
                 {

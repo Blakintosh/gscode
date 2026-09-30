@@ -357,14 +357,14 @@ function flop()
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; on-type is clipped to the group around the cursor, range to the selection |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
-| `gscode.format.fixCasing` | `true` | Lowercase keywords and give calls their function's spelling (§10) |
+| `gscode.format.fixCasing` | `true` | Lowercase keywords; give functions, namespaces and classes their declared spelling (§10) |
 
 ## 9. What the formatter will not do
 
 - Reflow or wrap long lines. Stock has no width discipline and breaking a line changes how it reads.
 - Reorder anything except the leading directive block, and that only under §5's conditions.
-- Change the case of anything but keywords and calls (§10). Variables, fields, namespaces and
-  class names keep the author's spelling.
+- Change the case of anything but keywords, function names, namespaces and class names (§10).
+  Variables and fields keep the author's spelling, and macros are never recased.
 - Touch the contents of strings, comments or `/@ @/` doc blocks.
 - Emit output whose token stream differs from the input's, except by the casing fixes of §10. That
   gate is what makes the formatter safe to run on a 4,000-line stock file without reading the diff.
@@ -372,23 +372,31 @@ function flop()
 ## 10. Casing
 
 `gscode.format.fixCasing` (on) is the one setting that changes token text rather than whitespace.
-GSC resolves keywords and function names case-insensitively, so it changes how code reads, not
-what runs:
+GSC resolves keywords, functions, namespaces and classes case-insensitively, so it changes how code
+reads, not what runs:
 
 - Keywords are lowercased: `IsDefined( x )` becomes `isdefined( x )`, `WAIT` becomes `wait`.
-- A call or function reference takes the spelling of what it resolves to: a script function's
-  declaration, in this file or any other (`FOo()` becomes `foo()` when the script declares
-  `function foo()`), or failing that the builtin's documented spelling (`getplayers()` becomes
-  `GetPlayers()`). A declaration's own name is the source of that spelling and is never changed.
+- A function takes the spelling of what the call resolves to. A bare call resolves to a builtin
+  before a script function of the same name, so it takes the builtin's documented spelling
+  (`getplayers()` becomes `GetPlayers()`). A qualified call, a threaded call and a function
+  reference (`&foo`) mean the script function, so they take its declaration's spelling, in this
+  file or any other (`FOo()` becomes `foo()` when the script declares `function foo()`).
+- A namespace takes the spelling of its `#namespace` directive (`Util::` becomes `util::`), and a
+  class the spelling of its declaration, after `new`, before `::` and as a base class.
+- A declaration's own name is the source of these spellings and is never changed. A name declared
+  with two different spellings is left alone.
 
-Two things are case-sensitive, and the setting leaves both exactly as written:
+Stock shows the function rule in one file: `exploder_shared.gsc` declares `function earthquake()`,
+calls the engine with a bare `Earthquake( … )`, and reaches its own function only qualified, as
+`exploder::earthquake()`. `_zm.gsc` threads its own zero-argument `spawnSpectator()` although the
+engine's `SpawnSpectator` takes two, which a builtin-first rule would reject — a threaded call
+cannot mean a builtin.
 
-- **Macros.** The preprocessor matches macro names case-sensitively, so `scale( 2 )` is not a use
-  of `#define SCALE`. A token spelled exactly like a macro is never recased, no fix may produce a
-  macro's name, and nothing inside a `#define` line is touched.
-- **A name that is both a script function and a builtin.** Stock declares `function earthquake()`
-  and, in the same file, calls the engine's `Earthquake( … )`: the spelling picks which one runs.
-  Such a call keeps its spelling, and so does a name declared with two different spellings.
+**Macros match 1:1.** The preprocessor compares macro names exactly, so a macro use is never
+recased and no fix may produce a macro's name; nothing inside a `#define` line is touched either.
+A function-like macro is only a use where a `(` follows it. That is how stock's `DEFAULT( var, value )`
+and the `default:` label live in one file: `DEFAULT( a, 1 )` stays the macro, and a `DEFAULT:` label
+is the keyword and becomes `default:`.
 
 The token gate checks the output against these fixes, and each may differ from the source only in
 case.

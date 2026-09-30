@@ -782,12 +782,17 @@ that chose it. These are the pieces that implement it:
   formatter's per-region edits onto the protocol. Each handler then keeps whichever edits its
   feature is scoped to. With `fixCasing` on it also resolves the document through
   `NavigationSupport` and hands the formatter a `CallCasing` lookup.
-- `GscFormatter.Casing.cs` — the `fixCasing` pass: which tokens are keywords or callees, and the
-  macro guard (macro names are case-sensitive, so a macro is never recased and no fix may spell
-  one). Its fixes are the only difference the token gate permits.
-- `CallCasing` — the spelling a call should have: this file's or the index's declaration, else the
-  builtin's documented name, else nothing. A name that is both a script function and a builtin
-  answers nothing, because the spelling picks which one runs.
+- `GscFormatter.Casing.cs` — the `fixCasing` pass: which tokens are keywords, functions (bare,
+  qualified, threaded, referenced), namespace or class qualifiers, and classes after `new` or as a
+  base; and the macro guard (macro names match exactly, so a macro use is never recased and no fix
+  may spell one; a function-like macro is only a use before a `(`). Its fixes are the only
+  difference the token gate permits.
+- `ICasingLookup` — the spellings the pass asks for, answered by something that can see the
+  workspace, which the formatter cannot.
+- `CallCasing` — the workspace's `ICasingLookup`. A bare call takes a builtin's spelling before a
+  script function's, since it resolves to the builtin first; a qualified or threaded call, or a
+  reference, takes the script function's. Namespaces come from `NamespaceSpan.Name` (the
+  `#namespace` directive's spelling), classes from their declarations.
 
 ## Handlers/ — the remainder
 

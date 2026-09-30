@@ -13,25 +13,51 @@ public class FixCasingTests
 {
     private static readonly FormatOptions s_fixing = FormatOptions.Default with { UseTabs = true, FixCasing = true };
 
-    private static readonly Dictionary<string, string> s_declared = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>A fixed table standing in for the workspace.</summary>
+    private sealed class TableLookup : ICasingLookup
     {
-        ["foo"] = "foo",
-        ["getplayers"] = "GetPlayers",
-        ["wait_network_frame"] = "wait_network_frame",
-        ["scale"] = "scale",
-        ["shout"] = "SHOUT",
-    };
+        private static readonly Dictionary<string, string> s_functions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["foo"] = "foo",
+            ["getplayers"] = "GetPlayers",
+            ["wait_network_frame"] = "wait_network_frame",
+            ["scale"] = "scale",
+            ["shout"] = "SHOUT",
+        };
 
-    private static string? Lookup(string? qualifier, string name)
-    {
-        return s_declared.TryGetValue(name, out string? spelling) ? spelling : null;
+        private static readonly Dictionary<string, string> s_qualifiers = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["util"] = "util",
+            ["base"] = "Base",
+        };
+
+        private static readonly Dictionary<string, string> s_classes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["base"] = "Base",
+            ["derived"] = "Derived",
+        };
+
+        public string? Function(string? qualifier, string name, bool preferScript)
+        {
+            return s_functions.TryGetValue(name, out string? spelling) ? spelling : null;
+        }
+
+        public string? Qualifier(string name)
+        {
+            return s_qualifiers.TryGetValue(name, out string? spelling) ? spelling : null;
+        }
+
+        public string? Class(string name)
+        {
+            return s_classes.TryGetValue(name, out string? spelling) ? spelling : null;
+        }
     }
 
     private static string Format(string source, FormatOptions options)
     {
         ParseResult result = TestParse.Analyze(source);
 
-        return GscFormatter.Format(result, options, Lookup) ?? throw new InvalidOperationException("formatter refused the input");
+        return GscFormatter.Format(result, options, new TableLookup()) ?? throw new InvalidOperationException("formatter refused the input");
     }
 
     private static string Body(string statements)
@@ -54,12 +80,36 @@ public class FixCasingTests
     [InlineData("FOo();", "\tfoo();\n")]
     [InlineData("p = getplayers();", "\tp = GetPlayers();\n")]
     [InlineData("self thread FOO();", "\tself thread foo();\n")]
-    [InlineData("util::Wait_Network_Frame();", "\tutil::wait_network_frame();\n")]
+    [InlineData("Util::Wait_Network_Frame();", "\tutil::wait_network_frame();\n")]
     [InlineData("ptr = &FOO;", "\tptr = &foo;\n")]
-    [InlineData("ptr = &util::FOO;", "\tptr = &util::foo;\n")]
+    [InlineData("ptr = &UTIL::FOO;", "\tptr = &util::foo;\n")]
+    [InlineData("obj = new derived();", "\tobj = new Derived();\n")]
     public void CallsAndReferencesTakeTheLookupsSpelling(string source, string expected)
     {
         Assert.Equal(expected, Body(source));
+    }
+
+    [Fact]
+    public void ABaseClassAndAClassQualifierTakeTheClassSpelling()
+    {
+        string formatted = Format(
+            "class Base\n{\n}\n\nclass Derived : base\n{\n\tfunction f()\n\t{\n\t\tBASE::f();\n\t}\n}\n", s_fixing);
+
+        Assert.Contains("class Derived : Base\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\t\tBase::f();\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFunctionLikeMacroIsOnlyAMacroWhereItIsCalled()
+    {
+        // Stock's DEFAULT( var, value ) is a macro; `DEFAULT:` without a '(' is the keyword.
+        string source = "#define DEFAULT( _v, _d ) if ( !isdefined( _v ) ) _v = _d;\n\n"
+            + "function f( a, v )\n{\n\tDEFAULT( a, 1 );\n\tswitch ( v )\n\t{\n\t\tDEFAULT:\n\t\t\tbreak;\n\t}\n}\n";
+
+        string formatted = Format(source, s_fixing);
+
+        Assert.Contains("\tDEFAULT( a, 1 );\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\t\tdefault:\n", formatted, StringComparison.Ordinal);
     }
 
     [Fact]

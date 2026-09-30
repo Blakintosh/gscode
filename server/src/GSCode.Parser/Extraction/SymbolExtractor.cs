@@ -382,12 +382,17 @@ public sealed class SymbolExtractor
     // --- Namespace span bookkeeping ---
 
     private TextRange _currentNamespaceNameRange = TextRange.Empty;
+
+    // The namespace as the #namespace directive spells it, for display and casing; the key above is
+    // what every lookup compares. The file-default namespace has no directive, so it is the key.
+    private string? _currentNamespaceSpelling;
     private Position _currentNamespaceStart = Position.Zero;
 
     private void CloseNamespaceSpan(Position end)
     {
         TextRange governed = new(_currentNamespaceStart, end);
-        _namespaces.Add(new NamespaceSpan(_currentNamespace, _currentNamespace, _currentNamespaceNameRange, governed));
+        _namespaces.Add(new NamespaceSpan(
+            _currentNamespaceSpelling ?? _currentNamespace, _currentNamespace, _currentNamespaceNameRange, governed));
     }
 
     // --- Declaration walk ---
@@ -402,6 +407,7 @@ public sealed class SymbolExtractor
                 {
                     CloseNamespaceSpan(namespaceNode.Range.Start);
                     _currentNamespace = _names.InternLower(namespaceNode.NameToken.Text);
+                    _currentNamespaceSpelling = namespaceNode.NameToken.Text;
                     _currentNamespaceNameRange = namespaceNode.NameToken.RootRange;
                     _currentNamespaceStart = namespaceNode.Range.Start;
                     continue;

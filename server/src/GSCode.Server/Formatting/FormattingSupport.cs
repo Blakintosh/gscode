@@ -105,15 +105,15 @@ public sealed class FormattingSupport
 
         ParseResult analysis = _documents.AnalyzeIfStale(document, cancellationToken);
 
-        // Fixing a call's casing asks the workspace what it resolves to, which the formatter
-        // itself cannot see. Without a target the keywords are still fixed; the calls are not.
-        Func<string?, string, string?>? canonicalFunction = null;
+        // Fixing a name's casing asks the workspace what it resolves to, which the formatter
+        // itself cannot see. Without a target the keywords are still fixed; the names are not.
+        ICasingLookup? casing = null;
         if ( options.FixCasing && _navigation.ResolveFresh(uri, cancellationToken) is NavigationTarget target )
         {
-            canonicalFunction = new CallCasing(target, _builtins).SpellingFor;
+            casing = new CallCasing(target, _builtins);
         }
 
-        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options, canonicalFunction));
+        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options, casing));
     }
 
     private bool IsStockScript(string path)

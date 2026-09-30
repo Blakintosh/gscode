@@ -43,15 +43,14 @@ public static partial class GscFormatter
     /// overlap — a matched (unchanged) line always sits between two hunks — so they satisfy the
     /// LSP's requirements for a multi-edit response.
     /// </summary>
-    /// <param name="canonicalFunction">
-    /// The spelling a call should have, for <see cref="FormatOptions.FixCasing"/>: given a callee's
-    /// qualifier (or null) and name, the declaration's or builtin's spelling, or null to leave it.
-    /// The formatter cannot see the workspace, so the caller answers. Null skips calls entirely.
+    /// <param name="casing">
+    /// The spellings names take under <see cref="FormatOptions.FixCasing"/>. The formatter cannot see
+    /// the workspace, so the caller answers; without it only keywords are fixed.
     /// </param>
     public static ImmutableArray<FormatEdit> FormatMinimalEdits(
-        ParseResult result, FormatOptions? options = null, Func<string?, string, string?>? canonicalFunction = null)
+        ParseResult result, FormatOptions? options = null, ICasingLookup? casing = null)
     {
-        string? formatted = Format(result, options, canonicalFunction);
+        string? formatted = Format(result, options, casing);
         if ( formatted is null )
         {
             return [];
@@ -317,7 +316,7 @@ public static partial class GscFormatter
     /// "make no edits".
     /// </summary>
     public static string? Format(
-        ParseResult result, FormatOptions? requested = null, Func<string?, string, string?>? canonicalFunction = null)
+        ParseResult result, FormatOptions? requested = null, ICasingLookup? casing = null)
     {
         // Nullable rather than a `default` struct sentinel: default(FormatOptions) is all-zero,
         // which reads as a perfectly valid "no indent, no padding" configuration and silently
@@ -342,7 +341,7 @@ public static partial class GscFormatter
         // The spelling each token is written with: null keeps the source's. Only casing ever
         // differs, and only when FixCasing asks for it.
         string?[] spellings = options.FixCasing
-            ? CasingFixes(significant, result, roles, canonicalFunction)
+            ? CasingFixes(significant, result, roles, casing)
             : new string?[significant.Count];
 
         string formatted = Reflow(significant, result.Text, options, roles, spellings);

@@ -426,7 +426,7 @@
 					"gscode.format.fixCasing": {
 						"type": "boolean",
 						"default": true,
-						"description": "Fix the casing of keywords and calls while formatting: keywords are lowercased ('isDefined' becomes 'isdefined') and a call takes the spelling of the function it resolves to ('FOo()' becomes 'foo()' when the script declares 'function foo()', 'getplayers()' becomes 'GetPlayers()'). Macro names are case-sensitive, so they are never recased, and a call whose name is both a script function and a builtin keeps its spelling, because the spelling picks which one runs.",
+						"description": "Fix casing while formatting: keywords are lowercased ('isDefined' becomes 'isdefined'); a call takes the spelling of the function it resolves to ('getplayers()' becomes 'GetPlayers()', 'FOo()' becomes 'foo()' when the script declares 'function foo()'); namespaces take their #namespace spelling and classes their declaration's. A bare call resolves to a builtin before a script function of the same name; a qualified or threaded call means the script one. Macro names match exactly, so macros are never recased.",
 						"scope": "window"
 					}
 				}

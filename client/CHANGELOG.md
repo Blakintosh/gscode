@@ -32,10 +32,11 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Two formatter settings for indentation the stock scripts split on:
   `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
   `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block).
-- `gscode.format.fixCasing` (on): formatting lowercases keywords and writes each call the way its
-  function is declared, or its builtin documented — `isDefined()` becomes `isdefined()`, `FOo()`
-  becomes `foo()`. Macros are case-sensitive and are never recased, and a name that is both a
-  script function and a builtin keeps its spelling, because the spelling picks which one runs.
+- `gscode.format.fixCasing` (on): formatting lowercases keywords and writes functions, namespaces
+  and classes the way they are declared — `isDefined()` becomes `isdefined()`, `getplayers()`
+  becomes `GetPlayers()`, `FOo()` becomes `foo()`, `Util::` becomes `util::`. A bare call takes the
+  builtin's spelling when there is one, since it resolves to the builtin first. Macros match exactly
+  and are never recased.
 
 ### Changed
 - The formatter indents a line that continues an open `(` or `[` one level past its statement,

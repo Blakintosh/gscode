@@ -442,12 +442,12 @@ first token is a macro invocation, or ask the preprocessed stream whether the ex
 `;` or `}`. The first is local and safe; the second is exact but gives the formatter a
 dependency on the preprocessor it does not have today.
 
-### Should `fixCasing` reach variables, fields and everything else?
+### Should `fixCasing` reach variables and fields?
 
-`gscode.format.fixCasing` covers keywords and calls, because both have one authoritative spelling
-— the keyword table, and a function's declaration or the builtin library. Extending it to every
-identifier would make a file read consistently throughout, but each kind needs its own answer to
-"what is the right spelling", and some have none:
+`gscode.format.fixCasing` covers keywords, functions, namespaces and class names, because each has
+one authoritative spelling — the keyword table, a declaration or `#namespace` directive, or the
+builtin library. Extending it to every identifier would make a file read consistently throughout,
+but each remaining kind needs its own answer to "what is the right spelling", and some have none:
 
 - **Locals and parameters.** Case-insensitive, scoped to one function. A parameter's declaration
   is an obvious source; a local has no declaration, only its first assignment, which is a weaker
@@ -457,15 +457,28 @@ identifier would make a file read consistently throughout, but each kind needs i
   the object-field data (`origin`, `angles`), which would cover the common ones; script-defined
   fields would need a majority rule across the workspace, and the reference index does not keep
   spellings today.
-- **Namespaces and class names.** A namespace has its `#namespace` directive and a class its
-  declaration, so both have a source; `util::` against `Util::` is common in mods.
-- **Macros stay excluded whatever else is added.** They are the case-sensitive exception: changing
-  a macro reference's case changes whether it expands. Anything wider must keep the current guard.
+- **Class methods.** `Base::take_damage()` recases `Base` but not `take_damage`, and `obj.Method()`
+  is untouched: a method's spelling needs the receiver's class, which the lookup does not resolve.
+- **Macros stay excluded whatever else is added.** They match 1:1: changing a macro reference's
+  case changes whether it expands. Anything wider must keep the current guard.
 - **Strings stay excluded.** Notify names, struct keys and asset names are compared by the engine
   as written.
 
 Worth measuring first: how often the stock scripts and a real mod spell the same local or field two
 ways. If that is rare, the churn of a wider fix may not pay for itself.
+
+### `ArgumentCountLint` models builtin-versus-script resolution by spelling
+
+The lint's comment reads the stock `earthquake` and `spawnSpectator` cases as "spelling decides
+which one a call means", and the gsc-dialect-facts skill said the same. Both files support a
+different model, and the formatter's casing now follows it: a bare call resolves to the builtin
+first, whatever its case; a qualified call means the script function (`exploder_shared.gsc` reaches
+its own `earthquake` only as `exploder::earthquake()`); and a threaded call cannot mean a builtin
+(`_zm.gsc` threads its zero-argument `spawnSpectator()`, while the engine's takes two).
+
+The lint's tie-break should be re-derived on that model and re-checked on the corpus. It currently
+agrees with both files for a different reason, so a case the two models split on — a bare call
+spelled like the script function rather than the builtin, say — is where it would be wrong.
 
 ---
 

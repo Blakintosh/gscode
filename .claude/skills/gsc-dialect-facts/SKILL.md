@@ -187,18 +187,20 @@ It is absent from the API library, so a rule consulting the library about it fin
 other call-shaped keywords are the same: `notify`, `endon`, `waittill`, `assert`, `vectorscale`,
 `prof_begin`/`prof_end`.
 
-## A script function shadows a builtin only when SPELLED the same
+## A bare call resolves to a builtin first; a qualified or threaded one means the script
 
-Builtins are the fallback after the current namespace — `sys::` exists as an explicit alias
-precisely because a script function otherwise wins. But whether a declaration shadows an engine
-function of the same name is decided by the SPELLING, not case-insensitively, and two shipped BO3
-files settle it in opposite directions:
+Builtins are the fallback after the current namespace only for a QUALIFIED call — `sys::` exists as
+the explicit builtin form. A bare call whose name is both an engine function and a script function
+resolves to the builtin first, whatever its case. Two shipped BO3 files show where the script one
+is reached instead:
 
 ```gsc
-// scripts\shared\exploder_shared.gsc
+// scripts\shared\exploder_shared.gsc   (#namespace exploder)
 function earthquake()                                       // declared here, takes nothing
 ...
-Earthquake( eq["magnitude"], eq["duration"], self.v["origin"], eq["radius"] );   // the ENGINE one
+self thread exploder::earthquake();                         // its OWN: qualified
+...
+Earthquake( eq["magnitude"], eq["duration"], self.v["origin"], eq["radius"] );   // the ENGINE one: bare
 ```
 
 ```gsc
@@ -209,12 +211,19 @@ self thread spawnSpectator();                               // its OWN, though B
                                                             // SpawnSpectator( origin, angles )
 ```
 
-Both files ship and work, and no case-insensitive rule explains both — it either breaks the first
-(four arguments to a nought-parameter function) or the second (nought arguments where two are
-mandatory). The authors clearly wrote the distinction on purpose.
+The first is disambiguated by the namespace qualifier, not by the capital E. The second is a bare
+name, but THREADED, and a builtin cannot be threaded — with builtin-first it would pass nothing
+to a builtin that needs two arguments, and the file ships and works. So:
 
-Scope it to THIS tie-break. General script-to-script resolution stays case-insensitive, as the rest
-of the codebase has it (`FunctionSymbol.KeyName` is lowercase-canonical and matched ordinally).
+- bare call → the builtin, if one exists;
+- qualified call (`ns::name`) → the script function; `sys::name` → the builtin;
+- threaded call or function reference (`&name`) → the script function.
+
+An earlier version of this entry read both files as "spelling decides", and a lint and a formatter
+feature were built on it. Spelling is not the mechanism; check the call's shape.
+
+General script-to-script resolution stays case-insensitive, as the rest of the codebase has it
+(`FunctionSymbol.KeyName` is lowercase-canonical and matched ordinally).
 
 A case-insensitive first attempt at the arity rule reported that `Earthquake` call as passing four
 arguments to a nought-parameter function — an Error on a file that ships. The corpus caught it; a

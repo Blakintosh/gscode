@@ -7,20 +7,23 @@ using GSCode.Workspace.Database;
 namespace GSCode.Server.Formatting;
 
 /// <summary>
-/// The spelling a call should be written with, for <see cref="FormatOptions.FixCasing"/>: its
-/// script function's declared spelling, or failing that its builtin's documented one. Answers null
-/// whenever the spelling is not safe to change, and the call is then left as written.
+/// The workspace's answers to <see cref="ICasingLookup"/>: a function's declared spelling or its
+/// builtin's documented one, a namespace's as its <c>#namespace</c> directive writes it, and a
+/// class's as its declaration does.
 /// </summary>
 /// <remarks>
-/// A name that is BOTH a script function and a builtin answers null. Spelling is what picks between
-/// the two — stock declares <c>function earthquake()</c> and, in the same file, calls the engine's
-/// <c>Earthquake( … )</c> — so recasing either call would change which function runs.
+/// A bare call resolves to a builtin before a script function of the same name, so it takes the
+/// builtin's spelling. Stock shows both halves in one file: <c>exploder_shared.gsc</c> declares
+/// <c>function earthquake()</c>, calls the engine with a bare <c>Earthquake( … )</c>, and reaches its
+/// own function only as <c>exploder::earthquake()</c>. A threaded call cannot mean a builtin —
+/// <c>_zm.gsc</c> threads its own zero-argument <c>spawnSpectator()</c> although the engine's needs
+/// two — so it takes the script function's spelling.
 /// </remarks>
-public sealed class CallCasing
+public sealed class CallCasing : ICasingLookup
 {
     /// <summary>
-    /// Enough declarations to see whether they disagree on a spelling. A bare name can have
-    /// thousands of declarations on a merge dialect; two differing spellings already decide it.
+    /// Enough declarations to see whether they disagree on a spelling. A bare name or a busy
+    /// namespace can have thousands; two differing spellings already decide it.
     /// </summary>
     private const int DeclarationLimit = 16;
 
@@ -34,23 +37,53 @@ public sealed class CallCasing
         _builtins = builtins.For(target.Language);
     }
 
-    /// <summary>The spelling for a call to <paramref name="name"/>, qualified or not, or null.</summary>
-    public string? SpellingFor(string? qualifier, string name)
+    public string? Function(string? qualifier, string name, bool preferScript)
     {
         string? namespaceKey = qualifier?.ToLowerInvariant();
         string nameKey = name.ToLowerInvariant();
-        string cacheKey = (namespaceKey ?? "") + "::" + nameKey;
+        string cacheKey = "f:" + (preferScript ? "s:" : "b:") + (namespaceKey ?? "") + "::" + nameKey;
         if ( _answers.TryGetValue(cacheKey, out string? known) )
         {
             return known;
         }
 
-        string? answer = Resolve(namespaceKey, nameKey);
+        string? answer = ResolveFunction(namespaceKey, nameKey, preferScript);
         _answers[cacheKey] = answer;
         return answer;
     }
 
-    private string? Resolve(string? namespaceKey, string nameKey)
+    public string? Qualifier(string name)
+    {
+        string key = name.ToLowerInvariant();
+        string cacheKey = "q:" + key;
+        if ( _answers.TryGetValue(cacheKey, out string? known) )
+        {
+            return known;
+        }
+
+        HashSet<string> spellings = NamespaceSpellings(key);
+        spellings.UnionWith(ClassSpellings(key));
+        string? answer = spellings.Count == 1 ? spellings.First() : null;
+        _answers[cacheKey] = answer;
+        return answer;
+    }
+
+    public string? Class(string name)
+    {
+        string key = name.ToLowerInvariant();
+        string cacheKey = "c:" + key;
+        if ( _answers.TryGetValue(cacheKey, out string? known) )
+        {
+            return known;
+        }
+
+        HashSet<string> spellings = ClassSpellings(key);
+        string? answer = spellings.Count == 1 ? spellings.First() : null;
+        _answers[cacheKey] = answer;
+        return answer;
+    }
+
+    private string? ResolveFunction(string? namespaceKey, string nameKey, bool preferScript)
     {
         // `sys::name` is the explicit builtin form; no script declaration can claim it.
         if ( namespaceKey == "sys" )
@@ -58,34 +91,34 @@ public sealed class CallCasing
             return _builtins.Find(nameKey)?.Name;
         }
 
-        HashSet<string> declared = DeclaredSpellings(namespaceKey, nameKey);
+        HashSet<string> declared = FunctionSpellings(namespaceKey, nameKey);
+        string? script = declared.Count == 1 ? declared.First() : null;
 
         // A qualified call names a namespace or a class, never a builtin.
-        BuiltinFunction? builtin = namespaceKey is null ? _builtins.Find(nameKey) : null;
-
-        if ( declared.Count > 0 && builtin is not null )
+        if ( namespaceKey is not null )
         {
-            return null;
+            return script;
         }
 
-        if ( declared.Count == 1 )
+        BuiltinFunction? builtin = _builtins.Find(nameKey);
+        if ( builtin is null )
         {
-            return declared.First();
+            return script;
         }
 
-        if ( declared.Count > 1 )
+        if ( !preferScript || declared.Count == 0 )
         {
-            return null;
+            return builtin.Name;
         }
 
-        return builtin?.Name;
+        return script;
     }
 
     /// <summary>
-    /// The distinct spellings the name is declared with: this file's own declarations, which may be
+    /// The distinct spellings a function is declared with: this file's own declarations, which may be
     /// newer than the index, and every visible one the index knows.
     /// </summary>
-    private HashSet<string> DeclaredSpellings(string? namespaceKey, string nameKey)
+    private HashSet<string> FunctionSpellings(string? namespaceKey, string nameKey)
     {
         HashSet<string> spellings = new(StringComparer.Ordinal);
         foreach ( FunctionSymbol function in _target.Result.Extraction.Functions )
@@ -105,6 +138,63 @@ public sealed class CallCasing
         foreach ( ResolvedFunction resolved in functions )
         {
             spellings.Add(resolved.Function.Name);
+        }
+
+        return spellings;
+    }
+
+    /// <summary>How the <c>#namespace</c> directives declaring this namespace spell it.</summary>
+    private HashSet<string> NamespaceSpellings(string namespaceKey)
+    {
+        HashSet<string> spellings = new(StringComparer.Ordinal);
+        AddDirectiveSpellings(_target.Result.Extraction.Namespaces, namespaceKey, spellings);
+
+        int read = 0;
+        foreach ( string path in _target.Store.FilesDeclaringInto(namespaceKey) )
+        {
+            if ( read++ >= DeclarationLimit )
+            {
+                break;
+            }
+
+            if ( _target.Store.TryGet(path, out ScriptRecord record) )
+            {
+                AddDirectiveSpellings(record.Namespaces, namespaceKey, spellings);
+            }
+        }
+
+        return spellings;
+    }
+
+    private static void AddDirectiveSpellings(
+        ImmutableArray<NamespaceSpan> spans, string namespaceKey, HashSet<string> spellings)
+    {
+        foreach ( NamespaceSpan span in spans )
+        {
+            // Only a span a directive opened has an author's spelling; the file-default one is a key.
+            bool fromDirective = span.NameRange != Core.Text.TextRange.Empty;
+            if ( fromDirective && string.Equals(span.KeyName, namespaceKey, StringComparison.Ordinal) )
+            {
+                spellings.Add(span.Name);
+            }
+        }
+    }
+
+    /// <summary>How the classes of this name are declared, here and anywhere visible.</summary>
+    private HashSet<string> ClassSpellings(string classKey)
+    {
+        HashSet<string> spellings = new(StringComparer.Ordinal);
+        foreach ( ClassSymbol classSymbol in _target.Result.Extraction.Classes )
+        {
+            if ( string.Equals(classSymbol.KeyName, classKey, StringComparison.Ordinal) )
+            {
+                spellings.Add(classSymbol.Name);
+            }
+        }
+
+        foreach ( ResolvedClass resolved in DatabaseQueries.LookupClasses(_target.Store, _target.ContextId, null, classKey) )
+        {
+            spellings.Add(resolved.Class.Name);
         }
 
         return spellings;

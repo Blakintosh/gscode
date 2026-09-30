@@ -96,6 +96,9 @@ game passes it to the parser call.
 | `ProfileScope` | `GSCode.Testing` | `Default`, `Use(profile?)` — select and restore `Active` |
 | `TestWorkspace` | `GSCode.Testing` | `Build(files \| fakeFileSystem, profile?, mode)`: indexed store + resolver on `TestPaths.Config`, for lint, database and completion tests. `Analyze(relative)` for a file it holds, `Analyze(relative, text)` for one the index has not seen |
 | `TestDocuments` | `GSCode.Testing` | `Standalone()`: open documents with no workspace behind them, for tests whose subject is the document store itself |
+| `TestParse` | `GSCode.Testing` | `Analyze(source, path?, profile?)`: one file's text parsed on its own, no workspace. `path` is absolute and defaults to `DefaultPath` (`scripts\t.gsc`); the language follows its extension |
+| `TestRecords` | `GSCode.Testing` | `At(path, contextId = "raw", relativePath = "", language = Gsc)`, `Function(keyName, ns)`, `Class(name, ns)`, `Anywhere`: hand-built records for tests whose subject is record data. Add what the test is about with `with { ... }` |
+| `RecordingDiagnosticsSink`, `DiscardingDiagnosticsSink` | `GSCode.Server.Tests/Handlers` | what reached the client (thread-safe), or nothing, for a `DiagnosticsPublisher` |
 | `HandlerWorkspace` | `GSCode.Server.Tests/Handlers` | `BuildAsync(files, profile?, mode)`: wired like `ServerServices` — real `ResolverInsertProvider` over a shared `InsertCache` (so `#insert` works from a `.gsh` in the file list), builtins in `NavigationSupport`, `CompletionEngine`. `Open(relative)` for a file it indexed, `Open(relative, text)` for a buffer it did not, `Identify(relative)`, `Selector` |
 
 `HandlerWorkspace.Selector` is `gsc`; no handler reads its selector while answering, so it serves
@@ -179,6 +182,9 @@ With a game, the list is indented under the call and the profile follows it:
 - **Fact names are sentences** stating the behaviour (`AHighlightNeverIncludesACallFromAnotherFile`),
   as the suites already do. Keep an existing name when converting: renaming a test is not a
   conversion, and the name list is how the pass is verified.
+- **No private wrapper around a shared helper.** A method that only forwards to `TestParse.Analyze`
+  or `TestRecords.At` with the same arguments is deleted and its callers call the helper; a wrapper
+  that pins a path, a game or an argument order earns its name.
 - **A dialect test names its game once**, as a `static readonly GameProfile` field, a local in the
   one fact, or a `[Theory]` over short names, and passes it to the harness — never to `Select`.
 - House C# style: Allman braces on every block, `if ( x )` padding, explicit types, no tuple

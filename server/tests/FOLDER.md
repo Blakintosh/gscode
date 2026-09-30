@@ -161,7 +161,9 @@ root, `c:\raw`, so a test names `scripts\lib.gsc` and never a drive, plus `ModsR
 `Config(files)`, the standard `RootConfig` over both · `TestFile` one script under the raw root ·
 `ProfileScope` selects a game and RESTORES the previous one, with BO3 as `Default` ·
 `TestWorkspace` an indexed in-memory store and resolver for one game (below) · `TestDocuments.Standalone()`
-open documents with no workspace behind them, for tests of the document store itself. How a test uses them,
+open documents with no workspace behind them, for tests of the document store itself ·
+`TestParse.Analyze(source, path?, profile?)` one file's text parsed on its own · `TestRecords` hand-built
+store records (`At`, `Function`, `Class`) for tests whose subject is record data. How a test uses them,
 and when a named game or a real path is right instead, is the `standard-tests` skill.
 
 ---

@@ -95,7 +95,8 @@ game passes it to the parser call.
 | `TestFile` | `GSCode.Testing` | `(RelativePath, Text)` — one script under the raw root |
 | `ProfileScope` | `GSCode.Testing` | `Default`, `Use(profile?)` — select and restore `Active` |
 | `TestWorkspace` | `GSCode.Testing` | `Build(files \| fakeFileSystem, profile?, mode)`: indexed store + resolver on `TestPaths.Config`, for lint, database and completion tests. `Analyze(relative)` for a file it holds, `Analyze(relative, text)` for one the index has not seen |
-| `HandlerWorkspace` | `GSCode.Server.Tests/Handlers` | `BuildAsync(files, profile?, mode)`: wired like `ServerServices` — real `ResolverInsertProvider` over a shared `InsertCache` (so `#insert` works from a `.gsh` in the file list), builtins in `NavigationSupport`, `CompletionEngine`. `Open(relative)`, `Identify(relative)`, `Selector` |
+| `TestDocuments` | `GSCode.Testing` | `Standalone()`: open documents with no workspace behind them, for tests whose subject is the document store itself |
+| `HandlerWorkspace` | `GSCode.Server.Tests/Handlers` | `BuildAsync(files, profile?, mode)`: wired like `ServerServices` — real `ResolverInsertProvider` over a shared `InsertCache` (so `#insert` works from a `.gsh` in the file list), builtins in `NavigationSupport`, `CompletionEngine`. `Open(relative)` for a file it indexed, `Open(relative, text)` for a buffer it did not, `Identify(relative)`, `Selector` |
 
 `HandlerWorkspace.Selector` is `gsc`; no handler reads its selector while answering, so it serves
 `.csc` requests too.
@@ -105,14 +106,21 @@ add it to the harness — wired the way production wires it — so the next test
 
 ### Which setup a test gets
 
-1. **The harness**, when the test indexes its sources or loads the real builtins: nearly every
-   handler, lint, completion and database test.
-2. **Incidental parts only**, when the test deliberately seeds SOME files and not others, or passes
-   an empty or hand-built builtin library, and that choice is part of what it tests
-   (`NamespaceImportFixTests`, `CodeActionLintReuseTests`, the `InlayHint*` tests, `ResolveForQuery`).
-   It keeps its hand-built pieces on `FakeFileSystem` and `TestPaths`. Do not grow harness options
-   to reproduce an empty library — that is isolation, not production wiring.
-3. **Real disk**, when the file system is the subject (below).
+1. **The harness**, for every handler, lint, completion and database test that needs a workspace —
+   including ones that want it EMPTY (`BuildAsync([])`) or want the asking file kept out of the
+   index (`Open(relative, text)`, `TestWorkspace.Analyze(relative, text)`). A test that wants an
+   empty or hand-built builtin library passes it to the HANDLER it constructs; the store is not
+   what it is choosing (`InlayHintParameterTests`, `InlayHintMacroTests`).
+2. **`TestDocuments.Standalone()`**, when the document store IS the subject: analysis gates,
+   single-flight reruns, versions, untitled buffers.
+3. **Hand-built pieces on `FakeFileSystem` and `TestPaths`**, only when the data itself is the
+   subject — records upserted with their own context ids (`ResolveForQueryTests`,
+   `WorkspaceSymbolShadowingTests`), a hand-built builtin library a lint consumes
+   (`ArgumentCountLintTests`).
+4. **Real disk**, when the file system is the subject (below).
+
+"I seeded it by hand on purpose" is worth checking before it is believed: of the nine handler tests
+first filed under hand-built, eight only wanted an empty workspace or an unindexed buffer.
 
 ## The format of a test class
 
@@ -226,8 +234,10 @@ caller's queries, or run them itself before it returns.
    ```
    Build first: on a project that does not compile, IDE0005 has nothing to go on.
 6. **Grep the area** for what the pass removes: `GetTempPath`, `GameProfile.Select`,
-   `new PhysicalFileSystem`, `RootConfig.Create`, `TestPaths.Config(`, `new PathResolver`,
-   `new WorkspaceIndexer`, `.Commit(`, drive letters. `TestPaths.Config(` is on the list because a
+   `PhysicalFileSystem`, `RootConfig.Create`, `TestPaths.Config(`, `PathResolver`,
+   `WorkspaceIndexer`, `DocumentStore`, `NavigationSupport`, `.Commit(`, drive letters. Grep the TYPE
+   names, not `new X`: `PhysicalFileSystem fileSystem = new();` is target-typed, and a search for
+   `new PhysicalFileSystem` walked past one for three passes. `TestPaths.Config(` is on the list because a
    hand-built workspace spelled on the standard roots no longer matches `RootConfig.Create` — the
    grep that stops finding a pattern is not proof the pattern is gone. What is left must be on the
    "stays on real disk" list, in "What is still hand-built", a root/data path from "The path", or a
@@ -252,7 +262,9 @@ path resolved inside the method. The compiler reports both (CS0133, CS1736).
 - **Seeded by hand on purpose:** `ArgumentCountLintTests` (a hand-built builtin library),
   `DialectIncludeScopeTests` and `ExportSignatureTests` (records committed per dialect),
   `DevBlockCallLintTests` (commits the asking file beside the index), `ClassMethodLintTests`' and
-  `UsingNotFoundLintTests`' resolver-only helpers, and the category-2 handler tests above.
+  `UsingNotFoundLintTests`' resolver-only helpers, and in the handlers only `ResolveForQueryTests`
+  and `WorkspaceSymbolShadowingTests` (records with their own context ids) and
+  `DependentRefreshStampTests` (real write stamps).
 - **Style, not setup:** `CompletionEngineTests.BuildWorld` now builds on `TestWorkspace` but still
   returns a tuple its sixty callers deconstruct, against the house style. Its CoD4 fact asserts on
   a builtin because a merge-dialect fixture "extracts to nothing" — true of the default-game

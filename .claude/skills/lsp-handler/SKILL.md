@@ -131,9 +131,11 @@ Drive it through `HandlerWorkspace.BuildAsync(files, profile?)` (Server.Tests/Ha
 in-memory workspace under `TestPaths.RawRoot`, wired like `ServerServices` — real insert provider,
 builtins in `NavigationSupport` — that holds `GameProfile.Active` on its game until disposed, since a
 handler reads Active while it answers. `workspace.Open(relative)` opens a file the way the editor
-does; `HandlerWorkspace.Identify(relative)` names it in a request. Build it per question with
-`using`. A test that deliberately seeds only some files, or passes an empty builtin library, builds
-its pieces by hand on `FakeFileSystem` instead — see the `standard-tests` skill.
+does, and `workspace.Open(relative, text)` opens a buffer the index has not seen;
+`HandlerWorkspace.Identify(relative)` names it in a request. Build it per question with `using` —
+`BuildAsync([])` when the question needs an empty workspace. A handler that should see an empty or
+hand-built builtin library is constructed with one; the workspace does not change. See the
+`standard-tests` skill.
 
 ## Client-side plumbing
 

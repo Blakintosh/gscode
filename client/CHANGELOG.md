@@ -29,8 +29,14 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - A status-bar warning when indexing fails, instead of a spinner that never stops.
 - The lints now see through macros: a private, dev-only, ambiguous or unresolved call that a macro
   expands to is reported at the invocation, and a missing `#using`/`#include` it needs is asked for.
+- Two formatter settings for indentation the stock scripts split on:
+  `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
+  `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block).
 
 ### Changed
+- The formatter indents a line that continues an open `(` or `[` one level past its statement,
+  as the stock scripts do. It used to pull such lines back flush, so Format Document re-indents
+  split calls and conditions in existing files once.
 - Large workspaces stay fast. Measured on generated 50,000-file workspaces: a warm start is about
   4 seconds, and completion, one file's lint pass, CodeLens and find-references cost the same as in
   a 1,000-file one. The workspace cache uses a new binary format, so it rebuilds once on first start.
@@ -38,6 +44,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Diagnostics for closed files are only re-sent when they change.
 
 ### Fixed
+- Formatting a CRLF file no longer returns an edit covering the whole file every time, and no
+  longer does so on every `;` and `}` with format-on-type. Output keeps the file's line endings.
 - The `doc` snippet on the four pre-BO3 games now writes the `///ScriptDocBegin`/`///ScriptDocEnd`
   fence, without which what it inserted read back as an ordinary comment and the function it
   documented hovered with no documentation at all.

@@ -27,7 +27,7 @@ readers who share the corpus's majority but not every one of its habits.
 | `else` starts its own line, never `} else` | 7 cuddled in the entire corpus |
 | No blank line immediately after `{` | 50,734 code vs 314 blank |
 | One statement per line | 65 violations in 397,111 lines |
-| A line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush |
+| A line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush; the shape splits, see below |
 | Spaces around assignment: `a = b` | 48,974 spaced vs 1,870 tight |
 | A space after every comma: `f( a, b )` | 71,606 vs 4,180 |
 | Call parentheses are **padded**: `foo( x )` (`padCallParens`) | 88,126 vs 14,274; and 473 files are internally consistent against 14 |
@@ -44,6 +44,10 @@ Stock writes indexes tight (`a[i]`, 19,175 against 4,686) and function pointers 
 (`[[ptr]]`, 1,176 against 546). We pad both interiors instead — `foo( a[ i ] )`, `[[ ptr ]]` — so
 that one rule covers every bracketing construct rather than an asymmetry nobody can remember the
 direction of.
+
+Continuation lines are indented in stock, but not one way: 207 sit exactly one level deeper and
+most of the rest are aligned under the open parenthesis. One level wins because it is expressible
+in tabs alone and does not move every continuation line when the callee is renamed.
 
 Adjacent brackets stay tight, which is what keeps `[[` and `]]` reading as the single token they
 are rather than as a nested index, and leaves an empty array as `[]`.

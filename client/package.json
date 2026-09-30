@@ -408,7 +408,7 @@
 					"gscode.format.alignConsecutive": {
 						"type": "boolean",
 						"default": true,
-						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
+						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to all three formatting requests: format-on-type is limited to the run you are editing, Format Selection to the selection.",
 						"scope": "window"
 					},
 					"gscode.format.indentCaseLabels": {

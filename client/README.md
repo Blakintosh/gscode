@@ -174,6 +174,8 @@ code it suppresses and says where it stops.
 | `gscode.format.maxBlankLines` | `2` | The longest run of blank lines the formatter keeps. |
 | `gscode.format.sortDirectives` | `true` | Group and sort the directive block at the top of a file. |
 | `gscode.format.alignConsecutive` | `true` | Line up the `=` of consecutive assignments. |
+| `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch`. |
+| `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block. |
 
 ### Commands and useful editor features
 

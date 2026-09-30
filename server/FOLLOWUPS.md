@@ -409,35 +409,20 @@ coercion first (it is one decision, not a data edit), then the worklist, then a 
   label is usually a macro or a bare literal while the subject is usually a parameter. The
   duplicate-label half already ships as `5017`, and the duplicate-`default:` half now as `5027`.
 
-### The formatter's blank line after a block does not follow an unbraced body
+### A macro can hide the end of an unbraced body from the formatter
 
-The formatter puts a blank line after a closing `}` before the next statement. A body written
-without braces never has one, so the statement after it gets no blank line:
+The formatter ends an unbraced body at its `;` — that is where the body's indent is released and
+where the blank line after the chain goes. It reads the raw tokens, before any macro is expanded,
+so a macro invocation can hide the `;` or `}` it keys on. Nested unbraced bodies are legal and
+must keep formatting as written, so none of the directions below may insert braces or refuse.
 
-```gsc
-	if ( x )
-		y();
-	if ( a && b )    // no blank line above; a braced body would have one
-```
-
-The BO3 scripts measure the statement after an unbraced `if`/`else`/`for`/`foreach`/`while` body
-at 3,145 after a blank line, 526 directly, and 1,478 where it is a closer, `else`, `case` or
-`break` and a blank would not belong anyway, so the gap is real. The proposal: treat the `;` that
-ends an unbraced body like a `}` (`UnbracedBodyTracker` already finds it, since it releases the
-body's indent there) and owe a blank line after it, with the same exceptions as after a `}`.
-
-**Nested unbraced bodies stay legal.** `if ( a )` / `if ( b )` / `c();` is ugly but valid, and the
-formatter must keep formatting it as written — no inserted braces, no refusal. One `;` ends every
-nested header at once, so the blank line would come once, after `c();`, not once per header.
-
-**Macros are where this goes wrong.** The formatter reads the raw tokens, before any macro is
-expanded, and the tracker ends a body at a `;` or `}` it can see. A macro invocation hides both:
+The shapes, and what each does today:
 
 - **A macro used as a whole statement, with no `;`.** Stock does this: `WAIT_SERVER_FRAME` is
   `#define WAIT_SERVER_FRAME {wait(SERVER_FRAME);}` and is written bare. As an unbraced body the
-  tracker never sees the body end, and this is already wrong today, before any blank line: the
+  tracker never sees the body end: the
   NEXT statement is indented as if it were the body, and a function's closing `}` after one comes
-  out indented. A blank-line rule keyed on the same `;` would land after the wrong statement.
+  out indented. The blank line after the chain lands after the wrong statement too.
   ```gsc
   	if ( x )
   		WAIT_SERVER_FRAME
@@ -446,7 +431,7 @@ expanded, and the tracker ends a body at a `;` or `}` it can see. A macro invoca
   ```
 - **A macro that expands to several statements**, such as `#define TWO_CALLS a(); b();`, used as an
   unbraced body. The source shows one statement under the `if`; after expansion only `a();` is
-  conditional. A blank line after the invocation would make the wrong reading look deliberate.
+  conditional, and the blank line after the chain makes the wrong reading look deliberate.
   That one is a lint candidate more than a formatter one.
 - **A macro that expands to a header**, such as `#define IF_DEV if ( level.dev )`. The tracker keys on
   the `if` token, so it never opens a body: no indent and no blank line. Expected from the design;

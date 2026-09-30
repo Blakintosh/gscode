@@ -64,6 +64,39 @@ public class BlankLineAfterBlockTests
     }
 
     [Fact]
+    public void ANestedUnbracedChainGetsOneBlankLineAfterItsStatement()
+    {
+        // Nested unbraced bodies are legal and stay as written; the one ';' ends the whole chain.
+        Assert.Equal(
+            "function f()\n{\n\tif ( a )\n\t\tif ( b )\n\t\t\tc();\n\n\td();\n}\n",
+            Format("function f()\n{\nif ( a )\nif ( b )\nc();\nd();\n}\n", s_tabs));
+    }
+
+    [Fact]
+    public void AnUnbracedIfElseStaysTogether()
+    {
+        Assert.Equal(
+            "function f()\n{\n\tif ( x )\n\t\ty();\n\telse\n\t\tz();\n\n\tw();\n}\n",
+            Format("function f()\n{\nif ( x )\ny();\nelse\nz();\nw();\n}\n", s_tabs));
+    }
+
+    [Fact]
+    public void AnUnbracedDoBodyKeepsItsTailAndTheBlankGoesAfter()
+    {
+        Assert.Equal(
+            "function f()\n{\n\tdo\n\t\ti--;\n\twhile ( i > 0 );\n\n\th();\n}\n",
+            Format("function f()\n{\ndo\ni--;\nwhile ( i > 0 );\nh();\n}\n", s_tabs));
+    }
+
+    [Fact]
+    public void AnUnbracedForBodyEndsAtItsStatementNotItsHeader()
+    {
+        Assert.Equal(
+            "function f()\n{\n\tfor ( i = 0; i < 3; i++ )\n\t\tg( i );\n\n\th();\n}\n",
+            Format("function f()\n{\nfor ( i = 0; i < 3; i++ )\ng( i );\nh();\n}\n", s_tabs));
+    }
+
+    [Fact]
     public void FunctionsAreSeparatedByABlankLine()
     {
         Assert.Equal(

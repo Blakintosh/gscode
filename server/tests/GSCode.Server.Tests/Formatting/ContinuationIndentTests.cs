@@ -41,7 +41,7 @@ public class ContinuationIndentTests
     public void AnUnbracedBodyAfterAJoinedHeaderIsIndentedOnce()
     {
         Assert.Equal(
-            "function f()\n{\n\tif ( a || b )\n\t\tc();\n\td();\n}\n",
+            "function f()\n{\n\tif ( a || b )\n\t\tc();\n\n\td();\n}\n",
             Format("function f()\n{\nif ( a ||\nb )\nc();\nd();\n}\n"));
     }
 

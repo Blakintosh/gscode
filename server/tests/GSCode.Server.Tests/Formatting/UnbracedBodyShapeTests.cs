@@ -54,10 +54,13 @@ public class UnbracedBodyShapeTests
             {
             	if ( n )
             		a();
+
             	while ( n )
             		b();
+
             	for ( i = 0; i < n; i++ )
             		c();
+
             	foreach ( foo in bar )
             		d();
             }
@@ -88,6 +91,7 @@ public class UnbracedBodyShapeTests
             	if ( n )
             		foreach ( foo in bar )
             			deep();
+
             	after();
             }
             """);

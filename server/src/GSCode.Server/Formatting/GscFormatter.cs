@@ -669,6 +669,21 @@ public static class GscFormatter
                     blankOwed = true;
                 }
             }
+
+            // The ';' ending a chain of unbraced bodies closes it the way a '}' closes a block:
+            // stock puts a blank line after one 3,145 times against 526. Nested headers share that
+            // ';', so the chain gets one blank line, not one per header.
+            if ( !inDirective && unbraced.BodyEnded )
+            {
+                if ( unbraced.EndedDoBody )
+                {
+                    doTailPending = true;
+                }
+                else
+                {
+                    blankOwed = true;
+                }
+            }
         }
 
         output.Append('\n');
@@ -1003,9 +1018,20 @@ public static class GscFormatter
         private int _headerParenDepth;
         private bool _awaitingBody;
         private bool _awaitingBodyFromElse;
+        private bool _awaitingBodyFromDo;
+        private bool _doBodyOpen;
 
         /// <summary>Extra indent levels owed to unbraced bodies currently open.</summary>
         public int PendingIndents { get; private set; }
+
+        /// <summary>
+        /// Whether the last token ended a chain of unbraced bodies. Nested headers all end at the
+        /// same ';', so the chain ends once, however deep it was.
+        /// </summary>
+        public bool BodyEnded { get; private set; }
+
+        /// <summary>Whether the chain that just ended was a <c>do</c> body, whose <c>while</c> tail follows.</summary>
+        public bool EndedDoBody { get; private set; }
 
         /// <summary>Called before the token is written, so its own line uses the right indent.</summary>
         public void BeforeToken(TokenKind kind)
@@ -1018,6 +1044,8 @@ public static class GscFormatter
             _awaitingBody = false;
             bool fromElse = _awaitingBodyFromElse;
             _awaitingBodyFromElse = false;
+            bool fromDo = _awaitingBodyFromDo;
+            _awaitingBodyFromDo = false;
 
             // A braced body needs nothing: brace depth already covers it.
             if ( kind == TokenKind.OpenBrace )
@@ -1034,11 +1062,18 @@ public static class GscFormatter
             }
 
             PendingIndents++;
+            if ( fromDo )
+            {
+                _doBodyOpen = true;
+            }
         }
 
         /// <summary>Called after the token is written, to arm or release the next body.</summary>
         public void AfterToken(TokenKind kind)
         {
+            BodyEnded = false;
+            EndedDoBody = false;
+
             // A statement terminator ends every unbraced body stacked above it. `}` is reset
             // rather than decremented: a brace closing here means the body was braced after all,
             // or the tracker is out of step, and dropping to zero is the safe direction.
@@ -1053,10 +1088,14 @@ public static class GscFormatter
 
             if ( kind == TokenKind.Semicolon || kind == TokenKind.CloseBrace )
             {
+                BodyEnded = kind == TokenKind.Semicolon && PendingIndents > 0;
+                EndedDoBody = BodyEnded && _doBodyOpen;
                 PendingIndents = 0;
                 _expectingHeader = false;
                 _awaitingBody = false;
                 _awaitingBodyFromElse = false;
+                _awaitingBodyFromDo = false;
+                _doBodyOpen = false;
                 return;
             }
 
@@ -1072,6 +1111,7 @@ public static class GscFormatter
             {
                 _awaitingBody = true;
                 _awaitingBodyFromElse = kind == TokenKind.Else;
+                _awaitingBodyFromDo = kind == TokenKind.Do;
                 return;
             }
 

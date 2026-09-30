@@ -130,6 +130,18 @@ its tail's `;`, not at its `}`. What continues the same construct stays directly
 `else`, the `while` of a do-while, the next `case` label, a closer, `#/`, and the `break` after a
 braced case body, which stock writes directly after its `}`. `maxBlankLines = 0` still wins.
 
+A body written without braces is closed by its `;` instead, with the same exceptions — stock puts
+a blank line after one 3,145 times against 526. Nested unbraced headers are legal and stay as
+written; they share that one `;`, so the chain gets one blank line after its statement:
+
+```gsc
+if ( a )
+	if ( b )
+		c();
+
+d();
+```
+
 ```gsc
 for ( i = 0; i < 10; i++ )
 {

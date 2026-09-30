@@ -115,6 +115,24 @@ level further. Corpus: 2,012 indented against 517 flush. The minority is common 
 rather than an accident, so `gscode.format.indentCaseLabels` puts the labels in the switch's own
 column instead.
 
+A case body written as a braced block takes no extra level: the braces supply it. The `{`, the `}`
+and anything after them in that case, a `break;` included, sit in the label's column. Stock does
+this 59 times against 47 with the block indented, and in every such case the `break;` sits beside
+the braces.
+
+```gsc
+switch ( type )
+{
+	case "plane":
+	case "helicopter":
+	{
+		return true;
+	}
+	default:
+		return false;
+}
+```
+
 ## 4. Blank lines
 
 One blank line is the convention — between functions, and between logical groups inside one. A

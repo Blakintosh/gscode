@@ -124,6 +124,23 @@ public sealed class FormattingSupport
     }
 
     /// <summary>
+    /// Whether an edit lies wholly within lines <paramref name="top"/> to <paramref name="bottom"/>:
+    /// it starts on one of them and ends on one of them, or at the start of the line after.
+    /// </summary>
+    /// <remarks>
+    /// The fragment formatters keep only these. Keeping any edit that merely OVERLAPPED the scope
+    /// let one large edit through whole: on a 7,000-line file, typing a ';' rewrote everything from
+    /// the first change to the last and sent the caret to the end of it.
+    /// </remarks>
+    public static bool WithinLines(GscFormatter.FormatEdit edit, int top, int bottom)
+    {
+        bool startsInside = edit.Range.Start.Line >= top && edit.Range.Start.Line <= bottom;
+        bool endsInside = edit.Range.End.Line <= bottom
+            || (edit.Range.End.Line == bottom + 1 && edit.Range.End.Character == 0);
+        return startsInside && endsInside;
+    }
+
+    /// <summary>
     /// The edits as the protocol wants them. Per-region rather than one document-spanning
     /// replacement, so the editor can hold the caret on whatever unchanged line it started on
     /// instead of dropping it at the end of a whole-file edit.

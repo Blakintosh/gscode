@@ -51,17 +51,14 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        // Keep only edits touching the alignment GROUP around the cursor — the run of lines that
+        // Keep only edits WITHIN the alignment GROUP around the cursor — the run of lines that
         // actually re-flow together when this one is edited. Editing an assignment tidies its run
         // of assignments and stops at the next statement of a different kind, rather than the whole
-        // function body.
-        //
-        // A LINE-level test, not TextRange.Overlaps: the group is a span of whole lines, and an
-        // edit that starts mid-line still belongs to the line it sits on.
+        // function body. An edit that reaches outside the group is dropped, not applied whole.
         (int top, int bottom) = FormatScope.GroupAround(prepared.Document.Text.Text, request.Position.Line);
 
         List<TextEdit> textEdits = FormattingSupport.ToLspEdits(
-            prepared.Edits.Where(edit => edit.Range.Start.Line <= bottom && edit.Range.End.Line >= top));
+            prepared.Edits.Where(edit => FormattingSupport.WithinLines(edit, top, bottom)));
 
         if ( textEdits.Count == 0 )
         {

@@ -152,105 +152,54 @@ public static partial class GscFormatter
         return kept.ToImmutable();
     }
 
-    /// <summary>Beyond this many changed lines on either side, one whole-region edit is used
-    /// instead of a line diff. The line-diff matrix is quadratic, and a file this size being
-    /// reindented wholesale is rare enough that the coarser edit is an acceptable fallback.</summary>
-    private const int LineDiffLimit = 3000;
-
     private static ImmutableArray<FormatEdit> DiffByLines(SourceText text, string original, string formatted)
     {
         List<LineSpan> originalLines = SplitLines(original);
         List<string> formattedLines = [.. SplitLines(formatted).Select(static span => span.Text)];
 
-        int originalCount = originalLines.Count;
-        int formattedCount = formattedLines.Count;
-
-        // Trim the runs of identical lines at the top and bottom; only the middle can differ.
-        int lead = 0;
-        while ( lead < originalCount && lead < formattedCount
-            && string.Equals(originalLines[lead].Text, formattedLines[lead], StringComparison.Ordinal) )
-        {
-            lead++;
-        }
-
-        int tail = 0;
-        while ( tail < originalCount - lead && tail < formattedCount - lead
-            && string.Equals(
-                originalLines[originalCount - 1 - tail].Text,
-                formattedLines[formattedCount - 1 - tail],
-                StringComparison.Ordinal) )
-        {
-            tail++;
-        }
-
-        int midOriginal = originalCount - tail - lead;
-        int midFormatted = formattedCount - tail - lead;
+        List<string> originalKeys = [.. originalLines.Select(static span => LineDiff.KeyOf(span.Text))];
+        List<string> formattedKeys = [.. formattedLines.Select(LineDiff.KeyOf)];
 
         ImmutableArray<FormatEdit>.Builder edits = ImmutableArray.CreateBuilder<FormatEdit>();
 
-        // One coarse edit when the middle is empty on a side (pure insertion or deletion) or too
-        // large to diff. Correct either way; it just may span the caret.
-        if ( midOriginal == 0 || midFormatted == 0 || midOriginal > LineDiffLimit || midFormatted > LineDiffLimit )
+        // Too different to line up, which the formatter's own output never is: one edit for all of it.
+        List<LinePair>? pairs = LineDiff.Match(originalKeys, formattedKeys);
+        if ( pairs is null )
         {
-            AddEdit(edits, text, originalLines, formattedLines, lead, originalCount - tail, lead, formattedCount - tail);
+            AddEdit(edits, text, originalLines, formattedLines, 0, originalLines.Count, 0, formattedLines.Count);
             return edits.ToImmutable();
         }
 
-        // Longest common subsequence of the middle lines: the anchors that stay put, so the gaps
-        // between them are the smallest set of edits that turns original into formatted.
-        int[,] lcs = new int[midOriginal + 1, midFormatted + 1];
-        for ( int i = midOriginal - 1; i >= 0; i-- )
+        int originalPosition = 0;
+        int formattedPosition = 0;
+        foreach ( LinePair pair in pairs )
         {
-            for ( int j = midFormatted - 1; j >= 0; j-- )
+            // Lines between two matches were added, removed or split by the formatter: one edit.
+            if ( pair.Original > originalPosition || pair.Formatted > formattedPosition )
             {
-                if ( string.Equals(originalLines[lead + i].Text, formattedLines[lead + j], StringComparison.Ordinal) )
-                {
-                    lcs[i, j] = lcs[i + 1, j + 1] + 1;
-                }
-                else
-                {
-                    lcs[i, j] = Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
-                }
+                AddEdit(
+                    edits, text, originalLines, formattedLines,
+                    originalPosition, pair.Original, formattedPosition, pair.Formatted);
             }
+
+            // A matched line whose whitespace or casing changed is an edit of its own, so changes
+            // stay where they are rather than joining into one region across unchanged lines.
+            if ( !string.Equals(originalLines[pair.Original].Text, formattedLines[pair.Formatted], StringComparison.Ordinal) )
+            {
+                AddEdit(
+                    edits, text, originalLines, formattedLines,
+                    pair.Original, pair.Original + 1, pair.Formatted, pair.Formatted + 1);
+            }
+
+            originalPosition = pair.Original + 1;
+            formattedPosition = pair.Formatted + 1;
         }
 
-        int originalPos = 0;
-        int formattedPos = 0;
-        int walkI = 0;
-        int walkJ = 0;
-        while ( walkI < midOriginal && walkJ < midFormatted )
-        {
-            if ( string.Equals(originalLines[lead + walkI].Text, formattedLines[lead + walkJ], StringComparison.Ordinal) )
-            {
-                // A line that stays. Everything queued before it is one edit.
-                if ( walkI > originalPos || walkJ > formattedPos )
-                {
-                    AddEdit(
-                        edits, text, originalLines, formattedLines,
-                        lead + originalPos, lead + walkI, lead + formattedPos, lead + walkJ);
-                }
-
-                originalPos = walkI + 1;
-                formattedPos = walkJ + 1;
-                walkI++;
-                walkJ++;
-            }
-            else if ( lcs[walkI + 1, walkJ] >= lcs[walkI, walkJ + 1] )
-            {
-                walkI++;
-            }
-            else
-            {
-                walkJ++;
-            }
-        }
-
-        // The final gap after the last anchor.
-        if ( midOriginal > originalPos || midFormatted > formattedPos )
+        if ( originalLines.Count > originalPosition || formattedLines.Count > formattedPosition )
         {
             AddEdit(
                 edits, text, originalLines, formattedLines,
-                lead + originalPos, lead + midOriginal, lead + formattedPos, lead + midFormatted);
+                originalPosition, originalLines.Count, formattedPosition, formattedLines.Count);
         }
 
         return edits.ToImmutable();
@@ -281,6 +230,17 @@ public static partial class GscFormatter
         }
 
         TextRange range = new(text.GetPosition(startOffset), text.GetPosition(endOffset));
+
+        // A pure insertion that meets another edit at the same point has no order an editor must
+        // honour between the two, so it joins that edit instead of standing beside it.
+        if ( edits.Count > 0 && edits[^1].Range.End == range.Start
+            && (edits[^1].Range.Start == edits[^1].Range.End || range.Start == range.End) )
+        {
+            FormatEdit previous = edits[^1];
+            edits[^1] = new FormatEdit(new TextRange(previous.Range.Start, range.End), previous.NewText + replacement);
+            return;
+        }
+
         edits.Add(new FormatEdit(range, replacement.ToString()));
     }
 

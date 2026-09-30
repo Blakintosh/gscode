@@ -585,9 +585,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Formatting/GscFormatter.cs
 
-- `FormatMinimalEdits(ParseResult)` returns the formatting result as per-region `FormatEdit`s —
-  one small edit per run of changed lines, unchanged lines left out entirely — which all three
-  formatting handlers share. `Format(ParseResult)` returns the full formatted text (or null).
+- `FormatMinimalEdits(ParseResult)` returns the formatting result as local `FormatEdit`s — one per
+  changed line, plus one per run of lines the formatter added, removed or split; unchanged lines
+  are left out entirely — which all three formatting handlers share. The lines are paired by
+  `LineDiff`, a Myers diff over each line's content with whitespace removed and case folded, so
+  the pairing stays nearly one-to-one however much of the file was reindented. The on-type and
+  range handlers keep only edits wholly inside their scope (`FormattingSupport.WithinLines`).
+  `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
   braces, one statement per line, one indent per brace level (`AppendIndent`: a tab

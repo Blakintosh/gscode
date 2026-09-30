@@ -54,6 +54,10 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 ### Fixed
 - Formatting a CRLF file no longer returns an edit covering the whole file every time, and no
   longer does so on every `;` and `}` with format-on-type. Output keeps the file's line endings.
+- Format-on-type and Format Selection only change the lines they are scoped to. On a large file
+  whose formatting changed lines throughout, one `;` used to rewrite the whole file and move the
+  caret thousands of lines. Formatting edits are now one per changed line, and computing them is
+  about three times faster on the largest stock scripts.
 - The `doc` snippet on the four pre-BO3 games now writes the `///ScriptDocBegin`/`///ScriptDocEnd`
   fence, without which what it inserted read back as an ordinary comment and the function it
   documented hovered with no documentation at all.

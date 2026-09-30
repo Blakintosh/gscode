@@ -41,10 +41,15 @@ public sealed class DocumentRangeFormattingHandler : DocumentRangeFormattingHand
             return Task.FromResult<TextEditContainer>(new TextEditContainer());
         }
 
-        // Only the edits that touch the selection; a clean selection then does nothing.
+        // Only the edits within the selected lines; a clean selection then does nothing, and nothing
+        // outside it changes. A selection ending at the start of a line does not include that line.
         TextRange requested = request.Range.ToCore();
+        int top = requested.Start.Line;
+        int bottom = requested.End.Character == 0 && requested.End.Line > top
+            ? requested.End.Line - 1
+            : requested.End.Line;
         List<TextEdit> textEdits = FormattingSupport.ToLspEdits(
-            prepared.Edits.Where(edit => edit.Range.Overlaps(requested)));
+            prepared.Edits.Where(edit => FormattingSupport.WithinLines(edit, top, bottom)));
 
         return Task.FromResult<TextEditContainer>(new TextEditContainer(textEdits));
     }

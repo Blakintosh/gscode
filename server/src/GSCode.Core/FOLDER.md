@@ -275,6 +275,13 @@ for a rule to say what a value can never be.
   stage: lexing 1xxx, preprocessing 2xxx, parsing 3xxx, per-file semantics 4xxx, cross-file /
   workspace semantics 5xxx (e.g. NamespaceNotImported). Grows phase by phase.
 
+## Diagnostics/GscDiagnosticStages.cs
+
+- `static class GscDiagnosticStages` — `IsLexing(code)` (1xxx) and `IsParsing(code)` (3xxx), a
+  code's stage read from its thousands digit. The formatter's syntax-error refusal, the lenient
+  header parse in `ScriptAnalysis` and `ExpressionStatementLint` ask through it rather than
+  spelling a range out.
+
 ## Diagnostics/DiagnosticMessages.cs
 
 - `static class DiagnosticMessages` — the single template table (code → message format).

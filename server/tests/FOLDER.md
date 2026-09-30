@@ -415,7 +415,12 @@ open `(`/`[` · `IndentOptionsTests` `case` labels and dev blocks · `UnbracedBo
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,
 `BracketSpacingTests` · `ColumnAlignerTests`, `AssignmentAlignerTests` · `DirectiveSorterTests` ·
 `FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma disable format` ·
-`GuidelineExampleTests` the examples in `FORMATTING.md`.
+`GuidelineExampleTests` the examples in `FORMATTING.md` · `LocalFormatEditTests` edits staying
+where their changes are on a large or heavily reformatted file · `BlankLineAfterBlockTests` the
+blank line after a closed block · `ColonFormattingTests` a ':' as a label, a ternary or a base
+class · `DefineFormattingTests` a `#define`'s '(' adjacency kept exactly ·
+`FunctionPointerSpacingTests` `[[ ]]` read as one token each · `FixCasingTests` the `fixCasing`
+pass over a fixed lookup, `CallCasingTests` the workspace's answers to it.
 
 **Handlers.** `CodeActionHandlerTests` quick fixes · `CodeActionLintReuseTests` one request runs the
 lint pass once, asserted by array identity rather than by counting calls on a sealed type ·
@@ -454,7 +459,10 @@ hierarchies) · `ClassMemberNavigationTests` a class `var` read as a bare name i
 declining rather than falling back to the declaration · `HoverDefinitionLinkTests` the definition
 link under a hover's signature, and none for a builtin · `AutoImportCompletionTests` the directive
 edit an unimported candidate carries · `GenerateScriptDocTests` a generated ScriptDoc block reading
-back as documentation in both dialect forms.
+back as documentation in both dialect forms · `NarrowedCompletionTests` a list cut to the typed
+text marked incomplete · `SysQualifiedHoverTests` a `sys::` hover describing the engine function.
+`TestDiagnosticsSinks` holds `RecordingDiagnosticsSink`, which keeps every publish for a test to
+assert on, and `DiscardingDiagnosticsSink`.
 
 **Analysis ordering and publishing.** `AnalysisGateTests`, `SingleFlightAnalysisTests` one analysis
 in flight per document and none for a document nothing holds · `DiagnosticsPublishOrderTests` the

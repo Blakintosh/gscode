@@ -1,7 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
@@ -29,16 +26,10 @@ public class MacroHoverProbeTests
         + "    }\n"
         + "}\n";
 
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     /// <summary>Mirrors the handler: find the invocation, read its arguments, render the body.</summary>
     private static string RenderAtInvocation(string source, string macroName)
     {
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
 
@@ -63,7 +54,7 @@ public class MacroHoverProbeTests
     {
         // The fact the fix turns on, pinned so nobody "simplifies" the argument lookup back to
         // slicing the range.
-        ParseResult result = Analyze(Source);
+        ParseResult result = TestParse.Analyze(Source);
         MacroInvocation invocation = Assert.Single(result.Preprocessed.MacroInvocations);
 
         int start = result.Text.GetOffset(invocation.Range.Start);

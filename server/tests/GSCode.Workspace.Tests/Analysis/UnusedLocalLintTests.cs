@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -24,12 +20,7 @@ public class UnusedLocalLintTests
 {
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("function f( p )\n{\n" + body + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f( p )\n{\n" + body + "\n}\n");
 
         return UnusedLocalLint.Analyze(result);
     }
@@ -142,8 +133,7 @@ public class UnusedLocalLintTests
             + "    }\n"
             + "}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.Empty(UnusedLocalLint.Analyze(result));
     }
@@ -152,12 +142,7 @@ public class UnusedLocalLintTests
     public void EachFunctionIsSeparate()
     {
         // A name read in another function does not keep this one alive.
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("function a()\n{\n    bar = 1;\n}\nfunction b()\n{\n    bar = 2;\n    use( bar );\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function a()\n{\n    bar = 1;\n}\nfunction b()\n{\n    bar = 2;\n    use( bar );\n}\n");
 
         Assert.Single(UnusedLocalLint.Analyze(result));
     }

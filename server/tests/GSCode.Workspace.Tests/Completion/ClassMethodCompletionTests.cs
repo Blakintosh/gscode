@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
@@ -32,12 +31,7 @@ public class ClassMethodCompletionTests
 
     private static ParseResult Analyze(string path, string text)
     {
-        return ScriptAnalysis.Analyze(
-            path,
-            ScriptAnalysis.LanguageFromPath(path),
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable());
+        return TestParse.Analyze(text, path);
     }
 
     private static bool HasLabel(ImmutableArray<CompletionEntry> entries, string label)

@@ -27,7 +27,7 @@ public class CompletionEngineTests
 
     private static ParseResult Analyze(string path, string text)
     {
-        return ScriptAnalysis.Analyze(path, ScriptAnalysis.LanguageFromPath(path), SourceText.From(text), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
+        return TestParse.Analyze(text, path);
     }
 
     /// <summary>
@@ -981,13 +981,7 @@ public class CompletionEngineTests
         // with the active profile, so a merge dialect's `foo() { }` in a fixture file extracts to
         // nothing and the store would have had no function to offer.
         string text = "main()\n{\n    x = mask & \n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptAnalysis.LanguageFromPath(TestPaths.Raw(@"maps\mp\test.gsc")),
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            cod4);
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"maps\mp\test.gsc"), cod4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result,
@@ -1385,9 +1379,7 @@ public class CompletionEngineTests
 
         GameProfile mw2 = GameProfile.ByName("mw2")!;
         string text = "helper_just_typed()\n{\n}\n\nrun()\n{\n    \n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\main.gsc"), GSCode.Core.Symbols.ScriptLanguage.Gsc, SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), mw2);
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"maps\main.gsc"), mw2);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(6, 4), profile: mw2);
 

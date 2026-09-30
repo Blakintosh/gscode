@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -12,15 +8,9 @@ namespace GSCode.Server.Tests.Formatting;
 
 public class GscFormatterTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     private static string? Format(string source)
     {
-        return GscFormatter.Format(Analyze(source));
+        return GscFormatter.Format(TestParse.Analyze(source));
     }
 
     /// <summary>The non-trivia token kinds+texts of two sources, for the fidelity gate.</summary>
@@ -136,7 +126,7 @@ public class GscFormatterTests
         // Only the "a=0;" line needs spacing; the edit must not span the whole file.
         string source = "function f()\n{\n    a=0;\n}\n";
 
-        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
         GscFormatter.FormatEdit edit = Assert.Single(edits);
         Assert.Equal(2, edit.Range.Start.Line);
@@ -149,7 +139,7 @@ public class GscFormatterTests
     {
         string source = "function f()\n{\n    a = 0;\n}\n";
 
-        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
         Assert.Empty(edits);
     }

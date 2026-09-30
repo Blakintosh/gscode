@@ -2,9 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -41,12 +38,6 @@ public class ClassMethodLintTests
         return database;
     }
 
-    private static ParseResult Parse(string source, string path)
-    {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     /// <summary>Resolution diagnostics for <paramref name="source"/>, with the other files indexed.</summary>
     private static ImmutableArray<Diagnostic> Resolution(
         string source, params (string Name, string Source)[] others)
@@ -56,7 +47,7 @@ public class ClassMethodLintTests
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
 
         return FunctionResolutionLint.Analyze(
-            Parse(source, path), database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), GameProfile.BlackOps3);
+            TestParse.Analyze(source, path), database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), GameProfile.BlackOps3);
     }
 
     /// <summary>Argument-count diagnostics for <paramref name="source"/>.</summary>
@@ -67,7 +58,7 @@ public class ClassMethodLintTests
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
 
         return ArgumentCountLint.Analyze(
-            Parse(source, path), database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), GameProfile.BlackOps3);
+            TestParse.Analyze(source, path), database.Gsc, "raw", path, builtins.For(ScriptLanguage.Gsc), GameProfile.BlackOps3);
     }
 
     // --- Resolution ---
@@ -225,7 +216,7 @@ public class ClassMethodLintTests
 
         RootConfig config = TestPaths.Config(new FakeFileSystem());
         Assert.Empty(NamespaceUsageLint.Analyze(
-            Parse(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
+            TestParse.Analyze(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
     }
 
     [Fact]
@@ -241,7 +232,7 @@ public class ClassMethodLintTests
 
         RootConfig config = TestPaths.Config(new FakeFileSystem());
         Diagnostic diagnostic = Assert.Single(NamespaceUsageLint.Analyze(
-            Parse(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
+            TestParse.Analyze(source, path), database.Gsc, ScriptLanguage.Gsc, new PathResolver(config, new FakeFileSystem()), path));
 
         Assert.Equal(GscDiagnosticCode.NamespaceNotImported, diagnostic.Code);
     }

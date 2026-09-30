@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -23,13 +21,7 @@ public class LocalReferencesTests
 {
     private static ParseResult Analyze(string source, GameProfile? profile = null)
     {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\main.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        return TestParse.Analyze(source, TestPaths.Raw(@"scripts\main.gsc"), profile);
     }
 
     [Fact]

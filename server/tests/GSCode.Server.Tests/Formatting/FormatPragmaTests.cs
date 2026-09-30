@@ -1,9 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -19,16 +14,6 @@ namespace GSCode.Server.Tests.Formatting;
 /// </summary>
 public class FormatPragmaTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
-    }
-
     [Fact]
     public void AProtectedRegionIsLeftAlone()
     {
@@ -42,7 +27,7 @@ public class FormatPragmaTests
             + "// #pragma restore format\n"
             + "}\n";
 
-        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
         // Nothing may touch lines 3 or 4, the two inside the region.
         Assert.All(edits, edit => Assert.True(
@@ -64,7 +49,7 @@ public class FormatPragmaTests
             + "            b = 2;\n"
             + "}\n";
 
-        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
         // Line 5 is below the region and must still be reindented. The edit covering it may begin
         // on line 4 — the `restore` comment is itself reindented, and consecutive changed lines
@@ -78,6 +63,6 @@ public class FormatPragmaTests
         // The filter must cost nothing in the ordinary case.
         string source = "function f()\n{\n        a = 1;\n}\n";
 
-        Assert.NotEmpty(GscFormatter.FormatMinimalEdits(Analyze(source)));
+        Assert.NotEmpty(GscFormatter.FormatMinimalEdits(TestParse.Analyze(source)));
     }
 }

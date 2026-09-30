@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -25,8 +22,7 @@ public class UnassignedVariableLintTests
         GameProfile profile = GameProfile.ByName(game)!;
         string path = game == "bo3" ? TestPaths.Raw(@"scripts\t.gsc") : TestPaths.Raw(@"maps\t.gsc");
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), profile);
+        ParseResult result = TestParse.Analyze(source, path, profile);
 
         return UnassignedVariableLint.Analyze(result, profile);
     }

@@ -1,8 +1,6 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using Xunit;
@@ -24,13 +22,7 @@ public class DialectDependencyTests
 
     private static ParseResult Analyze()
     {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\maps\mp\_utility.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(Source),
-            NullInsertProvider.Instance,
-            new NameTable(),
-            s_cod4);
+        return TestParse.Analyze(Source, TestPaths.Raw(@"scripts\maps\mp\_utility.gsc"), s_cod4);
     }
 
     [Fact]

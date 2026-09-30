@@ -1,8 +1,6 @@
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -33,8 +31,7 @@ public class MacroNavigationTests
 
     private static ParseResult Analyze()
     {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(Source), NullInsertProvider.Instance, new NameTable());
+        return TestParse.Analyze(Source);
     }
 
     private static Position InvocationPosition(ParseResult result)

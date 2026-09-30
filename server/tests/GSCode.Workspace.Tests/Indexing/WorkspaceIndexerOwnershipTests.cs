@@ -1,9 +1,6 @@
 using GSCode.Core;
 using GSCode.Core.Paths;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -21,7 +18,6 @@ namespace GSCode.Workspace.Tests.Indexing;
 /// </summary>
 public class WorkspaceIndexerOwnershipTests
 {
-
     private static (ScriptDatabase Database, WorkspaceIndexer Indexer, PathResolver Resolver, string OpenPath)
         BuildWorkspaceWithOneOpenFile()
     {
@@ -37,9 +33,7 @@ public class WorkspaceIndexerOwnershipTests
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
 
-        ParseResult openBuffer = ScriptAnalysis.Analyze(
-            openPath, ScriptLanguage.Gsc, SourceText.From("function edited_in_buffer()\n{\n}\n"),
-            NullInsertProvider.Instance, new NameTable());
+        ParseResult openBuffer = TestParse.Analyze("function edited_in_buffer()\n{\n}\n", openPath);
         database.Commit(openBuffer, resolver.GetContext(openPath), isDirty: true, "scripts\\open.gsc");
 
         return (database, indexer, resolver, openPath);

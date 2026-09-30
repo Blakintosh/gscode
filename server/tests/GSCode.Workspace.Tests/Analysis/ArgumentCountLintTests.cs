@@ -1,11 +1,7 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -55,14 +51,12 @@ public class ArgumentCountLintTests
         if ( otherFile is not null )
         {
             string otherPath = TestPaths.Raw(@"scripts\zm\_zm_utility.gsc");
-            ParseResult other = ScriptAnalysis.Analyze(
-                otherPath, ScriptLanguage.Gsc, SourceText.From(otherFile), NullInsertProvider.Instance, new NameTable());
+            ParseResult other = TestParse.Analyze(otherFile, otherPath);
 
             database.Commit(other, ResolutionContext.RawContext, isDirty: false, @"scripts\zm\_zm_utility.gsc");
         }
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            AskingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, AskingPath);
 
         // The asking file is indexed too, as it is in a live workspace. It matters: the script half of
         // this rule reads declarations from the STORE, so an un-indexed asking file has no arity to

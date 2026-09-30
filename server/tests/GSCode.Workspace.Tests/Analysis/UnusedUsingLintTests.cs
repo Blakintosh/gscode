@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
@@ -15,7 +12,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 
 public class UnusedUsingLintTests
 {
-
     /// <summary>
     /// A small world: util (plain functions), boot (an autoexec), shapes (a class), and
     /// util_more (a second contributor to the SAME namespace as util).
@@ -39,8 +35,7 @@ public class UnusedUsingLintTests
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         return UnusedUsingLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
     }

@@ -1,8 +1,5 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -100,9 +97,7 @@ public sealed class TestWorkspace : IDisposable
     /// </summary>
     public ParseResult Analyze(string relativePath, string text)
     {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(relativePath), ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance,
-            new NameTable(), Profile);
+        return TestParse.Analyze(text, TestPaths.Raw(relativePath), Profile);
     }
 
     public void Dispose()

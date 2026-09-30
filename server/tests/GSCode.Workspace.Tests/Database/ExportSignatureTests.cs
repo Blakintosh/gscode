@@ -21,12 +21,7 @@ public class ExportSignatureTests
 {
     private static ulong SignatureOf(string source, string relativePath = @"scripts\util.gsc")
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\util.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze(source, TestPaths.Raw(@"scripts\util.gsc"));
 
         ScriptDatabase database = new();
         return ExportSignature.Of(database.Commit(result, ResolutionContext.RawContext, false, relativePath));

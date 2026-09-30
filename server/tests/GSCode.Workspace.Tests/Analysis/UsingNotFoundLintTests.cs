@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
@@ -37,8 +36,7 @@ public class UsingNotFoundLintTests
         PathResolver resolver = workspace.Resolver;
 
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, path);
 
         return (
             UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path),
@@ -57,12 +55,7 @@ public class UsingNotFoundLintTests
         PathResolver resolver = new(config, files);
 
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path,
-            ScriptLanguage.Gsc,
-            SourceText.From("#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n", path);
 
         Assert.Empty(UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path));
     }
@@ -113,9 +106,7 @@ public class UsingNotFoundLintTests
         PathResolver resolver = new(config, files);
 
         string path = TestPaths.Raw(@"maps\mp\_menus.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), s_cod4);
+        ParseResult result = TestParse.Analyze(source, path, s_cod4);
 
         return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, s_cod4);
     }

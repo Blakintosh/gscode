@@ -1,8 +1,5 @@
-using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
@@ -134,8 +131,7 @@ public class ImportResolutionProbeCostTests
     private static void ResolveImportsAndCheckUsingsExist(
         PathResolver resolver, string askingPath, string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, askingPath);
 
         // Mirrors WorkspaceLints.Analyze exactly: FileImports.Resolve is shared across four lints
         // (called once), UsingNotFoundLint resolves the same directives again independently.
@@ -157,8 +153,7 @@ public class ImportResolutionProbeCostTests
         (CountingFileSystem fileSystem, PathResolver resolver, string askingPath, string source) =
             BuildAdversarialWorkspace();
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, askingPath);
         FileImports.Resolve(result, new LanguageStore(), ScriptLanguage.Gsc, resolver, askingPath);
 
         Assert.Equal(expectedColdProbes, fileSystem.FileExistsCount);
@@ -192,8 +187,7 @@ public class ImportResolutionProbeCostTests
         (CountingFileSystem fileSystem, PathResolver resolver, string askingPath, string source) =
             BuildSingleRootWorkspace();
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, askingPath);
         FileImports.Resolve(result, new LanguageStore(), ScriptLanguage.Gsc, resolver, askingPath);
 
         Assert.Equal(expectedColdProbes, fileSystem.FileExistsCount);

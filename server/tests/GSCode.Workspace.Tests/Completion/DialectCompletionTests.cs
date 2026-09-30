@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
@@ -157,13 +156,7 @@ public class DialectCompletionTests
         // Variable, which is the first sort tier, so offering them would put them at the head of
         // every file-scope list.
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("\nmain()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            s_cod4);
+        ParseResult result = TestParse.Analyze("\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, 0), profile: s_cod4);
 
@@ -179,13 +172,7 @@ public class DialectCompletionTests
     public void Cod4FileScopeStaysWithinTheDialect()
     {
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("#define CAP 5\n\nmain()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            s_cod4);
+        ParseResult result = TestParse.Analyze("#define CAP 5\n\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(1, 0), profile: s_cod4);
 
@@ -322,13 +309,7 @@ public class DialectCompletionTests
     private static ImmutableArray<CompletionEntry> DirectivesAfterHash(GameProfile profile)
     {
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("#\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze("#\n", TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(0, 1), profile: profile);
     }
@@ -337,13 +318,7 @@ public class DialectCompletionTests
     private static ImmutableArray<CompletionEntry> TopLevelCompletions(GameProfile profile)
     {
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze("\n", TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(0, 0), profile: profile);
     }
@@ -355,7 +330,6 @@ public class DialectCompletionTests
     // directives get has to work in ordinary code too, or there is no way to discover what a path
     // continues into. The profile is passed explicitly rather than through GameProfile.Active, so
     // these cannot be perturbed by a test that mutates it.
-
 
     private static readonly FakeFileSystem s_pathWorld = new FakeFileSystem()
         .AddFile(TestPaths.Raw(@"maps\mp\_utility.gsc"), "helper()\n{\n}\n")
@@ -386,13 +360,7 @@ public class DialectCompletionTests
 
         string opening = profile.HasFunctionKeyword ? "function " : "";
         string text = opening + "main()\n{\n    " + line + "\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(2, 4 + line.Length), profile: profile);
     }
@@ -500,13 +468,7 @@ public class DialectCompletionTests
         // so the whole Infinity Ward line got no path completion on the one directive it writes.
         CompletionEngine engine = BuildEngine();
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\mp\test.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("#include maps\\\nmain()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            s_cod4);
+        ParseResult result = TestParse.Analyze("#include maps\\\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(0, 14), profile: s_cod4);

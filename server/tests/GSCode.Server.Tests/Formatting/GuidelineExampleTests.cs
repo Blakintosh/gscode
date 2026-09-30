@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -25,8 +21,7 @@ public class GuidelineExampleTests
 
     private static string? Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, s_tabs);
     }

@@ -3,9 +3,7 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -35,8 +33,7 @@ public class PrivateAccessLintTests
     {
         string askingPath = TestPaths.Raw(askingRelativePath);
         ScriptDatabase database = BuildWorkspace();
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         return PrivateAccessLint.Analyze(
@@ -65,8 +62,7 @@ public class PrivateAccessLintTests
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
         ScriptDatabase database = BuildWorkspace();
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, askingPath);
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
 
         Assert.Empty(PrivateAccessLint.Analyze(
@@ -115,7 +111,6 @@ public class PrivateAccessLintTests
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
 
         DiagnosticRelation relation = Assert.Single(Assert.Single(Lint(source)).RelatedInformation);
-
 
         Assert.EndsWith("util.gsc", relation.FilePath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, relation.Range.Start.Line);
@@ -197,8 +192,7 @@ public class PrivateAccessLintTests
 
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
         string source = "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::hidden();\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, askingPath);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         Diagnostic diagnostic = Assert.Single(PrivateAccessLint.Analyze(

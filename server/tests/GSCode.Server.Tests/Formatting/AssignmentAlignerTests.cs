@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -22,8 +18,7 @@ public class AssignmentAlignerTests
 
     private static string Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, s_aligned)!;
     }
@@ -175,8 +170,7 @@ public class AssignmentAlignerTests
     {
         string once = Format("function f()\n{\na = 1;\nbbbbbb = 2;\ncc = 3;\n}\n");
 
-        ParseResult reparsed = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+        ParseResult reparsed = TestParse.Analyze(once);
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_aligned));
     }
@@ -185,12 +179,7 @@ public class AssignmentAlignerTests
     public void OffByDefault_LeavesSingleSpacing()
     {
         // FormatOptions.Default has alignment off, so the same input keeps ordinary spacing.
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\na = 1;\nbbbbbb = 2;\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f()\n{\na = 1;\nbbbbbb = 2;\n}\n");
 
         string formatted = GscFormatter.Format(result, FormatOptions.Default with { UseTabs = true })!;
 

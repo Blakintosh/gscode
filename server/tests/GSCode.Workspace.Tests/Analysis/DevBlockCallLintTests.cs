@@ -3,9 +3,7 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -21,7 +19,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class DevBlockCallLintTests
 {
-
     private static ImmutableArray<Diagnostic> Lint(string askingSource, FakeFileSystem? extra = null)
     {
         FakeFileSystem files = extra ?? new FakeFileSystem();
@@ -31,8 +28,7 @@ public class DevBlockCallLintTests
         ScriptDatabase database = workspace.Database;
 
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         // The asking file is not indexed, so commit it too — its own dev-only functions must be
         // resolvable for the same-file case.

@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
@@ -19,7 +17,6 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class RealisticKeystrokeTests
 {
-
     private readonly ITestOutputHelper _output;
 
     public RealisticKeystrokeTests(ITestOutputHelper output)
@@ -44,12 +41,7 @@ public class RealisticKeystrokeTests
         CompletionEngine engine = Build();
         string text = "#namespace util;\n\nfunction run()\n{\n" + line + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\main.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"scripts\main.gsc"));
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(4, line.Length), callPunctuation: CallPunctuation.ParensAndSemicolon);

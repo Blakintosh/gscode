@@ -2,9 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -40,8 +38,7 @@ public class FunctionResolutionLintTests
     {
         string askingPath = TestPaths.Raw(askingRelativePath);
         ScriptDatabase database = BuildWorkspace();
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         return FunctionResolutionLint.Analyze(
@@ -118,10 +115,7 @@ public class FunctionResolutionLintTests
 
         ScriptDatabase database = BuildWorkspace();
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc,
-            SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
-            NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n", path);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         Assert.Empty(FunctionResolutionLint.Analyze(
@@ -143,8 +137,7 @@ public class FunctionResolutionLintTests
         // missing FILE is reported by the preprocessor, and the lint adds nothing on top of it.
         ScriptDatabase database = BuildWorkspace();
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, path);
 
         Assert.Contains(result.AllDiagnostics, static d => d.Code == GscDiagnosticCode.InsertNotFound);
 
@@ -176,10 +169,7 @@ public class FunctionResolutionLintTests
         // Without an API library every builtin call would look unresolved, so the lint stands down.
         ScriptDatabase database = BuildWorkspace();
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc,
-            SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
-            NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n", path);
 
         ImmutableArray<Diagnostic> diagnostics = FunctionResolutionLint.Analyze(
             result, database.Gsc, "raw", path, BuiltinApi.Empty, GameProfile.ByName("waw")!);
@@ -194,7 +184,6 @@ public class FunctionResolutionLintTests
     // and no builtin of that name. Every step is right and 5014's verdict is still the wrong thing
     // to tell someone whose real mistake was targeting the wrong game.
 
-
     private static ImmutableArray<Diagnostic> LintAsCod4(string source)
     {
         GameProfile cod4 = GameProfile.Cod4;
@@ -204,8 +193,7 @@ public class FunctionResolutionLintTests
         using TestWorkspace workspace = TestWorkspace.Build(files, cod4, IndexingMode.Partial);
         ScriptDatabase database = workspace.Database;
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), cod4);
+        ParseResult result = TestParse.Analyze(source, askingPath, cod4);
 
         // The library must be CoD4's. Loading the active profile's would judge CoD4 code against
         // BO3's engine functions, which is its own bug and would hide this one.
@@ -304,7 +292,6 @@ public class FunctionResolutionLintTests
     // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
     // able to make a path call resolve on anyone else's say-so.
 
-
     private static ImmutableArray<Diagnostic> LintPathCall(
         string askingSource, params (string Path, string Text)[] otherFiles)
     {
@@ -324,8 +311,7 @@ public class FunctionResolutionLintTests
         indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
             .GetAwaiter().GetResult();
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), mw2);
+        ParseResult result = TestParse.Analyze(askingSource, askingPath, mw2);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, mw2);
         return FunctionResolutionLint.Analyze(

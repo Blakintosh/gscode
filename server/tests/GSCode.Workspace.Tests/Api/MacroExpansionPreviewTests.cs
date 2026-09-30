@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -19,8 +17,7 @@ public class MacroExpansionPreviewTests
 {
     private static ImmutableArray<PToken> BodyOf(string source, string macroName)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
         return definition.Body;
@@ -42,8 +39,7 @@ public class MacroExpansionPreviewTests
 
     private static ImmutableArray<string> ParametersOf(string source, string macroName)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
         return definition.Parameters ?? [];
@@ -248,8 +244,7 @@ public class MacroExpansionPreviewTests
 
     private static MacroTable MacrosOf(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
         return result.Preprocessed.Macros;
     }
 

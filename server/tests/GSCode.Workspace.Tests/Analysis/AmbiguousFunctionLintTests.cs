@@ -1,8 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
@@ -24,7 +22,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class AmbiguousFunctionLintTests
 {
-
     private static ImmutableArray<Diagnostic> Lint(FakeFileSystem files, string source)
     {
         using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
@@ -32,8 +29,7 @@ public class AmbiguousFunctionLintTests
         PathResolver resolver = workspace.Resolver;
 
         string path = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source, path);
 
         return AmbiguousFunctionLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, path);
     }

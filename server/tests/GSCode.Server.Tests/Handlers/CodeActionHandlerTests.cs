@@ -1,8 +1,6 @@
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Core.Diagnostics;
 using GSCode.Server.Handlers;
@@ -15,17 +13,6 @@ namespace GSCode.Server.Tests.Handlers;
 
 public class CodeActionHandlerTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return AnalyzeAt(source, TestPaths.Raw(@"scripts\t.gsc"));
-    }
-
-    private static ParseResult AnalyzeAt(string source, string path)
-    {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     private static TextRange WholeFile => TextRange.FromCoordinates(0, 0, 1000, 0);
 
     /// <summary>
@@ -61,7 +48,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
         // The SECOND occurrence (line 1) is the redundant one.
@@ -73,7 +60,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\Util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
     }
@@ -83,7 +70,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\array;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Empty(duplicates);
     }
@@ -95,7 +82,7 @@ public class CodeActionHandlerTests
 
         // A selection covering only line 0 (the first, non-redundant occurrence).
         TextRange lineZero = TextRange.FromCoordinates(0, 0, 0, 5);
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), lineZero);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), lineZero);
 
         Assert.Empty(duplicates);
     }
@@ -110,13 +97,7 @@ public class CodeActionHandlerTests
         // directive and no IncludeNode is produced at all. There is no dialect in which both forms
         // exist, which is why the two are tracked separately rather than compared with each other.
         string source = "#include maps\\_utility;\n#include maps\\_utility;\nmain(){}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"maps\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable(),
-            GameProfile.Cod4);
+        ParseResult result = TestParse.Analyze(source, TestPaths.Raw(@"maps\t.gsc"), GameProfile.Cod4);
 
         CodeActionHandler.RedundantImport duplicate =
             Assert.Single(CodeActionHandler.FindRemovableDuplicates(result, WholeFile));
@@ -131,7 +112,7 @@ public class CodeActionHandlerTests
     {
         ScriptDatabase database = DatabaseWithUtil();
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult asking = AnalyzeAt("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
+        ParseResult asking = TestParse.Analyze("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
         List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
@@ -143,7 +124,7 @@ public class CodeActionHandlerTests
     {
         ScriptDatabase database = DatabaseWithUtil();
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult asking = AnalyzeAt(
+        ParseResult asking = TestParse.Analyze(
             "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
         List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
@@ -156,7 +137,7 @@ public class CodeActionHandlerTests
     {
         ScriptDatabase database = DatabaseWithUtil();
         string askingPath = TestPaths.Raw(@"scripts\util_more.gsc");
-        ParseResult asking = AnalyzeAt("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
+        ParseResult asking = TestParse.Analyze("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
         List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
@@ -177,7 +158,7 @@ public class CodeActionHandlerTests
 
     private static List<CodeAction> FixesFor(string source, params LspDiagnostic[] reported)
     {
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
         List<CommandOrCodeAction> actions = [];
 
         CodeActionParams request = new()
@@ -426,7 +407,7 @@ public class CodeActionHandlerTests
 
     private static List<CodeAction> CallFixes(string source, int line, int start, int end, ScriptDatabase? database = null)
     {
-        ParseResult result = AnalyzeAt(source, AskingPath);
+        ParseResult result = TestParse.Analyze(source, AskingPath);
 
         CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", AskingPath);
 
@@ -587,9 +568,7 @@ public class CodeActionHandlerTests
     /// </summary>
     private static List<CodeAction> IncludeFixes(string source, TestWorkspace? workspace = null)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            Cod4AskingPath, ScriptLanguage.Gsc, SourceText.From(source),
-            NullInsertProvider.Instance, new NameTable(), s_cod4);
+        ParseResult result = TestParse.Analyze(source, Cod4AskingPath, s_cod4);
 
         const string called = "scriptPrintln";
         string[] lines = source.Split('\n');

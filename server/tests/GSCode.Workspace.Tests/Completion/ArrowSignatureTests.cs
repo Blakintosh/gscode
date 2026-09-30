@@ -1,7 +1,5 @@
-using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
@@ -34,8 +32,7 @@ public class ArrowSignatureTests
 
     private static ParseResult Analyze(string path, string text)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptAnalysis.LanguageFromPath(path), SourceText.From(text), NullInsertProvider.Instance, new NameTable());
+        return TestParse.Analyze(text, path);
     }
 
     /// <summary>scene_shared.gsc's shape: a class `play`, plus an unrelated `animation::play`.</summary>

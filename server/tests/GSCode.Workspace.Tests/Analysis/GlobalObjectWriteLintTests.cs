@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -22,12 +19,7 @@ public class GlobalObjectWriteLintTests
 {
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\n" + body + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f()\n{\n" + body + "\n}\n");
 
         return NodeLintHarness.Run(
             result,

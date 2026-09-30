@@ -1,10 +1,8 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using Xunit;
@@ -25,8 +23,7 @@ public class DialectIncludeScopeTests
 
     private static ParseResult AnalyzeIw(string path, string source)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), s_cod4);
+        return TestParse.Analyze(source, path, s_cod4);
     }
 
     /// <summary>Two files each defining helper(); returns the definition set keyed (null, helper).</summary>
@@ -182,8 +179,7 @@ public class DialectIncludeScopeTests
 
     private static ParseResult AnalyzeBo3(string path, string source)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), s_bo3);
+        return TestParse.Analyze(source, path, s_bo3);
     }
 
     /// <summary>The MP and ZM copies of one namespace, each declaring the same function.</summary>

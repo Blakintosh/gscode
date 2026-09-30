@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -19,12 +17,6 @@ namespace GSCode.Workspace.Tests.Api;
 /// </summary>
 public class MacroArgumentSpanTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     /// <summary>Mirrors the handler: find the invocation, then the spans of what it was passed.</summary>
     private static ImmutableArray<MacroArgumentSpan> SpansAt(ParseResult result, string macroName)
     {
@@ -56,7 +48,7 @@ public class MacroArgumentSpanTests
             + "    }\n"
             + "}\n";
 
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
         MacroArgumentSpan span = Assert.Single(SpansAt(result, "IS_TRUE"));
 
         Assert.Equal("level.ready", result.Text.Text[span.Start..span.End]);
@@ -78,7 +70,7 @@ public class MacroArgumentSpanTests
             + "    PAIR( first( x, y ), things[0, 1] );\n"
             + "}\n";
 
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
 
         MacroInvocation invocation = Assert.Single(result.Preprocessed.MacroInvocations);
         int afterName = result.Text.GetOffset(invocation.Range.End);
@@ -107,7 +99,7 @@ public class MacroArgumentSpanTests
             + "        two );\n"
             + "}\n";
 
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
         ImmutableArray<MacroArgumentSpan> spans = SpansAt(result, "PAIR");
 
         Assert.Equal(2, spans.Length);
@@ -125,7 +117,7 @@ public class MacroArgumentSpanTests
             + "    x = MAX_PLAYERS;\n"
             + "}\n";
 
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
 
         // The definition carries no parameters, which is what the handler gates on, and the text
         // after the name is not an argument list either.

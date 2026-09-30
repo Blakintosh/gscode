@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -23,12 +20,6 @@ public class FormatMinimalEditsTests
 {
     private static readonly FormatOptions s_tabs = FormatOptions.Default with { UseTabs = true };
 
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\t.gsc"), ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     /// <summary>Applies the edits the way an editor would — right to left, so earlier offsets hold.</summary>
     private static string Apply(string original, ImmutableArray<GscFormatter.FormatEdit> edits, SourceText text)
     {
@@ -46,7 +37,7 @@ public class FormatMinimalEditsTests
     [Fact]
     public void TheEditsReproduceTheFormattedDocument()
     {
-        ParseResult result = Analyze("function f()\n{\na=1;\nb=2;\nc=3;\n}\n");
+        ParseResult result = TestParse.Analyze("function f()\n{\na=1;\nb=2;\nc=3;\n}\n");
 
         ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
 
@@ -58,7 +49,7 @@ public class FormatMinimalEditsTests
     {
         // The caret-preservation property. The middle line is already correct; reformatting the
         // lines around it must leave it out of every edit range, or the caret resting on it moves.
-        ParseResult result = Analyze("function f()\n{\na=1;\n\tx = 1;\nc=3;\n}\n");
+        ParseResult result = TestParse.Analyze("function f()\n{\na=1;\n\tx = 1;\nc=3;\n}\n");
         SourceText text = result.Text;
 
         ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
@@ -78,7 +69,7 @@ public class FormatMinimalEditsTests
     public void ManySeparatelyChangedLinesBecomeManyEdits()
     {
         // Interleaved changed and unchanged lines: the point is that this is NOT one big edit.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "function f()\n{\n\ta = 1;\nb=2;\n\tc = 3;\nd=4;\n\te = 5;\n}\n");
 
         ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
@@ -91,7 +82,7 @@ public class FormatMinimalEditsTests
     public void EditsAreOrderedAndDoNotOverlap()
     {
         // The LSP requires it, and the diff guarantees it: a matched line always sits between hunks.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "function f()\n{\na=1;\n\tok = 1;\nb=2;\n\tok2 = 2;\nc=3;\n}\n");
         SourceText text = result.Text;
 
@@ -112,7 +103,7 @@ public class FormatMinimalEditsTests
     {
         // A pasted-flat function: every code line reindents, but the blank line separating two
         // statements is unchanged and must escape every edit.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "function f()\n{\na = 1;\n\nb = 2;\n}\n");
         SourceText text = result.Text;
 
@@ -127,7 +118,7 @@ public class FormatMinimalEditsTests
     [Fact]
     public void AnAlreadyFormattedDocumentYieldsNoEdits()
     {
-        Assert.Empty(GscFormatter.FormatMinimalEdits(Analyze("function f()\n{\n\ta = 1;\n}\n"), s_tabs));
+        Assert.Empty(GscFormatter.FormatMinimalEdits(TestParse.Analyze("function f()\n{\n\ta = 1;\n}\n"), s_tabs));
     }
 
     [Fact]
@@ -135,7 +126,7 @@ public class FormatMinimalEditsTests
     {
         // Directive sorting inserts a blank line between groups; the insertion point is a
         // zero-width range, not a replacement of the surrounding lines.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "#using scripts\\a;\n#namespace foo;\n\nfunction f()\n{\n\tx = 1;\n}\n");
         SourceText text = result.Text;
 

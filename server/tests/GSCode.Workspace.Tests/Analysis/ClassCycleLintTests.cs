@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
@@ -14,7 +10,6 @@ namespace GSCode.Workspace.Tests.Analysis;
 
 public class ClassCycleLintTests
 {
-
     /// <summary>
     /// Lints <paramref name="askingSource"/> as scripts\main.gsc, with <paramref name="otherSource"/>
     /// indexed as scripts\other.gsc so a chain can cross a file boundary — which is the shape 4 of
@@ -35,8 +30,7 @@ public class ClassCycleLintTests
         ScriptDatabase database = workspace.Database;
 
         string askingPath = TestPaths.Raw(@"scripts\main.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         return ClassCycleLint.Analyze(result, database.Gsc, "raw");
     }

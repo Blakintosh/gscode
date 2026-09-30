@@ -1,8 +1,5 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -19,12 +16,7 @@ public class LocalDefinitionTests
 {
     private static ParseResult Analyze(string source)
     {
-        return ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"scripts\main.gsc"),
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
+        return TestParse.Analyze(source, TestPaths.Raw(@"scripts\main.gsc"));
     }
 
     [Fact]

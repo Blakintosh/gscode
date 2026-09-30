@@ -3,9 +3,7 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -57,9 +55,7 @@ public class IncludeUsageLintTests
         using ProfileScope asking = ProfileScope.Use(game);
 
         string askingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
-            NullInsertProvider.Instance, new NameTable(), game);
+        ParseResult result = TestParse.Analyze(askingSource, askingPath, game);
 
         return IncludeUsageLint.Analyze(
             result, workspace.Database.Gsc, ScriptLanguage.Gsc, workspace.Resolver, askingPath, s_engineNames, "raw", game);

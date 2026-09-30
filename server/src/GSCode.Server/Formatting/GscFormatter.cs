@@ -445,6 +445,9 @@ public static class GscFormatter
         // whole rest of the file one level right.
         int openGroups = 0;
 
+        // Spacing that depends on more than the two tokens either side of the gap.
+        TokenRoles roles = TokenRoles.Of(significant);
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
@@ -525,7 +528,18 @@ public static class GscFormatter
                 {
                     // The token before the operator decides whether `-`, `+` and `&` are unary.
                     TokenKind beforePrevious = index >= 2 ? significant[index - 2].Token.Kind : TokenKind.OpenBrace;
-                    output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, options));
+                    if ( roles.TightBefore[index] )
+                    {
+                        // Nothing between the two tokens.
+                    }
+                    else if ( roles.SpaceBefore[index] )
+                    {
+                        output.Append(' ');
+                    }
+                    else
+                    {
+                        output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, options));
+                    }
                 }
 
                 output.Append(token.GetText(text));
@@ -571,6 +585,97 @@ public static class GscFormatter
 
         output.Append('\n');
         return output.ToString();
+    }
+
+    /// <summary>
+    /// Per-token spacing decided by context the pairwise <see cref="Separator"/> cannot see. Worked
+    /// out in one pass before the reflow, so the reflow asks by index.
+    /// </summary>
+    private sealed class TokenRoles
+    {
+        /// <summary>The gap before this token is always empty.</summary>
+        public required bool[] TightBefore { get; init; }
+
+        /// <summary>The gap before this token is always one space.</summary>
+        public required bool[] SpaceBefore { get; init; }
+
+        public static TokenRoles Of(List<SignificantToken> significant)
+        {
+            TokenRoles roles = new()
+            {
+                TightBefore = new bool[significant.Count],
+                SpaceBefore = new bool[significant.Count],
+            };
+
+            for ( int index = 0; index < significant.Count; index++ )
+            {
+                if ( significant[index].Token.Kind == TokenKind.DefineDirective )
+                {
+                    MarkDefine(significant, index, roles);
+                }
+            }
+
+            return roles;
+        }
+
+        /// <summary>
+        /// A <c>#define</c>'s name and what follows it. Whether a macro takes parameters is decided
+        /// by WHITESPACE, which the token gate cannot see: <c>#define HALF( x )</c> is function-like
+        /// only because the paren touches the name, and <c>#define HALF ( 1 / 2 )</c> is an
+        /// object-like macro whose body happens to start with one. Hugging the second the way a call
+        /// is hugged turned it into the first, and every bare <c>HALF</c> stopped expanding. So the
+        /// source's adjacency is kept exactly, and the body is always set one space off.
+        /// </summary>
+        private static void MarkDefine(List<SignificantToken> significant, int directive, TokenRoles roles)
+        {
+            int name = directive + 1;
+            int next = directive + 2;
+            if ( next >= significant.Count || significant[name].NewlinesBefore > 0 || significant[next].NewlinesBefore > 0 )
+            {
+                return;
+            }
+
+            Token nameToken = significant[name].Token;
+            Token nextToken = significant[next].Token;
+            bool functionLike = nextToken.Kind == TokenKind.OpenParen && nameToken.Range.End == nextToken.Range.Start;
+            if ( !functionLike )
+            {
+                roles.SpaceBefore[next] = true;
+                return;
+            }
+
+            roles.TightBefore[next] = true;
+
+            // The body starts after the parameter list's ')', which never spans a line.
+            int depth = 0;
+            for ( int index = next; index < significant.Count; index++ )
+            {
+                if ( index > next && significant[index].NewlinesBefore > 0 )
+                {
+                    return;
+                }
+
+                TokenKind kind = significant[index].Token.Kind;
+                if ( kind == TokenKind.OpenParen )
+                {
+                    depth++;
+                }
+                else if ( kind == TokenKind.CloseParen )
+                {
+                    depth--;
+                    if ( depth == 0 )
+                    {
+                        int body = index + 1;
+                        if ( body < significant.Count && significant[body].NewlinesBefore == 0 )
+                        {
+                            roles.SpaceBefore[body] = true;
+                        }
+
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>One open brace: whether it is a switch body, and whether a case label is open in it.</summary>

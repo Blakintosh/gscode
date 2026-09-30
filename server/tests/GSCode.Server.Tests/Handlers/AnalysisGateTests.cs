@@ -1,5 +1,3 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;
 using Xunit;
@@ -22,7 +20,7 @@ public class AnalysisGateTests
 
     private static DocumentStore NewStore()
     {
-        return new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
+        return TestDocuments.Standalone();
     }
 
     [Fact]

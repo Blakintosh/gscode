@@ -1,17 +1,9 @@
-using GSCode.Core;
 using GSCode.Core.Paths;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Api;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using Xunit;
 
 namespace GSCode.Server.Tests.Handlers;
@@ -36,7 +28,7 @@ public class DependentDiagnosticsTests
     {
         const string Source = "function main()\n{\n}\n";
 
-        DocumentStore store = new(static _ => NullInsertProvider.Instance, new NameTable());
+        DocumentStore store = TestDocuments.Standalone();
         OpenDocument document = store.Open(path, Source, analyzedVersion);
         store.Analyze(document);
 
@@ -83,60 +75,60 @@ public class DependentDiagnosticsTests
 
     // --- ClosedDependentsOf (F7: the full-mode closed-file half) ---
 
-    private static readonly string LibPath = TestPaths.Raw(@"lib.gsc");
-    private static readonly string CallerPath = TestPaths.Raw(@"caller.gsc");
+    private const string LibRelativePath = @"scripts\lib.gsc";
+    private const string CallerRelativePath = @"scripts\caller.gsc";
 
-    private static (ScriptDatabase Database, ScriptRecord Origin) BuildTwoFileWorkspace()
+    private static readonly string LibPath = TestPaths.Raw(LibRelativePath);
+    private static readonly string CallerPath = TestPaths.Raw(CallerRelativePath);
+
+    /// <summary>lib declares helper; caller imports lib and calls it. Neither is open.</summary>
+    private static Task<HandlerWorkspace> TwoFileWorkspaceAsync()
     {
-        NameTable names = new();
-        ScriptDatabase database = new();
+        return HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(LibRelativePath, "#namespace lib;\nfunction helper()\n{\n}\n"),
+            new TestFile(CallerRelativePath, "#using scripts\\lib;\n#namespace game;\nfunction run()\n{\n    lib::helper();\n}\n"),
+        ]);
+    }
 
-        ParseResult lib = ScriptAnalysis.Analyze(
-            LibPath, ScriptLanguage.Gsc, SourceText.From("#namespace lib;\nfunction helper()\n{\n}\n"),
-            NullInsertProvider.Instance, names);
-        ScriptRecord origin = database.Commit(lib, ResolutionContext.RawContext, isDirty: false, "lib.gsc");
-
-        ParseResult caller = ScriptAnalysis.Analyze(
-            CallerPath, ScriptLanguage.Gsc,
-            SourceText.From("#using scripts\\lib;\n#namespace game;\nfunction run()\n{\n    lib::helper();\n}\n"),
-            NullInsertProvider.Instance, names);
-        database.Commit(caller, ResolutionContext.RawContext, isDirty: false, "caller.gsc");
-
-        return (database, origin);
+    private static ScriptRecord OriginIn(HandlerWorkspace workspace)
+    {
+        Assert.True(workspace.Database.TryGetAnyRecord(LibPath, out ScriptRecord origin));
+        return origin;
     }
 
     [Fact]
-    public void ClosedDependentsOf_FindsAClosedCaller()
+    public async Task ClosedDependentsOf_FindsAClosedCaller()
     {
-        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
-        DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
+        using HandlerWorkspace workspace = await TwoFileWorkspaceAsync();
 
-        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, noOpenDocuments);
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
+            OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
         Assert.Contains(PathUtil.NormalizeAbsolute(CallerPath), dependents);
     }
 
     [Fact]
-    public void ClosedDependentsOf_ExcludesAnOpenCaller()
+    public async Task ClosedDependentsOf_ExcludesAnOpenCaller()
     {
         // The live-analysis path already covers an open file with the richer, real-time result —
         // re-linting it here from disk would describe whatever was last SAVED instead.
-        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        documents.Open(CallerPath, "irrelevant buffer text", version: 1);
+        using HandlerWorkspace workspace = await TwoFileWorkspaceAsync();
+        workspace.Documents.Open(CallerPath, "irrelevant buffer text", version: 1);
 
-        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, documents);
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
+            OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
         Assert.Empty(dependents);
     }
 
     [Fact]
-    public void ClosedDependentsOf_ExcludesTheOriginItself()
+    public async Task ClosedDependentsOf_ExcludesTheOriginItself()
     {
-        (ScriptDatabase database, ScriptRecord origin) = BuildTwoFileWorkspace();
-        DocumentStore noOpenDocuments = new(static _ => NullInsertProvider.Instance, new NameTable());
+        using HandlerWorkspace workspace = await TwoFileWorkspaceAsync();
 
-        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(origin, database.Gsc, noOpenDocuments);
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
+            OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
         Assert.DoesNotContain(PathUtil.NormalizeAbsolute(LibPath), dependents);
     }
@@ -162,30 +154,24 @@ public class DependentDiagnosticsTests
     /// A refresher over an empty workspace. Every collaborator is a real but empty instance, which
     /// is all the queueing question needs: the pass is cancelled before it reaches any of them.
     /// </summary>
-    private static DependentDiagnosticsRefresher EmptyRefresher()
+    private static DependentDiagnosticsRefresher EmptyRefresher(HandlerWorkspace workspace)
     {
-        return EmptyRefresher(NullCodeLensRefreshSink.Instance, new ServerSettings());
+        return EmptyRefresher(workspace, NullCodeLensRefreshSink.Instance, new ServerSettings());
     }
 
-    private static DependentDiagnosticsRefresher EmptyRefresher(ICodeLensRefreshSink codeLenses, ServerSettings settings)
+    private static DependentDiagnosticsRefresher EmptyRefresher(
+        HandlerWorkspace workspace, ICodeLensRefreshSink codeLenses, ServerSettings settings)
     {
-        PhysicalFileSystem fileSystem = new();
-        ResolverHolder resolverHolder = new(fileSystem);
-        NameTable names = new();
-        ScriptDatabase database = new();
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, names);
-        WorkspaceIndexer indexer = new(database, () => resolverHolder.Current, fileSystem, names);
-
-        string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
         DocumentLinter linter = new(
-            database, resolverHolder, BuiltinApiSet.Load(apiDirectory), ObjectFields.Load(apiDirectory));
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
 
         DiagnosticsPublisher publisher = new(new DiscardingSink());
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(database, documents, publisher, new ServerSettings());
-        WorkspaceLintSweep sweep = new(database, documents, indexer, linter);
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(
+            workspace.Database, workspace.Documents, publisher, new ServerSettings());
+        WorkspaceLintSweep sweep = new(workspace.Database, workspace.Documents, workspace.Indexer, linter);
 
         return new DependentDiagnosticsRefresher(
-            documents, publisher, linter, database, sweep, workspaceDiagnostics, codeLenses, settings);
+            workspace.Documents, publisher, linter, workspace.Database, sweep, workspaceDiagnostics, codeLenses, settings);
     }
 
     [Fact]
@@ -195,7 +181,8 @@ public class DependentDiagnosticsTests
         // to drop every origin it had not finished with. Nothing else re-lints a closed dependent,
         // so those files kept diagnostics computed against exports the origin no longer has until
         // some unrelated later edit happened to name the same file.
-        DependentDiagnosticsRefresher refresher = EmptyRefresher();
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(workspace);
         refresher.Schedule(TestPaths.Raw(@"util.gsc"));
 
         using CancellationTokenSource cancelled = new();
@@ -211,7 +198,8 @@ public class DependentDiagnosticsTests
     {
         // The control: an uncancelled pass over an empty workspace consumes its origins rather than
         // handing them back, so the case above cannot pass by nothing ever being taken.
-        DependentDiagnosticsRefresher refresher = EmptyRefresher();
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(workspace);
         refresher.Schedule(TestPaths.Raw(@"util.gsc"));
 
         await refresher.RunPassAsync(CancellationToken.None);
@@ -227,7 +215,8 @@ public class DependentDiagnosticsTests
         // re-requested them for every visible document about four times a second — and one such
         // request measured 164 ms on the densest cod4 script.
         CountingCodeLensSink lenses = new();
-        DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = true });
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(workspace, lenses, new ServerSettings { CodeLensEnabled = true });
 
         refresher.Schedule(TestPaths.Raw(@"a.gsc"));
         refresher.Schedule(TestPaths.Raw(@"b.gsc"));
@@ -244,7 +233,8 @@ public class DependentDiagnosticsTests
         // codeLens.enabled is off by default, and a client that shows no lenses has none to
         // re-request.
         CountingCodeLensSink lenses = new();
-        DependentDiagnosticsRefresher refresher = EmptyRefresher(lenses, new ServerSettings { CodeLensEnabled = false });
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(workspace, lenses, new ServerSettings { CodeLensEnabled = false });
 
         refresher.Schedule(TestPaths.Raw(@"a.gsc"));
 

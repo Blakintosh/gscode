@@ -4,7 +4,6 @@ using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using GSCode.Core.Diagnostics;
 using GSCode.Server.Handlers;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -45,12 +44,16 @@ public class CodeActionHandlerTests
         return paths;
     }
 
+    /// <summary>
+    /// A store holding scripts\util.gsc, which declares util::helper. The asking file is analysed on
+    /// its own and never indexed. Disposed before it returns: the default game, so the queries
+    /// that follow see the same Active either way.
+    /// </summary>
     private static ScriptDatabase DatabaseWithUtil()
     {
-        ScriptDatabase database = new();
-        ParseResult util = AnalyzeAt("#namespace util;\nfunction helper()\n{\n}\n", TestPaths.Raw(@"scripts\util.gsc"));
-        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\util.gsc");
-        return database;
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [new TestFile(@"scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n")]);
+        return workspace.Database;
     }
 
     [Fact]
@@ -519,10 +522,9 @@ public class CodeActionHandlerTests
     public void AnOwnNamespaceMatch_IsNotOffered()
     {
         // Already reachable unqualified, so an import would be noise and a qualifier a no-op.
-        ScriptDatabase database = new();
-        ParseResult util = AnalyzeAt(
-            "#namespace game;\nfunction helper()\n{\n}\n", TestPaths.Raw(@"scripts\other.gsc"));
-        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\other.gsc");
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [new TestFile(@"scripts\other.gsc", "#namespace game;\nfunction helper()\n{\n}\n")]);
+        ScriptDatabase database = workspace.Database;
 
         string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
 
@@ -570,16 +572,11 @@ public class CodeActionHandlerTests
 
     private static readonly string Cod4AskingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
 
-    private static ScriptDatabase DatabaseWithCod4Utility()
+    /// <summary>A CoD4 workspace whose one file, common_scripts\utility.gsc, declares scriptPrintln.</summary>
+    private static TestWorkspace WorkspaceWithCod4Utility()
     {
-        ScriptDatabase database = new();
-        ParseResult utility = ScriptAnalysis.Analyze(
-            TestPaths.Raw(@"common_scripts\utility.gsc"), ScriptLanguage.Gsc,
-            SourceText.From("scriptPrintln( channel, msg )\n{\n}\n"),
-            NullInsertProvider.Instance, new NameTable(), s_cod4);
-
-        database.Commit(utility, ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
-        return database;
+        return TestWorkspace.Build(
+            [new TestFile(@"common_scripts\utility.gsc", "scriptPrintln( channel, msg )\n{\n}\n")], s_cod4);
     }
 
     /// <summary>
@@ -588,7 +585,7 @@ public class CodeActionHandlerTests
     /// call, so hand-written coordinates would be three sets of magic numbers coupled to the sources
     /// they index into.
     /// </summary>
-    private static List<CodeAction> IncludeFixes(string source, ScriptDatabase? database = null)
+    private static List<CodeAction> IncludeFixes(string source, TestWorkspace? workspace = null)
     {
         ParseResult result = ScriptAnalysis.Analyze(
             Cod4AskingPath, ScriptLanguage.Gsc, SourceText.From(source),
@@ -600,7 +597,7 @@ public class CodeActionHandlerTests
         int start = lines[line].IndexOf(called, StringComparison.Ordinal);
 
         CodeActionHandler.CallFixContext context = new(
-            result, database?.Gsc, "raw", Cod4AskingPath, s_cod4);
+            result, workspace?.Database.Gsc, "raw", Cod4AskingPath, s_cod4);
 
         return CodeActionHandler.MissingIncludeFixes(
             DocumentUri.FromFileSystemPath(Cod4AskingPath),
@@ -613,7 +610,8 @@ public class CodeActionHandlerTests
     {
         string source = "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n";
 
-        CodeAction fix = Assert.Single(IncludeFixes(source, DatabaseWithCod4Utility()));
+        using TestWorkspace workspace = WorkspaceWithCod4Utility();
+        CodeAction fix = Assert.Single(IncludeFixes(source, workspace));
 
         Assert.Equal(@"Add #include common_scripts\utility", fix.Title);
 
@@ -637,7 +635,8 @@ public class CodeActionHandlerTests
         // would insert a duplicate and leave the error standing.
         string source = "#include common_scripts\\utility;\ninit()\n{\n\tscriptPrintln();\n}\n";
 
-        Assert.Empty(IncludeFixes(source, DatabaseWithCod4Utility()));
+        using TestWorkspace workspace = WorkspaceWithCod4Utility();
+        Assert.Empty(IncludeFixes(source, workspace));
     }
 
     [Fact]

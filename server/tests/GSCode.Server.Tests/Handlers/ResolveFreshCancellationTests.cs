@@ -1,9 +1,5 @@
-using GSCode.Core;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Xunit;
@@ -21,60 +17,52 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class ResolveFreshCancellationTests
 {
-    private static readonly string Path = TestPaths.Raw(@"scripts\shared\resolve_fresh.gsc");
+    private const string RelativePath = @"scripts\shared\resolve_fresh.gsc";
     private const string Source = "#namespace resolve;\nfunction main()\n{\n    a = 1;\n}\n";
 
-    private static NavigationSupport BuildSupport(out DocumentStore documents)
-    {
-        documents = new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
-        return new NavigationSupport(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
-    }
-
-    private static DocumentUri Uri => DocumentUri.FromFileSystemPath(Path);
+    private static DocumentUri Uri => HandlerWorkspace.Identify(RelativePath).Uri;
 
     [Fact]
     public async Task ACancelledRequestDoesNotAnalyseAStaleDocument()
     {
-        NavigationSupport support = BuildSupport(out DocumentStore documents);
-        OpenDocument document = documents.Open(Path, Source, version: 1);
-        documents.AnalyzeIfStale(document);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        OpenDocument document = workspace.Open(RelativePath, Source);
 
         // The text moves on, so the next resolve has real work to do rather than handing back the
         // published snapshot.
-        documents.ApplyChange(document, range: null, Source + "\nfunction second()\n{\n}\n", version: 2);
+        workspace.Documents.ApplyChange(document, range: null, Source + "\nfunction second()\n{\n}\n", version: 2);
 
         using CancellationTokenSource source = new();
         await source.CancelAsync();
 
-        Assert.Throws<OperationCanceledException>(() => support.ResolveFresh(Uri, source.Token));
+        Assert.Throws<OperationCanceledException>(() => workspace.Navigation.ResolveFresh(Uri, source.Token));
     }
 
     [Fact]
-    public void AnUncancelledRequestStillFreshens()
+    public async Task AnUncancelledRequestStillFreshens()
     {
         // The control, so the assertion above cannot pass by the resolve simply never working.
-        NavigationSupport support = BuildSupport(out DocumentStore documents);
-        OpenDocument document = documents.Open(Path, Source, version: 1);
-        documents.AnalyzeIfStale(document);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        OpenDocument document = workspace.Open(RelativePath, Source);
 
-        documents.ApplyChange(document, range: null, Source + "\nfunction second()\n{\n}\n", version: 2);
+        workspace.Documents.ApplyChange(document, range: null, Source + "\nfunction second()\n{\n}\n", version: 2);
 
-        NavigationTarget? target = support.ResolveFresh(Uri, CancellationToken.None);
+        NavigationTarget? target = workspace.Navigation.ResolveFresh(Uri, CancellationToken.None);
 
         Assert.NotNull(target);
         Assert.Equal(2, document.Analysis?.Version);
     }
 
     [Fact]
-    public void AnUnchangedDocumentIsNotReanalysedAtAll()
+    public async Task AnUnchangedDocumentIsNotReanalysedAtAll()
     {
         // The cached path takes no notice of the token because it does no work: the published
         // snapshot is handed straight back, which callers assert on by instance.
-        NavigationSupport support = BuildSupport(out DocumentStore documents);
-        OpenDocument document = documents.Open(Path, Source, version: 1);
-        ParseResult first = documents.AnalyzeIfStale(document);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        OpenDocument document = workspace.Open(RelativePath, Source);
+        ParseResult first = workspace.Documents.AnalyzeIfStale(document);
 
-        NavigationTarget? target = support.ResolveFresh(Uri, CancellationToken.None);
+        NavigationTarget? target = workspace.Navigation.ResolveFresh(Uri, CancellationToken.None);
 
         Assert.NotNull(target);
         Assert.Same(first, target.Result);

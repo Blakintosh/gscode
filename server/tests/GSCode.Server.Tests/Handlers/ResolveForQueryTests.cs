@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Paths;
 using GSCode.Core.Text;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
@@ -30,7 +28,7 @@ public class ResolveForQueryTests
 
     private static NavigationSupport SupportOver(ScriptDatabase database)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
         return new NavigationSupport(documents, database, new ResolverHolder(new FakeFileSystem()));
     }
 

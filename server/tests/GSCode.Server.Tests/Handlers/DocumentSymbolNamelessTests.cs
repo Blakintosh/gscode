@@ -1,5 +1,3 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;
@@ -24,7 +22,7 @@ public class DocumentSymbolNamelessTests
 
     private static async Task<List<DocumentSymbol>> OutlineAsync(string text)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
         OpenDocument document = documents.Open(s_path, text, version: 1);
         documents.Analyze(document);
 
@@ -82,7 +80,7 @@ public class DocumentSymbolNamelessTests
         // the user typed something. Deliberately no Analyze/AnalyzeIfStale call before the request
         // — this is exactly that race, and the handler must parse for itself instead of trusting a
         // snapshot that has not been published yet.
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
         OpenDocument document = documents.Open(s_path, "#namespace vibing3;\nfunction one()\n{\n}\n", version: 1);
         Assert.Null(document.Analysis);
 

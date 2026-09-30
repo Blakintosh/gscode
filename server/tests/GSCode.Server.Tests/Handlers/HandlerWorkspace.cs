@@ -122,8 +122,17 @@ public sealed class HandlerWorkspace : IDisposable
     /// </summary>
     public OpenDocument Open(string relativePath)
     {
-        string path = TestPaths.Raw(relativePath);
-        OpenDocument document = Documents.Open(path, Files.ReadAllText(path), version: 1);
+        return Open(relativePath, Files.ReadAllText(TestPaths.Raw(relativePath)));
+    }
+
+    /// <summary>
+    /// Opens and analyses a buffer the index has NOT seen: a file being written that is not on disk
+    /// yet, or an edit that has not been saved. That is a different question from one the index
+    /// already answers, and the tests that ask it keep the file out of the workspace on purpose.
+    /// </summary>
+    public OpenDocument Open(string relativePath, string text)
+    {
+        OpenDocument document = Documents.Open(TestPaths.Raw(relativePath), text, version: 1);
         Documents.AnalyzeIfStale(document);
         return document;
     }

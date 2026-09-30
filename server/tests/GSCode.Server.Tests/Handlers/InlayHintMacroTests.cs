@@ -1,11 +1,6 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -19,8 +14,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintMacroTests
 {
-    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
-
     private const string Source =
         "#define IS_TRUE(__a) (isdefined(__a) && __a)\n"
         + "#define MAX_PLAYERS 18\n"
@@ -35,31 +28,29 @@ public class InlayHintMacroTests
         + "    return MAX_PLAYERS;\n"
         + "}\n";
 
-    private static InlayHintHandler BuildHandler(ServerSettings settings)
+    /// <summary>
+    /// The hints over lines <paramref name="firstLine"/> to <paramref name="endLine"/> of
+    /// <see cref="Source"/>, with no engine library to supply any of them.
+    /// </summary>
+    private static async Task<List<InlayHint>> HintsAsync(ServerSettings settings, int firstLine = 0, int endLine = 20)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(Path, Source, 1);
-        documents.AnalyzeIfStale(document);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([new TestFile(@"scripts\main.gsc", Source)]);
+        workspace.Open(@"scripts\main.gsc");
 
-        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
-
-        return new InlayHintHandler(
-            support,
+        InlayHintHandler handler = new(
+            workspace.Navigation,
             new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),
             ObjectFields.Empty,
             settings,
-            TextDocumentSelector.ForLanguage("gsc"));
-    }
+            HandlerWorkspace.Selector);
 
-    private static async Task<List<InlayHint>> HintsAsync(ServerSettings settings)
-    {
         InlayHintParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(Path) },
-            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 20, 0),
+            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(firstLine, 0, endLine, 0),
         };
 
-        InlayHintContainer? container = await BuildHandler(settings).Handle(request, CancellationToken.None);
+        InlayHintContainer? container = await handler.Handle(request, CancellationToken.None);
 
         return [.. container ?? []];
     }
@@ -120,15 +111,7 @@ public class InlayHintMacroTests
     [Fact]
     public async Task AnInvocationOutsideTheWindowIsNotHinted()
     {
-        InlayHintParams request = new()
-        {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(Path) },
-            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(8, 0, 11, 0),
-        };
-
-        InlayHintContainer? container = await BuildHandler(MacroOnly()).Handle(request, CancellationToken.None);
-
-        Assert.Empty(container ?? []);
+        Assert.Empty(await HintsAsync(MacroOnly(), firstLine: 8, endLine: 11));
     }
 
     [Fact]

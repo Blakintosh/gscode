@@ -1,8 +1,6 @@
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
@@ -53,7 +51,7 @@ public class WorkspaceDiagnosticsRefreshTests
 
         public Fixture()
         {
-            DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+            DocumentStore documents = TestDocuments.Standalone();
             Publisher = new WorkspaceDiagnosticsPublisher(Database, documents, new DiagnosticsPublisher(Sink), new ServerSettings());
         }
     }

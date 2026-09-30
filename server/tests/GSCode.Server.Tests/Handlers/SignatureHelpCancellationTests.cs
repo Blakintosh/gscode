@@ -1,12 +1,5 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using LspPosition = OmniSharp.Extensions.LanguageServer.Protocol.Models.Position;
@@ -23,8 +16,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class SignatureHelpCancellationTests
 {
-    private static string ScriptPath => Path.Combine(TestPaths.RawRoot, @"scripts\shared\sig_test.gsc");
-
     /// <summary>
     /// A call being written: the cursor sits in the first argument. A BUILTIN, so the signature
     /// comes from the bundled API and this pins the handler rather than the database's contents.
@@ -33,28 +24,18 @@ public class SignatureHelpCancellationTests
 
     private static LspPosition InsideTheCall => new(3, 12);
 
-    private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
-
-    private static SignatureHelpHandler BuildHandler()
+    private static async Task<SignatureHelp?> HandleAsync(CancellationToken cancellationToken)
     {
-        ScriptDatabase database = new();
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        documents.AnalyzeIfStale(documents.Open(ScriptPath, Source, 1));
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        workspace.Open(@"scripts\shared\sig_test.gsc", Source);
 
-        NavigationSupport support = new(documents, database, new ResolverHolder(new FakeFileSystem()));
+        SignatureHelpHandler handler = new(
+            workspace.Navigation, new SignatureEngine(workspace.Database, workspace.Builtins), HandlerWorkspace.Selector);
 
-        return new SignatureHelpHandler(
-            support,
-            new SignatureEngine(database, BuiltinApiSet.Load(ApiDirectory)),
-            TextDocumentSelector.ForLanguage("gsc"));
-    }
-
-    private static Task<SignatureHelp?> HandleAsync(CancellationToken cancellationToken)
-    {
-        return BuildHandler().Handle(
+        return await handler.Handle(
             new SignatureHelpParams
             {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(ScriptPath) },
+                TextDocument = HandlerWorkspace.Identify(@"scripts\shared\sig_test.gsc"),
                 Position = InsideTheCall,
             },
             cancellationToken);

@@ -160,7 +160,8 @@ with a global `using GSCode.Testing;`. `FakeFileSystem` the in-memory tree · `T
 root, `c:\raw`, so a test names `scripts\lib.gsc` and never a drive, plus `ModsRoot` (`c:\mods`) and
 `Config(files)`, the standard `RootConfig` over both · `TestFile` one script under the raw root ·
 `ProfileScope` selects a game and RESTORES the previous one, with BO3 as `Default` ·
-`TestWorkspace` an indexed in-memory store and resolver for one game (below). How a test uses them,
+`TestWorkspace` an indexed in-memory store and resolver for one game (below) · `TestDocuments.Standalone()`
+open documents with no workspace behind them, for tests of the document store itself. How a test uses them,
 and when a named game or a real path is right instead, is the `standard-tests` skill.
 
 ---
@@ -313,8 +314,11 @@ The LSP layer, the formatter, and the real-corpus sweeps.
 **Build a handler's workspace with `HandlerWorkspace.BuildAsync(files)`.** It is wired the way
 `ServerServices` wires the server — real insert provider over a shared `InsertCache`, builtins in
 `NavigationSupport` — over `FakeFileSystem`, and holds `GameProfile.Active` on its game until
-disposed, since handlers read Active while they answer. Handler tests used to build this by hand in
-a temp directory, only because `FakeFileSystem` lived in the other suite.
+disposed, since handlers read Active while they answer. `Open(relative)` opens a file it indexed;
+`Open(relative, text)` opens a buffer it did not, for a fix or completion on a file being written.
+Handler tests used to build this by hand in a temp directory, only because `FakeFileSystem` lived
+in the other suite. Two still build their own pieces, on purpose: `DependentRefreshStampTests` needs
+real write stamps, and `ResolveForQueryTests` upserts records whose context ids are the subject.
 
 **Corpus** (all `Category=Corpus`, all no-op without their game). `CorpusFixture` locates BO3 via
 `GSCODE_CORPUS_BO3`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`, built from

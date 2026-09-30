@@ -1,13 +1,5 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
 using GSCode.Workspace.Typing;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using System.Collections.Immutable;
 using Xunit;
 
@@ -26,39 +18,31 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class HoverInferenceReuseTests
 {
-    private static readonly string Path1 = TestPaths.Raw(@"scripts\fields.gsc");
-
-    private static string ApiDirectory => System.IO.Path.Combine(AppContext.BaseDirectory, "Api");
-
     // Two field writes and a local, so the walk has something to return either way.
     private const string Source =
         "function run()\n{\n    self.state = \"idle\";\n    self.count = 3;\n    a = 1;\n}\n";
 
-    private static HoverHandler BuildHandler(string source, out NavigationTarget target)
+    /// <summary>
+    /// A hover handler over <see cref="Source"/>, open in an otherwise empty workspace, and the
+    /// resolved target it answers for.
+    /// </summary>
+    private static HoverHandler HandlerOver(HandlerWorkspace workspace, out NavigationTarget target)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(Path1, source, version: 1);
-        documents.AnalyzeIfStale(document);
-
-        ScriptDatabase database = new();
-        ResolverHolder holder = new(new FakeFileSystem());
-        NavigationSupport support = new(documents, database, holder);
+        workspace.Open(@"scripts\fields.gsc", Source);
 
         HoverHandler handler = new(
-            support,
-            BuiltinApiSet.Load(ApiDirectory),
-            ObjectFields.Load(ApiDirectory),
-            TextDocumentSelector.ForLanguage("gsc"));
+            workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
-        target = support.Resolve(DocumentUri.FromFileSystemPath(Path1), CancellationToken.None)!;
+        target = workspace.Navigation.Resolve(HandlerWorkspace.Identify(@"scripts\fields.gsc").Uri, CancellationToken.None)!;
         Assert.NotNull(target);
         return handler;
     }
 
     [Fact]
-    public void TwoHoversOnOneVersion_WalkTheFileOnce()
+    public async Task TwoHoversOnOneVersion_WalkTheFileOnce()
     {
-        HoverHandler handler = BuildHandler(Source, out NavigationTarget target);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        HoverHandler handler = HandlerOver(workspace, out NavigationTarget target);
 
         ImmutableArray<InferredAssignment> first = handler.AssignmentsOf(target);
         ImmutableArray<InferredAssignment> second = handler.AssignmentsOf(target);
@@ -67,15 +51,16 @@ public class HoverInferenceReuseTests
     }
 
     [Fact]
-    public void TheCachedWalk_IsWhatTheTyperWouldHaveReturned()
+    public async Task TheCachedWalk_IsWhatTheTyperWouldHaveReturned()
     {
         // The cache is not allowed to be a filtered or reordered view of the walk: the field hover
         // reads every entry and requires every write of a name to agree.
-        HoverHandler handler = BuildHandler(Source, out NavigationTarget target);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        HoverHandler handler = HandlerOver(workspace, out NavigationTarget target);
 
         ImmutableArray<InferredAssignment> cached = handler.AssignmentsOf(target);
         ImmutableArray<InferredAssignment> direct =
-            new FlowTyper(BuiltinApiSet.Load(ApiDirectory).For(target.Language), ObjectFields.Load(ApiDirectory))
+            new FlowTyper(workspace.Builtins.For(target.Language), workspace.ObjectFields)
                 .InferAssignments(target.Result);
 
         Assert.Equal(direct.Length, cached.Length);
@@ -85,14 +70,16 @@ public class HoverInferenceReuseTests
     }
 
     [Fact]
-    public void ANewVersionOfTheDocument_IsWalkedAgain()
+    public async Task ANewVersionOfTheDocument_IsWalkedAgain()
     {
         // Keyed by ParseResult reference: an edited document is a different parse, and must not be
         // answered from the old one.
-        HoverHandler handler = BuildHandler(Source, out NavigationTarget target);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        HoverHandler handler = HandlerOver(workspace, out NavigationTarget target);
         ImmutableArray<InferredAssignment> first = handler.AssignmentsOf(target);
 
-        HoverHandler other = BuildHandler(Source, out NavigationTarget reparsed);
+        using HandlerWorkspace otherWorkspace = await HandlerWorkspace.BuildAsync([]);
+        HoverHandler other = HandlerOver(otherWorkspace, out NavigationTarget reparsed);
         Assert.False(first == other.AssignmentsOf(reparsed));
     }
 }

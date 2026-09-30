@@ -1,16 +1,7 @@
 using System.Collections.Frozen;
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
@@ -28,9 +19,6 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintParameterTests
 {
-    private static readonly string MainPath = TestPaths.Raw(@"scripts\main.gsc");
-    private static readonly string UtilPath = TestPaths.Raw(@"scripts\util.gsc");
-
     /// <summary>
     /// One file exercising each callee form the family resolves, plus the three shapes that used to
     /// go wrong: a call whose arguments sit below its own first line, a macro that names its
@@ -102,37 +90,29 @@ public class InlayHintParameterTests
         return new BuiltinApiSet(gsc, BuiltinApi.Empty);
     }
 
-    private static InlayHintHandler BuildHandler(ServerSettings settings)
-    {
-        ScriptDatabase database = new();
-        database.Commit(Analyze(UtilSource, UtilPath), ResolutionContext.RawContext, false, "scripts\\util.gsc");
-        database.Commit(Analyze(MainSource, MainPath), ResolutionContext.RawContext, false, "scripts\\main.gsc");
-
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(MainPath, MainSource, 1);
-        documents.AnalyzeIfStale(document);
-
-        NavigationSupport support = new(documents, database, new ResolverHolder(new FakeFileSystem()));
-
-        return new InlayHintHandler(
-            support, Builtins(), ObjectFields.Empty, settings, TextDocumentSelector.ForLanguage("gsc"));
-    }
-
-    private static ParseResult Analyze(string source, string path)
-    {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
+    /// <summary>
+    /// The hints over <see cref="MainSource"/>, with util indexed beside it and only the one
+    /// hand-built builtin in the engine library.
+    /// </summary>
     private static async Task<List<InlayHint>> HintsAsync(ServerSettings settings, LspRange? window = null)
     {
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\util.gsc", UtilSource),
+            new TestFile(@"scripts\main.gsc", MainSource),
+        ]);
+        workspace.Open(@"scripts\main.gsc");
+
+        InlayHintHandler handler = new(
+            workspace.Navigation, Builtins(), ObjectFields.Empty, settings, HandlerWorkspace.Selector);
+
         InlayHintParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(MainPath) },
+            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
             Range = window ?? new LspRange(0, 0, 30, 0),
         };
 
-        InlayHintContainer? container = await BuildHandler(settings).Handle(request, CancellationToken.None);
+        InlayHintContainer? container = await handler.Handle(request, CancellationToken.None);
 
         return [.. container ?? []];
     }

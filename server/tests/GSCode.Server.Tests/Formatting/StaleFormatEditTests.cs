@@ -1,8 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using GSCode.Workspace.Documents;
 using Xunit;
@@ -24,7 +22,7 @@ public class StaleFormatEditTests
 
     private static DocumentStore NewStore()
     {
-        return new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
+        return TestDocuments.Standalone();
     }
 
     /// <summary>Applies edits the way an editor would, to prove the result is the formatted text.</summary>

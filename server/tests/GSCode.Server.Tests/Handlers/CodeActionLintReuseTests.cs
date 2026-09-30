@@ -1,11 +1,5 @@
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using System.Collections.Immutable;
 using Xunit;
@@ -28,34 +22,27 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class CodeActionLintReuseTests
 {
-    private static readonly string AskingPath = TestPaths.Raw(@"scripts\main.gsc");
-
-    private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
-
-    private static CodeActionHandler.RequestLints BuildLints(string source, out int diagnosticCount)
+    /// <summary>
+    /// One request's lints over <see cref="Source"/>, open in an otherwise empty workspace — the
+    /// memo is what is under test, not what the pass finds.
+    /// </summary>
+    private static CodeActionHandler.RequestLints LintsOver(HandlerWorkspace workspace)
     {
-        ScriptDatabase database = new();
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(AskingPath, source, 1);
-        documents.AnalyzeIfStale(document);
-
-        ParseResult result = document.LatestResult!;
+        OpenDocument document = workspace.Open(@"scripts\main.gsc", Source);
         DocumentLinter linter = new(
-            database, new ResolverHolder(new FakeFileSystem()),
-            BuiltinApiSet.Load(ApiDirectory), ObjectFields.Load(ApiDirectory));
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
 
-        CodeActionHandler.RequestLints lints = new(linter, document, result);
-        diagnosticCount = lints.All(CancellationToken.None).Length;
-        return lints;
+        return new CodeActionHandler.RequestLints(linter, document, document.LatestResult!);
     }
 
     /// <summary>A document the cross-file pass has something to say about.</summary>
     private const string Source = "#using util;\n\nfunction run()\n{\n    a = 1;\n}\n";
 
     [Fact]
-    public void TwoReadsOfOneRequest_RunThePassOnce()
+    public async Task TwoReadsOfOneRequest_RunThePassOnce()
     {
-        CodeActionHandler.RequestLints lints = BuildLints(Source, out int _);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler.RequestLints lints = LintsOver(workspace);
 
         ImmutableArray<Diagnostic> first = lints.All(CancellationToken.None);
         ImmutableArray<Diagnostic> second = lints.All(CancellationToken.None);
@@ -64,11 +51,13 @@ public class CodeActionLintReuseTests
     }
 
     [Fact]
-    public void TheMemoisedSet_IsTheWholeDocumentsDiagnostics()
+    public async Task TheMemoisedSet_IsTheWholeDocumentsDiagnostics()
     {
         // The memo is not allowed to be a filtered or truncated view: both consumers slice it
         // themselves, one by line and one by diagnostic code.
-        CodeActionHandler.RequestLints lints = BuildLints(Source, out int count);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler.RequestLints lints = LintsOver(workspace);
+        int count = lints.All(CancellationToken.None).Length;
 
         Assert.Equal(count, lints.All(CancellationToken.None).Length);
         // UnusedLocal comes from NodeLintPass, not from the parse — so its presence is what proves
@@ -79,12 +68,14 @@ public class CodeActionLintReuseTests
     }
 
     [Fact]
-    public void SeparateRequests_DoNotShareAMemo()
+    public async Task SeparateRequests_DoNotShareAMemo()
     {
         // Per request and dropped with it: a memo that outlived the request could answer for a
         // buffer that has since been edited.
-        CodeActionHandler.RequestLints one = BuildLints(Source, out int _);
-        CodeActionHandler.RequestLints other = BuildLints(Source, out int _);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        using HandlerWorkspace otherWorkspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler.RequestLints one = LintsOver(workspace);
+        CodeActionHandler.RequestLints other = LintsOver(otherWorkspace);
 
         Assert.False(one.All(CancellationToken.None) == other.All(CancellationToken.None));
     }

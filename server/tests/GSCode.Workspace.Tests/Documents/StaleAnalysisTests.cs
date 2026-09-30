@@ -21,7 +21,7 @@ public class StaleAnalysisTests
 {
     private static DocumentStore NewStore()
     {
-        return new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
+        return TestDocuments.Standalone();
     }
 
     /// <summary>How long a gate may wait before the test is declared hung rather than slow.</summary>

@@ -1,5 +1,3 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -25,7 +23,7 @@ public class StartupRacePreAnalysisTests
 
     private static DocumentStore FreshlyOpenedDocument(out OpenDocument document)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
         document = documents.Open(s_path, Source, version: 1);
         // Deliberately no Analyze/AnalyzeIfStale call — document.Analysis is null, exactly the
         // window between didOpen returning and its queued analysis actually finishing.

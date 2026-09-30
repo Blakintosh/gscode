@@ -1,13 +1,8 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Typing;
-using OmniSharp.Extensions.LanguageServer.Protocol;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
 namespace GSCode.Server.Tests.Handlers;
@@ -22,37 +17,34 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class InlayHintTypeCacheTests
 {
-    private static readonly string Path = TestPaths.Raw(@"scripts\main.gsc");
+    private const string RelativePath = @"scripts\main.gsc";
     private const string Source = "function main()\n{\n    x = 1;\n}\n";
 
-    private static (InlayHintHandler Handler, NavigationSupport Support, DocumentStore Documents) Build()
+    /// <summary>A handler over one open file, with no engine library: the cache is what is under test.</summary>
+    private static InlayHintHandler HandlerOver(HandlerWorkspace workspace)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        documents.Open(Path, Source, 1);
-
-        NavigationSupport support = new(documents, new ScriptDatabase(), new ResolverHolder(new FakeFileSystem()));
-        InlayHintHandler handler = new(
-            support,
+        return new InlayHintHandler(
+            workspace.Navigation,
             new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),
             ObjectFields.Empty,
             new ServerSettings { InlayParameterNames = true },
-            TextDocumentSelector.ForLanguage("gsc"));
-
-        return (handler, support, documents);
+            HandlerWorkspace.Selector);
     }
 
-    private static NavigationTarget Resolve(NavigationSupport support)
+    private static NavigationTarget Resolve(HandlerWorkspace workspace)
     {
-        return support.ResolveFresh(DocumentUri.FromFileSystemPath(Path), CancellationToken.None)!;
+        return workspace.Navigation.ResolveFresh(HandlerWorkspace.Identify(RelativePath).Uri, CancellationToken.None)!;
     }
 
     [Fact]
-    public void TwoRequestsForAnUnchangedDocumentShareOneInference()
+    public async Task TwoRequestsForAnUnchangedDocumentShareOneInference()
     {
-        (InlayHintHandler handler, NavigationSupport support, _) = Build();
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        workspace.Open(RelativePath, Source);
+        InlayHintHandler handler = HandlerOver(workspace);
 
-        NavigationTarget first = Resolve(support);
-        NavigationTarget second = Resolve(support);
+        NavigationTarget first = Resolve(workspace);
+        NavigationTarget second = Resolve(workspace);
 
         // Sanity on the premise the cache relies on: an unchanged document hands back the SAME
         // ParseResult instance, which is what AnalyzeIfStale's own staleness check guarantees.
@@ -65,17 +57,18 @@ public class InlayHintTypeCacheTests
     }
 
     [Fact]
-    public void AnEditThatMovesTheVersionGetsAFreshInference()
+    public async Task AnEditThatMovesTheVersionGetsAFreshInference()
     {
-        (InlayHintHandler handler, NavigationSupport support, DocumentStore documents) = Build();
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        OpenDocument document = workspace.Open(RelativePath, Source);
+        InlayHintHandler handler = HandlerOver(workspace);
 
-        NavigationTarget before = Resolve(support);
+        NavigationTarget before = Resolve(workspace);
         ScriptTypes beforeTypes = handler.InferTypes(before);
 
-        documents.TryGet(Path, out OpenDocument document);
-        documents.ApplyChange(document, range: null, Source + "\nfunction other()\n{\n}\n", version: 2);
+        workspace.Documents.ApplyChange(document, range: null, Source + "\nfunction other()\n{\n}\n", version: 2);
 
-        NavigationTarget after = Resolve(support);
+        NavigationTarget after = Resolve(workspace);
         ScriptTypes afterTypes = handler.InferTypes(after);
 
         Assert.NotSame(before.Result, after.Result);

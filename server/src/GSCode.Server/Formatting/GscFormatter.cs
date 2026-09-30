@@ -355,7 +355,30 @@ public static class GscFormatter
             formatted = AssignmentAligner.Align(formatted);
         }
 
-        return formatted;
+        return InDocumentLineEndings(formatted, result.Text.Text);
+    }
+
+    /// <summary>
+    /// The output in the line endings the document already uses. Every pass above writes '\n', so
+    /// without this a clean CRLF file came back as one edit spanning the whole file on every
+    /// request, and on-type formatting kept that edit on every keystroke.
+    /// </summary>
+    /// <remarks>
+    /// Normalised to '\n' before converting because a multi-line block comment is emitted verbatim,
+    /// its own '\r\n' included, and converting that a second time would write '\r\r\n'. The editor
+    /// owns the file's line endings, so the first line break decides; a mixed file is rare enough
+    /// that one answer for all of it is the right trade.
+    /// </remarks>
+    private static string InDocumentLineEndings(string formatted, string original)
+    {
+        int firstNewline = original.IndexOf('\n');
+        bool usesCrlf = firstNewline > 0 && original[firstNewline - 1] == '\r';
+        if ( !usesCrlf )
+        {
+            return formatted;
+        }
+
+        return formatted.Replace("\r\n", "\n").Replace("\n", "\r\n");
     }
 
     /// <summary>One significant (non-trivia) token plus how many newlines preceded it in the source.</summary>

@@ -122,6 +122,29 @@ public class FormatMinimalEditsTests
     }
 
     [Fact]
+    public void AnAlreadyFormattedCrlfDocumentYieldsNoEdits()
+    {
+        // The block comment is emitted verbatim with its own CRLF, which a naive conversion would
+        // turn into CR CR LF.
+        string source = "function f()\n{\n\t/*\n\t  note\n\t*/\n\ta = 1;\n}\n".Replace("\n", "\r\n");
+
+        Assert.Empty(GscFormatter.FormatMinimalEdits(TestParse.Analyze(source), s_tabs));
+    }
+
+    [Fact]
+    public void ACrlfDocumentIsReindentedInCrlf()
+    {
+        ParseResult result = TestParse.Analyze("function f()\r\n{\r\na = 1;\r\n}\r\n");
+        SourceText text = result.Text;
+
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(result, s_tabs);
+
+        GscFormatter.FormatEdit edit = Assert.Single(edits);
+        Assert.Equal("\ta = 1;\r\n", edit.NewText);
+        Assert.Equal("function f()\r\n{\r\n\ta = 1;\r\n}\r\n", Apply(text.Text, edits, text));
+    }
+
+    [Fact]
     public void APureInsertionIsAZeroWidthEdit()
     {
         // Directive sorting inserts a blank line between groups; the insertion point is a

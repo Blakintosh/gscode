@@ -32,20 +32,69 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(log);
     log.info("GSCode activating");
 
-    const created = await createLanguageClient(context, log);
+    // Commands first, before anything that can stop activation. Every command is declared in
+    // package.json, so the palette lists them whether or not this function got far enough to
+    // register them — and when the .NET runtime was missing it returned before that, so each one
+    // failed with "command not found" instead of saying what was actually wrong.
+    registerCommands(context, log);
+
+    // Settings the running server reads once and cannot pick up afterwards.
+    registerReloadPrompt(context, log);
+
+    let created: LanguageClient | undefined;
+    try {
+        created = await createLanguageClient(context, log);
+    } catch (error) {
+        // A debug session with no server location in client/.env. Logged here so the commands'
+        // "the GSCode log says why" is true of this case too.
+        log.error(`Could not create the language client: ${String(error)}`);
+        return;
+    }
     if (!created) {
         return;
     }
     client = created;
 
+    registerIndexingStatusBar(context, created, log);
+
+    await created.start();
+    log.info("GSCode language client started");
+
+    registerRenameDirectiveFixup(context, created, log);
+    registerSemicolonDeduplication(context);
+}
+
+/**
+ * The running language client, or undefined after telling the user there is none.
+ *
+ * Undefined means activation stopped before a client was created — the .NET runtime is missing, or
+ * a debug session has no server location — and the reason is in the "GSCode" log, so that is what
+ * gets shown.
+ */
+function requireClient(log: vscode.LogOutputChannel): LanguageClient | undefined {
+    if (client === undefined) {
+        log.show();
+        void vscode.window.showErrorMessage(
+            "The GSCode language server is not running. The GSCode log says why.",
+        );
+    }
+
+    return client;
+}
+
+function registerCommands(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): void {
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.showOutput", () => {
-            created.outputChannel.show();
+            // With no server there is no server channel, and the "GSCode" log is where the reason
+            // for that was written.
+            if (client === undefined) {
+                log.show();
+                return;
+            }
+
+            client.outputChannel.show();
         }),
     );
-
-    // Settings the running server reads once and cannot pick up afterwards.
-    registerReloadPrompt(context, log);
 
     // Restart the language server, for clearing a wedged session or picking up a rebuilt server
     // binary. It does NOT pick up changed settings: the launch arguments and initializationOptions
@@ -54,8 +103,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // change prompts for that instead.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.restartServer", async () => {
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
             log.info("Restarting GSCode language server");
-            await created.restart();
+            await running.restart();
         }),
     );
 
@@ -71,6 +125,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // It also drains the SQLite writer properly rather than stopping the server and sleeping 300ms.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.clearCacheAndReindex", async () => {
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
             const choice = await vscode.window.showWarningMessage(
                 "Clear the GSCode cache and re-index? The language server will restart.",
                 { modal: true },
@@ -82,7 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             log.info("Clearing cache and reindexing");
             try {
-                const response = await created.sendRequest<{ deleted: boolean; message: string }>(
+                const response = await running.sendRequest<{ deleted: boolean; message: string }>(
                     "gscode/clearCache",
                     {},
                 );
@@ -109,7 +168,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // argument, so applying it is a window reload rather than anything the running server can do.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.selectGame", async () => {
-            await pickGame(created, log, { title: "Select the game this workspace targets" });
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
+            await pickGame(running, log, { title: "Select the game this workspace targets" });
         }),
     );
 
@@ -122,6 +186,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The GAME comes from the client, not that request: the server answers with a name and a
     // language and says so deliberately, because how the site addresses its pages is not something
     // it should need redeploying over. The client already holds which game the server selected.
+    //
+    // With no server there is no symbol lookup, but the index is still worth opening.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.openApiLibrary", async () => {
             const editor = vscode.window.activeTextEditor;
@@ -129,9 +195,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const game = activeGame?.game ?? DEFAULT_LIBRARY_GAME;
             let page = `https://www.gscode.net/library/${game}/${library}`;
 
-            if (editor !== undefined) {
+            if (editor !== undefined && client !== undefined) {
                 try {
-                    const builtin = await created.sendRequest<{ name: string; language: string }>(
+                    const builtin = await client.sendRequest<{ name: string; language: string }>(
                         "gscode/builtinAt",
                         {
                             uri: editor.document.uri.toString(),
@@ -179,14 +245,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             },
         ),
     );
-
-    registerIndexingStatusBar(context, created, log);
-
-    await created.start();
-    log.info("GSCode language client started");
-
-    registerRenameDirectiveFixup(context, created, log);
-    registerSemicolonDeduplication(context);
 }
 
 /**

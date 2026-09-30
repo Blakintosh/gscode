@@ -59,14 +59,17 @@ export async function createLanguageClient(
 ): Promise<LanguageClient | undefined> {
     if (!await isDotnetRuntimeAvailable()) {
         log.error(`.NET ${REQUIRED_DOTNET_MAJOR} runtime not found`);
-        const selection = await vscode.window.showErrorMessage(
+        // Not awaited. A notification stays until it is answered, and awaiting it held activation
+        // open for as long as the user left it there.
+        void vscode.window.showErrorMessage(
             `GSCode requires the .NET ${REQUIRED_DOTNET_MAJOR} runtime. Please install it and reload the window.`,
             "Download .NET",
             "Dismiss",
-        );
-        if (selection === "Download .NET") {
-            vscode.env.openExternal(vscode.Uri.parse(DOTNET_DOWNLOAD_URL));
-        }
+        ).then((selection) => {
+            if (selection === "Download .NET") {
+                void vscode.env.openExternal(vscode.Uri.parse(DOTNET_DOWNLOAD_URL));
+            }
+        });
         return undefined;
     }
 

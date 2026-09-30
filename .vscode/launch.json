@@ -42,19 +42,6 @@
 				"VSCODE_DEBUG": "true",
 				"SHOULD_TEST_IN_RELEASE": "true"
 			}
-		},
-		{
-			"name": "Extension Tests",
-			"type": "extensionHost",
-			"request": "launch",
-			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}/client",
-				"--extensionTestsPath=${workspaceFolder}/client/out/test/suite/index"
-			],
-			"outFiles": [
-				"${workspaceFolder}/client/out/test/**/*.js"
-			],
-			"preLaunchTask": "build: debug"
 		}
 	]
 }

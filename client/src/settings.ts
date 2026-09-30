@@ -32,6 +32,8 @@ export interface GscodeSettings {
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
+    "format.indentCaseLabels": boolean;
+    "format.indentDevBlocks": boolean;
     "game": string;
 }
 
@@ -63,6 +65,8 @@ export function readSettings(): GscodeSettings {
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
+        "format.indentCaseLabels": config.get<boolean>("format.indentCaseLabels", true),
+        "format.indentDevBlocks": config.get<boolean>("format.indentDevBlocks", false),
         "game": config.get<string>("game", "bo3"),
     };
 }

@@ -31,7 +31,6 @@ gate with a safety check of its own.
 | Empty parentheses stay tight: `foo()` | 18,762 |
 | Bracket interiors are **padded**: `a[ i ]` | overridden — stock prefers tight 19,175 to 4,686 |
 | A function pointer's `[[`/`]]` stay tight around a padded interior: `[[ ptr ]]` | overridden — stock prefers `[[ptr]]` 1,176 to 546 |
-| `case` indents one level inside `switch` | 2,012 vs 517 |
 | One blank line between functions | 10,775 vs 1,490 |
 | Trailing whitespace is stripped | stock carries it on 40,126 lines — 10% of the corpus |
 | No maximum line width; lines are never reflowed | stock has no discipline here: 10,044 lines exceed 100 columns, 5,102 exceed 120 |
@@ -66,10 +65,15 @@ switch ( v )
 The keyword-to-paren space is not configurable — mixing the two forms is how stock became
 inconsistent in the first place. The *interior* padding is, via `gscode.format.padParens`.
 
-## 3. Dev blocks keep their surroundings' indentation
+## 3. Dev blocks and `case` labels
 
-A `/# … #/` block does **not** introduce an indent level; its contents sit at the same level as the
-`/#`. Corpus: 316 flush against 194 indented.
+Two indentation choices the corpus splits on. Each has a default and a setting for the other answer.
+
+### Dev blocks keep their surroundings' indentation
+
+By default a `/# … #/` block does **not** introduce an indent level; its contents sit at the same
+level as the `/#`. Corpus: 316 flush against 194 indented — a genuine split, so
+`gscode.format.indentDevBlocks` indents the body one level for those who want the other answer.
 
 This matters more than the margin suggests. A dev block is a compile-time switch, not a scope —
 when dev script is off the engine jumps over it — so indenting its body implies a nesting that does
@@ -89,6 +93,13 @@ function flop()
 	#/
 }
 ```
+
+### `case` labels
+
+`case` and `default` indent one level inside their `switch`, and the statements under a label one
+level further. Corpus: 2,012 indented against 517 flush. The minority is common enough to be a style
+rather than an accident, so `gscode.format.indentCaseLabels` puts the labels in the switch's own
+column instead.
 
 ## 4. Blank lines
 
@@ -286,6 +297,8 @@ function flop()
 | `gscode.format.maxBlankLines` | `2` | Longest run of blank lines preserved |
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; range and on-type are clipped to the group around the cursor |
+| `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
+| `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
 
 ## 9. What the formatter will not do
 

@@ -444,11 +444,12 @@ public static class GscFormatter
             int newlinesBefore = significant[index].NewlinesBefore;
             bool insideCallParen = false;
 
-            // Closers dedent before this line's indent is computed. A dev block is deliberately
-            // absent: `/# … #/` is a compile-time switch, not a scope -- the engine jumps over it
-            // when dev script is off -- so indenting its body would imply a nesting that does not
-            // exist. The stock scripts agree, 316 flush against 194 indented.
-            if ( token.Kind == TokenKind.CloseBrace )
+            // Closers dedent before this line's indent is computed. A dev block only counts when
+            // the setting asks for it: `/# … #/` is a compile-time switch, not a scope -- the
+            // engine jumps over it when dev script is off -- and stock keeps it flush 316 times
+            // to 194, but that is a split rather than a rule.
+            if ( token.Kind == TokenKind.CloseBrace
+                || (token.Kind == TokenKind.DevBlockClose && options.IndentDevBlocks) )
             {
                 depth = Math.Max(0, depth - 1);
             }
@@ -483,6 +484,13 @@ public static class GscFormatter
             bool isLabel = token.Kind is TokenKind.Case or TokenKind.Default;
             int caseIndents = OpenCaseIndents(blocks, excludeInnermost: isLabel);
 
+            // Flush labels take back the level each open switch's brace gave them, which moves
+            // the statements under a label back with them.
+            if ( !options.IndentCaseLabels )
+            {
+                caseIndents -= OpenSwitches(blocks);
+            }
+
             unbraced.BeforeToken(token.Kind);
 
             if ( index == 0 )
@@ -516,12 +524,17 @@ public static class GscFormatter
                 output.Append(token.GetText(text));
             }
 
-            // Openers indent everything that follows -- again, dev blocks excepted.
+            // Openers indent everything that follows -- again, dev blocks only by setting.
             if ( token.Kind == TokenKind.OpenBrace )
             {
                 depth++;
                 blocks.Add(new SwitchBlock { IsSwitch = switchHeaderSeen });
                 switchHeaderSeen = false;
+            }
+
+            if ( token.Kind == TokenKind.DevBlockOpen && options.IndentDevBlocks )
+            {
+                depth++;
             }
 
             if ( token.Kind == TokenKind.Switch )
@@ -592,6 +605,21 @@ public static class GscFormatter
             }
 
             total++;
+        }
+
+        return total;
+    }
+
+    /// <summary>How many of the open braces are switch bodies.</summary>
+    private static int OpenSwitches(List<SwitchBlock> blocks)
+    {
+        int total = 0;
+        foreach ( SwitchBlock block in blocks )
+        {
+            if ( block.IsSwitch )
+            {
+                total++;
+            }
         }
 
         return total;

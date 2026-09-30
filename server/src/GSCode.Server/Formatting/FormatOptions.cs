@@ -55,6 +55,15 @@ namespace GSCode.Server.Formatting;
 /// defaults it on, the same split already used for <see cref="UseTabs"/>: the code default is the
 /// conservative one, the editor default is the intended one.
 /// </param>
+/// <param name="IndentCaseLabels">
+/// Whether <c>case</c> and <c>default</c> labels sit one level inside their <c>switch</c>, with the
+/// statements under a label one level further. Stock indents them 2,012 times to 517 flush.
+/// </param>
+/// <param name="IndentDevBlocks">
+/// Whether the body of a <c>/# … #/</c> dev block is indented. Off by default: a dev block is a
+/// compile-time switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
+/// a real split, so the other answer is a setting rather than a bug.
+/// </param>
 public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
@@ -64,7 +73,9 @@ public readonly record struct FormatOptions(
     bool SpaceBeforeControlParen = true,
     int MaxBlankLines = 2,
     bool SortDirectives = true,
-    bool AlignConsecutive = false)
+    bool AlignConsecutive = false,
+    bool IndentCaseLabels = true,
+    bool IndentDevBlocks = false)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -77,7 +88,8 @@ public readonly record struct FormatOptions(
     public static FormatOptions Default { get; } = new(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
-        SortDirectives: true, AlignConsecutive: false);
+        SortDirectives: true, AlignConsecutive: false,
+        IndentCaseLabels: true, IndentDevBlocks: false);
 
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
@@ -100,6 +112,8 @@ public readonly record struct FormatOptions(
             SpaceBeforeControlParen: settings.FormatSpaceBeforeControlParen,
             MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
             SortDirectives: settings.FormatSortDirectives,
-            AlignConsecutive: settings.FormatAlignConsecutive);
+            AlignConsecutive: settings.FormatAlignConsecutive,
+            IndentCaseLabels: settings.FormatIndentCaseLabels,
+            IndentDevBlocks: settings.FormatIndentDevBlocks);
     }
 }

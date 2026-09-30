@@ -410,6 +410,18 @@
 						"default": true,
 						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
 						"scope": "window"
+					},
+					"gscode.format.indentCaseLabels": {
+						"type": "boolean",
+						"default": true,
+						"description": "Indent 'case' and 'default' labels one level inside their 'switch', with the statements under a label one level further. Off puts the labels in the switch's own column. Stock scripts indent them about 4 to 1.",
+						"scope": "window"
+					},
+					"gscode.format.indentDevBlocks": {
+						"type": "boolean",
+						"default": false,
+						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a compile-time switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
+						"scope": "window"
 					}
 				}
 			},

@@ -43,6 +43,8 @@ public sealed class ServerSettings
         public int FormatMaxBlankLines { get; init; } = 2;
         public bool FormatSortDirectives { get; init; } = true;
         public bool FormatAlignConsecutive { get; init; } = true;
+        public bool FormatIndentCaseLabels { get; init; } = true;
+        public bool FormatIndentDevBlocks { get; init; }
         public string Game { get; init; } = "bo3";
     }
 
@@ -228,6 +230,20 @@ public sealed class ServerSettings
         set { _current = _current with { FormatAlignConsecutive = value }; }
     }
 
+    /// <summary>Whether `case` labels sit one level inside their `switch`.</summary>
+    public bool FormatIndentCaseLabels
+    {
+        get { return _current.FormatIndentCaseLabels; }
+        set { _current = _current with { FormatIndentCaseLabels = value }; }
+    }
+
+    /// <summary>Whether the body of a `/# … #/` dev block is indented one level.</summary>
+    public bool FormatIndentDevBlocks
+    {
+        get { return _current.FormatIndentDevBlocks; }
+        set { _current = _current with { FormatIndentDevBlocks = value }; }
+    }
+
     /// <summary>The game whose dialect the workspace targets, by short name (e.g. "bo3", "cod4").</summary>
     public string Game
     {
@@ -379,6 +395,12 @@ public sealed class ServerSettings
             FormatSortDirectives = section.Value<bool?>("format.sortDirectives")
                 ?? section["format"]?.Value<bool?>("sortDirectives")
                 ?? current.FormatSortDirectives,
+            FormatIndentCaseLabels = section.Value<bool?>("format.indentCaseLabels")
+                ?? section["format"]?.Value<bool?>("indentCaseLabels")
+                ?? current.FormatIndentCaseLabels,
+            FormatIndentDevBlocks = section.Value<bool?>("format.indentDevBlocks")
+                ?? section["format"]?.Value<bool?>("indentDevBlocks")
+                ?? current.FormatIndentDevBlocks,
         };
     }
 }

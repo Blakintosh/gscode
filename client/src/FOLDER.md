@@ -31,6 +31,16 @@ The VSCode extension sources. Five small files; the heavy lifting lives in the s
   over a named pipe. Creates the "GSCode Server" output channel, which receives the
   server's stderr (Serilog). Sends `initializationOptions.gscode` from `readSettings()`.
 
+## caretRestore.ts
+
+- `caretRestoreMiddleware` — language-client middleware for Format Document and Format Selection
+  (and so format-on-save). Passes the server's edits through unchanged, and puts every caret back
+  where its position went once VS Code has applied them. Needed because VS Code's text buffer,
+  handed a thousand edits or more, replaces the whole span they cover in one operation, and a caret
+  inside it lands at its end: a large reformat sent the caret from line 2399 to line 7284.
+- `mapOffset(document, offset, edits)` — where a document offset ends up after the edits: shifted
+  by every edit before it, or moved to the end of an edit containing it, as VS Code does.
+
 ## settings.ts
 
 - `interface GscodeSettings` — the settings payload shape shared with the server: log level,

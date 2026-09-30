@@ -8,6 +8,7 @@ import {
     TransportKind,
 } from "vscode-languageclient/node";
 import * as dotenv from "dotenv";
+import { caretRestoreMiddleware } from "./caretRestore";
 import { readSettings } from "./settings";
 
 const REQUIRED_DOTNET_MAJOR = 10;
@@ -105,6 +106,8 @@ export async function createLanguageClient(
             gscode: settings,
         },
         outputChannel: serverChannel,
+        // Format Document on a large file moves the caret to the end without this; see caretRestore.ts.
+        middleware: caretRestoreMiddleware,
     };
 
     return new LanguageClient("gscode", "GSCode Language Server", serverOptions, clientOptions);

@@ -54,6 +54,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 ### Fixed
 - Formatting a CRLF file no longer returns an edit covering the whole file every time, and no
   longer does so on every `;` and `}` with format-on-type. Output keeps the file's line endings.
+- Format Document keeps the caret where it was on a large file. VS Code applies a thousand edits or
+  more as one replacement and put the caret at its end; the extension now puts it back.
 - Format-on-type and Format Selection only change the lines they are scoped to. On a large file
   whose formatting changed lines throughout, one `;` used to rewrite the whole file and move the
   caret thousands of lines. Formatting edits are now one per changed line, and computing them is

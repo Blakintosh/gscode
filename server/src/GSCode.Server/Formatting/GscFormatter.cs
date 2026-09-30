@@ -521,7 +521,7 @@ public static class GscFormatter
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
-                    int continuation = openGroups > 0 ? 1 : 0;
+                    int continuation = openGroups > 0 || roles.ContinuesLine[index] ? 1 : 0;
                     AppendIndent(output, depth + unbraced.PendingIndents + caseIndents + continuation, options);
                 }
                 else
@@ -602,6 +602,9 @@ public static class GscFormatter
         /// <summary>This token is the ':' ending a <c>case</c> or <c>default</c> label.</summary>
         public required bool[] LabelColon { get; init; }
 
+        /// <summary>This token starts the line after a '\' continuation, so it is indented one level.</summary>
+        public required bool[] ContinuesLine { get; init; }
+
         public static TokenRoles Of(List<SignificantToken> significant)
         {
             TokenRoles roles = new()
@@ -609,7 +612,10 @@ public static class GscFormatter
                 TightBefore = new bool[significant.Count],
                 SpaceBefore = new bool[significant.Count],
                 LabelColon = new bool[significant.Count],
+                ContinuesLine = new bool[significant.Count],
             };
+
+            MarkFunctionPointers(significant, roles);
 
             // A ':' ends a label, closes a ternary, or names a base class. A label's own
             // expression can hold a ternary, so its '?'s are counted apart from the statement's.
@@ -623,6 +629,16 @@ public static class GscFormatter
                 {
                     case TokenKind.DefineDirective:
                         MarkDefine(significant, index, roles);
+                        break;
+                    case TokenKind.Backslash:
+                        // A '\' that ends its line continues a directive, not a path: set it off
+                        // from the code before it, and indent the line it continues onto.
+                        if ( index + 1 < significant.Count && significant[index + 1].NewlinesBefore > 0 )
+                        {
+                            roles.SpaceBefore[index] = true;
+                            roles.ContinuesLine[index + 1] = true;
+                        }
+
                         break;
                     case TokenKind.Case:
                     case TokenKind.Default:
@@ -664,6 +680,60 @@ public static class GscFormatter
             }
 
             return roles;
+        }
+
+        /// <summary>
+        /// A function pointer's <c>[[</c> and <c>]]</c> read as one token each, so the two brackets
+        /// stay together while the interior takes the ordinary bracket padding:
+        /// <c>self [[ level.callback ]]()</c>. The <c>[[</c> is set off from a caller before it —
+        /// stock writes <c>self [[</c> 735 times against 2 — where a lone <c>[</c> after an operand
+        /// is a subscript and hugs it. Only a matched pair is a pointer: the closers are found by
+        /// bracket matching, so nested subscripts' <c>] ]</c> stay padded.
+        /// </summary>
+        private static void MarkFunctionPointers(List<SignificantToken> significant, TokenRoles roles)
+        {
+            List<int> open = [];
+            HashSet<int> pointerInners = [];
+            for ( int index = 0; index < significant.Count; index++ )
+            {
+                TokenKind kind = significant[index].Token.Kind;
+                if ( kind == TokenKind.OpenBracket )
+                {
+                    bool opensPointer = index + 1 < significant.Count
+                        && significant[index + 1].Token.Kind == TokenKind.OpenBracket
+                        && !pointerInners.Contains(index);
+                    if ( opensPointer )
+                    {
+                        pointerInners.Add(index + 1);
+                        roles.TightBefore[index + 1] = true;
+                        if ( index > 0 && EndsAnOperand(significant[index - 1].Token.Kind) )
+                        {
+                            roles.SpaceBefore[index] = true;
+                        }
+                    }
+
+                    open.Add(index);
+                }
+                else if ( kind == TokenKind.CloseBracket && open.Count > 0 )
+                {
+                    int opener = open[^1];
+                    open.RemoveAt(open.Count - 1);
+
+                    // The inner of a pointer pair closing, with the outer closing right after it.
+                    bool closesPointer = pointerInners.Contains(opener)
+                        && index + 1 < significant.Count
+                        && significant[index + 1].Token.Kind == TokenKind.CloseBracket;
+                    if ( closesPointer )
+                    {
+                        roles.TightBefore[index + 1] = true;
+                    }
+                }
+                else if ( kind is TokenKind.OpenBrace or TokenKind.CloseBrace )
+                {
+                    // No bracket spans a brace, so a stray one in a disabled branch stops here.
+                    open.Clear();
+                }
+            }
         }
 
         /// <summary>
@@ -1008,7 +1078,9 @@ public static class GscFormatter
 
         if ( current == TokenKind.CloseBracket )
         {
-            return previous == TokenKind.CloseBracket || !options.PadBrackets ? "" : " ";
+            // A function pointer's `]]` is kept tight by TokenRoles; any other `] ]` closes nested
+            // subscripts and is padded like every bracket: `a[ b[ c ] ]`.
+            return options.PadBrackets ? " " : "";
         }
 
         // A '[' hugs its operand only when it SUBSCRIPTS one -- `a[ 0 ]`, `foo()[ 1 ]`. Opening an

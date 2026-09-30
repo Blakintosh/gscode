@@ -36,6 +36,8 @@ readers who share the corpus's majority but not every one of its habits.
 | Empty parentheses stay tight: `foo()` | 18,762 |
 | Bracket interiors are **padded**: `a[ i ]` (`padBrackets`) | overridden — stock prefers tight 19,175 to 4,686 |
 | A function pointer's `[[`/`]]` stay tight around a padded interior: `[[ ptr ]]` | overridden — stock prefers `[[ptr]]` 1,176 to 546 |
+| A caller is set off from a pointer call: `self [[ ptr ]]()` — nested subscripts stay padded: `a[ b[ c ] ]` | 735 spaced vs 2 tight |
+| A `\` that continues a directive is set off, and the line it continues onto indents one level | |
 | One blank line between functions | 10,775 vs 1,490 |
 | Trailing whitespace is stripped | stock carries it on 40,126 lines — 10% of the corpus |
 | No maximum line width; lines are never reflowed | stock has no discipline here: 10,044 lines exceed 100 columns, 5,102 exceed 120 |

@@ -40,6 +40,15 @@ public class DefineFormattingTests
     }
 
     [Fact]
+    public void AContinuationBackslashIsSetOffAndItsLineIndented()
+    {
+        // A path's backslashes still hug: only a '\' that ends its line is a continuation.
+        Assert.StartsWith(
+            "#using scripts\\shared\\util_shared;\n\n#define MULTI( _a ) \\\n\tbaz( _a )\n",
+            Format("#using scripts\\shared\\util_shared;\n\n#define MULTI( _a )\\\nbaz( _a )\nfunction f()\n{\n\tx = MULTI( 1 );\n}\n"));
+    }
+
+    [Fact]
     public void DefineFormattingIsIdempotent()
     {
         string once = Format("#define HALF ( 1 / 2 )\n#define SCALE(_v)(_v*2)\nfunction f()\n{\n\tx = SCALE( HALF );\n}\n");

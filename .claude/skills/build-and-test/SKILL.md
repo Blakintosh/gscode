@@ -114,7 +114,14 @@ cd client
 npm run compile          # tsc
 npm run lint             # no output is the bar: 0 errors AND 0 warnings
 npm run bundle-server    # dotnet publish into client/service/
+npm run package          # bundle-server, then vsce package (whose prepublish runs `npm run bundle`)
 ```
+
+What ships is not tsc's output. `npm run bundle` empties `out/` and has esbuild write one bundled
+`out/extension.js` with the dependencies inside it, and the package excludes `node_modules`. F5
+still runs `tsc -watch` into `out/`, so a dev session never runs the bundle: a change to how the
+client imports something is only proven by installing the VSIX. Run `npm run compile` after
+packaging to put the tsc output back for F5.
 
 Every warning the linter used to report was one false positive: `naming-convention` flagging the
 quoted VS Code setting keys (`"format.maxBlankLines"`), which no casing could fix. The config now

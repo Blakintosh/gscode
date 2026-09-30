@@ -9,9 +9,9 @@ using Position = GSCode.Core.Text.Position;
 namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
-/// Workspace symbol search (Ctrl+T) walks every record with no overlay-shadowing at all — a raw
-/// file and the mod overlay that replaces it both declare the same function, and both show up as
-/// separate results, one of them for a file the engine never loads.
+/// Workspace symbol search (Ctrl+T) applies overlay shadowing: when a mod overlay replaces a raw
+/// file, the two declare the same function, and only the overlay's is offered. Without shadowing
+/// both appeared, one of them for a file the engine never loads.
 /// </summary>
 public class WorkspaceSymbolShadowingTests
 {
@@ -45,9 +45,9 @@ public class WorkspaceSymbolShadowingTests
     {
         ScriptDatabase database = new();
         database.Gsc.Upsert(FunctionRecord(
-            @"C:\raw0\maps\_utility.gsc", "raw", @"maps\_utility", "util"));
+            TestPaths.Raw(@"maps\_utility.gsc"), "raw", @"maps\_utility", "util"));
         database.Gsc.Upsert(FunctionRecord(
-            @"C:\mods0\zm_grief\maps\_utility.gsc", "mod:zm_grief", @"maps\_utility", "util"));
+            TestPaths.ModsRoot + @"\zm_grief\maps\_utility.gsc", "mod:zm_grief", @"maps\_utility", "util"));
 
         WorkspaceSymbolHandler handler = new(database);
         WorkspaceSymbolParams request = new() { Query = "util" };

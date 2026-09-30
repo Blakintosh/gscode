@@ -113,9 +113,11 @@ add it to the harness — wired the way production wires it — so the next test
    what it is choosing (`InlayHintParameterTests`, `InlayHintMacroTests`).
 2. **`TestDocuments.Standalone()`**, when the document store IS the subject: analysis gates,
    single-flight reruns, versions, untitled buffers.
-3. **Hand-built pieces on `FakeFileSystem` and `TestPaths`**, only when the data itself is the
-   subject — records upserted with their own context ids (`ResolveForQueryTests`,
-   `WorkspaceSymbolShadowingTests`), a hand-built builtin library a lint consumes
+3. **Hand-built pieces**, only for the one piece that is the subject, with the harness supplying
+   the rest: records upserted with their own context ids go into the harness's own database
+   (`ResolveForQueryTests`); a document store gated to park an analysis mid-flight is built by
+   the test and handed to collaborators from `HandlerWorkspace.BuildAsync([])`
+   (`DependentRefreshStampTests`); a hand-built builtin library goes to the lint that consumes it
    (`ArgumentCountLintTests`).
 4. **Real disk**, when the file system is the subject (below).
 
@@ -187,7 +189,9 @@ With a game, the list is indented under the call and the profile follows it:
 A temp directory is correct when the file system IS the subject:
 
 - `PhysicalFileSystemTests`, and anything asserting real write stamps — `FakeFileSystem` answers
-  `UnixEpoch` for every file (`DependentRefreshStampTests`, the cache-pruning tests).
+  `UnixEpoch` for every file (the cache-pruning tests). Read what "stamp" means before filing a
+  test here: `DependentRefreshStampTests` is about the diagnostics VERSION stamp, never wrote a
+  file, and carried a temp directory for nothing.
 - SQLite and the persistent cache (`Cache/*`, `Restored*`, `DeleteDatabaseTests`).
 - The bundled data loaders reading `AppContext.BaseDirectory\Api` (`ApiLoaderTests`, `ObjectFieldsTests`,
   `StockScriptsTests`) when they test the loading itself.
@@ -262,9 +266,9 @@ path resolved inside the method. The compiler reports both (CS0133, CS1736).
 - **Seeded by hand on purpose:** `ArgumentCountLintTests` (a hand-built builtin library),
   `DialectIncludeScopeTests` and `ExportSignatureTests` (records committed per dialect),
   `DevBlockCallLintTests` (commits the asking file beside the index), `ClassMethodLintTests`' and
-  `UsingNotFoundLintTests`' resolver-only helpers, and in the handlers only `ResolveForQueryTests`
-  and `WorkspaceSymbolShadowingTests` (records with their own context ids) and
-  `DependentRefreshStampTests` (real write stamps).
+  `UsingNotFoundLintTests`' resolver-only helpers. In the handlers, only the one subject piece
+  in `DependentRefreshStampTests` (its gated document store) and `WorkspaceSymbolShadowingTests`
+  (hand-built records into a bare database, since the handler takes nothing else).
 - **Style, not setup:** `CompletionEngineTests.BuildWorld` now builds on `TestWorkspace` but still
   returns a tuple its sixty callers deconstruct, against the house style. Its CoD4 fact asserts on
   a builtin because a merge-dialect fixture "extracts to nothing" — true of the default-game

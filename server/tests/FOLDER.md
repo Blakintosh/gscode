@@ -317,8 +317,8 @@ The LSP layer, the formatter, and the real-corpus sweeps.
 disposed, since handlers read Active while they answer. `Open(relative)` opens a file it indexed;
 `Open(relative, text)` opens a buffer it did not, for a fix or completion on a file being written.
 Handler tests used to build this by hand in a temp directory, only because `FakeFileSystem` lived
-in the other suite. Two still build their own pieces, on purpose: `DependentRefreshStampTests` needs
-real write stamps, and `ResolveForQueryTests` upserts records whose context ids are the subject.
+in the other suite. `DependentRefreshStampTests` builds one piece itself — a document store that
+parks an analysis mid-flight — and takes everything else from an empty workspace.
 
 **Corpus** (all `Category=Corpus`, all no-op without their game). `CorpusFixture` locates BO3 via
 `GSCODE_CORPUS_BO3`; `GameCorpusFixture` locates the others via `GSCODE_CORPUS_<GAME>`, built from

@@ -2,11 +2,7 @@ using GSCode.Core;
 using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -22,7 +18,7 @@ namespace GSCode.Server.Tests.Handlers;
 /// in between stamps a parse of older text with the newest version — the one stamp a client uses to
 /// decide a set is still current.
 /// </summary>
-public sealed class DependentRefreshStampTests : IDisposable
+public sealed class DependentRefreshStampTests
 {
     private const string Source = "function main()\n{\n}\n";
 
@@ -44,38 +40,18 @@ public sealed class DependentRefreshStampTests : IDisposable
         }
     }
 
-    private readonly string _root;
-
-    public DependentRefreshStampTests()
-    {
-        _root = Path.Combine(Path.GetTempPath(), $"gscode-refresh-stamp-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_root);
-    }
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_root, recursive: true);
-        }
-        catch ( IOException )
-        {
-            // Best-effort cleanup; a locked file left behind costs nothing a later run cannot fix.
-        }
-    }
-
     /// <summary>
-    /// A refresher over a document store whose SECOND analysis parks inside the insert-provider
-    /// factory — the one place a test can hold an analysis open while an edit lands on the same
-    /// document. The first analysis is the document's own, which has to complete for the refresh to
-    /// have anything to be stale against.
+    /// A document store whose SECOND analysis parks inside the insert-provider factory — the one
+    /// place a test can hold an analysis open while an edit lands on the same document. The first
+    /// analysis is the document's own, which has to complete for the refresh to have anything to be
+    /// stale against. This store is the subject, so it is built here rather than taken from the
+    /// harness; everything else the refresher needs is the harness's.
     /// </summary>
-    private DependentDiagnosticsRefresher Build(
-        RecordingSink sink, ManualResetEventSlim entered, ManualResetEventSlim release, out DocumentStore documents)
+    private static DocumentStore GatedDocuments(ManualResetEventSlim entered, ManualResetEventSlim release)
     {
         int started = 0;
 
-        documents = new DocumentStore(
+        return new DocumentStore(
             _ =>
             {
                 if ( Interlocked.Increment(ref started) == 2 )
@@ -87,29 +63,21 @@ public sealed class DependentRefreshStampTests : IDisposable
                 return NullInsertProvider.Instance;
             },
             new NameTable());
+    }
 
-        PhysicalFileSystem fileSystem = new();
-        RootConfig config = RootConfig.Create(
-            rawEnabled: true, rawPath: _root, modsPath: null, workspaceFolders: [], fileSystem: fileSystem);
-        PathResolver resolver = new(config, fileSystem);
-        ResolverHolder resolverHolder = new(fileSystem) { Current = resolver };
-
-        NameTable names = new();
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, names);
+    private static DependentDiagnosticsRefresher RefresherOver(
+        HandlerWorkspace workspace, DocumentStore documents, RecordingSink sink)
+    {
         DocumentLinter linter = new(
-            database,
-            resolverHolder,
-            BuiltinApiSet.Load(Path.Combine(AppContext.BaseDirectory, "Api")),
-            ObjectFields.Load(Path.Combine(AppContext.BaseDirectory, "Api")));
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
 
         DiagnosticsPublisher publisher = new(sink);
-        ServerSettings settings = new();
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(database, documents, publisher, settings);
-        WorkspaceLintSweep sweep = new(database, documents, indexer, linter);
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics = new(
+            workspace.Database, documents, publisher, new ServerSettings());
+        WorkspaceLintSweep sweep = new(workspace.Database, documents, workspace.Indexer, linter);
 
         return new DependentDiagnosticsRefresher(
-            documents, publisher, linter, database, sweep, workspaceDiagnostics,
+            documents, publisher, linter, workspace.Database, sweep, workspaceDiagnostics,
             NullCodeLensRefreshSink.Instance, new ServerSettings());
     }
 
@@ -120,10 +88,11 @@ public sealed class DependentRefreshStampTests : IDisposable
         using ManualResetEventSlim entered = new();
         using ManualResetEventSlim release = new();
 
-        DependentDiagnosticsRefresher refresher = Build(sink, entered, release, out DocumentStore documents);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DocumentStore documents = GatedDocuments(entered, release);
+        DependentDiagnosticsRefresher refresher = RefresherOver(workspace, documents, sink);
 
-        string path = Path.Combine(_root, "caller.gsc");
-        OpenDocument document = documents.Open(path, Source, version: 1);
+        OpenDocument document = documents.Open(TestPaths.Raw(@"scripts\caller.gsc"), Source, version: 1);
         documents.Analyze(document);
 
         // Stale, so the refresh has to re-analyse rather than reuse the cached parse.
@@ -152,11 +121,13 @@ public sealed class DependentRefreshStampTests : IDisposable
         using ManualResetEventSlim release = new();
         release.Set();
 
-        DependentDiagnosticsRefresher refresher = Build(sink, entered, release, out DocumentStore documents);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DocumentStore documents = GatedDocuments(entered, release);
+        DependentDiagnosticsRefresher refresher = RefresherOver(workspace, documents, sink);
 
-        OpenDocument first = documents.Open(Path.Combine(_root, "first.gsc"), Source, version: 1);
-        OpenDocument second = documents.Open(Path.Combine(_root, "second.gsc"), Source, version: 1);
-        OpenDocument bystander = documents.Open(Path.Combine(_root, "bystander.gsc"), Source, version: 1);
+        OpenDocument first = documents.Open(TestPaths.Raw(@"scripts\first.gsc"), Source, version: 1);
+        OpenDocument second = documents.Open(TestPaths.Raw(@"scripts\second.gsc"), Source, version: 1);
+        OpenDocument bystander = documents.Open(TestPaths.Raw(@"scripts\bystander.gsc"), Source, version: 1);
         documents.Analyze(first);
         documents.Analyze(second);
         documents.Analyze(bystander);

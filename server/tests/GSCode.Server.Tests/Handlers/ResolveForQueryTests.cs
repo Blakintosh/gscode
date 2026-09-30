@@ -2,10 +2,8 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Core.Paths;
 using GSCode.Core.Text;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Xunit;
 
@@ -21,16 +19,13 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class ResolveForQueryTests
 {
-    private static readonly string s_indexedPath =
-        PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\util_shared.gsc"));
+    private const string IndexedRelativePath = @"scripts\shared\util_shared.gsc";
+
+    private static readonly string s_indexedPath = PathUtil.NormalizeAbsolute(TestPaths.Raw(IndexedRelativePath));
+
+    private static DocumentUri IndexedUri => HandlerWorkspace.Identify(IndexedRelativePath).Uri;
 
     private static readonly TextRange s_someRange = new(new Position(1, 1), new Position(1, 5));
-
-    private static NavigationSupport SupportOver(ScriptDatabase database)
-    {
-        DocumentStore documents = TestDocuments.Standalone();
-        return new NavigationSupport(documents, database, new ResolverHolder(new FakeFileSystem()));
-    }
 
     private static ScriptRecord IndexedRecord()
     {
@@ -40,7 +35,7 @@ public class ResolveForQueryTests
             ContextId = "raw",
             ContentHash = 0,
             Language = ScriptLanguage.Gsc,
-            RelativePath = @"scripts\shared\util_shared.gsc",
+            RelativePath = IndexedRelativePath,
             DeclaredNamespaces = ImmutableArray.Create("util_shared"),
             Functions =
             [
@@ -57,13 +52,12 @@ public class ResolveForQueryTests
     }
 
     [Fact]
-    public void AFileThatIsIndexedButNotOpenStillResolves()
+    public async Task AFileThatIsIndexedButNotOpenStillResolves()
     {
-        ScriptDatabase database = new();
-        database.Gsc.Upsert(IndexedRecord());
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        workspace.Database.Gsc.Upsert(IndexedRecord());
 
-        SymbolQueryContext? context = SupportOver(database).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
+        SymbolQueryContext? context = workspace.Navigation.ResolveForQuery(IndexedUri, CancellationToken.None);
 
         Assert.NotNull(context);
         Assert.Equal(s_indexedPath, context.Path);
@@ -73,25 +67,25 @@ public class ResolveForQueryTests
     }
 
     [Fact]
-    public void AFileNothingKnowsAboutStillResolvesToNothing()
+    public async Task AFileNothingKnowsAboutStillResolvesToNothing()
     {
         // The control: the fallback answers from the INDEX, not from the path existing.
-        SymbolQueryContext? context = SupportOver(new ScriptDatabase()).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+
+        SymbolQueryContext? context = workspace.Navigation.ResolveForQuery(IndexedUri, CancellationToken.None);
 
         Assert.Null(context);
     }
 
     [Fact]
-    public void TheContextIdComesFromTheRecordRatherThanTheResolver()
+    public async Task TheContextIdComesFromTheRecordRatherThanTheResolver()
     {
         // A closed file's record already states its resolution world, so the fallback needs no
         // resolver call and no parse — nothing a hierarchy asks needs a syntax tree.
-        ScriptDatabase database = new();
-        database.Gsc.Upsert(IndexedRecord() with { ContextId = "mod:my_mod" });
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        workspace.Database.Gsc.Upsert(IndexedRecord() with { ContextId = "mod:my_mod" });
 
-        SymbolQueryContext? context = SupportOver(database).ResolveForQuery(
-            DocumentUri.FromFileSystemPath(s_indexedPath), CancellationToken.None);
+        SymbolQueryContext? context = workspace.Navigation.ResolveForQuery(IndexedUri, CancellationToken.None);
 
         Assert.NotNull(context);
         Assert.Equal("mod:my_mod", context.ContextId);

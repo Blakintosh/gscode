@@ -7,12 +7,12 @@ namespace GSCode.Server.Formatting;
 
 /// <summary>
 /// Consecutive alignment for assignments: a run of assignment statements at the same indentation
-/// has its operators lined up, one space past the longest left-hand side.
+/// has its '=' lined up, one space past the longest left-hand side.
 ///
 /// <code>
 ///   level.wasp_enabled          = true;
 ///   level.wasp_round_count_blah = 1;      // longest LHS sets the column
-///   level.wasp_round_count      += 1;     // compound operators extend rightward from it
+///   level.wasp_round_count     += 1;      // a compound operator's '=' shares it too
 /// </code>
 ///
 /// This is a deliberate override of the stock scripts, which align almost nothing (2 assignments in
@@ -59,13 +59,13 @@ public static class AssignmentAligner
             List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(kinds[line], indent));
             int lastAssignment = group[^1];
 
-            int target = 0;
+            // Every '=' lands in one column: one space past the longest left-hand side, or further
+            // when a compound operator's leading characters would not otherwise fit before it.
+            int equalsColumn = 0;
             foreach ( int line in group )
             {
-                target = Math.Max(target, kinds[line].LeftLength);
+                equalsColumn = Math.Max(equalsColumn, kinds[line].LeftLength + kinds[line].OperatorLength);
             }
-
-            target += 1;
 
             // Emit every line from index through the last aligned assignment, re-padding the
             // assignments and passing the interleaved comments straight through.
@@ -75,7 +75,10 @@ public static class AssignmentAligner
                     && string.Equals(kinds[line].Indent, indent, StringComparison.Ordinal)
                     && group.Count >= 2 )
                 {
-                    string aligned = Repad(lines[line], kinds[line], target);
+                    // A compound operator starts early by its length before the '=', so `+=`
+                    // hangs its '+' one column left of the shared '='.
+                    int operatorStart = equalsColumn - (kinds[line].OperatorLength - 1);
+                    string aligned = Repad(lines[line], kinds[line], operatorStart);
                     if ( !string.Equals(aligned, lines[line], StringComparison.Ordinal) )
                     {
                         changed = true;
@@ -125,7 +128,8 @@ public static class AssignmentAligner
         Assignment,
     }
 
-    private readonly record struct LineKind(LineRole Kind, string Indent, int LeftLength, int OperatorColumn);
+    private readonly record struct LineKind(
+        LineRole Kind, string Indent, int LeftLength, int OperatorColumn, int OperatorLength = 1);
 
     private static LineKind[] ClassifyLines(int lineCount, ImmutableArray<Token> tokens, string[] lines)
     {
@@ -178,10 +182,12 @@ public static class AssignmentAligner
             return new LineKind(LineRole.Other, "", 0, 0);
         }
 
-        int operatorColumn = code[operatorIndex].Range.Start.Character;
+        Token operatorToken = code[operatorIndex];
+        int operatorColumn = operatorToken.Range.Start.Character;
+        int operatorLength = operatorToken.Range.End.Character - operatorColumn;
         string left = lineText[..operatorColumn].TrimEnd();
         string indent = LineFacts.LeadingWhitespace(lineText);
 
-        return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn);
+        return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn, operatorLength);
     }
 }

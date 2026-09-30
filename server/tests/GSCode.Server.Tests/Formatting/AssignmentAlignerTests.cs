@@ -39,20 +39,30 @@ public class AssignmentAlignerTests
             + "{\n"
             + "\tlevel.wasp_enabled          = true;\n"
             + "\tlevel.wasp_round_count_blah = 1;\n"
-            + "\tlevel.wasp_round_count      += 1;\n"
+            + "\tlevel.wasp_round_count     += 1;\n"
             + "}\n";
 
         Assert.Equal(expected, formatted);
     }
 
     [Fact]
-    public void CompoundOperatorsStartAtTheColumn_NotAlignedOnTheEquals()
+    public void ACompoundOperatorsEqualsSharesTheColumn()
     {
-        // '+' sits at the operator column; the '=' of '+=' is one past. The user's example.
+        // The '=' of '+=' lines up with every other '='; its '+' hangs one column left.
         string formatted = Format("function f()\n{\nlevel.aaaa = 1;\nlevel.b += 2;\n}\n");
 
         Assert.Contains("\tlevel.aaaa = 1;\n", formatted, StringComparison.Ordinal);
-        Assert.Contains("\tlevel.b    += 2;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.b   += 2;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACompoundOperatorOnTheLongestSidePushesTheColumnOut()
+    {
+        // No room before the '=' for the '<<', so the column moves right to make it.
+        string formatted = Format("function f()\n{\nlevel.aaaa <<= 1;\nlevel.bbbb = 2;\n}\n");
+
+        Assert.Contains("\tlevel.aaaa <<= 1;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.bbbb   = 2;\n", formatted, StringComparison.Ordinal);
     }
 
     [Fact]

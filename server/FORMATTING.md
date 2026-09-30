@@ -203,13 +203,14 @@ Worth it: 498 of the 980 stock scripts are not in canonical order, and the same 
 ## 6. Consecutive alignment
 
 `gscode.format.alignConsecutive` (on) lines up the operators of a run of consecutive assignments,
-one space past the longest left-hand side. Compound operators start at that column and extend
-rightward.
+so every `=` sits in one column, one space past the longest left-hand side. A compound operator's
+`=` shares that column and its leading characters hang to the left of it; when the longest side is
+itself compound, the column moves right to make room.
 
 ```gsc
 level.wasp_enabled          = true;
 level.wasp_round_count_blah = 1;      // longest LHS sets the column
-level.wasp_round_count      += 1;     // '+' at the column, '=' one past
+level.wasp_round_count     += 1;      // '=' in the column, '+' one to its left
 ```
 
 Like directive sorting, this is a deliberate override of the corpus — the stock scripts align

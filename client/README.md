@@ -176,6 +176,7 @@ code it suppresses and says where it stops.
 | `gscode.format.alignConsecutive` | `true` | Line up the `=` of consecutive assignments. |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch`. |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block. |
+| `gscode.format.alignMaxPadding` | `20` | The most spaces alignment may add to one line. A far longer or shorter left-hand side keeps a single space instead of pushing its run across the screen. `0` removes the limit. |
 | `gscode.format.fixCasing` | `true` | Lowercase keywords (`IsDefined` → `isdefined`), and give functions, namespaces and classes the spelling they are declared with. Macros match exactly, so they are never touched. |
 
 ### Commands and useful editor features

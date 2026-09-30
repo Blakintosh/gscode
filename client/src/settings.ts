@@ -35,6 +35,7 @@ export interface GscodeSettings {
     "format.indentCaseLabels": boolean;
     "format.indentDevBlocks": boolean;
     "format.fixCasing": boolean;
+    "format.alignMaxPadding": number;
     "game": string;
 }
 
@@ -69,6 +70,7 @@ export function readSettings(): GscodeSettings {
         "format.indentCaseLabels": config.get<boolean>("format.indentCaseLabels", true),
         "format.indentDevBlocks": config.get<boolean>("format.indentDevBlocks", false),
         "format.fixCasing": config.get<boolean>("format.fixCasing", true),
+        "format.alignMaxPadding": config.get<number>("format.alignMaxPadding", 20),
         "game": config.get<string>("game", "bo3"),
     };
 }

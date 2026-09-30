@@ -32,6 +32,9 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - Two formatter settings for indentation the stock scripts split on:
   `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
   `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block).
+- `gscode.format.alignMaxPadding` (20): consecutive alignment no longer pushes a short name's `=`
+  across the screen to match a deeply subscripted neighbour. A line further than this from the rest
+  of its run keeps a single space, and the rest still align.
 - `gscode.format.fixCasing` (on): formatting lowercases keywords and writes functions, namespaces
   and classes the way they are declared — `isDefined()` becomes `isdefined()`, `getplayers()`
   becomes `GetPlayers()`, `FOo()` becomes `foo()`, `Util::` becomes `util::`. A bare call takes the

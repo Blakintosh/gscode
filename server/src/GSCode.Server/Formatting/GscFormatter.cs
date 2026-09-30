@@ -366,8 +366,8 @@ public static partial class GscFormatter
         if ( options.AlignConsecutive )
         {
             string unaligned = formatted;
-            formatted = ColumnAligner.Align(formatted);
-            formatted = AssignmentAligner.Align(formatted);
+            formatted = ColumnAligner.Align(formatted, options.AlignMaxPadding);
+            formatted = AssignmentAligner.Align(formatted, options.AlignMaxPadding);
 
             // The aligners only ever widen gaps, but they rewrite lines by column offset, and the
             // gate above ran before them. Checked again here so a wrong offset costs the alignment

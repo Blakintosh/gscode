@@ -65,6 +65,11 @@ namespace GSCode.Server.Formatting;
 /// compile-time switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
 /// a real split, so the other answer is a setting rather than a bug.
 /// </param>
+/// <param name="AlignMaxPadding">
+/// The most spaces consecutive alignment may add to one line, 0 for no limit. Caching a value and
+/// then writing a deeply subscripted one aligned the short name ninety columns out; past this the
+/// outlier keeps a single space and the rest of its run still aligns.
+/// </param>
 /// <param name="FixCasing">
 /// Whether keywords are lowercased and calls take their function's declared or documented
 /// spelling. The one option that changes token TEXT rather than whitespace, so it is off here —
@@ -83,7 +88,8 @@ public readonly record struct FormatOptions(
     bool AlignConsecutive = false,
     bool IndentCaseLabels = true,
     bool IndentDevBlocks = false,
-    bool FixCasing = false)
+    bool FixCasing = false,
+    int AlignMaxPadding = 20)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -97,7 +103,7 @@ public readonly record struct FormatOptions(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false,
-        IndentCaseLabels: true, IndentDevBlocks: false, FixCasing: false);
+        IndentCaseLabels: true, IndentDevBlocks: false, FixCasing: false, AlignMaxPadding: 20);
 
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
@@ -123,6 +129,7 @@ public readonly record struct FormatOptions(
             AlignConsecutive: settings.FormatAlignConsecutive,
             IndentCaseLabels: settings.FormatIndentCaseLabels,
             IndentDevBlocks: settings.FormatIndentDevBlocks,
-            FixCasing: settings.FormatFixCasing);
+            FixCasing: settings.FormatFixCasing,
+            AlignMaxPadding: Math.Max(0, settings.FormatAlignMaxPadding));
     }
 }

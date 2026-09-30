@@ -197,6 +197,57 @@ public class AssignmentAlignerTests
         Assert.Contains("\tbbbbbb = 2;\n", formatted, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ALeftHandSideTooFarFromItsRunIsNotPushedAcross()
+    {
+        // The reported pair: caching a value, then writing a deeply subscripted one. Aligning them
+        // put `nextID`'s '=' ninety columns out.
+        string formatted = Format("""
+            function f()
+            {
+            	nextID = level.releasedObjectives[localClientNum][ level.releasedObjectives[localClientNum].size - 1 ];
+            	level.releasedObjectives[localClientNum][ level.releasedObjectives[localClientNum].size - 1 ] = undefined;
+            }
+            """);
+
+        Assert.Contains("\tnextID = level.releasedObjectives[ localClientNum ]", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.releasedObjectives[ localClientNum ][ level.releasedObjectives[ localClientNum ].size - 1 ] = undefined;", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OneOutlierLeavesTheRunAndTheRestStillAlign()
+    {
+        string formatted = Format("""
+            function f()
+            {
+            	a = 1;
+            	bb = 2;
+            	ccc = 3;
+            	level.a_very_long_field_name_that_is_far_wider = 4;
+            }
+            """);
+
+        Assert.Contains("\ta   = 1;\n\tbb  = 2;\n\tccc = 3;\n\tlevel.a_very_long_field_name_that_is_far_wider = 4;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACapOfZeroAlignsEverything()
+    {
+        ParseResult result = TestParse.Analyze("function f()\n{\na = 1;\nlevel.a_very_long_field_name_that_is_far_wider = 4;\n}\n");
+
+        string formatted = GscFormatter.Format(result, s_aligned with { AlignMaxPadding = 0 })!;
+
+        Assert.Contains("\ta                                              = 1;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCapIsIdempotent()
+    {
+        string once = Format("function f()\n{\na = 1;\nbb = 2;\nlevel.a_very_long_field_name_that_is_far_wider = 4;\n}\n");
+
+        Assert.Equal(once, GscFormatter.Format(TestParse.Analyze(once), s_aligned));
+    }
+
     // Subscript-interior alignment for array left-hand sides lives in ColumnAlignerTests; this
     // file covers the operator alignment those two aligners compose with.
 }

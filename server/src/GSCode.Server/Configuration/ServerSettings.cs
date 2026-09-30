@@ -46,6 +46,7 @@ public sealed class ServerSettings
         public bool FormatIndentCaseLabels { get; init; } = true;
         public bool FormatIndentDevBlocks { get; init; }
         public bool FormatFixCasing { get; init; } = true;
+        public int FormatAlignMaxPadding { get; init; } = 20;
         public string Game { get; init; } = "bo3";
     }
 
@@ -252,6 +253,13 @@ public sealed class ServerSettings
         set { _current = _current with { FormatFixCasing = value }; }
     }
 
+    /// <summary>The most spaces consecutive alignment may add to one line; 0 for no limit.</summary>
+    public int FormatAlignMaxPadding
+    {
+        get { return _current.FormatAlignMaxPadding; }
+        set { _current = _current with { FormatAlignMaxPadding = value }; }
+    }
+
     /// <summary>The game whose dialect the workspace targets, by short name (e.g. "bo3", "cod4").</summary>
     public string Game
     {
@@ -412,6 +420,11 @@ public sealed class ServerSettings
             FormatFixCasing = section.Value<bool?>("format.fixCasing")
                 ?? section["format"]?.Value<bool?>("fixCasing")
                 ?? current.FormatFixCasing,
+            FormatAlignMaxPadding = Math.Max(
+                0,
+                section.Value<int?>("format.alignMaxPadding")
+                    ?? section["format"]?.Value<int?>("alignMaxPadding")
+                    ?? current.FormatAlignMaxPadding),
         };
     }
 }

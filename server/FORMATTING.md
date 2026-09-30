@@ -253,6 +253,17 @@ Grouping: a blank line or a statement of a different kind ends a run; a comment 
 transparent, and the assignments above and below it align together. A run of one is left at ordinary
 single spacing. Runs are per indentation level, so a nested block aligns within itself.
 
+Alignment is capped by `gscode.format.alignMaxPadding` (20). Caching a value and then writing a
+deeply subscripted one would otherwise push the short name's `=` ninety columns out. When a run's
+left-hand sides are further apart than the cap, the outlier — whichever of the widest and narrowest
+is further from the rest — keeps a single space, and the others still align. Subscript and argument
+columns that would need more than the cap are left as written. `0` removes the limit.
+
+```gsc
+nextID = level.releasedObjectives[ localClientNum ][ level.releasedObjectives[ localClientNum ].size - 1 ];
+level.releasedObjectives[ localClientNum ][ level.releasedObjectives[ localClientNum ].size - 1 ] = undefined;
+```
+
 The same setting also aligns the **interior of subscripts and call arguments** when a run of
 statements shares the same shape — the same base or callee, the same delimiters, the same arity:
 
@@ -375,6 +386,7 @@ function flop()
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; on-type is clipped to the group around the cursor, range to the selection |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
+| `gscode.format.alignMaxPadding` | `20` | The most spaces alignment may add to one line; `0` for no limit (§6) |
 | `gscode.format.fixCasing` | `true` | Lowercase keywords; give functions, namespaces and classes their declared spelling (§10) |
 
 ## 9. What the formatter will not do

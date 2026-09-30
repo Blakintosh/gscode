@@ -31,7 +31,11 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class ColumnAligner
 {
-    public static string Align(string formatted)
+    /// <param name="maxPadding">
+    /// The most spaces alignment may add to any one cell; 0 for no limit. A run that would need
+    /// more is left as written, since its columns are too far apart to read as one table.
+    /// </param>
+    public static string Align(string formatted, int maxPadding = 0)
     {
         string[] lines = formatted.Split('\n');
         ImmutableArray<Token> tokens = Lexer.Lex(SourceText.From(formatted)).Tokens;
@@ -77,7 +81,18 @@ public static class ColumnAligner
                     }
                 }
 
+                bool tooWide = false;
                 foreach ( int line in group )
+                {
+                    IReadOnlyList<Cell> cells = rows[line].Cells;
+                    for ( int c = 0; c < columns && maxPadding > 0; c++ )
+                    {
+                        tooWide |= maxWidth[c] - cells[c].Width > maxPadding;
+                    }
+                }
+
+                List<int> rebuilding = tooWide ? new List<int>() : group;
+                foreach ( int line in rebuilding )
                 {
                     string rebuilt = Rebuild(lines[line], rows[line].Cells, maxWidth, baseGap);
                     if ( !string.Equals(rebuilt, lines[line], StringComparison.Ordinal) )

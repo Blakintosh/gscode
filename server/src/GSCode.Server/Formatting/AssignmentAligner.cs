@@ -30,7 +30,11 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class AssignmentAligner
 {
-    public static string Align(string formatted)
+    /// <param name="maxPadding">
+    /// The most spaces alignment may add to any one line; 0 for no limit. A run whose left-hand
+    /// sides differ by more sheds its outliers, which keep a single space, and the rest align.
+    /// </param>
+    public static string Align(string formatted, int maxPadding = 0)
     {
         string[] lines = formatted.Split('\n');
         ImmutableArray<Token> tokens = Lexer.Lex(SourceText.From(formatted)).Tokens;
@@ -59,12 +63,15 @@ public static class AssignmentAligner
             List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(kinds[line], indent));
             int lastAssignment = group[^1];
 
+            // The lines that take part: all of them, unless aligning would pad one past the cap.
+            HashSet<int> aligned = WithinPadding(group, kinds, maxPadding);
+
             // Every '=' lands in one column: one space past the longest left-hand side, or further
             // when a compound operator's leading characters would not otherwise fit before it.
             int equalsColumn = 0;
-            foreach ( int line in group )
+            foreach ( int line in aligned )
             {
-                equalsColumn = Math.Max(equalsColumn, kinds[line].LeftLength + kinds[line].OperatorLength);
+                equalsColumn = Math.Max(equalsColumn, EqualsWidth(kinds[line]));
             }
 
             // Emit every line from index through the last aligned assignment, re-padding the
@@ -76,15 +83,18 @@ public static class AssignmentAligner
                     && group.Count >= 2 )
                 {
                     // A compound operator starts early by its length before the '=', so `+=`
-                    // hangs its '+' one column left of the shared '='.
-                    int operatorStart = equalsColumn - (kinds[line].OperatorLength - 1);
-                    string aligned = Repad(lines[line], kinds[line], operatorStart);
-                    if ( !string.Equals(aligned, lines[line], StringComparison.Ordinal) )
+                    // hangs its '+' one column left of the shared '='. A line left out of the
+                    // alignment keeps a single space.
+                    int operatorStart = aligned.Contains(line) && aligned.Count >= 2
+                        ? equalsColumn - (kinds[line].OperatorLength - 1)
+                        : kinds[line].LeftLength + 1;
+                    string repadded = Repad(lines[line], kinds[line], operatorStart);
+                    if ( !string.Equals(repadded, lines[line], StringComparison.Ordinal) )
                     {
                         changed = true;
                     }
 
-                    output.Append(aligned);
+                    output.Append(repadded);
                 }
                 else
                 {
@@ -101,6 +111,40 @@ public static class AssignmentAligner
         }
 
         return changed ? output.ToString() : formatted;
+    }
+
+    /// <summary>Where a line's '=' sits with a single space before its operator.</summary>
+    private static int EqualsWidth(LineKind kind)
+    {
+        return kind.LeftLength + kind.OperatorLength;
+    }
+
+    /// <summary>
+    /// The lines of a run that align together without any of them gaining more than
+    /// <paramref name="maxPadding"/> spaces. While the run's widest and narrowest sides are too far
+    /// apart, whichever of the two is further from the median leaves — so one long outlier
+    /// (`nextID = …` beside a 98-character subscript chain) drops out and the rest still align.
+    /// </summary>
+    private static HashSet<int> WithinPadding(List<int> group, LineKind[] kinds, int maxPadding)
+    {
+        List<int> kept = [.. group];
+        while ( maxPadding > 0 && kept.Count >= 2 )
+        {
+            List<int> byWidth = [.. kept.OrderBy(line => EqualsWidth(kinds[line]))];
+            int narrowest = byWidth[0];
+            int widest = byWidth[^1];
+            int spread = EqualsWidth(kinds[widest]) - EqualsWidth(kinds[narrowest]);
+            if ( spread <= maxPadding )
+            {
+                break;
+            }
+
+            int median = EqualsWidth(kinds[byWidth[byWidth.Count / 2]]);
+            bool widestIsFurther = EqualsWidth(kinds[widest]) - median >= median - EqualsWidth(kinds[narrowest]);
+            kept.Remove(widestIsFurther ? widest : narrowest);
+        }
+
+        return [.. kept];
     }
 
     private static LineFacts.RunStep StepOf(LineKind kind, string indent)

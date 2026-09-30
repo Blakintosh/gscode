@@ -423,6 +423,13 @@
 						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a compile-time switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
 						"scope": "window"
 					},
+					"gscode.format.alignMaxPadding": {
+						"type": "integer",
+						"default": 20,
+						"minimum": 0,
+						"description": "The most spaces consecutive alignment may add to one line. A line whose left-hand side is further than this from the rest of its run keeps a single space, and the rest still align; subscript and argument columns that would need more are left as written. 0 removes the limit.",
+						"scope": "window"
+					},
 					"gscode.format.fixCasing": {
 						"type": "boolean",
 						"default": true,

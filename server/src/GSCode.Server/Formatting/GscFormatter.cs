@@ -442,6 +442,13 @@ public static class GscFormatter
         // one. A header is written on one line, so a break inside it is joined back.
         List<bool> headerParens = [];
 
+        // A closed block is followed by a blank line before the next statement: stock puts one
+        // there 15,940 times against 3,012. A do-while's block is not closed until its tail's ';'.
+        bool blankOwed = false;
+        bool doSeen = false;
+        bool doTailPending = false;
+        bool inDoTail = false;
+
         // Open parentheses and brackets, for the continuation indent: a line that starts inside one
         // continues a statement and sits one level deeper. Separate from parenDepth because it
         // counts brackets too, and it is reset at every brace -- no brace can sit inside a
@@ -487,9 +494,25 @@ public static class GscFormatter
                 }
             }
 
+            bool closesDoBody = false;
             if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
             {
+                closesDoBody = blocks[^1].IsDo;
                 blocks.RemoveAt(blocks.Count - 1);
+            }
+
+            // The token after a do body's '}' is its `while` tail, which belongs to the block.
+            if ( doTailPending )
+            {
+                doTailPending = false;
+                if ( token.Kind == TokenKind.While )
+                {
+                    inDoTail = true;
+                }
+                else
+                {
+                    blankOwed = true;
+                }
             }
 
             if ( token.Kind is TokenKind.CloseParen or TokenKind.CloseBracket )
@@ -533,6 +556,10 @@ public static class GscFormatter
                 if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], insideHeader) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
+                    if ( blankOwed && !HugsTheBlockAbove(token.Kind) )
+                    {
+                        blankLines = Math.Max(blankLines, Math.Min(1, options.MaxBlankLines));
+                    }
                     output.Append('\n', 1 + blankLines);
                     int continuation = openGroups > 0 || roles.ContinuesLine[index] ? 1 : 0;
                     AppendIndent(output, depth + unbraced.PendingIndents + caseIndents + continuation, options);
@@ -562,7 +589,8 @@ public static class GscFormatter
             if ( token.Kind == TokenKind.OpenBrace )
             {
                 depth++;
-                blocks.Add(new SwitchBlock { IsSwitch = switchHeaderSeen });
+                blocks.Add(new SwitchBlock { IsSwitch = switchHeaderSeen, IsDo = doSeen });
+                doSeen = false;
                 switchHeaderSeen = false;
             }
 
@@ -597,6 +625,39 @@ public static class GscFormatter
             }
 
             unbraced.AfterToken(token.Kind);
+
+            // A trailing comment on the '}' line leaves the blank owed to the line after it.
+            bool trailing = index > 0 && LineFacts.IsComment(token.Kind) && newlinesBefore == 0;
+            if ( !trailing )
+            {
+                blankOwed = false;
+            }
+
+            if ( token.Kind == TokenKind.Do )
+            {
+                doSeen = true;
+            }
+            else if ( token.Kind == TokenKind.Semicolon && parenDepth == 0 )
+            {
+                doSeen = false;
+                if ( inDoTail )
+                {
+                    inDoTail = false;
+                    blankOwed = true;
+                }
+            }
+
+            if ( token.Kind == TokenKind.CloseBrace )
+            {
+                if ( closesDoBody )
+                {
+                    doTailPending = true;
+                }
+                else
+                {
+                    blankOwed = true;
+                }
+            }
         }
 
         output.Append('\n');
@@ -818,6 +879,25 @@ public static class GscFormatter
         public bool IsSwitch { get; init; }
 
         public bool CaseOpen { get; set; }
+
+        /// <summary>Whether this brace is a <c>do</c> body, whose <c>while</c> tail follows the '}'.</summary>
+        public bool IsDo { get; init; }
+    }
+
+    /// <summary>
+    /// Whether a token sits directly under the '}' above it rather than after a blank line: a
+    /// closer or a continuation of the same construct (`else`, the next label, the end of a dev
+    /// block), or the `break` that ends a braced case body, which stock writes directly after
+    /// its '}'.
+    /// </summary>
+    private static bool HugsTheBlockAbove(TokenKind kind)
+    {
+        return kind is TokenKind.CloseBrace
+            or TokenKind.Else
+            or TokenKind.Case
+            or TokenKind.Default
+            or TokenKind.DevBlockClose
+            or TokenKind.Break;
     }
 
     /// <summary>

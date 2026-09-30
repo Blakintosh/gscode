@@ -117,11 +117,38 @@ column instead.
 
 ## 4. Blank lines
 
-One blank line is the convention — between functions, and between logical groups inside one. The
-formatter does not impose it, because a blank line is authored punctuation: it preserves runs up to
+One blank line is the convention — between functions, and between logical groups inside one. A
+blank line is mostly authored punctuation, so the formatter preserves runs up to
 `gscode.format.maxBlankLines` (2 by default) and collapses anything longer to that.
 
 Corpus: 65,720 single-blank runs, 2,477 doubles, 152 triples, 21 longer.
+
+The one place it **inserts** a blank line is after a closed block: the statement following a `}` —
+another loop, an `if`, the next function or class member — gets one, so consecutive blocks never
+run into each other. Stock puts one there 15,940 times against 3,012. A do-while's block closes at
+its tail's `;`, not at its `}`. What continues the same construct stays directly under the `}`:
+`else`, the `while` of a do-while, the next `case` label, a closer, `#/`, and the `break` after a
+braced case body, which stock writes directly after its `}`. `maxBlankLines = 0` still wins.
+
+```gsc
+for ( i = 0; i < 10; i++ )
+{
+	a[ i ] = i;
+}
+
+foreach ( key, value in a )
+{
+	println( key );
+}
+
+do
+{
+	i--;
+}
+while ( i > 0 );
+
+done();
+```
 
 ## 5. Directive block
 

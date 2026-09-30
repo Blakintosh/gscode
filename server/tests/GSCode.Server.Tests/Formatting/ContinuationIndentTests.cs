@@ -29,19 +29,28 @@ public class ContinuationIndentTests
     }
 
     [Fact]
-    public void AContinuedConditionSitsOneLevelPastTheHeader()
+    public void ASplitConditionIsJoinedOntoTheHeaderLine()
     {
+        // A header is one line, calls inside it included, so it takes no continuation at all.
         Assert.Equal(
-            "function f()\n{\n\tif ( a &&\n\t\tb )\n\t{\n\t\tc();\n\t}\n}\n",
-            Format("function f()\n{\nif ( a &&\nb )\n{\nc();\n}\n}\n"));
+            "function f()\n{\n\tif ( a && foo( b, c ) )\n\t{\n\t\td();\n\t}\n}\n",
+            Format("function f()\n{\nif ( a &&\nfoo( b,\nc ) )\n{\nd();\n}\n}\n"));
     }
 
     [Fact]
-    public void AnUnbracedBodyAfterAContinuedHeaderIsIndentedOnce()
+    public void AnUnbracedBodyAfterAJoinedHeaderIsIndentedOnce()
     {
         Assert.Equal(
-            "function f()\n{\n\tif ( a ||\n\t\tb )\n\t\tc();\n\td();\n}\n",
+            "function f()\n{\n\tif ( a || b )\n\t\tc();\n\td();\n}\n",
             Format("function f()\n{\nif ( a ||\nb )\nc();\nd();\n}\n"));
+    }
+
+    [Fact]
+    public void ALineCommentInsideAHeaderStillEndsItsLine()
+    {
+        Assert.Equal(
+            "function f()\n{\n\twhile ( a && // why\n\t\tb )\n\t{\n\t}\n}\n",
+            Format("function f()\n{\nwhile ( a && // why\nb )\n{\n}\n}\n"));
     }
 
     [Fact]
@@ -72,7 +81,7 @@ public class ContinuationIndentTests
     [Fact]
     public void ContinuationIndentIsIdempotent()
     {
-        string once = Format("function f()\n{\nif ( a &&\nfoo( b,\nc ) )\n{\nd();\n}\n}\n");
+        string once = Format("function f()\n{\nx = foo( a,\nbar( b,\nc ) );\n}\n");
 
         Assert.Equal(once, Format(once));
     }

@@ -438,6 +438,10 @@ public static class GscFormatter
         // The closer needs the same answer, hence a stack rather than a flag.
         List<bool> callParens = new();
 
+        // Whether each open parenthesis belongs to a control-flow header, directly or nested inside
+        // one. A header is written on one line, so a break inside it is joined back.
+        List<bool> headerParens = [];
+
         // Open parentheses and brackets, for the continuation indent: a line that starts inside one
         // continues a statement and sits one level deeper. Separate from parenDepth because it
         // counts brackets too, and it is reset at every brace -- no brace can sit inside a
@@ -453,6 +457,9 @@ public static class GscFormatter
             Token token = significant[index].Token;
             int newlinesBefore = significant[index].NewlinesBefore;
             bool insideCallParen = false;
+
+            // Asked before the closer below is popped, so a header's own ')' is joined too.
+            bool insideHeader = headerParens.Count > 0 && headerParens[^1];
 
             // Closers dedent before this line's indent is computed. A dev block only counts when
             // the setting asks for it: `/# … #/` is a compile-time switch, not a scope -- the
@@ -473,6 +480,11 @@ public static class GscFormatter
                     insideCallParen = callParens[^1];
                     callParens.RemoveAt(callParens.Count - 1);
                 }
+
+                if ( headerParens.Count > 0 )
+                {
+                    headerParens.RemoveAt(headerParens.Count - 1);
+                }
             }
 
             if ( token.Kind == TokenKind.CloseBrace && blocks.Count > 0 )
@@ -488,6 +500,7 @@ public static class GscFormatter
             if ( token.Kind is TokenKind.OpenBrace or TokenKind.CloseBrace )
             {
                 openGroups = 0;
+                headerParens.Clear();
             }
 
             // A label sits at the block's own level, so it does not get its own case indent.
@@ -517,7 +530,7 @@ public static class GscFormatter
                     insideCallParen = callParens[^1];
                 }
 
-                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1]) )
+                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], insideHeader) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
@@ -578,6 +591,9 @@ public static class GscFormatter
             {
                 parenDepth++;
                 callParens.Add(index > 0 && !IsGroupingParen(significant[index - 1].Token.Kind));
+
+                bool opensHeader = index > 0 && IsControlFlowKeyword(significant[index - 1].Token.Kind);
+                headerParens.Add(opensHeader || (headerParens.Count > 0 && headerParens[^1]));
             }
 
             unbraced.AfterToken(token.Kind);
@@ -974,7 +990,8 @@ public static class GscFormatter
     /// glued to the line it annotated.
     /// </summary>
     private static bool ShouldBreak(
-        TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth, bool afterLabel)
+        TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth, bool afterLabel,
+        bool insideHeader)
     {
         if ( trailingComment )
         {
@@ -1018,6 +1035,14 @@ public static class GscFormatter
         // newline inside parentheses otherwise is. Nobody writes `for ( ;;` with the `)` on its
         // own line on purpose; every instance is this formatter's own earlier output.
         if ( previous == TokenKind.Semicolon && current == TokenKind.CloseParen )
+        {
+            return false;
+        }
+
+        // A control-flow header is one line: `if ( a && b )`, not `if ( a &&` then `b )`. Stock
+        // writes 6,191 compound conditions on one line against 273 split. Only a line comment,
+        // handled above, can still end a line inside one.
+        if ( insideHeader )
         {
             return false;
         }

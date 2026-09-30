@@ -27,7 +27,7 @@ readers who share the corpus's majority but not every one of its habits.
 | `else` starts its own line, never `} else` | 7 cuddled in the entire corpus |
 | No blank line immediately after `{` | 50,734 code vs 314 blank |
 | One statement per line | 65 violations in 397,111 lines |
-| A control-flow header is one line: a break inside `if ( a && b )` is joined back | 6,191 one-line compound conditions vs 273 split |
+| A control-flow header split across lines keeps its breaks, and each continuation line aligns under the first character inside its `( `, in spaces after the header line's tabs | the shape stock writes long `&&` chains in, e.g. `util_shared.csc` |
 | Outside a header, a line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush; the shape splits, see below |
 | Spaces around assignment: `a = b` | 48,974 spaced vs 1,870 tight |
 | A ternary's and a base class's `:` are spaced: `a ? b : c`, `class Foo : Bar` | 124 vs 7; 12 vs 0 |

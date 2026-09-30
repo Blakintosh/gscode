@@ -456,8 +456,18 @@ public static partial class GscFormatter
         List<bool> callParens = new();
 
         // Whether each open parenthesis belongs to a control-flow header, directly or nested inside
-        // one. A header is written on one line, so a break inside it is joined back.
+        // one. A header split across lines lines its continuation lines up under the first
+        // character inside its '(' -- the shape stock writes a long chain of `&&` conditions in.
         List<bool> headerParens = [];
+
+        // Where a split header's continuation lines start: the column, counted from the end of the
+        // header line's indentation, of the first token inside the header's '('. -1 when no header
+        // is open, or when that token itself starts a new line and there is nothing to align under.
+        int headerAlign = -1;
+        bool headerAlignPending = false;
+
+        // Where the current line's text starts in the output, after its indentation.
+        int lineContentStart = 0;
 
         // A closed block is followed by a blank line before the next statement: stock puts one
         // there 15,940 times against 3,012. A do-while's block is not closed until its tail's ';'.
@@ -511,6 +521,11 @@ public static partial class GscFormatter
                 {
                     headerParens.RemoveAt(headerParens.Count - 1);
                 }
+
+                if ( headerParens.Count == 0 || !headerParens[^1] )
+                {
+                    headerAlign = -1;
+                }
             }
 
             bool closesDoBody = false;
@@ -543,6 +558,8 @@ public static partial class GscFormatter
             {
                 openGroups = 0;
                 headerParens.Clear();
+                headerAlign = -1;
+                headerAlignPending = false;
             }
 
             // A label sits at the block's own level, so it does not get its own case indent.
@@ -575,7 +592,7 @@ public static partial class GscFormatter
                     insideCallParen = callParens[^1];
                 }
 
-                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], insideHeader, inDirective) )
+                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1], inDirective) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     if ( blankOwed && !HugsTheBlockAbove(token.Kind) )
@@ -583,8 +600,23 @@ public static partial class GscFormatter
                         blankLines = Math.Max(blankLines, Math.Min(1, options.MaxBlankLines));
                     }
                     output.Append('\n', 1 + blankLines);
-                    int continuation = openGroups > 0 || roles.ContinuesLine[index] ? 1 : 0;
-                    AppendIndent(output, depth + unbraced.PendingIndents + caseIndents + continuation, options);
+                    if ( insideHeader && headerAlign >= 0 )
+                    {
+                        // Tabs to the header line's own level, then spaces to align under its '( '.
+                        AppendIndent(output, depth + unbraced.PendingIndents + caseIndents, options);
+                        output.Append(' ', headerAlign);
+                    }
+                    else
+                    {
+                        int continuation = openGroups > 0 || roles.ContinuesLine[index] ? 1 : 0;
+                        AppendIndent(output, depth + unbraced.PendingIndents + caseIndents + continuation, options);
+                    }
+
+                    lineContentStart = output.Length;
+
+                    // A header whose '(' ends its line has nothing to align under; its continuation
+                    // lines take the ordinary one-level continuation instead.
+                    headerAlignPending = false;
                 }
                 else
                 {
@@ -602,6 +634,12 @@ public static partial class GscFormatter
                     {
                         output.Append(Separator(beforePrevious, previous.Kind, token.Kind, insideCallParen, options));
                     }
+                }
+
+                if ( headerAlignPending )
+                {
+                    headerAlign = output.Length - lineContentStart;
+                    headerAlignPending = false;
                 }
 
                 AppendToken(output, token, text, spellings[index]);
@@ -652,7 +690,15 @@ public static partial class GscFormatter
                 callParens.Add(index > 0 && !IsGroupingParen(significant[index - 1].Token.Kind));
 
                 bool opensHeader = index > 0 && IsControlFlowKeyword(significant[index - 1].Token.Kind);
-                headerParens.Add(opensHeader || (headerParens.Count > 0 && headerParens[^1]));
+                bool withinHeader = headerParens.Count > 0 && headerParens[^1];
+                headerParens.Add(opensHeader || withinHeader);
+
+                // The outermost header's first interior token sets the alignment column.
+                if ( opensHeader && !withinHeader )
+                {
+                    headerAlign = -1;
+                    headerAlignPending = true;
+                }
             }
 
             if ( !inDirective )
@@ -1195,7 +1241,7 @@ public static partial class GscFormatter
     /// </summary>
     private static bool ShouldBreak(
         TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth, bool afterLabel,
-        bool insideHeader, bool inDirective)
+        bool inDirective)
     {
         if ( trailingComment )
         {
@@ -1247,14 +1293,6 @@ public static partial class GscFormatter
         // newline inside parentheses otherwise is. Nobody writes `for ( ;;` with the `)` on its
         // own line on purpose; every instance is this formatter's own earlier output.
         if ( previous == TokenKind.Semicolon && current == TokenKind.CloseParen )
-        {
-            return false;
-        }
-
-        // A control-flow header is one line: `if ( a && b )`, not `if ( a &&` then `b )`. Stock
-        // writes 6,191 compound conditions on one line against 273 split. Only a line comment,
-        // handled above, can still end a line inside one.
-        if ( insideHeader )
         {
             return false;
         }

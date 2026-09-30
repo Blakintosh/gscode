@@ -29,28 +29,47 @@ public class ContinuationIndentTests
     }
 
     [Fact]
-    public void ASplitConditionIsJoinedOntoTheHeaderLine()
+    public void ASplitConditionAlignsUnderTheHeadersParenthesis()
     {
-        // A header is one line, calls inside it included, so it takes no continuation at all.
+        // The shape stock writes a long chain of conditions in (util_shared.csc): the breaks stay,
+        // and each continuation line starts under the first character inside `if ( `, in spaces
+        // after the header line's own tabs.
         Assert.Equal(
-            "function f()\n{\n\tif ( a && foo( b, c ) )\n\t{\n\t\td();\n\t}\n}\n",
+            "function f()\n{\n\tif ( ( !isdefined( a ) || a != \"x\" ) &&\n\t     ( !isdefined( b ) || b != \"x\" ) )\n\t\tc();\n}\n",
+            Format("function f()\n{\nif ((!isdefined(a)||a!=\"x\")&&\n(!isdefined(b)||b!=\"x\"))\nc();\n}\n"));
+    }
+
+    [Fact]
+    public void EveryLineOfASplitHeaderSharesOneColumn()
+    {
+        // A call nested in the header aligns with the header, not a level deeper.
+        Assert.Equal(
+            "function f()\n{\n\tif ( a &&\n\t     foo( b,\n\t     c ) )\n\t{\n\t\td();\n\t}\n}\n",
             Format("function f()\n{\nif ( a &&\nfoo( b,\nc ) )\n{\nd();\n}\n}\n"));
     }
 
     [Fact]
-    public void AnUnbracedBodyAfterAJoinedHeaderIsIndentedOnce()
+    public void AnUnbracedBodyAfterASplitHeaderIsIndentedOnce()
     {
         Assert.Equal(
-            "function f()\n{\n\tif ( a || b )\n\t\tc();\n\n\td();\n}\n",
+            "function f()\n{\n\tif ( a ||\n\t     b )\n\t\tc();\n\n\td();\n}\n",
             Format("function f()\n{\nif ( a ||\nb )\nc();\nd();\n}\n"));
     }
 
     [Fact]
-    public void ALineCommentInsideAHeaderStillEndsItsLine()
+    public void AWhileHeaderAlignsUnderItsOwnParenthesis()
     {
         Assert.Equal(
-            "function f()\n{\n\twhile ( a && // why\n\t\tb )\n\t{\n\t}\n}\n",
+            "function f()\n{\n\twhile ( a && // why\n\t        b )\n\t{\n\t}\n}\n",
             Format("function f()\n{\nwhile ( a && // why\nb )\n{\n}\n}\n"));
+    }
+
+    [Fact]
+    public void AHeaderWhoseParenthesisEndsTheLineTakesTheOrdinaryContinuation()
+    {
+        Assert.Equal(
+            "function f()\n{\n\tif (\n\t\ta && b )\n\t{\n\t}\n}\n",
+            Format("function f()\n{\nif (\na && b )\n{\n}\n}\n"));
     }
 
     [Fact]

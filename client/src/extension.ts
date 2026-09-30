@@ -32,6 +32,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(log);
     log.info("GSCode activating");
 
+    // Shows the server commands in the Command Palette (see `menus.commandPalette`), which would
+    // otherwise list them in every workspace, GSC or not.
+    void vscode.commands.executeCommand("setContext", "gscode.active", true);
+
     // Commands first, before anything that can stop activation. Every command is declared in
     // package.json, so the palette lists them whether or not this function got far enough to
     // register them — and when the .NET runtime was missing it returned before that, so each one

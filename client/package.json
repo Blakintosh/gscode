@@ -39,6 +39,20 @@
 		"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": "limited",
+			"description": "In Restricted Mode, gscode.rawPath and gscode.modsPath are read from your user settings only, so an untrusted workspace cannot point the language server at other folders on disk.",
+			"restrictedConfigurations": [
+				"gscode.rawPath",
+				"gscode.modsPath"
+			]
+		},
+		"virtualWorkspaces": {
+			"supported": false,
+			"description": "The language server reads scripts from disk, so it needs a workspace on the local file system."
+		}
+	},
 	"contributes": {
 		"semanticTokenScopes": [
 			{
@@ -181,6 +195,37 @@
 				"title": "GSCode: Open Documentation for Symbol"
 			}
 		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "gscode.openApiLibrary",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/"
+				},
+				{
+					"command": "gscode.showOutput",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.restartServer",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.selectGame",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.clearCacheAndReindex",
+					"when": "gscode.active"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "gscode.openApiLibrary",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/",
+					"group": "navigation@100"
+				}
+			]
+		},
 		"keybindings": [
 			{
 				"command": "gscode.openApiLibrary",

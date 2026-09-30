@@ -50,6 +50,11 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   a 1,000-file one. The workspace cache uses a new binary format, so it rebuilds once on first start.
 - `gscode.serverLogLevel` defaults to `warning` rather than `off`.
 - Diagnostics for closed files are only re-sent when they change.
+- GSCode runs in Restricted Mode, reading `gscode.rawPath` and `gscode.modsPath` from user settings
+  only until the workspace is trusted. It used to be disabled there entirely.
+- The GSCode commands no longer appear in the Command Palette of a workspace with no GSC in it, and
+  **Open Documentation for Symbol** only appears in a GSC, CSC or GSH editor. It is also on the
+  editor's right-click menu there.
 
 ### Fixed
 - Formatting a CRLF file no longer returns an edit covering the whole file every time, and no
@@ -85,6 +90,9 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   loses the update either.
 - Typing `;` in front of another `;` no longer deletes one inside a string or a comment, and undo
   and redo no longer trigger that clean-up.
+- Without the .NET runtime, the GSCode commands said "command not found". They now say the server
+  is not running and open the log that explains why, and **Open Documentation for Symbol** still
+  opens the library index.
 
 ## 2.0.2
 

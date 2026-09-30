@@ -38,6 +38,8 @@ public class FunctionPointerSpacingTests
     [InlineData("x=a[b[c]];", "x = a[ b[ c ] ];")]
     [InlineData("x=a[i];", "x = a[ i ];")]
     [InlineData("x=[];", "x = [];")]
+    [InlineData("x=vararg[0];", "x = vararg[ 0 ];")]
+    [InlineData("x=vararg.size-1;", "x = vararg.size - 1;")]
     public void SubscriptsStayPadded(string source, string expected)
     {
         Assert.Equal(expected, Body(source));

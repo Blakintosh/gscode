@@ -1427,7 +1427,10 @@ public static partial class GscFormatter
     /// </summary>
     private static bool EndsAnOperand(TokenKind kind)
     {
+        // `vararg` lexes as a keyword but is used as a variable, the array of extra arguments:
+        // `vararg[ i ]`, `vararg.size`.
         return kind is TokenKind.Identifier
+            or TokenKind.Vararg
             or TokenKind.Integer
             or TokenKind.Float
             or TokenKind.String

@@ -517,7 +517,7 @@ public static class GscFormatter
                     insideCallParen = callParens[^1];
                 }
 
-                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth) )
+                if ( ShouldBreak(previous.Kind, token.Kind, newlinesBefore, trailingComment, parenDepth, roles.LabelColon[index - 1]) )
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
@@ -599,19 +599,67 @@ public static class GscFormatter
         /// <summary>The gap before this token is always one space.</summary>
         public required bool[] SpaceBefore { get; init; }
 
+        /// <summary>This token is the ':' ending a <c>case</c> or <c>default</c> label.</summary>
+        public required bool[] LabelColon { get; init; }
+
         public static TokenRoles Of(List<SignificantToken> significant)
         {
             TokenRoles roles = new()
             {
                 TightBefore = new bool[significant.Count],
                 SpaceBefore = new bool[significant.Count],
+                LabelColon = new bool[significant.Count],
             };
+
+            // A ':' ends a label, closes a ternary, or names a base class. A label's own
+            // expression can hold a ternary, so its '?'s are counted apart from the statement's.
+            bool labelOpen = false;
+            int labelTernaries = 0;
 
             for ( int index = 0; index < significant.Count; index++ )
             {
-                if ( significant[index].Token.Kind == TokenKind.DefineDirective )
+                TokenKind kind = significant[index].Token.Kind;
+                switch ( kind )
                 {
-                    MarkDefine(significant, index, roles);
+                    case TokenKind.DefineDirective:
+                        MarkDefine(significant, index, roles);
+                        break;
+                    case TokenKind.Case:
+                    case TokenKind.Default:
+                        labelOpen = true;
+                        labelTernaries = 0;
+                        break;
+                    case TokenKind.QuestionMark:
+                        if ( labelOpen )
+                        {
+                            labelTernaries++;
+                        }
+
+                        break;
+                    case TokenKind.Colon:
+                        if ( labelOpen && labelTernaries == 0 )
+                        {
+                            // `case 0:` -- tight, and the label ends its line.
+                            roles.TightBefore[index] = true;
+                            roles.LabelColon[index] = true;
+                            labelOpen = false;
+                        }
+                        else
+                        {
+                            // `a ? b : c` and `class Derived : Base` -- spaced both sides.
+                            roles.SpaceBefore[index] = true;
+                            if ( labelOpen )
+                            {
+                                labelTernaries--;
+                            }
+                        }
+
+                        break;
+                    case TokenKind.Semicolon:
+                    case TokenKind.OpenBrace:
+                    case TokenKind.CloseBrace:
+                        labelOpen = false;
+                        break;
                 }
             }
 
@@ -856,11 +904,18 @@ public static class GscFormatter
     /// glued to the line it annotated.
     /// </summary>
     private static bool ShouldBreak(
-        TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth)
+        TokenKind previous, TokenKind current, int newlinesBefore, bool trailingComment, int parenDepth, bool afterLabel)
     {
         if ( trailingComment )
         {
             return false;
+        }
+
+        // A `case` or `default` label is a line of its own, and so is each of a stacked pair: stock
+        // writes 2,453 labels alone on their line against 63 followed by a statement.
+        if ( afterLabel )
+        {
+            return true;
         }
 
         // A line comment runs to end-of-line, so whatever follows must start a new line.
@@ -1017,7 +1072,7 @@ public static class GscFormatter
     {
         return IsControlFlowKeyword(previous)
             || IsBinaryOrAssignmentOperator(previous)
-            || previous is TokenKind.Return or TokenKind.Case;
+            || previous is TokenKind.Return or TokenKind.Case or TokenKind.Colon;
     }
 
     private static bool NoSpaceAfter(TokenKind kind)

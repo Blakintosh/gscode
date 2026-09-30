@@ -29,6 +29,8 @@ readers who share the corpus's majority but not every one of its habits.
 | One statement per line | 65 violations in 397,111 lines |
 | A line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush; the shape splits, see below |
 | Spaces around assignment: `a = b` | 48,974 spaced vs 1,870 tight |
+| A ternary's and a base class's `:` are spaced: `a ? b : c`, `class Foo : Bar` | 124 vs 7; 12 vs 0 |
+| A `case` or `default` label is a line of its own, `:` tight | 2,453 alone vs 63 followed by a statement |
 | A space after every comma: `f( a, b )` | 71,606 vs 4,180 |
 | Call parentheses are **padded**: `foo( x )` (`padCallParens`) | 88,126 vs 14,274; and 473 files are internally consistent against 14 |
 | Empty parentheses stay tight: `foo()` | 18,762 |

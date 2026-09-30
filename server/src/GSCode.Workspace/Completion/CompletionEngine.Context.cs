@@ -37,7 +37,7 @@ public sealed partial class CompletionEngine
             // wherever else it appears.
             case TokenKind.Private:
             case TokenKind.Autoexec:
-                int previous = PreviousSignificant(tokens, triggerIndex);
+                int previous = TokenFacts.PreviousSignificant(tokens, triggerIndex);
                 return previous >= 0 && tokens[previous].Kind == TokenKind.Function;
 
             default:
@@ -103,13 +103,13 @@ public sealed partial class CompletionEngine
             return false;
         }
 
-        int namespaceIndex = PreviousSignificant(tokens, triggerIndex);
+        int namespaceIndex = TokenFacts.PreviousSignificant(tokens, triggerIndex);
         if ( namespaceIndex < 0 || tokens[namespaceIndex].Kind != TokenKind.Identifier )
         {
             return false;
         }
 
-        int beforeNamespace = PreviousSignificant(tokens, namespaceIndex);
+        int beforeNamespace = TokenFacts.PreviousSignificant(tokens, namespaceIndex);
         return beforeNamespace >= 0 && tokens[beforeNamespace].Kind == TokenKind.Ampersand;
     }
 
@@ -127,7 +127,7 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static bool IsIncompleteScopeResolution(ImmutableArray<Token> tokens, int colonIndex)
     {
-        int nameIndex = PreviousSignificant(tokens, colonIndex);
+        int nameIndex = TokenFacts.PreviousSignificant(tokens, colonIndex);
         if ( nameIndex < 0 || tokens[nameIndex].Kind != TokenKind.Identifier )
         {
             return false;
@@ -165,13 +165,13 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static bool IsPrecacheAssetTypeLiteral(ImmutableArray<Token> tokens, int literalIndex)
     {
-        int openParen = PreviousSignificant(tokens, literalIndex);
+        int openParen = TokenFacts.PreviousSignificant(tokens, literalIndex);
         if ( openParen < 0 || tokens[openParen].Kind != TokenKind.OpenParen )
         {
             return false;
         }
 
-        int directive = PreviousSignificant(tokens, openParen);
+        int directive = TokenFacts.PreviousSignificant(tokens, openParen);
         return directive >= 0 && tokens[directive].Kind == TokenKind.PrecacheDirective;
     }
 
@@ -201,10 +201,10 @@ public sealed partial class CompletionEngine
         // Walk back over the deref rather than re-parsing, since this runs mid-keystroke where the
         // tree may not contain the call at all. `]]` lexes as TWO CloseBracket tokens, not one, so
         // this skips however many are there instead of assuming a single closing token.
-        int receiver = PreviousSignificant(tokens, arrowIndex);
+        int receiver = TokenFacts.PreviousSignificant(tokens, arrowIndex);
         while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
         {
-            receiver = PreviousSignificant(tokens, receiver);
+            receiver = TokenFacts.PreviousSignificant(tokens, receiver);
         }
 
         if ( receiver < 0 || tokens[receiver].Kind != TokenKind.Identifier )
@@ -328,7 +328,7 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static string OwnerBefore(ParseResult result, ImmutableArray<Token> tokens, int dotIndex)
     {
-        int ownerIndex = PreviousSignificant(tokens, dotIndex);
+        int ownerIndex = TokenFacts.PreviousSignificant(tokens, dotIndex);
         if ( ownerIndex < 0 || tokens[ownerIndex].Kind != TokenKind.Identifier )
         {
             return "";
@@ -340,7 +340,7 @@ public sealed partial class CompletionEngine
         // all, so there is no genuine "owner" to scope by. Narrowing to it anyway found nothing and
         // returned a near-empty list where the honestly-unknown-owner case (an index or call
         // result, just above) already knows to widen instead.
-        int beforeOwner = PreviousSignificant(tokens, ownerIndex);
+        int beforeOwner = TokenFacts.PreviousSignificant(tokens, ownerIndex);
         if ( beforeOwner >= 0 && tokens[beforeOwner].Kind is TokenKind.Dot or TokenKind.CloseBracket )
         {
             return "";
@@ -489,7 +489,7 @@ public sealed partial class CompletionEngine
                 continue;
             }
 
-            int keyword = PreviousSignificant(tokens, scan);
+            int keyword = TokenFacts.PreviousSignificant(tokens, scan);
             return keyword >= 0
                 && tokens[keyword].Kind is TokenKind.If or TokenKind.While
                     or TokenKind.For or TokenKind.Foreach;
@@ -514,7 +514,7 @@ public sealed partial class CompletionEngine
             return false;
         }
 
-        int before = PreviousSignificant(tokens, triggerIndex);
+        int before = TokenFacts.PreviousSignificant(tokens, triggerIndex);
         return before >= 0 && tokens[before].Kind == TokenKind.PrecacheDirective && kind == TokenKind.OpenParen;
     }
 
@@ -576,7 +576,7 @@ public sealed partial class CompletionEngine
 
     /// <summary>
     /// Whether the offset sits strictly inside a comment token. Comments are TRIVIA, so the trigger
-    /// scan below (<see cref="PreviousSignificant"/>) skips right over them — by design, so the rest
+    /// scan below (<see cref="TokenFacts.PreviousSignificant"/>) skips right over them — by design, so the rest
     /// of completion can read the token stream as if they were not there — but nothing upstream
     /// checked for this FIRST, so the trigger character landed on whatever code precedes the
     /// comment.
@@ -622,17 +622,6 @@ public sealed partial class CompletionEngine
         }
 
         return tokens.Length;
-    }
-
-    private static int PreviousSignificant(ImmutableArray<Token> tokens, int fromIndex)
-    {
-        int index = fromIndex - 1;
-        while ( index >= 0 && tokens[index].IsTrivia )
-        {
-            index--;
-        }
-
-        return index;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Database;
@@ -132,7 +133,7 @@ public sealed class WorkspaceLintSweep
             return false;
         }
 
-        System.Collections.Immutable.ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics =
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics =
             _linter.Analyze(record.Language, record.Path, result);
 
         // The hash of what was JUST read and linted, not record.ContentHash as captured before

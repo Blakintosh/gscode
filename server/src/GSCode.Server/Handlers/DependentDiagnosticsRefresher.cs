@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -303,7 +304,7 @@ public sealed class DependentDiagnosticsRefresher
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        long startedTicks = Stopwatch.GetTimestamp();
         LintSweepOutcome outcome = await _lintSweep.RelintClosedFilesAsync(dependents, cancellationToken)
             .ConfigureAwait(false);
 
@@ -315,7 +316,7 @@ public sealed class DependentDiagnosticsRefresher
             Log.Verbose(
                 "Re-linted {Count} closed dependent(s) in {Elapsed:F1}ms after {Path} changed its exports",
                 outcome.Linted,
-                System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+                Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
                 originPath);
         }
     }
@@ -325,7 +326,7 @@ public sealed class DependentDiagnosticsRefresher
 
     private void Refresh(IReadOnlySet<string> origins, CancellationToken cancellationToken)
     {
-        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        long startedTicks = Stopwatch.GetTimestamp();
         List<string> refreshedPaths = [];
 
         foreach ( OpenDocument document in _documents.OpenDocuments )
@@ -346,7 +347,7 @@ public sealed class DependentDiagnosticsRefresher
             Log.Verbose(
                 "Re-linted {Count} open document(s) in {Elapsed:F1}ms after {Origins} changed their exports: {Documents}",
                 refreshedPaths.Count,
-                System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+                Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
                 DescribeOrigins(origins),
                 DescribeDocuments(refreshedPaths));
         }

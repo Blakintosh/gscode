@@ -393,7 +393,10 @@ LSP types anywhere.
 - `static class TokenFacts` — `IsKeyword(kind)` (range-check over the contiguous keyword block
   in TokenKind) and `GetStaticText(kind)` (the canonical lexeme for fixed-text kinds —
   operators, punctuation, directives — or null when the source span must be sliced). Lets
-  fixed-text tokens materialize their text without allocating.
+  fixed-text tokens materialize their text without allocating. Also the token questions more than
+  one layer asks: `IsSelfName`, `IsAssignmentOperator`, `AnimReferenceName`, and
+  `PreviousSignificant(tokens, from)`, the walk back over trivia that completion and signature help
+  both make from the cursor.
 
 ## Lexing/GscIdentifier.cs
 

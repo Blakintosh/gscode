@@ -1,5 +1,6 @@
 using GSCode.Core.Instrumentation;
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -175,7 +176,7 @@ public sealed partial class Parser
     {
         PToken directive = Advance();
 
-        System.Text.StringBuilder builder = new();
+        StringBuilder builder = new();
         PToken? firstPathToken = null;
         PToken? lastPathToken = null;
 

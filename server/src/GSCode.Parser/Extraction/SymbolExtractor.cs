@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Docs;
@@ -723,7 +724,7 @@ public sealed class SymbolExtractor
         if ( valueCount < assetType.MinValues || valueCount > assetType.MaxValues )
         {
             string expected = assetType.MinValues == assetType.MaxValues
-                ? assetType.MinValues.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ? assetType.MinValues.ToString(CultureInfo.InvariantCulture)
                 : $"{assetType.MinValues}-{assetType.MaxValues}";
             AddDiagnostic(GscDiagnosticCode.WrongPrecacheArgumentCount, precache.Range, typeName, expected, valueCount);
         }

@@ -85,7 +85,7 @@ public sealed partial class CompletionEngine
         // The token being typed (if the cursor sits in/just after an identifier) and the
         // trigger token before it drive the context decision.
         int currentIndex = FindCurrentWordIndex(tokens, offset);
-        int triggerIndex = PreviousSignificant(tokens, currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset));
+        int triggerIndex = TokenFacts.PreviousSignificant(tokens, currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset));
 
         // Every context below is detected by looking BACKWARD for a trigger character, which
         // answers "what did the user just type" but not "is this construct legal here". The
@@ -224,7 +224,7 @@ public sealed partial class CompletionEngine
         // ns:: — offer functions in that namespace only.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.ScopeResolution )
         {
-            int nsIndex = PreviousSignificant(tokens, triggerIndex);
+            int nsIndex = TokenFacts.PreviousSignificant(tokens, triggerIndex);
             if ( nsIndex >= 0 && tokens[nsIndex].Kind == TokenKind.Identifier )
             {
                 // An inline path call writes its qualifier as a whole PATH

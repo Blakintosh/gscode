@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text;
 using GSCode.Core;
 using GSCode.Server.Transport;
 using GSCode.Workspace.Database;
@@ -61,7 +63,7 @@ internal static class IndexReporting
             macros += record.Macros.Length;
         }
 
-        System.Text.StringBuilder report = new();
+        StringBuilder report = new();
         report.Append("Index contents:");
         report.Append('\n').Append(FormatLanguageLine("GSC", gscRaw, gscMod, gscWorkspace));
         report.Append('\n').Append(FormatLanguageLine("CSC", cscRaw, cscMod, cscWorkspace));
@@ -140,7 +142,7 @@ internal static class IndexReporting
         double committed = info.TotalCommittedBytes / (1024.0 * 1024.0);
         double fragmented = info.FragmentedBytes / (1024.0 * 1024.0);
 
-        System.Text.StringBuilder report = new();
+        StringBuilder report = new();
         report.AppendLine($"Memory after {phase}:");
         report.AppendLine($"    files           {outcome.Total,8:N0}  ({outcome.Restored:N0} restored · {outcome.Analysed:N0} analysed)");
         report.AppendLine($"    working set     {workingSet,8:F1} MB   (what the OS reports)");
@@ -165,7 +167,7 @@ internal static class IndexReporting
     // The runtime reports five entries in a fixed order — gen0, gen1, gen2, the large-object heap and
     // the pinned-object heap — but the count is not contractually five, so the names are indexed
     // defensively rather than assumed.
-    private static void AppendGenerations(System.Text.StringBuilder report, GCMemoryInfo info)
+    private static void AppendGenerations(StringBuilder report, GCMemoryInfo info)
     {
         string[] names = ["gen0", "gen1", "gen2", "LOH", "POH"];
 
@@ -196,12 +198,12 @@ internal static class IndexReporting
     // client/package.json since the two ship as one extension.
     internal static string ServerVersion()
     {
-        System.Reflection.Assembly assembly = typeof(TransportOptions).Assembly;
+        Assembly assembly = typeof(TransportOptions).Assembly;
 
         // The informational version carries any suffix; the plain AssemblyVersion drops it, so prefer
         // it and fall back only if it is absent.
-        string? informational = System.Reflection.CustomAttributeExtensions
-            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)
+        string? informational = CustomAttributeExtensions
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>(assembly)
             ?.InformationalVersion;
 
         string version = informational ?? assembly.GetName().Version?.ToString() ?? "unknown";

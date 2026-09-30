@@ -82,13 +82,11 @@ public sealed class SqliteCache : IAsyncDisposable
                     deleted |= suffix.Length == 0;
                 }
             }
-            catch ( IOException )
+            catch ( Exception exception ) when ( exception is IOException or UnauthorizedAccessException )
             {
-                // Still held, or gone already. The cache is a rebuildable artifact, so a failure
-                // to remove it costs a stale-looking reindex rather than correctness.
-            }
-            catch ( UnauthorizedAccessException )
-            {
+                // Still held, gone already, or not ours to delete. The cache is a rebuildable
+                // artifact, so a failure to remove it costs a stale-looking reindex rather than
+                // correctness.
             }
         }
 

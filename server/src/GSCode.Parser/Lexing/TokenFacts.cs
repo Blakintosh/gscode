@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace GSCode.Parser.Lexing;
 
 /// <summary>
@@ -57,6 +59,23 @@ public static class TokenFacts
             or TokenKind.CaretAssign
             or TokenKind.ShiftLeftAssign
             or TokenKind.ShiftRightAssign;
+    }
+
+    /// <summary>
+    /// The index of the last non-trivia token before <paramref name="fromIndex"/>, or -1.
+    ///
+    /// Shared because completion and signature help both walk back from the cursor this way, and
+    /// each carried its own identical copy.
+    /// </summary>
+    public static int PreviousSignificant(ImmutableArray<Token> tokens, int fromIndex)
+    {
+        int index = fromIndex - 1;
+        while ( index >= 0 && tokens[index].IsTrivia )
+        {
+            index--;
+        }
+
+        return index;
     }
 
     /// <summary>

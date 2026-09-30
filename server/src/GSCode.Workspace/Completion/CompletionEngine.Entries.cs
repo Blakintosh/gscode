@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Parser.Lexing;
@@ -151,7 +152,7 @@ public sealed partial class CompletionEngine
             return hasVarargs ? "( ... )" : "()";
         }
 
-        System.Text.StringBuilder rendered = new();
+        StringBuilder rendered = new();
         foreach ( ParameterSymbol parameter in parameters )
         {
             if ( rendered.Length > 0 )

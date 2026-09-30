@@ -17,7 +17,7 @@ import type { Middleware } from "vscode-languageclient/node";
  */
 
 /** Where an offset in the document ends up once the edits are applied. */
-export function mapOffset(document: vscode.TextDocument, offset: number, edits: readonly vscode.TextEdit[]): number {
+function mapOffset(document: vscode.TextDocument, offset: number, edits: readonly vscode.TextEdit[]): number {
     const sorted = [...edits].sort((a, b) => a.range.start.compareTo(b.range.start));
     let shift = 0;
     for (const edit of sorted) {

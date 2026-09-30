@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Paths;
@@ -280,7 +281,7 @@ public sealed class WorkspaceIndexer
             return new IndexOutcome(0, 0, 0);
         }
 
-        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        Stopwatch stopwatch = Stopwatch.StartNew();
         PerfTracker.Begin("index.total");
 
         // Enumeration is fully serial and blocks every worker, so it gets its own scope rather than
@@ -316,9 +317,9 @@ public sealed class WorkspaceIndexer
         {
             token.ThrowIfCancellationRequested();
 
-            long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            long startedTicks = Stopwatch.GetTimestamp();
             FileOutcome outcome = ProcessFile(path, allowRestore: true, ownedByEditor);
-            TimeSpan fileElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks);
+            TimeSpan fileElapsed = Stopwatch.GetElapsedTime(startedTicks);
             Interlocked.Add(ref threadTicks, fileElapsed.Ticks);
             progress.FileIndexed(path, fileElapsed, outcome.Restored);
 

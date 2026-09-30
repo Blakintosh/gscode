@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -482,7 +483,7 @@ public sealed partial class Parser
     private PathQualifiedNode ParsePathQualified()
     {
         PToken start = Current;
-        System.Text.StringBuilder path = new();
+        StringBuilder path = new();
 
         // The path is identifiers joined by backslashes; it ends at the :: qualifier.
         while ( Kind == TokenKind.Identifier || Kind == TokenKind.Backslash )

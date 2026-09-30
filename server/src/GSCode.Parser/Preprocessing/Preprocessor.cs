@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -940,7 +941,7 @@ public sealed class Preprocessor
             case "__LINE__":
             {
                 // 1-based, matching how compilers report line numbers to users.
-                string line = (range.Start.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                string line = (range.Start.Line + 1).ToString(CultureInfo.InvariantCulture);
                 PToken token = new(TokenKind.Integer, _names.Intern(line), range, frame.Provenance);
                 sink.Add(token);
                 _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, line));

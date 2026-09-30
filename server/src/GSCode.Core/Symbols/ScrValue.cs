@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 
 namespace GSCode.Core.Symbols;
@@ -220,8 +221,8 @@ public readonly record struct ScrConstant
         {
             case ScrTypeSet.Undefined: return "undefined";
             case ScrTypeSet.Bool: return Boolean ? "true" : "false";
-            case ScrTypeSet.Int: return Integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            case ScrTypeSet.Float: return Real.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            case ScrTypeSet.Int: return Integer.ToString(CultureInfo.InvariantCulture);
+            case ScrTypeSet.Float: return Real.ToString("R", CultureInfo.InvariantCulture);
             case ScrTypeSet.Vector: return Vector.ToString();
             // Content, not Text: a literal's Text already carries its own quotes, and wrapping
             // those in another pair produced `""foo""` instead of `"foo"`.
@@ -289,7 +290,7 @@ public readonly record struct Vec3(double X, double Y, double Z)
 {
     public override string ToString()
     {
-        System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.InvariantCulture;
+        CultureInfo culture = CultureInfo.InvariantCulture;
         return "( " + X.ToString("R", culture) + ", " + Y.ToString("R", culture) + ", " + Z.ToString("R", culture) + " )";
     }
 }

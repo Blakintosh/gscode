@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace GSCode.Server.Formatting;
 
 /// <summary>An original line and the formatted line it became.</summary>
@@ -32,7 +34,7 @@ internal static class LineDiff
     /// <summary>A line's content with every whitespace character removed, lowercased.</summary>
     public static string KeyOf(string line)
     {
-        System.Text.StringBuilder key = new(line.Length);
+        StringBuilder key = new(line.Length);
         foreach ( char character in line )
         {
             if ( !char.IsWhiteSpace(character) )

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser.Lexing;
@@ -293,7 +294,7 @@ public static class PragmaDirectives
             ? written["gscode-".Length..]
             : written;
 
-        return int.TryParse(digits, System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out code);
+        return int.TryParse(digits, NumberStyles.None,
+            CultureInfo.InvariantCulture, out code);
     }
 }

@@ -1,5 +1,6 @@
 using GSCode.Core;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
@@ -340,7 +341,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     private void AnalyzeAndPublish(OpenDocument document, CancellationToken cancellationToken)
     {
-        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        long startedTicks = Stopwatch.GetTimestamp();
 
         // The WINNING snapshot, not document.Version read afterwards: two analyses of the same
         // document can run concurrently, OpenDocument.Publish's version CAS decides which one's
@@ -366,7 +367,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
         CommitAndScheduleDependents(document, result);
 
-        double elapsedMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
+        double elapsedMilliseconds = Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
 
         // The single most useful verbose line there is: it says whether the server reacted to a
         // keystroke at all, how long it took, and what it decided — which is most of what anyone

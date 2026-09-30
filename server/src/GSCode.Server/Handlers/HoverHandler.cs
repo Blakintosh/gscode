@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
+using System.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
@@ -445,7 +446,7 @@ public sealed class HoverHandler : HoverHandlerBase
             : MethodResolution.FindDeclaringClassForMember(
                 target.Store, target.ContextId, key.OwnerClass, key.Name) ?? key.OwnerClass;
 
-        System.Text.StringBuilder markdown = new();
+        StringBuilder markdown = new();
         markdown.Append("```gsc\n(member) ").Append(key.Name).Append("\n```\n");
 
         if ( declaring.Length > 0 )
@@ -534,7 +535,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 : $"```gsc\n(field) {name}\n```";
         }
 
-        System.Text.StringBuilder markdown = new();
+        StringBuilder markdown = new();
         markdown.Append("```gsc\n(field) ").Append(name).Append("\n```\n");
 
         // The owner's entity kind isn't inferred here, so list every kind declaring the name.

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -868,7 +869,7 @@ public sealed partial class CompletionEngine
     /// <summary>The other spellings of a field, each with how many files write it, as Markdown.</summary>
     private static string SpellingsDocumentation(List<VocabularyName> others)
     {
-        System.Text.StringBuilder markdown = new("Also written in this workspace as:\n\n");
+        StringBuilder markdown = new("Also written in this workspace as:\n\n");
         foreach ( VocabularyName spelling in others )
         {
             markdown.Append("- `").Append(spelling.Name).Append("` — ")

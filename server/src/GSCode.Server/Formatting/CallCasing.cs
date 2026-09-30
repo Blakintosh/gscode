@@ -42,45 +42,46 @@ public sealed class CallCasing : ICasingLookup
         string? namespaceKey = qualifier?.ToLowerInvariant();
         string nameKey = name.ToLowerInvariant();
         string cacheKey = "f:" + (preferScript ? "s:" : "b:") + (namespaceKey ?? "") + "::" + nameKey;
-        if ( _answers.TryGetValue(cacheKey, out string? known) )
-        {
-            return known;
-        }
-
-        string? answer = ResolveFunction(namespaceKey, nameKey, preferScript);
-        _answers[cacheKey] = answer;
-        return answer;
+        return Cached(cacheKey, () => ResolveFunction(namespaceKey, nameKey, preferScript));
     }
 
     public string? Qualifier(string name)
     {
         string key = name.ToLowerInvariant();
-        string cacheKey = "q:" + key;
-        if ( _answers.TryGetValue(cacheKey, out string? known) )
+        return Cached("q:" + key, () =>
         {
-            return known;
-        }
-
-        HashSet<string> spellings = NamespaceSpellings(key);
-        spellings.UnionWith(ClassSpellings(key));
-        string? answer = spellings.Count == 1 ? spellings.First() : null;
-        _answers[cacheKey] = answer;
-        return answer;
+            HashSet<string> spellings = NamespaceSpellings(key);
+            spellings.UnionWith(ClassSpellings(key));
+            return SoleSpelling(spellings);
+        });
     }
 
     public string? Class(string name)
     {
         string key = name.ToLowerInvariant();
-        string cacheKey = "c:" + key;
+        return Cached("c:" + key, () => SoleSpelling(ClassSpellings(key)));
+    }
+
+    /// <summary>
+    /// The answer for a key, worked out once per format. A name is asked about at every call site
+    /// in the file, and each answer reads the index.
+    /// </summary>
+    private string? Cached(string cacheKey, Func<string?> resolve)
+    {
         if ( _answers.TryGetValue(cacheKey, out string? known) )
         {
             return known;
         }
 
-        HashSet<string> spellings = ClassSpellings(key);
-        string? answer = spellings.Count == 1 ? spellings.First() : null;
+        string? answer = resolve();
         _answers[cacheKey] = answer;
         return answer;
+    }
+
+    /// <summary>The one spelling every declaration agrees on, or null when there is none or several.</summary>
+    private static string? SoleSpelling(HashSet<string> spellings)
+    {
+        return spellings.Count == 1 ? spellings.First() : null;
     }
 
     private string? ResolveFunction(string? namespaceKey, string nameKey, bool preferScript)
@@ -92,7 +93,7 @@ public sealed class CallCasing : ICasingLookup
         }
 
         HashSet<string> declared = FunctionSpellings(namespaceKey, nameKey);
-        string? script = declared.Count == 1 ? declared.First() : null;
+        string? script = SoleSpelling(declared);
 
         // A qualified call names a namespace or a class, never a builtin.
         if ( namespaceKey is not null )

@@ -290,16 +290,16 @@ public sealed class SignatureEngine
     /// </summary>
     private static ArrowReceiver ClassifyArrow(ImmutableArray<Token> tokens, SourceText text, int calleeIndex)
     {
-        int arrowIndex = PreviousSignificant(tokens, calleeIndex);
+        int arrowIndex = TokenFacts.PreviousSignificant(tokens, calleeIndex);
         if ( arrowIndex < 0 || tokens[arrowIndex].Kind != TokenKind.Arrow )
         {
             return ArrowReceiver.None;
         }
 
-        int receiver = PreviousSignificant(tokens, arrowIndex);
+        int receiver = TokenFacts.PreviousSignificant(tokens, arrowIndex);
         while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
         {
-            receiver = PreviousSignificant(tokens, receiver);
+            receiver = TokenFacts.PreviousSignificant(tokens, receiver);
         }
 
         bool isSelf = receiver >= 0
@@ -498,7 +498,7 @@ public sealed class SignatureEngine
                     // keyword (`waittill`, `isdefined`, ...) is a KEYWORD token, not an Identifier
                     // — the class doc's own "call-shaped keyword" promise needs both accepted. Not
                     // every keyword: `if (` must not be read as a call named "if".
-                    int calleeIndex = PreviousSignificant(tokens, index);
+                    int calleeIndex = TokenFacts.PreviousSignificant(tokens, index);
                     if ( calleeIndex < 0
                         || tokens[calleeIndex].Kind != TokenKind.Identifier
                             && !IsCallShapedKeyword(tokens[calleeIndex].Kind) )
@@ -507,10 +507,10 @@ public sealed class SignatureEngine
                     }
 
                     int namespaceIndex = -1;
-                    int scope = PreviousSignificant(tokens, calleeIndex);
+                    int scope = TokenFacts.PreviousSignificant(tokens, calleeIndex);
                     if ( scope >= 0 && tokens[scope].Kind == TokenKind.ScopeResolution )
                     {
-                        namespaceIndex = PreviousSignificant(tokens, scope);
+                        namespaceIndex = TokenFacts.PreviousSignificant(tokens, scope);
                     }
 
                     return new CallSite(calleeIndex, namespaceIndex, commas);
@@ -530,16 +530,5 @@ public sealed class SignatureEngine
         }
 
         return null;
-    }
-
-    private static int PreviousSignificant(ImmutableArray<Token> tokens, int fromIndex)
-    {
-        int index = fromIndex - 1;
-        while ( index >= 0 && tokens[index].IsTrivia )
-        {
-            index--;
-        }
-
-        return index;
     }
 }

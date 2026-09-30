@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Server.Configuration;
@@ -89,7 +90,7 @@ internal sealed class StartupIndexRunner
         TimeSpan restoreElapsed = TimeSpan.Zero;
         if ( _settings.EnableWorkspaceCache )
         {
-            System.Diagnostics.Stopwatch restoreWatch = System.Diagnostics.Stopwatch.StartNew();
+            Stopwatch restoreWatch = Stopwatch.StartNew();
             try
             {
                 SqliteCache.CleanUpLegacyCache();
@@ -153,7 +154,7 @@ internal sealed class StartupIndexRunner
                     // immediately.
                     notifier.SendNothingBefore(_settleGate.Settled);
 
-                    System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    Stopwatch stopwatch = Stopwatch.StartNew();
                     IndexOutcome outcome = await indexer.IndexAsync(
                         mode, notifier, _indexingLifetime.Token,
                         ownedByEditor: documents.IsOpen);
@@ -210,7 +211,7 @@ internal sealed class StartupIndexRunner
                     // PERF.md's 2026-09-15 entry for why this is affordable.
                     if ( mode == IndexingMode.Full )
                     {
-                        System.Diagnostics.Stopwatch lintStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                        Stopwatch lintStopwatch = Stopwatch.StartNew();
                         LintSweepOutcome lintOutcome = await services
                             .GetRequiredService<WorkspaceLintSweep>()
                             .RunFullSweepAsync(_indexingLifetime.Token);
@@ -343,7 +344,7 @@ internal sealed class StartupIndexRunner
     // separate decision that needs its own measurement, and is not made here.
     private static void Compact()
     {
-        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
 

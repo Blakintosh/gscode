@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -70,7 +71,7 @@ public sealed class Lexer
             // Fail-safe: the scan must always advance; a stall here would hang the server.
             if ( _offset == startOffset )
             {
-                System.Diagnostics.Debug.Fail("Lexer did not advance — fix the token path that stalled.");
+                Debug.Fail("Lexer did not advance — fix the token path that stalled.");
                 _offset++;
             }
         }

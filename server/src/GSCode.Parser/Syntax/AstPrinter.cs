@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
@@ -459,7 +460,7 @@ public static class AstPrinter
         Write(node, builder, depth);
     }
 
-    private static void WriteList(StringBuilder builder, string label, System.Collections.Immutable.ImmutableArray<AstNode> children, int depth)
+    private static void WriteList(StringBuilder builder, string label, ImmutableArray<AstNode> children, int depth)
     {
         builder.Append('(').Append(label);
         foreach ( AstNode child in children )

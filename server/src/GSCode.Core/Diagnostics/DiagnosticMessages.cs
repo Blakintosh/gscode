@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Globalization;
 
 namespace GSCode.Core.Diagnostics;
 
@@ -161,6 +162,6 @@ public static class DiagnosticMessages
             return template.Replace("{{", "{").Replace("}}", "}");
         }
 
-        return string.Format(System.Globalization.CultureInfo.InvariantCulture, template, arguments);
+        return string.Format(CultureInfo.InvariantCulture, template, arguments);
     }
 }

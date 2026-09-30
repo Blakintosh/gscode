@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -346,7 +350,7 @@ static List<string> ParseWordfileSection(string[] lines, int sectionIndex)
         }
     }
 
-    string marker = "/C" + sectionIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    string marker = "/C" + sectionIndex.ToString(CultureInfo.InvariantCulture);
     int start = -1;
     for ( int i = blockStart + 1; i < blockEnd; i++ )
     {
@@ -469,10 +473,10 @@ static void WriteJson<T>(string path, T value, bool camelCase = false)
         // documentation text full of <target> placeholders means thousands of escapes and an
         // artifact nobody can read in a diff. These files are never interpolated into HTML, so the
         // relaxed encoder is safe here and writes them literally, as the t7 files already are.
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     });
 
-    File.WriteAllText(path, ToAscii(path, json) + "\n", new System.Text.UTF8Encoding(false));
+    File.WriteAllText(path, ToAscii(path, json) + "\n", new UTF8Encoding(false));
 }
 
 // The bundled artifacts are ASCII, and this is where that is enforced rather than hoped for.
@@ -1852,11 +1856,11 @@ static string NormalizeArgName(string? raw, int index)
 {
     if ( string.IsNullOrWhiteSpace(raw) )
     {
-        return "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return "arg" + index.ToString(CultureInfo.InvariantCulture);
     }
 
     string cleaned = Regex.Replace(raw.Trim().ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');
-    return cleaned.Length == 0 ? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : cleaned;
+    return cleaned.Length == 0 ? "arg" + index.ToString(CultureInfo.InvariantCulture) : cleaned;
 }
 
 // The pages spell types in prose; these map onto the vocabulary the api files already use.
@@ -1883,13 +1887,13 @@ static string NormalizeType(string raw)
 static string? MatchInner(string input, string pattern)
 {
     Match match = Regex.Match(input, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    return match.Success ? System.Net.WebUtility.HtmlDecode(match.Groups[1].Value).Trim() : null;
+    return match.Success ? WebUtility.HtmlDecode(match.Groups[1].Value).Trim() : null;
 }
 
 static string StripTags(string html)
 {
     string text = Regex.Replace(html, @"<[^>]+>", " ");
-    text = System.Net.WebUtility.HtmlDecode(text);
+    text = WebUtility.HtmlDecode(text);
     return Ascii(Regex.Replace(text, @"\s+", " ").Trim());
 }
 
@@ -1898,7 +1902,7 @@ static string StripTags(string html)
 // folded to it; anything else is dropped rather than guessed at, so the artifact stays plain ASCII.
 static string Ascii(string text)
 {
-    System.Text.StringBuilder builder = new(text.Length);
+    StringBuilder builder = new(text.Length);
     foreach ( char c in text )
     {
         switch ( c )
@@ -2018,7 +2022,7 @@ static void GenerateClientApi(string prefix, string apiDir, string curatedDir, s
             api.Add(JsonNode.Parse(JsonSerializer.Serialize(SparseEmpiricalEntry(prefix, evidence), new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             })));
         }
 
@@ -2227,11 +2231,6 @@ static HashSet<string> ReadClientIndexedNames(string path)
 
 internal sealed record FieldEntry(string Name, string Type, bool ReadOnly = false);
 internal sealed record RadiantKey(string Name, string Type, string Side, string Comment);
-
-// The builtin-API artifact shape (matching t7_api_gsc.json): a name plus its overloads. From the
-// wordfile only names are known, so overloads is empty until the online-API enrichment pass.
-internal sealed record ApiFileOut(List<ApiEntryOut> Api);
-internal sealed record ApiEntryOut(string Name, IReadOnlyList<object> Overloads);
 
 // The richer shape the documented pages fill in. Mirrors what ApiLoader reads; WriteJson's
 // WhenWritingDefault drops the nulls and falses, so a sparse entry stays sparse.

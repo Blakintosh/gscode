@@ -345,14 +345,22 @@ public static class GscFormatter
             formatted = DirectiveSorter.Sort(formatted) ?? formatted;
         }
 
-        // Consecutive alignment is also a post-pass: it changes only whitespace, so the gate above
-        // has already vouched for the tokens. Columns first — padding subscript and argument
+        // Consecutive alignment is also a post-pass. Columns first — padding subscript and argument
         // interiors equalises the left-hand sides — then the operators, which the equalised sides
         // then line up almost for free.
         if ( options.AlignConsecutive )
         {
+            string unaligned = formatted;
             formatted = ColumnAligner.Align(formatted);
             formatted = AssignmentAligner.Align(formatted);
+
+            // The aligners only ever widen gaps, but they rewrite lines by column offset, and the
+            // gate above ran before them. Checked again here so a wrong offset costs the alignment
+            // rather than the file; the corpus gates test the same property, this enforces it.
+            if ( !SameTokens(unaligned, formatted) )
+            {
+                formatted = unaligned;
+            }
         }
 
         return InDocumentLineEndings(formatted, result.Text.Text);
@@ -1052,6 +1060,14 @@ public static class GscFormatter
         }
 
         return false;
+    }
+
+    /// <summary>Whether two texts lex to the same non-trivia token stream.</summary>
+    private static bool SameTokens(string before, string after)
+    {
+        SourceText beforeText = SourceText.From(before);
+        List<SignificantToken> beforeTokens = CollectSignificant(Lexer.Lex(beforeText).Tokens, beforeText);
+        return TokenStreamMatches(beforeTokens, beforeText, after);
     }
 
     /// <summary>

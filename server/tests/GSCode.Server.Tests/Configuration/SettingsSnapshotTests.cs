@@ -79,6 +79,22 @@ public class SettingsSnapshotTests
         Assert.Equal(0, settings.FormatMaxBlankLines);
     }
 
+    [Theory]
+    [InlineData("{ \"format.fixCasing\": false, \"format.maxBlankLines\": 5, \"diagnostics.scope\": \"open\" }")]
+    [InlineData("{ \"format\": { \"fixCasing\": false, \"maxBlankLines\": 5 }, \"diagnostics\": { \"scope\": \"open\" } }")]
+    public void AGroupedSettingIsReadInEitherShape(string body)
+    {
+        // The client sends the flat dotted keys; the nested form is what a hand-written payload
+        // looks like. Both reach the same flag, number and text setting.
+        ServerSettings settings = new();
+
+        settings.Apply(Payload(body));
+
+        Assert.False(settings.FormatFixCasing);
+        Assert.Equal(5, settings.FormatMaxBlankLines);
+        Assert.Equal("open", settings.DiagnosticsScope);
+    }
+
     [Fact]
     public void ASetterStillWorksForTheTestsThatUseOne()
     {

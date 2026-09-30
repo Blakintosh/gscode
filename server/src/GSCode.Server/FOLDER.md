@@ -19,9 +19,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   rather than a list that goes stale: the game and script roots (game, serverLogLevel, raw.enabled,
   rawPath/modsPath overrides, rawFileWarningMode), indexing (workspaceIndexingMode,
   enableWorkspaceCache, diagnostics.scope), the editor features (outline.showAssignments,
-  codeLens.enabled, the three inlayHints.* and the completion.* keys) and the four format.* knobs.
-  `Apply(JToken)` merges a settings payload (accepting both dotted and nested key forms); missing
-  keys keep current values.
+  codeLens.enabled, the three inlayHints.* and the completion.* keys) and the format.* knobs.
+  `Apply(JToken)` merges a settings payload; missing keys keep current values. A grouped key is
+  read in both dotted and nested form through `Flag`/`Number`/`Text`, which spell it once.
 
 ## Configuration/ResolverHolder.cs
 

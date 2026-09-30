@@ -349,82 +349,59 @@ public sealed class ServerSettings
             ServerLogLevel = section.Value<string>("serverLogLevel") ?? current.ServerLogLevel,
             WorkspaceIndexingMode = section.Value<string>("workspaceIndexingMode") ?? current.WorkspaceIndexingMode,
             EnableWorkspaceCache = section.Value<bool?>("enableWorkspaceCache") ?? current.EnableWorkspaceCache,
-            RawEnabled = section.Value<bool?>("raw.enabled")
-                ?? section["raw"]?.Value<bool?>("enabled")
-                ?? current.RawEnabled,
+            RawEnabled = Flag(section, "raw", "enabled") ?? current.RawEnabled,
             RawPath = section.Value<string>("rawPath") ?? current.RawPath,
             ModsPath = section.Value<string>("modsPath") ?? current.ModsPath,
             RawFileWarningMode = section.Value<string>("rawFileWarningMode") ?? current.RawFileWarningMode,
-            OutlineShowAssignments = section.Value<bool?>("outline.showAssignments")
-                ?? section["outline"]?.Value<bool?>("showAssignments")
-                ?? current.OutlineShowAssignments,
-            CodeLensEnabled = section.Value<bool?>("codeLens.enabled")
-                ?? section["codeLens"]?.Value<bool?>("enabled")
-                ?? current.CodeLensEnabled,
-            InlayParameterNames = section.Value<bool?>("inlayHints.parameterNames")
-                ?? section["inlayHints"]?.Value<bool?>("parameterNames")
-                ?? current.InlayParameterNames,
-            InlayInferredTypes = section.Value<bool?>("inlayHints.inferredTypes")
-                ?? section["inlayHints"]?.Value<bool?>("inferredTypes")
-                ?? current.InlayInferredTypes,
-            InlayMacroParameterNames = section.Value<bool?>("inlayHints.macroParameterNames")
-                ?? section["inlayHints"]?.Value<bool?>("macroParameterNames")
-                ?? current.InlayMacroParameterNames,
-            CompletionLiterals = section.Value<bool?>("completion.literals")
-                ?? section["completion"]?.Value<bool?>("literals")
-                ?? current.CompletionLiterals,
-            CompletionAutoImport = section.Value<bool?>("completion.autoImport")
-                ?? section["completion"]?.Value<bool?>("autoImport")
-                ?? current.CompletionAutoImport,
-            CompletionCallPunctuation = section.Value<string>("completion.callPunctuation")
-                ?? section["completion"]?.Value<string>("callPunctuation")
-                ?? current.CompletionCallPunctuation,
-            CompletionParameterHints = section.Value<bool?>("completion.parameterHints")
-                ?? section["completion"]?.Value<bool?>("parameterHints")
-                ?? current.CompletionParameterHints,
-            DiagnosticsScope = section.Value<string>("diagnostics.scope")
-                ?? section["diagnostics"]?.Value<string>("scope")
-                ?? current.DiagnosticsScope,
-            FormatPadParens = section.Value<bool?>("format.padParens")
-                ?? section["format"]?.Value<bool?>("padParens")
-                ?? current.FormatPadParens,
-            FormatPadCallParens = section.Value<bool?>("format.padCallParens")
-                ?? section["format"]?.Value<bool?>("padCallParens")
-                ?? current.FormatPadCallParens,
-            FormatPadBrackets = section.Value<bool?>("format.padBrackets")
-                ?? section["format"]?.Value<bool?>("padBrackets")
-                ?? current.FormatPadBrackets,
-            FormatSpaceBeforeControlParen = section.Value<bool?>("format.spaceBeforeControlParen")
-                ?? section["format"]?.Value<bool?>("spaceBeforeControlParen")
-                ?? current.FormatSpaceBeforeControlParen,
+            OutlineShowAssignments = Flag(section, "outline", "showAssignments") ?? current.OutlineShowAssignments,
+            CodeLensEnabled = Flag(section, "codeLens", "enabled") ?? current.CodeLensEnabled,
+            InlayParameterNames = Flag(section, "inlayHints", "parameterNames") ?? current.InlayParameterNames,
+            InlayInferredTypes = Flag(section, "inlayHints", "inferredTypes") ?? current.InlayInferredTypes,
+            InlayMacroParameterNames = Flag(section, "inlayHints", "macroParameterNames") ?? current.InlayMacroParameterNames,
+            CompletionLiterals = Flag(section, "completion", "literals") ?? current.CompletionLiterals,
+            CompletionAutoImport = Flag(section, "completion", "autoImport") ?? current.CompletionAutoImport,
+            CompletionCallPunctuation = Text(section, "completion", "callPunctuation") ?? current.CompletionCallPunctuation,
+            CompletionParameterHints = Flag(section, "completion", "parameterHints") ?? current.CompletionParameterHints,
+            DiagnosticsScope = Text(section, "diagnostics", "scope") ?? current.DiagnosticsScope,
+            FormatPadParens = Flag(section, "format", "padParens") ?? current.FormatPadParens,
+            FormatPadCallParens = Flag(section, "format", "padCallParens") ?? current.FormatPadCallParens,
+            FormatPadBrackets = Flag(section, "format", "padBrackets") ?? current.FormatPadBrackets,
+            FormatSpaceBeforeControlParen = Flag(section, "format", "spaceBeforeControlParen") ?? current.FormatSpaceBeforeControlParen,
 
             // Clamped, not trusted: the formatter emits this many blank lines, and a negative one
             // from a hand-edited settings file is a knob nobody meant to have.
-            FormatMaxBlankLines = Math.Max(
-                0,
-                section.Value<int?>("format.maxBlankLines")
-                    ?? section["format"]?.Value<int?>("maxBlankLines")
-                    ?? current.FormatMaxBlankLines),
-            FormatAlignConsecutive = section.Value<bool?>("format.alignConsecutive")
-                ?? section["format"]?.Value<bool?>("alignConsecutive")
-                ?? current.FormatAlignConsecutive,
-            FormatSortDirectives = section.Value<bool?>("format.sortDirectives")
-                ?? section["format"]?.Value<bool?>("sortDirectives")
-                ?? current.FormatSortDirectives,
-            FormatIndentCaseLabels = section.Value<bool?>("format.indentCaseLabels")
-                ?? section["format"]?.Value<bool?>("indentCaseLabels")
-                ?? current.FormatIndentCaseLabels,
-            FormatIndentDevBlocks = section.Value<bool?>("format.indentDevBlocks")
-                ?? section["format"]?.Value<bool?>("indentDevBlocks")
-                ?? current.FormatIndentDevBlocks,
-            FormatFixCasing = section.Value<bool?>("format.fixCasing")
-                ?? section["format"]?.Value<bool?>("fixCasing")
-                ?? current.FormatFixCasing,
-            FormatAlignMaxPadding = Math.Max(
-                0,
-                section.Value<int?>("format.alignMaxPadding")
-                    ?? section["format"]?.Value<int?>("alignMaxPadding")
-                    ?? current.FormatAlignMaxPadding),
+            FormatMaxBlankLines = Math.Max(0, Number(section, "format", "maxBlankLines") ?? current.FormatMaxBlankLines),
+            FormatAlignConsecutive = Flag(section, "format", "alignConsecutive") ?? current.FormatAlignConsecutive,
+            FormatSortDirectives = Flag(section, "format", "sortDirectives") ?? current.FormatSortDirectives,
+            FormatIndentCaseLabels = Flag(section, "format", "indentCaseLabels") ?? current.FormatIndentCaseLabels,
+            FormatIndentDevBlocks = Flag(section, "format", "indentDevBlocks") ?? current.FormatIndentDevBlocks,
+            FormatFixCasing = Flag(section, "format", "fixCasing") ?? current.FormatFixCasing,
+            FormatAlignMaxPadding = Math.Max(0, Number(section, "format", "alignMaxPadding") ?? current.FormatAlignMaxPadding),
         };
+    }
+
+    /// <summary>
+    /// A grouped setting, in either shape a payload carries it: the flat dotted key the client sends
+    /// (<c>"format.padParens"</c>) or nested under its group. Null when the payload has neither.
+    /// </summary>
+    /// <remarks>
+    /// One spelling per setting. Written out at each site, the key appeared twice, and a rename that
+    /// reached one half and not the other would drop the setting to its default without a word.
+    /// </remarks>
+    private static bool? Flag(JToken section, string group, string name)
+    {
+        return section.Value<bool?>(group + "." + name) ?? section[group]?.Value<bool?>(name);
+    }
+
+    /// <summary>The number form of <see cref="Flag"/>.</summary>
+    private static int? Number(JToken section, string group, string name)
+    {
+        return section.Value<int?>(group + "." + name) ?? section[group]?.Value<int?>(name);
+    }
+
+    /// <summary>The text form of <see cref="Flag"/>.</summary>
+    private static string? Text(JToken section, string group, string name)
+    {
+        return section.Value<string>(group + "." + name) ?? section[group]?.Value<string>(name);
     }
 }

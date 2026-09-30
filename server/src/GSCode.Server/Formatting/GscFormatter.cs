@@ -1049,10 +1049,7 @@ public static class GscFormatter
                 continue;
             }
 
-            int code = (int)diagnostic.Code;
-            bool lexError = code >= 1000 && code < 2000;
-            bool parseError = code >= 3000 && code < 4000;
-            if ( lexError || parseError )
+            if ( GscDiagnosticStages.IsLexing(diagnostic.Code) || GscDiagnosticStages.IsParsing(diagnostic.Code) )
             {
                 return true;
             }

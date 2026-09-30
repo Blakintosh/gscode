@@ -24,7 +24,7 @@ public static class ExpressionStatementLint
     {
         foreach ( Diagnostic diagnostic in result.Tree.Diagnostics )
         {
-            if ( (int)diagnostic.Code is >= 3000 and < 4000 )
+            if ( GscDiagnosticStages.IsParsing(diagnostic.Code) )
             {
                 return true;
             }

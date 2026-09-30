@@ -76,7 +76,7 @@ public static class ScriptAnalysis
         foreach ( Diagnostic diagnostic in tree.Diagnostics )
         {
             // GSH fragments legitimately fail whole-script parsing; keep them quiet.
-            if ( lenient && (int)diagnostic.Code >= 3000 && (int)diagnostic.Code < 4000 )
+            if ( lenient && GscDiagnosticStages.IsParsing(diagnostic.Code) )
             {
                 continue;
             }

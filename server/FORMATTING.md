@@ -24,6 +24,7 @@ gate with a safety check of its own.
 | `else` starts its own line, never `} else` | 7 cuddled in the entire corpus |
 | No blank line immediately after `{` | 50,734 code vs 314 blank |
 | One statement per line | 65 violations in 397,111 lines |
+| A line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush |
 | Spaces around assignment: `a = b` | 48,974 spaced vs 1,870 tight |
 | A space after every comma: `f( a, b )` | 71,606 vs 4,180 |
 | Call parentheses are **padded**: `foo( x )` | 88,126 vs 14,274; and 473 files are internally consistent against 14 |

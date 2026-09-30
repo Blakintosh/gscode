@@ -431,6 +431,13 @@ public static class GscFormatter
         // The closer needs the same answer, hence a stack rather than a flag.
         List<bool> callParens = new();
 
+        // Open parentheses and brackets, for the continuation indent: a line that starts inside one
+        // continues a statement and sits one level deeper. Separate from parenDepth because it
+        // counts brackets too, and it is reset at every brace -- no brace can sit inside a
+        // parenthesis in GSC, so an unbalanced pair in a disabled #if branch cannot push the
+        // whole rest of the file one level right.
+        int openGroups = 0;
+
         for ( int index = 0; index < significant.Count; index++ )
         {
             Token token = significant[index].Token;
@@ -462,6 +469,16 @@ public static class GscFormatter
                 blocks.RemoveAt(blocks.Count - 1);
             }
 
+            if ( token.Kind is TokenKind.CloseParen or TokenKind.CloseBracket )
+            {
+                openGroups = Math.Max(0, openGroups - 1);
+            }
+
+            if ( token.Kind is TokenKind.OpenBrace or TokenKind.CloseBrace )
+            {
+                openGroups = 0;
+            }
+
             // A label sits at the block's own level, so it does not get its own case indent.
             bool isLabel = token.Kind is TokenKind.Case or TokenKind.Default;
             int caseIndents = OpenCaseIndents(blocks, excludeInnermost: isLabel);
@@ -486,7 +503,8 @@ public static class GscFormatter
                 {
                     int blankLines = Math.Clamp(newlinesBefore - 1, 0, options.MaxBlankLines);
                     output.Append('\n', 1 + blankLines);
-                    AppendIndent(output, depth + unbraced.PendingIndents + caseIndents, options);
+                    int continuation = openGroups > 0 ? 1 : 0;
+                    AppendIndent(output, depth + unbraced.PendingIndents + caseIndents + continuation, options);
                 }
                 else
                 {
@@ -515,6 +533,11 @@ public static class GscFormatter
             if ( isLabel && blocks.Count > 0 && blocks[^1].IsSwitch )
             {
                 blocks[^1].CaseOpen = true;
+            }
+
+            if ( token.Kind is TokenKind.OpenParen or TokenKind.OpenBracket )
+            {
+                openGroups++;
             }
 
             if ( token.Kind == TokenKind.OpenParen )

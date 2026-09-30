@@ -14,11 +14,14 @@ gate with a safety check of its own.
 
 ---
 
-## 1. Settled rules — no setting, the corpus decided
+## 1. Settled rules — the corpus decided
+
+Most of these have no setting. The padding rows are the defaults of settings listed in §8, for
+readers who share the corpus's majority but not every one of its habits.
 
 | Rule | Corpus evidence |
 |---|---|
-| Lines end with **LF** | 396,131 LF, **0** CRLF |
+| Line endings are the document's own — LF in stock, CRLF kept in a CRLF checkout | 396,131 LF, **0** CRLF |
 | Indent with **tabs** | 247,613 tab-led indented lines vs 886 space-led |
 | **Allman** braces — `{` on its own line | 50,485 own-line vs 36 same-line |
 | `else` starts its own line, never `} else` | 7 cuddled in the entire corpus |
@@ -27,9 +30,9 @@ gate with a safety check of its own.
 | A line continuing an open `(` or `[` indents **one level** past the statement, however many are open | 438 indented vs 16 flush |
 | Spaces around assignment: `a = b` | 48,974 spaced vs 1,870 tight |
 | A space after every comma: `f( a, b )` | 71,606 vs 4,180 |
-| Call parentheses are **padded**: `foo( x )` | 88,126 vs 14,274; and 473 files are internally consistent against 14 |
+| Call parentheses are **padded**: `foo( x )` (`padCallParens`) | 88,126 vs 14,274; and 473 files are internally consistent against 14 |
 | Empty parentheses stay tight: `foo()` | 18,762 |
-| Bracket interiors are **padded**: `a[ i ]` | overridden — stock prefers tight 19,175 to 4,686 |
+| Bracket interiors are **padded**: `a[ i ]` (`padBrackets`) | overridden — stock prefers tight 19,175 to 4,686 |
 | A function pointer's `[[`/`]]` stay tight around a padded interior: `[[ ptr ]]` | overridden — stock prefers `[[ptr]]` 1,176 to 546 |
 | One blank line between functions | 10,775 vs 1,490 |
 | Trailing whitespace is stripped | stock carries it on 40,126 lines — 10% of the corpus |
@@ -45,14 +48,14 @@ direction of.
 Adjacent brackets stay tight, which is what keeps `[[` and `]]` reading as the single token they
 are rather than as a nested index, and leaves an empty array as `[]`.
 
-## 2. Control-flow keywords — the one thing stock never settled
+## 2. Control-flow keywords — stock never settled them
 
 `if ( x )` beats `if( x )` 20,382 to 10,429 overall. But per file, **270 files mix both forms
 internally** against 242 that are consistent. `while`, `foreach` and `switch` even lean tight in raw
 counts. Treyarch never made this decision, so measurement cannot make it for us.
 
-**Chosen: always spaced.** It is the overall majority, and it agrees with the call-paren padding
-that *is* settled.
+**Chosen: spaced by default.** It is the overall majority, and it agrees with the call-paren
+padding that *is* settled.
 
 ```gsc
 if ( isdefined( x ) )
@@ -62,8 +65,10 @@ foreach ( key, value in a )
 switch ( v )
 ```
 
-The keyword-to-paren space is not configurable — mixing the two forms is how stock became
-inconsistent in the first place. The *interior* padding is, via `gscode.format.padParens`.
+Because stock is split, both halves are settings: `gscode.format.spaceBeforeControlParen` for the
+keyword-to-paren gap (`if(` against `if (`) and `gscode.format.padParens` for the interior
+(`( x )` against `(x)`), so all four combinations are reachable. Whichever you choose, the
+formatter applies it everywhere — mixing the two forms is how stock became inconsistent.
 
 ## 3. Dev blocks and `case` labels
 
@@ -204,8 +209,9 @@ lines up on top of it.
 It applies to **all three** formatting requests. Directive sorting is the one that is Format Document
 only, and the two are easy to confuse: both fragment handlers switch off `SortDirectives` and leave
 alignment on, because hoisting a file's directive block out from under a partial edit would be
-startling while re-aligning the group you are typing into is the point. On-type and range edits are
-then clipped to the alignment group around the cursor, so nothing outside it moves.
+startling while re-aligning the group you are typing into is the point. On-type edits are then
+clipped to the alignment group around the cursor, and range edits to the selection, so nothing
+outside it moves.
 
 ## 7. Worked example
 
@@ -293,10 +299,13 @@ function flop()
 |---|---|---|
 | `editor.insertSpaces` | `false` for gsc/csc/gsh | Tabs. Arrives per request in the LSP payload |
 | `editor.tabSize` | `4` | Columns per level; only meaningful when indenting with spaces |
-| `gscode.format.padParens` | `true` | `if ( x )` against `if (x)` — the interior, not the keyword gap |
+| `gscode.format.padParens` | `true` | `if ( x )` against `if (x)` — the interior of control-flow and grouping parentheses |
+| `gscode.format.padCallParens` | `true` | `foo( a )` against `foo(a)` — call and declaration parentheses. `()` stays tight |
+| `gscode.format.padBrackets` | `true` | `a[ i ]` against `a[i]`. `[[ ptr ]]`'s outer brackets and `[]` stay tight |
+| `gscode.format.spaceBeforeControlParen` | `true` | `if (` against `if(` — the keyword gap, not the interior (§2) |
 | `gscode.format.maxBlankLines` | `2` | Longest run of blank lines preserved |
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
-| `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; range and on-type are clipped to the group around the cursor |
+| `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; on-type is clipped to the group around the cursor, range to the selection |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
 

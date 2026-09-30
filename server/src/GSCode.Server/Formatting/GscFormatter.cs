@@ -877,9 +877,8 @@ public static class GscFormatter
             return "";
         }
 
-        // A call/declaration '(' hugs its callee/name; a control-flow '(' is padded.
-        // Not affected by PadParens, which is about the INTERIOR: the tight form is `if (a)`,
-        // never `if(a)`, so a control-flow keyword keeps its space either way.
+        // A call/declaration '(' hugs its callee/name; a control-flow '(' follows
+        // SpaceBeforeControlParen. Neither is affected by PadParens, which is about the INTERIOR.
         //
         // It only hugs something it could actually be CALLING. After an OPERATOR a '(' opens a
         // grouped subexpression and is an operand in its own right, or
@@ -890,7 +889,7 @@ public static class GscFormatter
         // lose their hug under an allow-list.
         if ( current == TokenKind.OpenParen )
         {
-            // `if(`, `for(`, `while(` are a real style (4,333 tight against 33,140 spaced in stock),
+            // `if(`, `for(`, `while(` are a real style (13,600 tight against 23,645 spaced in stock),
             // so the keyword's space is its own setting. `return (` and `case (` are not keywords
             // opening a header and keep theirs regardless.
             if ( IsControlFlowKeyword(previous) )

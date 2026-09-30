@@ -36,7 +36,8 @@ namespace GSCode.Server.Formatting;
 /// </param>
 /// <param name="SpaceBeforeControlParen">
 /// Whether a control-flow keyword is separated from its parenthesis: <c>if ( x )</c> against
-/// <c>if( x )</c>. Independent of the interior padding, so every combination is reachable.
+/// <c>if( x )</c>. Stock is split, 23,645 spaced against 13,600 tight. Independent of the
+/// interior padding, so every combination is reachable.
 /// </param>
 /// <param name="MaxBlankLines">
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks

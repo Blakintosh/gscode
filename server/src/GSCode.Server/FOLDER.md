@@ -590,16 +590,18 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   formatting handlers share. `Format(ParseResult)` returns the full formatted text (or null).
 - `static class GscFormatter.Format(ParseResult)` — a whitespace-only formatter. It emits
   every non-trivia token verbatim and only recomputes the surrounding whitespace: Allman
-  braces, one statement per line, one indent per brace/dev-block level (`AppendIndent`: a tab
+  braces, one statement per line, one indent per brace level (`AppendIndent`: a tab
   or `tabSize` spaces, from the request's `insertSpaces` — the client defaults all three languages
-  to tabs, which is what the corpus does), padded
-  control-flow and non-empty parens (`( x )`, `()` stays tight), hugging `.`/`::`/`->`/`[ ]`
-  and backslash paths, and blank lines capped at two. Line breaks are forced structurally
+  to tabs, which is what the corpus does), one more for a line continuing an open `(` or `[`,
+  dev blocks and `case` labels by setting, padded non-empty parens (`( x )`, `()` stays tight),
+  hugging `.`/`::`/`->` and backslash paths, and blank-line runs capped at `MaxBlankLines`.
+  Output is written in the document's own line endings. Line breaks are forced structurally
   (Allman) but original breaks are otherwise preserved, which keeps newline-terminated
   directives (`#define`, `#if`) intact; trailing comments stay glued to their line. Two
   safety properties make corruption impossible: it refuses files with lexer (1xxx) or parser
   (3xxx) errors, and it re-lexes its own output and returns null (no edits) unless the
-  non-trivia token stream is byte-for-byte identical to the input's.
+  non-trivia token stream is byte-for-byte identical to the input's. The aligners run after
+  that gate and are checked again; a mismatch there drops the alignment, not the format.
 
 ## Program.cs
 
@@ -767,8 +769,9 @@ that chose it. These are the pieces that implement it:
   whatever spacing the author left — and a run followed by a blank line part-way down, which is
   owned by nothing and so ends the block.
 - `LineFacts` — shared line-level premises: comment tokens, leading whitespace, code-only tokens,
-  comment-only lines, and `BucketByLine` (a line's significant tokens, whitespace and newlines
-  dropped). Keeping these in one place prevents the aligners and formatter scope logic from
+  comment-only lines, `BucketByLine` (a line's significant tokens, whitespace and newlines
+  dropped), `TopLevelAssignment` (the one bracket-depth walk that decides a line is an
+  assignment) and `GatherRun` (a run of member lines with comments stepped over). Keeping these in one place prevents the aligners and formatter scope logic from
   disagreeing.
 - `FormattingSupport` — the steps the three formatting handlers share before they diverge. An
   injected singleton, like `NavigationSupport`, owning the document store, resolver, stock-script

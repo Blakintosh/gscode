@@ -410,7 +410,8 @@ decides what the parser and the lints do. The serialization costs about a second
 nothing within a test: the corpus sweeps still parallelise their own file walk.
 
 **Formatting.** `GscFormatterTests` the formatter at large · `FormatMinimalEditsTests` minimal edits ·
-`StaleFormatEditTests` edits against a changed buffer · `UnbracedBodyFormattingTests`,
+`StaleFormatEditTests` edits against a changed buffer · `ContinuationIndentTests` lines inside an
+open `(`/`[` · `IndentOptionsTests` `case` labels and dev blocks · `UnbracedBodyFormattingTests`,
 `UnbracedBodyShapeTests` braceless bodies · `ElseIfChainTests` · `OperatorSpacingTests`,
 `BracketSpacingTests` · `ColumnAlignerTests`, `AssignmentAlignerTests` · `DirectiveSorterTests` ·
 `FormatOptionsTests` the settings layer · `FormatPragmaTests` `#pragma disable format` ·

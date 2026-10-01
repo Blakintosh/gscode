@@ -134,6 +134,16 @@ public sealed class FlowTyper
     private ScriptTypes? _typed;
 
     /// <summary>
+    /// The bookkeeping a loop's silent warm-up passes write into and nobody reads. Shared across
+    /// every warm-up rather than allocated per pass, which a loop takes up to three of: the walk
+    /// only ever adds to these, and what it adds is thrown away, so a nested warm-up clearing them
+    /// mid-walk loses nothing.
+    /// </summary>
+    private HashSet<string>? _silentHinted;
+    private ImmutableArray<InferredAssignment>.Builder? _silentHints;
+    private ImmutableArray<FieldWrite>.Builder? _silentWrites;
+
+    /// <summary>
     /// <paramref name="profile"/> defaults to the active one, matching how every <c>Analyze</c>
     /// entry point in Analysis, Api and Database takes it — so a test can type a function against a
     /// dialect other than the one the server happens to be running.
@@ -583,8 +593,9 @@ public sealed class FlowTyper
 
         // The real, hint-recording pass starts from the CONVERGED candidate rather than the raw
         // pre-loop environment — the only difference from before the fix — so a read anywhere in
-        // the body sees what a prior iteration could have left there.
-        Dictionary<string, ScrValue> bodyEnvironment = Clone(candidate);
+        // the body sees what a prior iteration could have left there. Walked in place: nothing
+        // reads the candidate after this, so a copy of it would only be garbage.
+        Dictionary<string, ScrValue> bodyEnvironment = candidate;
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
         if ( increment is not null )
@@ -595,14 +606,31 @@ public sealed class FlowTyper
         MergeAlternatives(environment, bodyEnvironment);
     }
 
-    /// <summary>Runs a warm-up pass with scratch bookkeeping, so nothing it finds is recorded twice.</summary>
+    /// <summary>
+    /// Runs a warm-up pass with scratch bookkeeping, so nothing it finds is recorded twice.
+    ///
+    /// The per-expression map is switched off for the same reason: the real pass walks the same
+    /// body and records every one of these nodes again, so recording them here was only overwritten.
+    /// </summary>
     private void WalkStatementSilently(AstNode statement, Dictionary<string, ScrValue> environment)
     {
-        WalkStatement(
-            statement, environment,
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-            ImmutableArray.CreateBuilder<InferredAssignment>(),
-            ImmutableArray.CreateBuilder<FieldWrite>());
+        _silentHinted ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _silentHints ??= ImmutableArray.CreateBuilder<InferredAssignment>();
+        _silentWrites ??= ImmutableArray.CreateBuilder<FieldWrite>();
+        _silentHinted.Clear();
+        _silentHints.Clear();
+        _silentWrites.Clear();
+
+        Dictionary<ExprNode, ScrValue>? recorded = _recorded;
+        _recorded = null;
+        try
+        {
+            WalkStatement(statement, environment, _silentHinted, _silentHints, _silentWrites);
+        }
+        finally
+        {
+            _recorded = recorded;
+        }
     }
 
     /// <summary>

@@ -110,7 +110,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to namespace '{1}'; only files declaring that namespace can call it.",
         [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
-        [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
+        [GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock] = "'{0}' is dev-only. A '/# #/' dev block is skipped unless developer script is enabled on the server, so call it from inside one.",
         [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
         [GscDiagnosticCode.VariableNeverAssigned] = "'{0}' is read but never assigned in this function.",
         [GscDiagnosticCode.VarargOutsideVarargFunction] = "'{0}' is only bound in a function declaring '...'; add it to the parameter list to use the pack here.",

@@ -257,14 +257,14 @@ function waiting_function()
 }
 
 // ---------------------------------------------------------------------------
-// Dev-only builtins. `/# … #/` is compiled out of a release build, and so are
-// the engine functions that only exist in one — so calling one from release
-// code is a call to something that will not be there.
+// Dev-only builtins. `/# … #/` is skipped at runtime unless developer script is
+// enabled on the server, and some engine functions must be called from inside
+// one — so calling one from ordinary code is a mistake.
 // ---------------------------------------------------------------------------
 
 function dev_only_calls()
 {
-	// expect 5006 — Print3d only exists in a development build
+	// expect 5006 — Print3d must be called from inside a dev block
 	Print3d( ( 0, 0, 0 ), "text", ( 1, 1, 1 ), 1, 1 );
 
 	// The same call inside a dev block is correct, and is not reported.

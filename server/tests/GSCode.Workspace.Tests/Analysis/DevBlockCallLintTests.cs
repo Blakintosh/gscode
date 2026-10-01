@@ -14,8 +14,8 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Analysis;
 
 /// <summary>
-/// Dev blocks are stripped from a release build, so calling into one from ordinary code works
-/// while developing and breaks only once the mod ships.
+/// Dev blocks are skipped at runtime unless developer script is enabled on the server, so calling
+/// into one from ordinary code works while developing and breaks only on a server without it.
 /// </summary>
 public class DevBlockCallLintTests
 {
@@ -46,14 +46,14 @@ public class DevBlockCallLintTests
     }
 
     [Fact]
-    public void CallingADevOnlyFunctionFromReleaseCode_IsReported()
+    public void CallingADevOnlyFunctionOutsideADevBlock_IsReported()
     {
         // The reported shape.
         string source = "/#\nfunction foo()\n{\n}\n#/\nfunction bar()\n{\n    foo();\n}\n";
 
         Diagnostic diagnostic = Assert.Single(Lint(source));
 
-        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock, diagnostic.Code);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("foo", diagnostic.Message);
     }
@@ -71,7 +71,7 @@ public class DevBlockCallLintTests
     [Fact]
     public void CallingFromInsideADevBlock_IsFine()
     {
-        // Both sides vanish together in a release build, so the call is consistent.
+        // Both sides are skipped together without developer script, so the call is consistent.
         string source = "/#\nfunction foo()\n{\n}\nfunction dev_caller()\n{\n    foo();\n}\n#/\n";
 
         Assert.Empty(Lint(source));
@@ -104,7 +104,7 @@ public class DevBlockCallLintTests
         string source = "#using scripts\\devtools;\n#namespace game;\nfunction run()\n{\n    devtools::dump_state();\n}\n";
 
         Assert.Equal(
-            GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
+            GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock,
             Assert.Single(Lint(source, files)).Code);
     }
 
@@ -118,13 +118,13 @@ public class DevBlockCallLintTests
     }
 
     [Fact]
-    public void DevOnlyBuiltinCalledFromReleaseCode_IsReported()
+    public void DevOnlyBuiltinCalledOutsideADevBlock_IsReported()
     {
         string source = "function bar()\n{\n    PrintLn( \"hi\" );\n}\n";
 
         Diagnostic diagnostic = Assert.Single(Lint(source));
 
-        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock, diagnostic.Code);
         Assert.Contains("PrintLn", diagnostic.Message);
 
         // The engine owns builtins, so there is no declaration to point at.
@@ -140,9 +140,9 @@ public class DevBlockCallLintTests
     }
 
     [Fact]
-    public void ReleaseBuiltins_AreNeverFlagged()
+    public void OrdinaryBuiltins_AreNeverFlagged()
     {
-        // IPrintLn is the in-game HUD print and exists in release, unlike PrintLn. Confusing
+        // IPrintLn is the in-game HUD print and works outside a dev block, unlike PrintLn. Confusing
         // the two would flag working code, so the distinction is pinned.
         string source = "function bar()\n{\n    IPrintLn( \"hi\" );\n}\n";
 
@@ -218,9 +218,9 @@ public class DevBlockCallLintTests
     }
 
     [Fact]
-    public void ReleaseOverloadElsewhere_SuppressesTheReport()
+    public void NonDevOverloadElsewhere_SuppressesTheReport()
     {
-        // A same-named function that survives a release build makes the call safe, so the
+        // A same-named function declared outside a dev block makes the call safe, so the
         // dev-only declaration alone must not condemn it.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(TestPaths.Raw(@"scripts\shared.gsc"), "#namespace shared;\nfunction helper()\n{\n}\n");
@@ -234,13 +234,13 @@ public class DevBlockCallLintTests
     [Fact]
     public void ADevOnlyCallAMacroExpandedInto_IsReported()
     {
-        // The macro hides the call, not the consequence: `foo` is stripped from a release build,
-        // so the file invoking HELP() is the one that stops compiling once the mod ships.
+        // The macro hides the call, not the consequence: `foo` is dev-only, so the file invoking
+        // HELP() is the one that breaks on a server without developer script.
         string source = "/#\nfunction foo()\n{\n}\n#/\n#define HELP() foo()\nfunction bar()\n{\n    HELP();\n}\n";
 
         Diagnostic diagnostic = Assert.Single(Lint(source));
 
-        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock, diagnostic.Code);
         Assert.Equal(8, diagnostic.Range.Start.Line);
     }
 
@@ -270,7 +270,7 @@ public class DevBlockCallLintTests
         // cScriptBundleObjectBase — and BO3 also declares a dev-block `util::error( msg )` in both
         // mp/_util.gsc and zm/_util.gsc. The rule looked the name up as a namespace function, which
         // cannot see methods and reads a null namespace as "any namespace", so all thirteen calls
-        // were reported as shipped-build failures against a function they never reach.
+        // were reported as dev-only calls against a function they never reach.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
                 TestPaths.Raw(@"scripts\bundle.gsc"),
@@ -297,17 +297,17 @@ public class DevBlockCallLintTests
 
         Diagnostic diagnostic = Assert.Single(Lint(source));
 
-        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock, diagnostic.Code);
         Assert.Contains("dump_state", diagnostic.Message);
     }
 
     [Fact]
     public void AMethodInheritedFromAClassInsideADevBlock_IsReported()
     {
-        // Routing gains the rule a case it could never see before: the whole class is stripped from
-        // a release build, so the derived class's call to an inherited method stops compiling. The
-        // parser takes /# #/ only around a whole class — a dev block inside a class body is not a
-        // class member — so this is the only shape a dev-only method comes in.
+        // Routing gains the rule a case it could never see before: the whole class is inside a dev
+        // block, so the derived class's call to an inherited method breaks without developer
+        // script. The parser takes /# #/ only around a whole class — a dev block inside a class
+        // body is not a class member — so this is the only shape a dev-only method comes in.
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
                 TestPaths.Raw(@"scripts\devbase.gsc"),
@@ -318,7 +318,7 @@ public class DevBlockCallLintTests
 
         Diagnostic diagnostic = Assert.Single(Lint(source, files));
 
-        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledFromRelease, diagnostic.Code);
+        Assert.Equal(GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock, diagnostic.Code);
         Assert.Contains("dump_state", diagnostic.Message);
     }
 

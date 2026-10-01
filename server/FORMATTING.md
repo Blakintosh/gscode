@@ -89,7 +89,7 @@ By default a `/# … #/` block does **not** introduce an indent level; its conte
 level as the `/#`. Corpus: 316 flush against 194 indented — a genuine split, so
 `gscode.format.indentDevBlocks` indents the body one level for those who want the other answer.
 
-This matters more than the margin suggests. A dev block is a compile-time switch, not a scope —
+This matters more than the margin suggests. A dev block is a runtime switch, not a scope —
 when dev script is off the engine jumps over it — so indenting its body implies a nesting that does
 not exist. Nested dev blocks likewise add nothing.
 

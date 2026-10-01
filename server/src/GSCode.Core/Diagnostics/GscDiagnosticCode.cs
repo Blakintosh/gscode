@@ -120,7 +120,7 @@ public enum GscDiagnosticCode
     PrivateFunctionNotVisible = 5003,
     ReadOnlyFieldWrite = 5004,
     SizeIsReadOnly = 5005,
-    DevOnlyFunctionCalledFromRelease = 5006,
+    DevOnlyFunctionCalledOutsideDevBlock = 5006,
 
     /// <summary>
     /// The same namespace::name is declared in two files this one links against, so which

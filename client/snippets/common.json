@@ -97,7 +97,7 @@
 	"dev block": {
 		"prefix": "devblock",
 		"body": ["/#", "\t$0", "#/"],
-		"description": "Development-only block, stripped from a release build"
+		"description": "Development-only block, skipped at runtime unless developer script is enabled on the server"
 	},
 	"define": {
 		"prefix": "define",

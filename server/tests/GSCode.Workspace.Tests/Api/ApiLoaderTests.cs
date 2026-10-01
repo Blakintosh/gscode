@@ -71,8 +71,8 @@ public class ApiLoaderTests
     [Fact]
     public void RenderBuiltin_WarnsOnDevOnlyBuiltins()
     {
-        // Calling one of these outside /# #/ compiles fine and then does nothing in a release
-        // mod, so the warning belongs above the description rather than buried under it.
+        // Calling one of these outside /# #/ compiles fine and then fails on a server without
+        // developer script, so the warning belongs above the description rather than buried under it.
         BuiltinApi api = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
         BuiltinFunction printLn = api.Find("PrintLn")!;
 

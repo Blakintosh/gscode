@@ -123,7 +123,7 @@
     }
    ],
    "example": "ADD_POINT_SCORE( point, \"dist_to_enemy\", score );",
-   "remarks": "The per name debug record is wrapped in a developer block ( /# #/ ) and only exists in developer builds, but the score field is always updated.",
+   "remarks": "The per name debug record is wrapped in a developer block ( /# #/ ) and only runs when developer script is enabled, but the score field is always updated.",
    "flags": [
     "generated"
    ],

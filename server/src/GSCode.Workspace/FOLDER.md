@@ -892,10 +892,10 @@ are out.
 - `CaseLabelLint` (5010/5011/5017) — a `case` on an undefined value, a non-constant label, and the
   same label twice in one switch. The third found a real duplicate `case 1:` in shipped BO3 code.
 - `ClassCycleLint` (5021) — a class inheritance cycle, which would otherwise recurse forever.
-- `DevBlockCallLint` (5006) — calling a `/# #/`-only function from release code. Resolves a call only
-  when its name COULD be dev-only — `LanguageStore.MayBeDevOnly`, or a dev-only builtin — since for
-  any other name neither half of the rule can report; the prefilter is what stopped it resolving
-  every bare-name call on a merge dialect at scale.
+- `DevBlockCallLint` (5006) — calling a `/# #/`-only function from outside a dev block. Resolves a
+  call only when its name COULD be dev-only — `LanguageStore.MayBeDevOnly`, or a dev-only builtin —
+  since for any other name neither half of the rule can report; the prefilter is what stopped it
+  resolving every bare-name call on a merge dialect at scale.
 - `ArithmeticLint` (5031, Warning) — division by a divisor WRITTEN as zero. No constant propagation:
   the literal case is the one that needs no data flow to be certain. A `NodeLintPass` rule.
 - `ConstDeclarationLint` (5029/5030, Warning) — a `const` whose value is not a compile-time constant,

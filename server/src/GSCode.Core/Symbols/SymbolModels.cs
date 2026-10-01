@@ -83,8 +83,8 @@ public sealed record FunctionSymbol
     public bool IsAutoexec { get; init; }
 
     /// <summary>
-    /// Declared inside a <c>/# #/</c> dev block, so it does not exist in a release build.
-    /// Callers outside a dev block are reported.
+    /// Declared inside a <c>/# #/</c> dev block, which the game skips at runtime unless developer
+    /// script is enabled on the server. Callers outside a dev block are reported.
     /// </summary>
     public bool IsDevOnly { get; init; }
     public ImmutableArray<ParameterSymbol> Parameters { get; init; } = [];

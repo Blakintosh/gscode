@@ -448,8 +448,9 @@ function private macros()
 }
 
 // ---------------------------------------------------------------------------
-// Dev blocks. `/# … #/` is compiled out of a release build, so a function
-// declared inside one may only be called from inside one.
+// Dev blocks. `/# … #/` is skipped at runtime unless developer script is enabled
+// on the server, so a function declared inside one may only be called from
+// inside one.
 // ---------------------------------------------------------------------------
 
 /#

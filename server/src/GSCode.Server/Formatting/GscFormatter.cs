@@ -557,7 +557,7 @@ public static partial class GscFormatter
             bool structuralBrace = !inDirective && (token.Kind is TokenKind.OpenBrace or TokenKind.CloseBrace);
 
             // Closers dedent before this line's indent is computed. A dev block only counts when
-            // the setting asks for it: `/# … #/` is a compile-time switch, not a scope -- the
+            // the setting asks for it: `/# … #/` is a runtime switch, not a scope -- the
             // engine jumps over it when dev script is off -- and stock keeps it flush 316 times
             // to 194, but that is a split rather than a rule.
             if ( (token.Kind == TokenKind.CloseBrace && structuralBrace)

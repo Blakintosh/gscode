@@ -47,7 +47,7 @@ public sealed class SymbolExtractor
     // walk, and afterwards by ClassSymbol.FullRange for anything that needs it positionally.
     private string? _currentClass;
 
-    // How many dev blocks enclose the walk right now; > 0 means release builds drop this code.
+    // How many dev blocks enclose the walk right now; > 0 means the code is dev-only.
     private int _devBlockDepth;
 
     // Whether the walk is inside a `+` chain, where a string literal is a message fragment
@@ -433,7 +433,8 @@ public sealed class SymbolExtractor
                     continue;
                 }
                 case DevBlockDeclNode devBlock:
-                    // Everything declared in here is stripped from a release build.
+                    // Everything declared in here is dev-only: the block is skipped at runtime
+                    // unless developer script is enabled on the server.
                     _devBlockDepth++;
                     WalkDeclarations(devBlock.Declarations, devBlock.Range);
                     _devBlockDepth--;

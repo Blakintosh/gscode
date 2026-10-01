@@ -130,8 +130,9 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     counter, a `foreach` key/value). Still a real assignment for typing and completion; just not
     worth an outline entry, where every loop's `i`/`key`/`value` would drown the names that mean
     something.
-  - `FunctionSymbol.IsDevOnly` — declared inside a `/# #/` dev block, so it does not exist in a
-    release build; a caller outside a dev block is reported (`DevOnlyFunctionCalledFromRelease`).
+  - `FunctionSymbol.IsDevOnly` — declared inside a `/# #/` dev block, which the game skips at
+    runtime unless developer script is enabled on the server; a caller outside a dev block is
+    reported (`DevOnlyFunctionCalledOutsideDevBlock`).
   - `ClassSymbol.Constructor` / `Destructor` — the ctor/dtor bodies, kept OUT of `Methods`
     deliberately: they are not callable by name, so listing them there would offer them in method
     completion and count them toward the export signature. Carried at all because their bodies have

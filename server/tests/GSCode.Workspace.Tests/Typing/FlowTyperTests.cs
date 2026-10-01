@@ -40,9 +40,9 @@ public class FlowTyperTests
     [Fact]
     public void AssignmentsInsideADevBlockAreTyped()
     {
-        // `/# … #/` is real code that runs in a debug build. FlowTyper's walk had no case for the
-        // node at all, so nothing inside one was ever visited — no inlay, no hover type, and
-        // nothing for the field lints to see.
+        // `/# … #/` is real code that runs when developer script is enabled. FlowTyper's walk had
+        // no case for the node at all, so nothing inside one was ever visited — no inlay, no hover
+        // type, and nothing for the field lints to see.
         Dictionary<string, ScrType> types = InferByFirstToken(
             "    /#\n        debugCount = 5;\n        level.debugName = \"x\";\n    #/");
 
@@ -53,7 +53,7 @@ public class FlowTyperTests
     [Fact]
     public void ADevBlockLocalIsNotAssumedToExistAfterIt()
     {
-        // The block is compiled out of a release build, so code after it cannot assume anything it
+        // The block is skipped without developer script, so code after it cannot assume anything it
         // assigned still holds — the same treatment a loop body gets for the same reason.
         string source = "function f()\n{\n\t/#\n\tn = 5;\n\t#/\n\n\tuse( n );\n}\n";
 

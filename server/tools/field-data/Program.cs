@@ -1710,7 +1710,7 @@ static int ApplyOverrides(string prefix, string overridesPath, Dictionary<string
             flags.Add("corrected");
         }
 
-        // Whether the engine ships this function only in a development build, which is a fact about
+        // Whether the engine requires this function to be called from a dev block, a fact about
         // THIS game and cannot be inherited from another's. Stated here so the answer travels with
         // the function's own data; absent, the loader falls back to its curated list.
         bool? devOnly = element.TryGetProperty("devOnly", out JsonElement dev) ? dev.GetBoolean() : null;
@@ -2243,9 +2243,9 @@ internal sealed record Cod4Entry(
     string? Module,
     string? Spmp,
     List<string>? Flags,
-    // Whether the engine ships this function only in a development build. Nullable and omitted when
-    // unset, so it appears only where an override states it and the loader falls back to its own
-    // curated list everywhere else.
+    // Whether the engine requires this function to be called from a dev block. Nullable and omitted
+    // when unset, so it appears only where an override states it and the loader falls back to its
+    // own curated list everywhere else.
     bool? DevOnly = null);
 internal sealed record Cod4Overload(Cod4CalledOn? CalledOn, List<Cod4Parameter> Parameters);
 internal sealed record Cod4CalledOn(string Name, string? Description);

@@ -562,7 +562,7 @@ should become a copy step rather than two files someone has to remember to edit 
 
 ### 2. Curate the dev-only builtin list
 
-`Api/DevOnlyBuiltins.cs` drives the `DevOnlyFunctionCalledFromRelease` diagnostic for engine
+`Api/DevOnlyBuiltins.cs` drives the `DevOnlyFunctionCalledOutsideDevBlock` diagnostic for engine
 builtins. **The plumbing is done** — `BuiltinFunction.IsDevOnly` carries the flag, `ApiLoader`
 stamps it, and the lint reads that one property — so this is purely a data-curation task. When
 the API data carries its own `devOnly` field the loader prefers it; otherwise it falls back to
@@ -778,7 +778,7 @@ false` to WaW and BO1 and took both to zero. Counted on WaW's own scripts, `Prin
 inside a dev block against 954 outside, `Line` 104:157, `Print3d` 93:118 — the same inversion of BO3's
 269:2 that made CoD4 wrong. `SetDebugSideSwitch` (1:0) is the one name that stays dev-only there.
 
-**`gscode-5006 DevOnlyFunctionCalledFromRelease` — 6 Errors, all GENUINE.** Checked site by site
+**`gscode-5006 DevOnlyFunctionCalledOutsideDevBlock` — 6 Errors, all GENUINE.** Checked site by site
 against the BO3 corpus; the standing suspicion that the callers were themselves dev-only is wrong,
 and no change to `DevBlockCallLint` is warranted:
 
@@ -787,7 +787,7 @@ and no change to `DevBlockCallLint` is warranted:
   There is no non-dev `error` in namespace `util` for GSC to fall back to; the one in
   `util_shared.csc` is client-side only.
 - `debug_spherical_cone` (`_microwave_turret.gsc:467`) — dev-only in `util_shared`, called from
-  release code in another file.
+  outside a dev block in another file.
 - `printHashIDs` (`_zm.gsc:419`) — declared inside a `/#` at `_zm.gsc:7136`. Worth knowing that a
   naive delimiter count says otherwise: the only `/#` before the call is on line 47, inside
   `//#using scripts\zm\_zm_hero_weapon;`, where the comment slashes abut the directive's hash. The
@@ -795,7 +795,7 @@ and no change to `DevBlockCallLint` is warranted:
 - `Print3d` (`vehicle_shared.gsc:3929`) — the interesting one. `show_node_debug_info` and
   `print_debug_info` are plainly MEANT to be dev-guarded: there is a closing `#/` on line 3932. But
   no `/#` opens it — the nearest one, at 3287, is closed at 3292 — so the guard never begins and the
-  functions really are release code calling a dev-only builtin. A stray delimiter in the stock
+  functions really do call a dev-only builtin outside a dev block. A stray delimiter in the stock
   scripts, surfaced by the lint doing its job.
 
 **`UnusedUsing` (2,187 at last sweep)** — also real: a text scan for the imported file's namespace,

@@ -80,11 +80,11 @@ public static class MarkdownDocRenderer
         markdown.Append(BuiltinSignature(builtin, primary));
         markdown.Append("\n```");
 
-        // Above the description: calling this outside a /# #/ block breaks a shipped mod, which
-        // matters more than anything else the hover has to say.
+        // Above the description: calling this outside a /# #/ block breaks on a server without
+        // developer script, which matters more than anything else the hover has to say.
         if ( builtin.IsDevOnly )
         {
-            markdown.Append("\n\n**Development only** — calling this outside a `/# #/` block will not work in a release build.");
+            markdown.Append("\n\n**Development only** — call this from inside a `/# #/` block, which only runs when developer script is enabled on the server.");
         }
 
         if ( builtin.Description.Length > 0 )

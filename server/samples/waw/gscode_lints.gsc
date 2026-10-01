@@ -181,8 +181,8 @@ waiting_function()
 // Dev-only builtins — 5006 — cannot be shown on this game, and the reason is
 // our data rather than the dialect.
 //
-// The rule reports an engine function that only exists in a development build
-// being called from release code, and the call below is exactly that: Print3d
+// The rule reports an engine function that must be called from inside a dev
+// block being called from outside one, and the call below is exactly that: Print3d
 // is dev-only in every game that has it. It is not reported here because
 // cod4_api_gsc.json carries an explicit "devOnly": false on every entry, and an
 // explicit false beats the fallback list in DevOnlyBuiltins. The BO3 library

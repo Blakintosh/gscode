@@ -62,7 +62,7 @@ namespace GSCode.Server.Formatting;
 /// </param>
 /// <param name="IndentDevBlocks">
 /// Whether the body of a <c>/# … #/</c> dev block is indented. Off by default: a dev block is a
-/// compile-time switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
+/// runtime switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
 /// a real split, so the other answer is a setting rather than a bug.
 /// </param>
 /// <param name="AlignMaxPadding">

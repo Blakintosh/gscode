@@ -436,14 +436,14 @@ public sealed class FlowTyper
                 WalkSwitch(switchNode, environment, hinted, hints, writes);
                 return;
             case DevBlockStmtNode devBlock:
-                // `/# … #/` is real code — it runs in a debug build, and assignments inside it want
-                // their hints exactly as anywhere else.
+                // `/# … #/` is real code — it runs when developer script is enabled, and
+                // assignments inside it want their hints exactly as anywhere else.
                 //
                 // Walked as an ALTERNATIVE path rather than inline, on the same reasoning as a loop
-                // body: the block is compiled out of a release build, so code after it cannot
-                // assume anything it assigned still holds. Inside the block the assignments are
-                // exact; outside, a name typed only there joins with the environment as it stood
-                // before and becomes Unknown, which is the honest answer.
+                // body: the block is skipped at runtime without developer script, so code after it
+                // cannot assume anything it assigned still holds. Inside the block the assignments
+                // are exact; outside, a name typed only there joins with the environment as it
+                // stood before and becomes Unknown, which is the honest answer.
                 MergeDevBlock(devBlock, environment, hinted, hints, writes);
                 return;
             case ConstDeclNode constDecl:

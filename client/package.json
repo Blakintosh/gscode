@@ -465,7 +465,7 @@
 					"gscode.format.indentDevBlocks": {
 						"type": "boolean",
 						"default": false,
-						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a compile-time switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
+						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a runtime switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
 						"scope": "window"
 					},
 					"gscode.format.alignMaxPadding": {

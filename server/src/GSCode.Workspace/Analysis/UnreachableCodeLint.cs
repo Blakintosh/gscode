@@ -52,9 +52,9 @@ public static class UnreachableCodeLint
     /// <summary>
     /// Reports the run of statements after the first terminator in a block or case body, if any.
     ///
-    /// A DEV BLOCK is skipped: <c>/# … #/</c> is compiled out of a release build, so a statement
-    /// after a return inside one is a debugging aid the author put there knowingly, and greying it
-    /// out would be reporting the dev block itself rather than a mistake.
+    /// A DEV BLOCK is skipped: <c>/# … #/</c> only runs when developer script is enabled, so a
+    /// statement after a return inside one is a debugging aid the author put there knowingly, and
+    /// greying it out would be reporting the dev block itself rather than a mistake.
     /// </summary>
     private static void ReportAfterTerminator(
         ImmutableArray<AstNode> statements, ImmutableArray<Diagnostic>.Builder diagnostics)

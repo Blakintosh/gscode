@@ -67,8 +67,9 @@ public sealed record BuiltinFunction(
     string Example)
 {
     /// <summary>
-    /// Exists only in a development build, so calling it outside a `/# #/` block breaks a
-    /// shipped mod. Populated by the loader — see DevOnlyBuiltins for where the truth lives.
+    /// Must be called from inside a `/# #/` dev block, which only runs when developer script is
+    /// enabled on the server. Populated by the loader — see DevOnlyBuiltins for where the truth
+    /// lives.
     /// </summary>
     public bool IsDevOnly { get; init; }
 

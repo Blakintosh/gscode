@@ -12,9 +12,9 @@ namespace GSCode.Workspace.Analysis;
 
 /// <summary>
 /// Reports a call to a function declared inside a <c>/# #/</c> dev block from code that is not
-/// itself in one. Dev blocks are stripped from a release build, so the call compiles and runs
-/// fine while developing and then fails only once the mod ships — exactly the kind of bug worth
-/// catching early.
+/// itself in one. A dev block is not a compile-time conditional: the game skips it at runtime
+/// unless developer script is enabled on the server, so the call works while developing and then
+/// fails only on a server without it — exactly the kind of bug worth catching early.
 ///
 /// The two halves come from different places on purpose. The CALLEE's dev-ness is a stored
 /// fact (<see cref="FunctionSymbol.IsDevOnly"/>), so the check works across files. The CALLER's
@@ -22,7 +22,7 @@ namespace GSCode.Workspace.Analysis;
 /// correct for unsaved edits.
 ///
 /// Engine builtins get the same treatment through <see cref="BuiltinFunction.IsDevOnly"/>,
-/// since some exist only in a development build. There is no declaration to point at for
+/// since some must be called from inside a dev block. There is no declaration to point at for
 /// those, so they are reported without related information.
 ///
 /// Resolution goes through <see cref="MethodResolution.ResolveCall"/> rather than straight to
@@ -54,25 +54,25 @@ public static class DevBlockCallLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // Keyed on the symbol: one dev-only function named twice by a macro body is one shipped-
-        // build failure, not two. See MacroReports.
+        // Keyed on the symbol: one dev-only function named twice by a macro body is one failure,
+        // not two. See MacroReports.
         HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            // FromMacro is not skipped: a dev-only function called from a macro body vanishes from
-            // a release build exactly as it would called directly, and the file invoking the macro
-            // is the one that stops compiling — found only once the mod ships, the one class of bug
-            // this lint exists for.
+            // FromMacro is not skipped: a dev-only function called from a macro body breaks without
+            // developer script exactly as it would called directly, and the file invoking the macro
+            // is the one that fails — found only on a server without developer script, the one
+            // class of bug this lint exists for.
             if ( !entry.IsFunctionCall )
             {
                 continue;
             }
 
-            // A call that is itself dev-only disappears alongside its target, so it is fine. The
-            // range is the INVOCATION for an expanded call, which is the right question to ask:
-            // what decides whether the call survives is where the macro was invoked, not where
-            // its body was written.
+            // A call that is itself in a dev block runs only with developer script, like its target.
+            // The range is the INVOCATION for an expanded call, which is the right question to ask:
+            // what decides whether the call runs is where the macro was invoked, not where its
+            // body was written.
             if ( IsInsideDevRegion(entry.Range, devRegions) )
             {
                 continue;
@@ -100,7 +100,7 @@ public static class DevBlockCallLint
             // namespace". So `error( ... )` inside cSceneObject — the inherited
             // cScriptBundleObjectBase method, which returns a bool and is not dev-only — matched the
             // unrelated `util::error` declared in a dev block in mp/_util.gsc, and every one of
-            // scene_shared.gsc's thirteen calls to it was reported as a shipped-build failure.
+            // scene_shared.gsc's thirteen calls to it was reported as a dev-only call.
             if ( !resolutions.TryGetValue(entry.Key, out ImmutableArray<ResolvedFunction> resolved) )
             {
                 resolved = MethodResolution.ResolveCall(
@@ -112,8 +112,8 @@ public static class DevBlockCallLint
             if ( resolved.Length == 0 )
             {
                 // No script function by that name, so it may be an engine builtin. Some of those
-                // exist only in a development build and are just as broken to call from release
-                // code, but the engine owns them, so there is no declaration to point at. The
+                // must be called from inside a dev block and are just as broken to call from
+                // outside one, but the engine owns them, so there is no declaration to point at. The
                 // flag is read off the function itself, so whether it came from the curated list
                 // or one day from the API data makes no difference here.
                 BuiltinFunction? builtin = builtins.Find(entry.Key.Name);
@@ -124,15 +124,15 @@ public static class DevBlockCallLint
                     diagnostics.Add(Diagnostic.Create(
                         entry.Range,
                         DiagnosticSeverity.Error,
-                        GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
+                        GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock,
                         builtin.Name));
                 }
 
                 continue;
             }
 
-            // Only report when every candidate is dev-only: if any visible overload survives a
-            // release build, the call is fine.
+            // Only report when every candidate is dev-only: if any visible overload is declared
+            // outside a dev block, the call is fine.
             if ( !AllDevOnly(resolved) )
             {
                 continue;
@@ -141,7 +141,7 @@ public static class DevBlockCallLint
             Diagnostic diagnostic = Diagnostic.Create(
                 entry.Range,
                 DiagnosticSeverity.Error,
-                GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
+                GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock,
                 resolved[0].Function.Name);
 
             // DeclaringPath, not Record.Path: a dev-only function reached through #insert has a

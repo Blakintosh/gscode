@@ -113,6 +113,11 @@ JSON source of truth). The tool converts curated → the bundled runtime artifac
 
 ## Documentation convention
 
+`docs/` at the repository root is the narrative layer above this file and the `FOLDER.md`s: the
+mental model, step-by-step lifecycles, the feature and diagnostic catalogs, the invariants and a
+glossary. It links here rather than repeating per-file detail; `docs/README.md` says which document
+owns which kind of fact.
+
 `FOLDER.md` lives **one per project** (`GSCode.Core`, `GSCode.Parser`, `GSCode.Workspace`,
 `GSCode.Server`, `tools/field-data`, `tests`, `client/src`) rather than one per directory, with a `##`
 section per source file named by its path within the project (`## Database/ScriptRecord.cs`).

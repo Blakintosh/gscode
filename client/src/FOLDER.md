@@ -9,14 +9,21 @@ The VSCode extension sources. Five small files; the heavy lifting lives in the s
   language client via `createLanguageClient`, registers commands, wires the indexing
   status bar, and starts the client. Commands: `gscode.showOutput` (opens the server
   channel), `gscode.restartServer` (restarts the language client),
-  `gscode.clearCacheAndReindex` (stops the server, removes only this workspace's hashed SQLite
-  database and its `-wal`/`-shm` sidecars, then reloads the window for a fresh cold index — behind
-  a modal confirm), `gscode.selectGame` (the game picker, see `gamePicker.ts`),
+  `gscode.clearCacheAndReindex` (behind a modal confirm, asks the server over `gscode/clearCache` to
+  stop indexing and delete only this workspace's database — the server is the side that knows which
+  file that is — then reloads the window for a fresh cold index), `gscode.selectGame` (the game picker, see `gamePicker.ts`),
   `gscode.openApiLibrary` (opens the gscode.net library for the active editor's
   language; bound to `shift+f1` in gsc/csc/gsh files), and the `gscode.showReferences` bridge for
   code-lens clicks.
 - `registerIndexingStatusBar(context, client)` — the live indexing counter: a spinner whose
   number races upward on `gscode/indexingStarted|Progress|Complete` notifications.
+- `registerRenameDirectiveFixup(context, client, log)` — on `onWillRenameFiles`, asks the server
+  (`gscode/planRename`) for the `#using`/`#insert` edits a script move implies and applies them with
+  the rename, de-duplicating an edit planned twice for a `.gsc`/`.csc` pair.
+- `registerSemicolonDeduplication(context)` — removes the second of two adjacent semicolons right
+  after one is typed, so typing `;` over the one a call completion already inserted "types over" it,
+  as `editor.autoClosingOvertype` does for `)`. Client-side and unconditional, because the server's
+  on-type handler runs only when `editor.formatOnType` is on.
 - `deactivate()` — stops the language client.
 
 ## server.ts

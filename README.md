@@ -144,6 +144,7 @@ On Windows, `scripts\` wraps the common runs in batch files: `test.bat` (the com
 project), `sweep.bat`, `corpus.bat`, `perf.bat` and `scale.bat` (the game-corpus suites, cod4 and
 bo3 unless given `all` or a list of games), and `build-vsix.bat` (packages the extension without
 publishing it). Double-click one or run it from a terminal; each file's header says what it takes.
+[docs/README.md](docs/README.md) is the engineering handbook and the place to start;
 [server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
 `FOLDER.md` describing its own contents.
 

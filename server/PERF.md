@@ -588,6 +588,11 @@ hints and the parameter typer, all per-request; indexing does not call it.
 
 ### 2026-08-19: the flow typer's environment cloning is NOT worth attacking
 
+**Superseded 2026-09-30.** This judged cloning by TIME, through a probe that cost more than the copy.
+The cost was ALLOCATION, and it surfaced as collections landing in whatever ran next. The joins and
+clones together were about half of everything the walk allocated. See "the flow typer was
+allocation-bound" below.
+
 `FlowTyper` clones the whole local environment at nine sites — both arms of an `if`, both
 `isdefined` narrowings, a dev block, each loop body, each `switch` case, and the no-default path —
 so the obvious guess is that a function with branchy control flow pays O(branches × locals) copies
@@ -803,6 +808,114 @@ allocates a node map per file, so it is the likeliest scope to be holding the cl
 runs; that is a reading, not a measurement. The files slow on both runs (`_helicopter.gsc`,
 `_globallogic_player.gsc`, `_globallogic.gsc`, `dom.gsc`, 6–15 ms) are where to start if the typer is
 ever tuned.
+
+### 2026-09-30: the flow typer was allocation-bound, and four changes took two thirds of it
+
+Once inference had a scope of its own it was the most expensive one in the lint pass, and its
+worst files moved by an order of magnitude between runs with nothing changed. A standalone harness
+ran `InferValues` alone over every bo3 and cod4 file, eight passes per run. It allocated **594 MB
+per pass on bo3 and 521 MB on cod4**, identical on every pass, while the pass times wandered by a
+quarter. One file read 3 ms on most passes and 50 ms on the pass where a gen2 collection landed in
+it. The walk was not doing too much work. Each expression is typed 0.8 to 1.0 times, so the loop
+fixpoint does not re-walk anything. The cost was memory.
+
+An allocation trace (`dotnet-trace --profile gc-verbose`) split it:
+
+| share | where |
+|---|---|
+| ~46% | environment dictionaries: `MergeAlternatives` building a fresh table per join, and `Clone` |
+| ~26% | `_recorded`, the per-expression map, growing from empty by doubling |
+| ~5% | the loop warm-up passes' throwaway hint and field-write builders |
+
+Every one of those entries holds a `ScrValue` by value, and a `ScrValue` was 120 bytes.
+
+**Behaviour was pinned before anything changed.** The harness wrote every recorded value (with
+truthiness, class, function target and constant payload, since `ScrValue.ToString` omits them),
+every assignment, every field write, and a hover query at every assignment site: 542,031 lines for
+bo3 and 684,271 for cod4, deterministic across runs. A planted bug (dropping the `undefined` a
+one-sided join adds) changed it, so it can see a regression. Every change below left it
+byte-identical.
+
+| step | bo3 MB / pass | cod4 MB / pass | bo3 ms / pass |
+|---|---:|---:|---:|
+| before | 594 | 521 | 233–304 |
+| join in place; the then-arm walks the live environment | 367 | 381 | 190–248 |
+| loop warm-ups share scratch, record nothing, and keep their candidate | 324 | 331 | 185–246 |
+| `_recorded` sized from the token count | 247 | 237 | 165–225 |
+| `ScrConstant` packed: `ScrValue` 120 → 80 bytes | **182** | **174** | **140–190** |
+
+Workstation GC, passes 4 to 8 of each run. Gen0 collections per pass fell from 30 to 8 on bo3 and
+from 23 to 6 on cod4. Under the server's own GC settings (server GC, eight heaps, conserve 5) bo3
+went from 266–327 ms to 151–186 ms.
+
+- **Join in place.** `MergeAlternatives` now updates the kept side through
+  `CollectionsMarshal.GetValueRefOrNullRef`, so the enumeration is never invalidated, and the kept
+  side stays the LEFT operand of every union. That matters: a union keeps the left side's constant
+  spelling and class casing when the two agree. An `if` walks its then-arm on the live environment
+  and copies only the else-arm, since the join lands in the then-arm's environment anyway.
+- **Loop warm-ups.** Their hint and field-write output is thrown away, so one scratch set per typer
+  serves every warm-up, and a nested warm-up clearing it mid-walk loses nothing. They record into
+  `_recorded` no longer: the real pass walks the same body and records every one of those nodes
+  again. The converged candidate is walked in place rather than copied once more.
+- **Presizing.** A file records 0.19–0.55 entries per preprocessed token across both games,
+  0.27–0.31 at the median, so two in five leaves the usual file one table and the densest one
+  resize.
+- **`ScrConstant`.** Its int, float, bool, string and vector were five fields, though a constant has
+  exactly one. The three scalars now share one 8-byte slot (a float as its bit pattern), and a
+  string or a boxed vector shares one reference. 64 bytes became 24. The public properties are
+  unchanged and read empty on the wrong kind, as they did. `-0.0` and NaN keep their bits, and
+  vectors compare by component, not by box. All three are tested, and a test fails if `ScrValue`
+  grows past 80 bytes.
+
+**One edit is now typed once, not once per surface.** The lint pass, the inlay hints and hover
+each ran their own walk over the same parse, with separate caches. `FlowTyper.InferValuesShared`
+is one answer per parse, weakly keyed like the tables it replaced, and a hit only when the library,
+field table and game also match. The server's linter fills it for OPEN documents. The closed-file
+sweep does not, because nothing asks about a closed file. Hover now reads assignments from the same
+answer, and its own table is gone.
+
+Two costs come with it. Every open document now keeps its whole per-expression map, presize
+slack included, until its next edit, even with inlay hints switched off. Before, only an inlay
+request kept one. And a hover that misses the cache now pays for the recorded walk rather than the
+cheaper `InferAssignments`. After an edit the lint pass has usually run first, so the miss is rare.
+`InlayHintTypeCacheTests` shows the lint pass and the following hint request read the same parse
+and find its answer cached.
+
+**Two problems found on the way, and one change rejected:**
+
+- **A shared cache breaks every warm-then-measure sweep.** `CorpusPerfTests` and `LintBudgetTests`
+  lint each file once to warm it and then time a second pass on the same parse. A second pass
+  reading the first one's answer would time a cache hit and report the most expensive step in the
+  pass as free. So `WorkspaceLints` takes `shareTypes`, off by default, and only `DocumentLinter`
+  sets it. `SharedTypesLintTests` pins both sides.
+- **The per-file maximum is set by the collector, not the file.** In the isolated harness no file
+  now costs more than about 3.5 ms. The 15–20 ms readings move between files from run to run. Fewer
+  allocations mean fewer collections, but a collection that does run still lands on whatever is
+  running.
+- **Recording only the nodes that are read: measured, and rejected.** The consumers ask about four
+  roles: a foreach collection, a vector component, an arrow call's object, and a pointer being
+  called. Any expression kind can fill a role, so a filter has to be by role, which means a pre-walk.
+  A prototype recorded 2.6% of bo3's entries and 14% of cod4's, and took allocation from 247 to
+  154 MB, but its pass time barely moved, because the pre-walk ate the saving. It also breaks the
+  per-node contract `ScriptTypesTests` pins, and a future rule reading a fifth role would silently
+  read nothing. Recording everything costs about 100 MB per corpus now. That is the price of the
+  contract.
+
+The lint budget gate, three interleaved pairs run alone, base `87051556` against this:
+
+| | before | after |
+|---|---:|---:|
+| bo3 `lint.FlowTyper.InferValues` total | 396–623 ms | 229–391 ms |
+| bo3 worst file | 24.9–28.5 ms | 9.7–17.6 ms |
+| cod4 total | 230–253 ms | 154–164 ms |
+| cod4 worst file | 14.9–17.2 ms | 15.0–21.8 ms |
+| cod4 whole pass p99 | 9.9–12.0 ms | 8.4–9.2 ms |
+
+The bo3 totals overlap at one end, so the harness is the cleaner measurement. The cod4 worst file
+did not move, for the reason above. bo3's whole-pass p99 (14–20 ms) did not clearly move either. The
+rest of the pass is in that number, and inference was never most of its tail. A `Category=Corpus`
+sweep on both sides printed identical findings: 37 tests, 434 lines, differing only in xUnit's own
+timestamps.
 
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
@@ -1989,6 +2102,10 @@ now hold — and answers 31% on cod4 and 40% on bo3. Both figures are true. The 
 because the rules replaced a sweep that was already walking the same trees; the share is large
 because five rules is a lot of rules. Quote the share when deciding whether to add a sixth, and the
 delta only when deciding whether the lattice itself was affordable.
+
+**Done 2026-09-30, and the measurement this section asked for is what justified it:** packing
+took `ScrValue` from 120 bytes (it had grown past the 112 measured here) to 80, without an
+explicit layout. See the flow-typer allocation entry. The original reasoning follows.
 
 The obvious shrink is available if it is ever wanted — the payloads are mutually exclusive, so
 `long`, `double`, `bool` and `Vec3` could share one 24-byte union under an explicit layout and take

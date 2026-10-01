@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using GSCode.Core.Symbols;
 using Xunit;
 
@@ -325,6 +326,71 @@ public class ScrValueTests
 
         Assert.Equal(left, right);
         Assert.Equal(left.GetHashCode(), right.GetHashCode());
+    }
+
+    // --- the packed constant ---
+
+    [Fact]
+    public void EachPayloadReadsBackAndTheOthersReadEmpty()
+    {
+        // The int, float and bool share one slot and the string and vector share one reference, so
+        // a payload read on the wrong kind must still read empty, as it did when each had a field.
+        ScrConstant integer = ScrConstant.OfInt(-7);
+        ScrConstant real = ScrConstant.OfFloat(2.5);
+        ScrConstant boolean = ScrConstant.OfBool(true);
+        ScrConstant text = ScrConstant.OfString("\"a\"");
+        ScrConstant vector = ScrConstant.OfVector(new Vec3(1, 2, 3));
+
+        Assert.Equal(-7, integer.Integer);
+        Assert.Equal(0, integer.Real);
+        Assert.False(integer.Boolean);
+
+        Assert.Equal(2.5, real.Real);
+        Assert.Equal(0, real.Integer);
+
+        Assert.True(boolean.Boolean);
+        Assert.Equal(0, boolean.Integer);
+
+        Assert.Equal("\"a\"", text.Text);
+        Assert.Equal(default, text.Vector);
+
+        Assert.Equal(new Vec3(1, 2, 3), vector.Vector);
+        Assert.Null(vector.Text);
+    }
+
+    [Fact]
+    public void AFloatKeepsItsExactBits()
+    {
+        // Stored as its bit pattern, so negative zero must come back negative and NaN must come
+        // back NaN rather than either being normalised on the way through.
+        Assert.Equal(
+            BitConverter.DoubleToInt64Bits(-0.0),
+            BitConverter.DoubleToInt64Bits(ScrConstant.OfFloat(-0.0).Real));
+        Assert.True(double.IsNaN(ScrConstant.OfFloat(double.NaN).Real));
+    }
+
+    [Fact]
+    public void TwoVectorConstantsAreEqualByComponentsNotByBox()
+    {
+        // Each vector constant boxes its own components, so two equal vectors hold two different
+        // boxes. Equality and hashing have to look through them.
+        ScrConstant left = ScrConstant.OfVector(new Vec3(0, 0, 1));
+        ScrConstant right = ScrConstant.OfVector(new Vec3(0, 0, 1));
+
+        Assert.Equal(left, right);
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.NotEqual(left, ScrConstant.OfVector(new Vec3(0, 1, 0)));
+    }
+
+    [Fact]
+    public void AValueStaysSmallEnoughToCopyCheaply()
+    {
+        // Every flow-typer environment entry and every recorded expression holds one by value, and
+        // copying them was most of what the walk allocated. 120 bytes before the constant was
+        // packed; a field added here is paid for at every one of those copies.
+        Assert.True(
+            Unsafe.SizeOf<ScrValue>() <= 80,
+            $"ScrValue is {Unsafe.SizeOf<ScrValue>()} bytes");
     }
 
     [Fact]

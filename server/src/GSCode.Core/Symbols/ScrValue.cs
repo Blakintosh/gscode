@@ -94,22 +94,48 @@ public enum ScrTypeSet : ulong
 /// </remarks>
 public readonly record struct ScrConstant
 {
-    private ScrConstant(ScrTypeSet type, long integer, double real, bool boolean, string? text, Vec3 vector)
+    /// <summary>
+    /// The int, float or bool, whichever <see cref="Type"/> says this is. One slot, because a
+    /// constant only ever has one of them.
+    ///
+    /// The payloads were separate fields, and a string or vector carried empty slots for the other
+    /// four: 64 bytes, inside a <see cref="ScrValue"/> that every flow-typer environment entry and
+    /// every recorded expression holds by value. The flow typer's allocation is mostly copies of
+    /// those values, so the empty slots were most of what it copied.
+    /// </summary>
+    private readonly long _bits;
+
+    /// <summary>
+    /// A string constant's text, or a vector constant's <see cref="VectorBox"/>. A vector is boxed
+    /// rather than carried inline, because three doubles in every constant cost 24 bytes on every
+    /// value that is not a vector, which is nearly all of them.
+    /// </summary>
+    private readonly object? _reference;
+
+    private ScrConstant(ScrTypeSet type, long bits, object? reference)
     {
         Type = type;
-        Integer = integer;
-        Real = real;
-        Boolean = boolean;
-        Text = text;
-        Vector = vector;
+        _bits = bits;
+        _reference = reference;
     }
 
     /// <summary>Which of the payloads below is meaningful. Always a single bit.</summary>
     public ScrTypeSet Type { get; }
 
-    public long Integer { get; }
-    public double Real { get; }
-    public bool Boolean { get; }
+    public long Integer
+    {
+        get { return Type == ScrTypeSet.Int ? _bits : 0; }
+    }
+
+    public double Real
+    {
+        get { return Type == ScrTypeSet.Float ? BitConverter.Int64BitsToDouble(_bits) : 0; }
+    }
+
+    public bool Boolean
+    {
+        get { return Type == ScrTypeSet.Bool && _bits != 0; }
+    }
 
     /// <summary>
     /// A string constant's text, which for a LITERAL is the token exactly as written — quotes and
@@ -120,9 +146,15 @@ public readonly record struct ScrConstant
     /// them in Black Ops III's scripts alone, on the most common node kind there is, for a value
     /// almost nothing reads. Use <see cref="Content"/> where the characters themselves are wanted.
     /// </summary>
-    public string? Text { get; }
+    public string? Text
+    {
+        get { return _reference as string; }
+    }
 
-    public Vec3 Vector { get; }
+    public Vec3 Vector
+    {
+        get { return _reference is VectorBox box ? box.Value : default; }
+    }
 
     /// <summary>
     /// The characters between the quotes, allocated on demand. Tolerant of an unquoted string, so a
@@ -146,33 +178,33 @@ public readonly record struct ScrConstant
 
     public static ScrConstant OfInt(long value)
     {
-        return new ScrConstant(ScrTypeSet.Int, value, 0, false, null, default);
+        return new ScrConstant(ScrTypeSet.Int, value, null);
     }
 
     public static ScrConstant OfFloat(double value)
     {
-        return new ScrConstant(ScrTypeSet.Float, 0, value, false, null, default);
+        return new ScrConstant(ScrTypeSet.Float, BitConverter.DoubleToInt64Bits(value), null);
     }
 
     public static ScrConstant OfBool(bool value)
     {
-        return new ScrConstant(ScrTypeSet.Bool, 0, 0, value, null, default);
+        return new ScrConstant(ScrTypeSet.Bool, value ? 1 : 0, null);
     }
 
     /// <summary>A string constant. <paramref name="type"/> distinguishes plain / localized / hashed.</summary>
     public static ScrConstant OfString(string value, ScrTypeSet type = ScrTypeSet.String)
     {
-        return new ScrConstant(type, 0, 0, false, value, default);
+        return new ScrConstant(type, 0, value);
     }
 
     public static ScrConstant OfVector(Vec3 value)
     {
-        return new ScrConstant(ScrTypeSet.Vector, 0, 0, false, null, value);
+        return new ScrConstant(ScrTypeSet.Vector, 0, new VectorBox(value));
     }
 
     public static ScrConstant OfUndefined()
     {
-        return new ScrConstant(ScrTypeSet.Undefined, 0, 0, false, null, default);
+        return new ScrConstant(ScrTypeSet.Undefined, 0, null);
     }
 
     /// <summary>The numeric value of an int or float constant, for arithmetic that widens.</summary>
@@ -228,6 +260,17 @@ public readonly record struct ScrConstant
             // those in another pair produced `""foo""` instead of `"foo"`.
             default: return Content is null ? "" : "\"" + Content + "\"";
         }
+    }
+
+    /// <summary>A vector payload on the heap, so the constant need not reserve room for one.</summary>
+    private sealed class VectorBox
+    {
+        public VectorBox(Vec3 value)
+        {
+            Value = value;
+        }
+
+        public Vec3 Value { get; }
     }
 
     /// <summary>

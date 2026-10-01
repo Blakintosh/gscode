@@ -79,9 +79,9 @@ internal static class NodeLintPass
     /// <paramref name="diagnostics"/>.
     /// </summary>
     /// <param name="types">
-    /// The flow typer's answer for this file, which `TypeMismatchLint` reads. It is memoised per
-    /// parse, so asking for it here costs nothing beyond the walk the field-write rules already
-    /// paid for.
+    /// The flow typer's answer for this file, which `TypeMismatchLint` reads. Computed by the
+    /// caller rather than here, so the inference walk is not timed as part of this pass; it is
+    /// memoised per parse, so the field-write rules that run afterwards read the same answer.
     /// </param>
     internal static void Run(
         ParseResult result,

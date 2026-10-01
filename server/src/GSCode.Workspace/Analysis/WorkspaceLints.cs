@@ -177,7 +177,6 @@ public static class WorkspaceLints
         }
         // One typer for all three rules that read it, and — because InferValues memoises per parse
         // — one inference walk between them: separate walks cost 30% of BO3's lint pass, shared 20%.
-        // Whichever rule runs first pays for the walk; the other two read the same ScriptTypes.
         FlowTyper typer;
         using ( LintScope.For("lint.FlowTyper.ctor", timings) )
         {
@@ -186,12 +185,22 @@ public static class WorkspaceLints
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // The inference walk in a scope of its own, BEFORE any rule reads it. Whichever caller asks
+        // first pays for the walk, and when that was an argument inside NodeLintPass's scope the
+        // report charged the whole flow typer to the nine per-node rules: 458 ms of cod4's
+        // "NodeLintPass" was 252 ms of inference and 69 ms of the rules themselves.
+        ScriptTypes types;
+        using ( LintScope.For("lint.FlowTyper.InferValues", timings) )
+        {
+            types = typer.InferValues(result);
+        }
+
         // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
         // nine. Run here because two of them read the flow typer, whose answer has to exist first;
         // everything else in the pass is order-independent now that the result is sorted.
         using ( LintScope.For("lint.NodeLintPass", timings) )
         {
-            NodeLintPass.Run(result, languageBuiltins, typer.InferValues(result), lints);
+            NodeLintPass.Run(result, languageBuiltins, types, lints);
         }
 
         // What those rules do that is NOT per-node, and so has no place in the shared walk: the

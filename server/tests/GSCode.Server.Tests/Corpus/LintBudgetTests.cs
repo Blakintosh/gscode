@@ -42,9 +42,11 @@ public class LintBudgetTests
     /// The share of the debounce ONE rule may spend on its worst file. Over this, the test fails.
     ///
     /// Set from measurement rather than taste, and read with <see cref="PerRuleWatchShareOfDebounce"/>
-    /// below — see PERF.md's per-lint budget section for the runs. The worst rule measured on either
-    /// dialect is <c>lint.NodeLintPass</c> at 9.2–14.4% of the debounce across three runs of one
-    /// build, so this sits about 2.8x over the worst reading and about 4x over the typical one.
+    /// below — see PERF.md's per-lint budget section for the runs. The worst scope measured on either
+    /// dialect was <c>lint.NodeLintPass</c> at 9.2–14.4% of the debounce across three runs of one
+    /// build, so this sits about 2.8x over the worst reading and about 4x over the typical one. That
+    /// scope then included the flow typer's inference walk, which is now
+    /// <c>lint.FlowTyper.InferValues</c> at about 8% on its own.
     ///
     /// Generous ON PURPOSE. The same three runs put that rule's own worst file anywhere in a 23–36 ms
     /// band with nothing changed, so a bound near the measurement would fail on the machine rather

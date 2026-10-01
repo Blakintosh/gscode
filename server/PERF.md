@@ -766,7 +766,8 @@ Two things the gate deliberately does NOT do:
 - **It does not budget the nine fused rules individually.** `lint.NodeLintPass` is one walk asking
   nine questions per node, and timing each rule separately would mean a `Begin`/`End` pair per rule
   per node over bo3's ~1M nodes — an instrument costing more than what it measures. It is budgeted
-  as the one walk it is, and it is the most expensive scope on both dialects.
+  as the one walk it is. (It read as the most expensive scope on both dialects only because it was
+  carrying the flow typer's inference walk; see the 2026-09-30 entry below.)
 - **It does not bound the whole pass's MAX.** bo3's ranges 37–85 ms run to run, which is a fact
   about one file and the machine rather than about the pass. `TextSyncHandler` already logs a
   Warning when a whole analysis reaches the debounce on a real workspace, which is the same question
@@ -775,6 +776,33 @@ Two things the gate deliberately does NOT do:
 The page is `temp/gscode-lint-budget-<game>.html`: every rule with its worst file named, and the
 twenty-five slowest files with the three rules that made them slow. It is written on every run, pass
 or fail, since the numbers are worth reading when nothing is wrong.
+
+### 2026-09-30: `lint.NodeLintPass` was carrying the flow typer
+
+The pass took the flow typer's answer as an argument, `typer.InferValues(result)`, evaluated
+INSIDE its scope. It is the first caller, so the whole inference walk was billed to it, and the
+memoised answer made the two field-write rules that read it later look free. The nine per-node rules
+were never what made it the most expensive scope.
+
+Inference now has its own `lint.FlowTyper.InferValues` scope, entered before the pass. The probe
+that found it, run twice alone (cod4, then bo3):
+
+| | as one scope | `InferValues` | `NodeLintPass` |
+|---|---:|---:|---:|
+| cod4 | 458 ms | 252 / 283 ms | 69 / 63 ms |
+| bo3 | 542 ms | 730 / 391 ms | 92 / 134 ms |
+
+The budget gate after the split, worst single file: `lint.FlowTyper.InferValues` 20.9 ms on bo3
+(8.4% of the debounce) and 19.6 ms on cod4 (7.8%); `lint.NodeLintPass` 6.2 ms (2.5%) and 2.0 ms
+(0.8%). Both pass with room to spare.
+
+**Read the inference scope by its totals and its repeat offenders, not one run's top files.** Single
+files move by an order of magnitude between runs with nothing changed (cod4 `combat_utility.gsc` 2.8
+then 37.6 ms, bo3 `_weapons.gsc` 2.4 then 17.7 ms), and bo3's total moved from 730 to 391 ms. It
+allocates a node map per file, so it is the likeliest scope to be holding the clock when a collection
+runs; that is a reading, not a measurement. The files slow on both runs (`_helicopter.gsc`,
+`_globallogic_player.gsc`, `_globallogic.gsc`, `dom.gsc`, 6–15 ms) are where to start if the typer is
+ever tuned.
 
 ## Measured: COMPLETION, and why it is NOT worth optimising
 

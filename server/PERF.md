@@ -1821,9 +1821,16 @@ too — the suites then run under the collation the server ships.
 
 ## Reading the reports
 
-Each game writes `temp/gscode-perf-<game>.html`; `GSCODE_PERF_REPORT` overrides the directory.
+Each game writes `temp/gscode-perf-<game>.html`, and the lint and completion sweeps write
+`gscode-perf-<game>-lints.html` and `gscode-perf-<game>-completion.html`; `GSCODE_PERF_REPORT`
+overrides the directory. A page shows only what its sweep measured: the phase split belongs to the
+analysis sweep, the lint page leads with its per-rule table, and the completion page folds its up to
+eleven requests per file into one row, drops time per kilobyte (a completion costs what the
+workspace costs, not what the file costs), and shows how many entries the requests returned — the
+check that the sample reached the store-querying arm at all.
 
-- **Headline stats, phases, sub-phases** — the run in summary.
+- **Headline stats, distribution, phases, sub-phases** — the run in summary. The distribution gives
+  each band's share of the rows AND of the time, which is what says whether a tail is worth chasing.
 - **Slowest by absolute time** (top 25) — where the wall-clock went.
 - **Slowest per kilobyte** (top 25, files over 4 KB) — meant to catch superlinear behaviour. Treat
   it with suspicion at the small end: reconciling the total removed the contradiction between the
@@ -1832,12 +1839,17 @@ Each game writes `temp/gscode-perf-<game>.html`; `GSCODE_PERF_REPORT` overrides 
 - **All files** — every row, sortable by any column and filterable by path. This is the actual data;
   the tables above are only the questions someone already thought to ask.
 
-`temp/gscode-perf-all.html` is rebuilt from the JSON sidecars after every game, so it is correct
-whether one game was swept or five, and independent of the order the two xUnit facts run in. It
-carries each game's own run timestamp — a sidecar left behind by an earlier sweep shows as stale
-rather than being silently folded in. Its "hotspots in more than one game" table matches on file
-NAME across each game's slowest 50, since the lineage reuses script names; a file there is usually
-one script evolved across releases, and fixing what it exercises pays out in every game at once.
+`temp/gscode-perf-all.html` is the hub. It opens with a table of every report page on disk per game
+(diagnostics, analysis, lints, completion, lint budget) with each page's write time, and every page
+links back to it. Below that, it is rebuilt from the JSON sidecars after every sweep, so it is correct
+whether one game was swept or five, and independent of the order the xUnit facts run in. It has one
+section per sweep kind, read from the sidecar name, so a lint pass is never ranked against a parse.
+It carries each sidecar's own run timestamp, and one far older than the newest is dimmed, marked
+stale and left out of the cross-game tables rather than silently folded in. Each section's
+"hotspots in more than one game" table matches on file NAME across each game's slowest 50 and counts
+distinct games, since the lineage reuses script names; a file there is usually one script evolved
+across releases, and fixing what it exercises pays out in every game at once. Where a sweep has
+sub-phases, a scope-by-game table gives each game's worst single file for every scope.
 
 ## Deeper timing (optional instrumentation)
 

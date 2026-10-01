@@ -736,32 +736,13 @@ public partial class ScalePerfTests
                 + $"{lookups.RenamePlan.P99:F2} | {lookups.ClassLookup.P99:F3} | {lookups.VisibleClasses.P99:F3} | {lookups.HeaderMacroReferences.P99:F2} | {argumentCount:F2} |");
         }
 
-        string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured && configured.Length > 0
-            ? configured
-            : ScratchDirectory();
+        string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
         Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, "gscode-scale.md");
+        string path = Path.Combine(directory, ReportPage.ScalePage);
         File.WriteAllText(path, table.ToString());
 
         _output.WriteLine("");
         _output.WriteLine(table.ToString());
         _output.WriteLine($"Report: {path}");
-    }
-
-    private static string ScratchDirectory()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-        while ( current is not null )
-        {
-            string git = Path.Combine(current.FullName, ".git");
-            if ( Directory.Exists(git) || File.Exists(git) )
-            {
-                return Path.Combine(current.FullName, "temp");
-            }
-
-            current = current.Parent;
-        }
-
-        return Path.GetTempPath();
     }
 }

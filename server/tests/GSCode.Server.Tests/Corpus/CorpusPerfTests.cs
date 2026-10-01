@@ -70,7 +70,7 @@ public class CorpusPerfTests
             timings.Add(Time(path, GameProfile.BlackOps3, inserts, names, CorpusFixture.Inserts, () => CorpusFixture.Analyze(path, resolver, names)));
         }
 
-        Report("bo3", timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
+        Report("bo3", PerfSweep.Analysis, timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class CorpusPerfTests
                 timings.Add(Time(path, corpus.Profile, inserts, names, GameCorpusFixture.Inserts, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
             }
 
-            Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
+            Report(corpus.Profile.ShortName, PerfSweep.Analysis, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
         }
     }
 
@@ -677,7 +677,7 @@ public class CorpusPerfTests
                 }
             }
 
-            Report(profile.ShortName + "-lints", timings, rawRoot, cachedHeaders: 0);
+            Report(profile.ShortName, PerfSweep.Lints, timings, rawRoot, cachedHeaders: 0);
         }
         finally
         {
@@ -842,8 +842,7 @@ public class CorpusPerfTests
                 }
             }
 
-            Report(profile.ShortName + "-completion", timings, rawRoot, cachedHeaders: 0);
-            ReportEntryCounts(entryCounts);
+            Report(profile.ShortName, PerfSweep.Completion, timings, rawRoot, cachedHeaders: 0, entryCounts);
         }
         finally
         {
@@ -873,7 +872,7 @@ public class CorpusPerfTests
 
     /// <summary>
     /// How big the returned lists were — which is how to tell whether the timings above mean
-    /// anything.
+    /// anything. The same figures go into the report page and its sidecar.
     ///
     /// <c>Complete</c> has around ten arms and most of them are cheap and return almost nothing: a
     /// path segment list, an asset type list, an empty result where the position turned out not to be
@@ -885,21 +884,18 @@ public class CorpusPerfTests
     /// nothing — which is the same failure mode PERF.md records for the lint sweep against a partial
     /// index, arriving by a different route.
     /// </summary>
-    private void ReportEntryCounts(List<int> counts)
+    private void ReportEntryCounts(EntryCounts? entries)
     {
-        if ( counts.Count == 0 )
+        if ( entries is null )
         {
             return;
         }
 
-        List<int> sorted = [.. counts.Order()];
-        int large = counts.Count(static c => c > 500);
-
         _output.WriteLine(
-            $"    entries returned: median {Percentile([.. sorted.Select(static c => (double)c)], 0.50):F0} | "
-            + $"p90 {Percentile([.. sorted.Select(static c => (double)c)], 0.90):F0} | max {sorted[^1]:N0}");
+            $"    entries returned: median {entries.Median:F0} | p90 {entries.P90:F0} | max {entries.Max:N0}");
         _output.WriteLine(
-            $"    {large:N0} of {counts.Count:N0} requests ({large * 100.0 / counts.Count:F1}%) returned over 500 entries "
+            $"    {entries.OverFiveHundred:N0} of {entries.Requests:N0} requests "
+            + $"({entries.OverFiveHundred * 100.0 / entries.Requests:F1}%) returned over 500 entries "
             + "- those are the statement-scope arm, the one that queries the store");
     }
 
@@ -1004,7 +1000,9 @@ public class CorpusPerfTests
             path, lex + preprocess + parse + extract, bytes, lex, preprocess, parse, extract, scopes);
     }
 
-    private void Report(string game, List<PerfReport.Item> timings, string root, int cachedHeaders)
+    private void Report(
+        string game, PerfSweep sweep, List<PerfReport.Item> timings, string root, int cachedHeaders,
+        IReadOnlyList<int>? entryCounts = null)
     {
         if ( timings.Count == 0 )
         {
@@ -1013,8 +1011,10 @@ public class CorpusPerfTests
 
         List<double> sorted = [.. timings.Select(static t => t.Milliseconds).Order()];
         double total = sorted.Sum();
+        string name = PerfReport.SidecarName(game, sweep);
+        string unit = sweep == PerfSweep.Completion ? "requests" : "files";
 
-        _output.WriteLine($"=== {game}: {timings.Count} files, {total:F0} ms total ===");
+        _output.WriteLine($"=== {name}: {timings.Count} {unit}, {total:F0} ms total ===");
         _output.WriteLine(
             $"    median {Percentile(sorted, 0.50):F2} ms | p90 {Percentile(sorted, 0.90):F2} ms | "
             + $"p99 {Percentile(sorted, 0.99):F2} ms | max {sorted[^1]:F2} ms");
@@ -1048,12 +1048,14 @@ public class CorpusPerfTests
 
         // Per world: a .gsc and a .csc are separate universes to the database, and one total
         // hides which of the two the time went to. Headers are counted separately again - they are
-        // inserted rather than indexed, so they belong to neither.
+        // inserted rather than indexed, so they belong to neither. Counted over distinct FILES, since
+        // a completion sweep has several timings per file.
+        List<string> files = [.. timings.Select(static t => t.Path).Distinct(StringComparer.OrdinalIgnoreCase)];
         Dictionary<string, int> worlds = new(StringComparer.Ordinal)
         {
-            ["gsc (server)"] = timings.Count(static t => t.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase)),
-            ["csc (client)"] = timings.Count(static t => t.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase)),
-            ["gsh (headers)"] = timings.Count(static t => t.Path.EndsWith(".gsh", StringComparison.OrdinalIgnoreCase)),
+            ["gsc (server)"] = files.Count(static f => f.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase)),
+            ["csc (client)"] = files.Count(static f => f.EndsWith(".csc", StringComparison.OrdinalIgnoreCase)),
+            ["gsh (headers)"] = files.Count(static f => f.EndsWith(".gsh", StringComparison.OrdinalIgnoreCase)),
         };
 
         foreach ( KeyValuePair<string, int> world in worlds )
@@ -1097,7 +1099,10 @@ public class CorpusPerfTests
             $"    memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
             + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
 
-        WriteReport(game, timings, root, worlds, memory, cachedHeaders);
+        EntryCounts? entries = PerfReport.SummarizeEntries(entryCounts);
+        ReportEntryCounts(entries);
+
+        WriteReport(game, sweep, timings, root, worlds, memory, cachedHeaders, entryCounts);
     }
 
     private static double Percentile(List<double> sorted, double fraction)
@@ -1112,39 +1117,14 @@ public class CorpusPerfTests
     /// the directory, matching GSCODE_SWEEP_REPORT.
     /// </summary>
     private void WriteReport(
-        string game, IReadOnlyList<PerfReport.Item> timings, string root,
-        IReadOnlyDictionary<string, int> worlds, PerfReport.Memory memory, int cachedHeaders)
+        string game, PerfSweep sweep, IReadOnlyList<PerfReport.Item> timings, string root,
+        IReadOnlyDictionary<string, int> worlds, PerfReport.Memory memory, int cachedHeaders,
+        IReadOnlyList<int>? entryCounts)
     {
-        string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured
-            && configured.Length > 0
-                ? configured
-                : ScratchDirectory();
-
-        string path = Path.Combine(directory, $"gscode-perf-{game}.html");
-        PerfReport.Write(path, game, timings, root, worlds, memory, cachedHeaders);
-        _output.WriteLine($"Report [{game}]: {path}");
-    }
-
-    /// <summary>
-    /// The repository's <c>temp/</c> folder, found by walking up to the <c>.git</c> entry — which is
-    /// a directory in a clone and a FILE in a worktree, so both are checked. Falls back to the system
-    /// temp folder when there is no repository above, as in a packaged run.
-    /// </summary>
-    private static string ScratchDirectory()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-
-        while ( current is not null )
-        {
-            string git = Path.Combine(current.FullName, ".git");
-            if ( Directory.Exists(git) || File.Exists(git) )
-            {
-                return Path.Combine(current.FullName, "temp");
-            }
-
-            current = current.Parent;
-        }
-
-        return Path.GetTempPath();
+        string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
+        string name = PerfReport.SidecarName(game, sweep);
+        string path = Path.Combine(directory, ReportPage.PerfPage(name));
+        PerfReport.Write(path, game, sweep, timings, root, worlds, memory, cachedHeaders, entryCounts);
+        _output.WriteLine($"Report [{name}]: {path}");
     }
 }

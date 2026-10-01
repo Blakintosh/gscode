@@ -388,7 +388,9 @@ line means "suppressed on this game" rather than "run twice".
   label repeats the word it sits on, read from the source TEXT so the check is not a restatement of
   the handler's own rule. It found the `DELETE_TRIGGER: delete_trigger` macro case on its first run.
   `MemoryProbeTests` (`Perf`) — what a full index RETAINS, watched for fifteen seconds, built to be
-  carried onto older commits for bisecting. `PerfReport` / `SweepReport` write the HTML pages.
+  carried onto older commits for bisecting. `PerfReport` / `SweepReport` write the HTML pages on
+  the shared `ReportPage` (file names, output directory, stylesheet, sort script), and every page
+  links to `temp/gscode-perf-all.html`, the index.
 
 **Samples.** `SampleScriptTests` — the hand-written worked example per game per language world in
 `server/samples`, run through the whole diagnostic pipeline and checked against the `// expect`

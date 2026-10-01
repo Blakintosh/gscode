@@ -321,12 +321,8 @@ public class LintBudgetTests
         List<double> sorted,
         double p99)
     {
-        string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured
-            && configured.Length > 0
-                ? configured
-                : ScratchDirectory();
-
-        string path = Path.Combine(directory, $"gscode-lint-budget-{game}.html");
+        string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
+        string path = Path.Combine(directory, ReportPage.BudgetPage(game));
 
         PerfReport.WriteLintBudget(path, new LintBudgetReport(
             game,
@@ -342,27 +338,5 @@ public class LintBudgetTests
             [.. files.OrderByDescending(static file => file.Milliseconds).Take(25)]));
 
         _output.WriteLine($"    report: {path}");
-    }
-
-    /// <summary>
-    /// The repository's <c>temp</c> folder, found by walking up to the <c>.git</c> marker — the same
-    /// place the perf sweep writes, so the two pages sit together.
-    /// </summary>
-    private static string ScratchDirectory()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-
-        while ( current is not null )
-        {
-            string git = Path.Combine(current.FullName, ".git");
-            if ( Directory.Exists(git) || File.Exists(git) )
-            {
-                return Path.Combine(current.FullName, "temp");
-            }
-
-            current = current.Parent;
-        }
-
-        return Path.GetTempPath();
     }
 }

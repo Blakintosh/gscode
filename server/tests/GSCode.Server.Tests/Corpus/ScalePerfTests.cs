@@ -697,6 +697,18 @@ public partial class ScalePerfTests
         }
     }
 
+    /// <summary>
+    /// What each column of a table holds, as a list under it. The headers are abbreviated to keep the
+    /// table pasteable, and an abbreviation nobody defined is a number nobody can read.
+    /// </summary>
+    private static void AppendLegend(StringBuilder table, IReadOnlyList<(string Column, string Meaning)> columns)
+    {
+        foreach ( (string Column, string Meaning) column in columns )
+        {
+            table.AppendLine($"- **{column.Column}**: {column.Meaning}.");
+        }
+    }
+
     /// <summary>A markdown table under <c>temp/</c>, ready to paste into PERF.md.</summary>
     private void WriteReport(List<ScaleRow> rows)
     {
@@ -710,6 +722,25 @@ public partial class ScalePerfTests
                 + $"{row.RetainedMegabytes:F0} | {row.CompactMilliseconds:F0} | {row.LintSweepSeconds:F1} | {row.CompletionP99:F2} | "
                 + $"{row.LiteralP99:F2} | {row.FieldP99:F2} | {row.LensP99:F1} | {row.ReferencesP99:F1} | {row.RenameP99:F1} | {row.LintMax:F1} | {row.DroppedWrites:N0} | {row.WarmRestored:N0}/{row.WarmTotal:N0} |");
         }
+
+        table.AppendLine();
+        AppendLegend(table,
+        [
+            ("files", "how many files the generated workspace holds"),
+            ("cold s", "indexing every file with no cache"),
+            ("warm s", "a start from the cache: LoadAll plus the warm index pass"),
+            ("LoadAll ms", "reading every cached record back"),
+            ("retained MB", "managed memory the finished index keeps alive, after a full collection"),
+            ("compact ms", "the server's blocking compaction after indexing"),
+            ("sweep s", "the full-mode lint sweep over every file"),
+            ("compl p99 ms", "one completion request at file scope or a call site: 99% took less"),
+            ("literal p99 ms", "one completion inside a string literal, which reads every record in the workspace"),
+            ("field p99 ms", "one completion after a dot, `self.health|`, which reads every field assigned anywhere visible"),
+            ("lens / refs / rename p99 ms", "one code-lens, find-references or rename request"),
+            ("lint max ms", "the whole lint pass on the single slowest sampled file"),
+            ("dropped", "cache writes dropped while populating. Anything above 0 is a bug"),
+            ("restored", "files the warm start restored, out of the files indexed. Anything short is a bug"),
+        ]);
 
         table.AppendLine();
         table.AppendLine("| game | files | import path p99 ms | insert path p99 ms | header inserters p99 ms | rename plan p99 ms | class lookup p99 ms | visible classes p99 ms | header macro refs p99 ms | ArgumentCountLint p99 ms |");
@@ -735,6 +766,18 @@ public partial class ScalePerfTests
                 $"| {row.Game} | {row.Total:N0} | {lookups.ImportPath.P99:F2} | {lookups.InsertPath.P99:F2} | {lookups.HeaderInserters.P99:F2} | "
                 + $"{lookups.RenamePlan.P99:F2} | {lookups.ClassLookup.P99:F3} | {lookups.VisibleClasses.P99:F3} | {lookups.HeaderMacroReferences.P99:F2} | {argumentCount:F2} |");
         }
+
+        table.AppendLine();
+        AppendLegend(table,
+        [
+            ("import path / insert path", "path completion inside a `#using` or `#include`, and inside an `#insert`"),
+            ("header inserters", "finding the files a changed header makes re-index"),
+            ("rename plan", "the directive edits a file rename needs"),
+            ("class lookup / visible classes", "the two class queries"),
+            ("header macro refs", "macro references inside headers"),
+            ("ArgumentCountLint", "that one rule's time on one file"),
+        ]);
+        table.AppendLine("Every column here is p99 ms over the sampled requests: 99% took less.");
 
         string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
         Directory.CreateDirectory(directory);

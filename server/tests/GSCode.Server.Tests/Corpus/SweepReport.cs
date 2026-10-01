@@ -84,7 +84,14 @@ internal static class SweepReport
     private static void AppendSummary(StringBuilder html, IReadOnlyList<Item> items)
     {
         html.AppendLine("<h2>By diagnostic</h2>");
-        ReportPage.TableStart(html, null, "code", "name", "severity", "count", "files");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("code", "the gscode-NNNN number; click to jump to its findings"),
+            new Column("name", "the diagnostic's name in GscDiagnosticCode"),
+            new Column("severity", "how the editor shows it"),
+            new Column("count", "findings with this code across the whole corpus"),
+            new Column("files", "files with at least one of them"),
+        ]);
 
         foreach ( IGrouping<GscDiagnosticCode, Item> group in Ordered(items) )
         {

@@ -8,6 +8,13 @@ namespace GSCode.Server.Tests.Corpus;
 internal sealed record PageLink(string File, string Label);
 
 /// <summary>
+/// A table column: its header, and what a number in it IS. The meaning is printed above the table
+/// and repeated in the header's tooltip. A bare header like "total ms" reads as belonging to
+/// whatever sits beside it, and a corpus total next to a file name was read as that file's time.
+/// </summary>
+internal sealed record Column(string Name, string Meaning = "");
+
+/// <summary>
 /// What every report page shares: where they are written, what they are called, the stylesheet, the
 /// script, and the small table and stat helpers. In one place so the pages read as one set and link
 /// to each other by names that cannot drift apart.
@@ -155,6 +162,8 @@ internal static class ReportPage
         html.AppendLine(".loc{color:var(--muted)}pre{margin:.15rem 0 0;padding:.35rem .5rem;background:Canvas;border:1px solid var(--line);");
         html.AppendLine("border-radius:3px;overflow-x:auto;font-size:12px}");
         html.AppendLine(".toolbar{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;margin:1rem 0}.toolbar .q{flex:1;min-width:16rem}");
+        html.AppendLine(".legend{display:grid;grid-template-columns:max-content 1fr;gap:.1rem 1rem;margin:.4rem 0 .2rem;font-size:.85rem;color:var(--muted)}");
+        html.AppendLine(".legend dt{font-weight:600;color:var(--fg)}.legend dd{margin:0}");
         html.AppendLine("</style>");
     }
 
@@ -212,14 +221,45 @@ internal static class ReportPage
             """);
     }
 
-    /// <summary>Opens a table with a real header row, which is what the sort script and sticky header hook.</summary>
-    public static void TableStart(StringBuilder html, string? id, params string[] columns)
+    /// <summary>
+    /// What a reading of one file's time includes, said once so every table that shows one says the
+    /// same thing. Each file is timed once, so a garbage-collection pause that happens to run during
+    /// it is part of the reading.
+    /// </summary>
+    public const string OneReadingNote =
+        "One timed run per file, so a garbage-collection pause that lands in it counts too. A worst "
+        + "file that changes from run to run is a pause, not the file.";
+
+    /// <summary>
+    /// Opens a table with a real header row, which is what the sort script and sticky header hook,
+    /// after a legend saying what each column with a meaning holds.
+    /// </summary>
+    /// <param name="legend">
+    /// False for a second table with the same columns on the same page: the headers still carry
+    /// their tooltips, and the legend above the first one already said it.
+    /// </param>
+    public static void TableStart(StringBuilder html, string? id, IReadOnlyList<Column> columns, bool legend = true)
     {
+        if ( legend && columns.Any(static column => column.Meaning.Length > 0) )
+        {
+            html.Append("<dl class=\"legend\">");
+            foreach ( Column column in columns )
+            {
+                if ( column.Meaning.Length > 0 )
+                {
+                    html.Append($"<dt>{Escape(column.Name)}</dt><dd>{Escape(column.Meaning)}</dd>");
+                }
+            }
+
+            html.AppendLine("</dl>");
+        }
+
         string idAttribute = id is null ? "" : $" id=\"{Escape(id)}\"";
         StringBuilder header = new();
-        foreach ( string column in columns )
+        foreach ( Column column in columns )
         {
-            header.Append($"<th>{Escape(column)}</th>");
+            string title = column.Meaning.Length > 0 ? $" title=\"{Escape(column.Meaning)}\"" : "";
+            header.Append($"<th{title}>{Escape(column.Name)}</th>");
         }
 
         html.AppendLine($"<table{idAttribute}><thead><tr>{header}</tr></thead><tbody>");

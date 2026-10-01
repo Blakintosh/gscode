@@ -379,7 +379,7 @@ internal static class PerfReport
 
         html.AppendLine("<div class=\"stats\">");
         ReportPage.Stat(html, unit, $"{items.Count:N0}");
-        ReportPage.Stat(html, "total", $"{total:F0} ms");
+        ReportPage.Stat(html, $"total, all {unit}", $"{total:F0} ms");
         ReportPage.Stat(html, "median", $"{Percentile(sorted, 0.50):F2} ms");
         ReportPage.Stat(html, "p90", $"{Percentile(sorted, 0.90):F2} ms");
         ReportPage.Stat(html, "p99", $"{Percentile(sorted, 0.99):F2} ms");
@@ -415,7 +415,7 @@ internal static class PerfReport
             html.AppendLine($"<div class=\"sub\">Every one of the {groups.Count:N0} files sampled. Click "
                 + "a header to sort; type to filter by path.</div>");
             html.AppendLine("<input class=\"q\" data-filter=\"all\" placeholder=\"filter by path...\">");
-            GroupTable(html, "all", [.. groups.OrderByDescending(static g => g.Max)], corpusRoot);
+            GroupTable(html, "all", [.. groups.OrderByDescending(static g => g.Max)], corpusRoot, legend: false);
         }
         else
         {
@@ -430,7 +430,7 @@ internal static class PerfReport
                 + "on this list is where to look for superlinear behaviour - a long one is just long.</div>");
             ItemTable(html, null,
                 [.. items.Where(static i => i.Bytes > 4096).OrderByDescending(static i => i.MillisecondsPerKilobyte).Take(25)],
-                corpusRoot, phases);
+                corpusRoot, phases, legend: false);
 
             // The two tables above are the curated answer to "what is slow"; this is the DATA, because
             // a top-25 discards 97% of a run and no question outside the ones already asked can be
@@ -439,7 +439,7 @@ internal static class PerfReport
             html.AppendLine($"<div class=\"sub\">Every one of the {items.Count:N0} files timed. Click a "
                 + "header to sort; type to filter by path.</div>");
             html.AppendLine("<input class=\"q\" data-filter=\"all\" placeholder=\"filter by path...\">");
-            ItemTable(html, "all", [.. items.OrderByDescending(static i => i.Milliseconds)], corpusRoot, phases);
+            ItemTable(html, "all", [.. items.OrderByDescending(static i => i.Milliseconds)], corpusRoot, phases, legend: false);
         }
 
         RunContext(html, sweep, worldCounts, memory, cachedHeaders);
@@ -546,7 +546,14 @@ internal static class PerfReport
         html.AppendLine("<h2>Distribution</h2>");
         html.AppendLine($"<div class=\"sub\">How many {ReportPage.Escape(unit)} fall in each band, and how much of "
             + "the total time they carry.</div>");
-        ReportPage.TableStart(html, null, "band", unit, $"share of {unit}", "share of time");
+        string one = unit == "requests" ? "request" : "file";
+        ReportPage.TableStart(html, null,
+        [
+            new Column("band", $"a range of time one {one} took"),
+            new Column(unit, $"how many {unit} took a time in that range"),
+            new Column($"share of {unit}", $"those {unit} as a share of all of them"),
+            new Column("share of time", "their time added up, as a share of the whole sweep's time"),
+        ]);
 
         int index = 0;
         double lower = 0;
@@ -608,7 +615,12 @@ internal static class PerfReport
         double phases = lex + pre + par + ext;
 
         html.AppendLine("<h2>Where the time goes, by phase</h2>");
-        ReportPage.TableStart(html, null, "phase", "ms", "share");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("phase", "one stage of analysing a file: lex, preprocess, parse, extract"),
+            new Column("ms", "time in that stage, added up over every file"),
+            new Column("share", "that stage's share of the four stages' time"),
+        ]);
         PhaseRow(html, "lex", lex, phases);
         PhaseRow(html, "preprocess", pre, phases);
         PhaseRow(html, "parse", par, phases);
@@ -641,14 +653,27 @@ internal static class PerfReport
 
         string intro = lints
             ? "One row per rule, from <code>LintTimings</code>, plus any instrumented scopes. "
-            : "Nested inside the phases above, so they do not sum to the total. ";
-        html.AppendLine($"<div class=\"sub\">{intro}<code>mean</code> is per call. <code>median</code> "
-            + "through <code>max</code> are per FILE, over the files the scope ran in; "
-            + $"<code>max % debounce</code> reads that worst file against the {AnalysisTiming.DebounceMilliseconds} ms "
-            + "keystroke debounce, which is the only budget an interactive path has.</div>");
+                + "<code>total ms</code> is a corpus total; the per-file columns are what one keystroke pays."
+            : "Nested inside the phases above, so they do not sum to the total.";
+        html.AppendLine($"<div class=\"sub\">{intro}</div>");
 
-        ReportPage.TableStart(html, null, lints ? "rule" : "scope", "ms", "calls", "mean ms", "files", "median ms",
-            "p90 ms", "p99 ms", "max ms", "max % debounce");
+        ReportPage.TableStart(html, null,
+        [
+            lints
+                ? new Column("rule", "one lint rule. lint.FlowTyper.InferValues is the type inference the type-aware "
+                    + "rules share, timed on its own")
+                : new Column("scope", "one measured step inside a phase"),
+            new Column("total ms", "its time added up over every file in the sweep: a corpus total, not one file's cost"),
+            new Column("calls", "how many times it ran, over all files"),
+            new Column("mean ms", "total ms divided by calls"),
+            new Column("files", "how many files it ran in"),
+            new Column("median ms", "its time in one file: half the files took less"),
+            new Column("p90 ms", "its time in one file: 90% of the files took less"),
+            new Column("p99 ms", "its time in one file: 99% of the files took less"),
+            new Column("max ms", "its time in the single slowest file. " + ReportPage.OneReadingNote),
+            new Column("max % debounce", $"max ms against the {AnalysisTiming.DebounceMilliseconds} ms keystroke debounce, "
+                + "the only budget an interactive path has"),
+        ]);
 
         foreach ( SubPhaseRow scope in subPhases )
         {
@@ -675,7 +700,11 @@ internal static class PerfReport
         // Per world, because a .gsc and a .csc are separate universes to the database, and "980
         // files" hides which of the two the time went to.
         html.AppendLine("<h2>Files by world</h2>");
-        ReportPage.TableStart(html, null, "world", "files");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("world", "server (.gsc) or client (.csc) scripts, which the database keeps apart"),
+            new Column("files", "files of that world in the sweep"),
+        ]);
         foreach ( KeyValuePair<string, int> world in worldCounts.OrderByDescending(static w => w.Value) )
         {
             html.AppendLine($"<tr><td>{ReportPage.Escape(world.Key)}</td><td class=\"n\">{world.Value}</td></tr>");
@@ -690,7 +719,7 @@ internal static class PerfReport
 
         html.AppendLine("<h2>Memory after the sweep</h2>");
         html.AppendLine("<div class=\"sub\">Sampled after a forced gen2 collection, so this is what is RETAINED.</div>");
-        ReportPage.TableStart(html, null, "pool", "MB", "what it means");
+        ReportPage.TableStart(html, null, [new Column("pool"), new Column("MB", "megabytes"), new Column("what it means")]);
         MemoryRow(html, "managed live", memory.ManagedLive, "the object graph still reachable");
         MemoryRow(html, "heap size", memory.HeapSize, "what the GC has carved out");
         MemoryRow(html, "committed", memory.Committed, "backed by real memory");
@@ -705,16 +734,26 @@ internal static class PerfReport
     /// Rows of files. The phase columns appear only for the analysis sweep: every other sweep leaves
     /// them at zero, and a column of zeros reads as "free" rather than "not measured".
     /// </summary>
-    private static void ItemTable(StringBuilder html, string? id, IReadOnlyList<Item> rows, string root, bool phases)
+    private static void ItemTable(
+        StringBuilder html, string? id, IReadOnlyList<Item> rows, string root, bool phases, bool legend = true)
     {
+        List<Column> columns =
+        [
+            new Column("ms", "this file's time, from one timed run after a warm-up. " + ReportPage.OneReadingNote),
+            new Column("KB", "the file's size on disk"),
+            new Column("ms/KB", "ms divided by KB. High on a small file means time that grows faster than its size"),
+        ];
+
         if ( phases )
         {
-            ReportPage.TableStart(html, id, "ms", "KB", "ms/KB", "lex", "pre", "parse", "extract", "file");
+            columns.Add(new Column("lex", "ms spent lexing"));
+            columns.Add(new Column("pre", "ms spent preprocessing"));
+            columns.Add(new Column("parse", "ms spent parsing"));
+            columns.Add(new Column("extract", "ms spent extracting symbols"));
         }
-        else
-        {
-            ReportPage.TableStart(html, id, "ms", "KB", "ms/KB", "file");
-        }
+
+        columns.Add(new Column("file", "path under the corpus root"));
+        ReportPage.TableStart(html, id, columns, legend);
 
         foreach ( Item row in rows )
         {
@@ -736,9 +775,17 @@ internal static class PerfReport
         ReportPage.TableEnd(html);
     }
 
-    private static void GroupTable(StringBuilder html, string? id, IReadOnlyList<FileGroup> rows, string root)
+    private static void GroupTable(StringBuilder html, string? id, IReadOnlyList<FileGroup> rows, string root, bool legend = true)
     {
-        ReportPage.TableStart(html, id, "max ms", "median ms", "total ms", "requests", "KB", "file");
+        ReportPage.TableStart(html, id,
+        [
+            new Column("max ms", "this file's slowest completion request. " + ReportPage.OneReadingNote),
+            new Column("median ms", "its median request"),
+            new Column("total ms", "all of its requests added up"),
+            new Column("requests", "requests timed in this file: one at file scope and up to ten at call sites"),
+            new Column("KB", "the file's size on disk"),
+            new Column("file", "path under the corpus root"),
+        ], legend);
 
         foreach ( FileGroup row in rows )
         {
@@ -949,9 +996,10 @@ internal static class PerfReport
     /// </summary>
     private static void PageIndex(StringBuilder html, string directory, IEnumerable<string> gameNames)
     {
-        List<string> columns = ["game"];
-        columns.AddRange(ReportPage.GamePages("game").Select(static page => page.Label));
-        ReportPage.TableStart(html, null, [.. columns]);
+        List<Column> columns = [new Column("game", "the game the pages are for")];
+        columns.AddRange(ReportPage.GamePages("game").Select(static page => new Column(
+            page.Label, $"when the {page.Label} page was last written; click to open it. A dash means it has not been run")));
+        ReportPage.TableStart(html, null, columns);
 
         foreach ( string game in gameNames )
         {
@@ -1012,19 +1060,36 @@ internal static class PerfReport
         bool phases = kind == AnalysisKind;
         bool entries = games.Any(static g => g.Entries is not null);
 
-        List<string> columns = ["game", UnitOf(kind), "total ms", "median", "p90", "p99", "max"];
+        string unit = UnitOf(kind);
+        string one = unit == "requests" ? "request" : "file";
+        List<Column> columns =
+        [
+            new Column("game", "click to open that game's page"),
+            new Column(unit, $"{unit} timed"),
+            new Column("total ms", $"every {one}'s time added up"),
+            new Column("median", $"ms for one {one}: half took less"),
+            new Column("p90", $"ms for one {one}: 90% took less"),
+            new Column("p99", $"ms for one {one}: 99% took less"),
+            new Column("max", $"ms for the single slowest {one}. " + ReportPage.OneReadingNote),
+        ];
+
         if ( phases )
         {
-            columns.AddRange(["lex", "pre", "parse", "extract"]);
+            columns.Add(new Column("lex", "lexing's share of the four stages' time"));
+            columns.Add(new Column("pre", "preprocessing's share"));
+            columns.Add(new Column("parse", "parsing's share"));
+            columns.Add(new Column("extract", "symbol extraction's share"));
         }
 
         if ( entries )
         {
-            columns.AddRange(["median entries", "over 500 entries"]);
+            columns.Add(new Column("median entries", "median length of a completion list"));
+            columns.Add(new Column("over 500 entries", "share of requests returning over 500 entries: the only ones that reach the "
+                + "expensive store query"));
         }
 
-        columns.Add("run at");
-        ReportPage.TableStart(html, null, [.. columns]);
+        columns.Add(new Column("run at", "when the sweep ran"));
+        ReportPage.TableStart(html, null, columns);
 
         foreach ( GameSummary game in games )
         {
@@ -1120,7 +1185,13 @@ internal static class PerfReport
         html.AppendLine("<div class=\"sub\">Matched by file NAME across each game's slowest 50, worst "
             + "reading per game. The lineage shares script names, so these are usually the same file "
             + "evolved.</div>");
-        ReportPage.TableStart(html, null, "file", "games", "worst ms", "where");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("file", "a file name, matched across games"),
+            new Column("games", "how many games have it among their 50 slowest"),
+            new Column("worst ms", "its slowest reading in any of those games"),
+            new Column("where", "each game's reading"),
+        ]);
 
         foreach ( KeyValuePair<string, Dictionary<string, double>> row in recurring )
         {
@@ -1168,9 +1239,10 @@ internal static class PerfReport
         html.AppendLine($"<div class=\"sub\">Max ms per file for each scope. Highlighted cells reach "
             + $"half of the {AnalysisTiming.DebounceMilliseconds} ms debounce or more; hover for the corpus total.</div>");
 
-        List<string> columns = ["scope"];
-        columns.AddRange(instrumented.Select(static g => BaseGameOf(g.Game)));
-        ReportPage.TableStart(html, null, [.. columns]);
+        List<Column> columns = [new Column("scope", "one lint rule or measured step")];
+        columns.AddRange(instrumented.Select(static g => new Column(
+            BaseGameOf(g.Game), $"ms in {BaseGameOf(g.Game)}'s single slowest file for this scope; hover a cell for its corpus total")));
+        ReportPage.TableStart(html, null, columns);
 
         foreach ( KeyValuePair<string, Dictionary<string, SubPhaseRow>> scope in byScope
             .OrderByDescending(static pair => pair.Value.Values.Max(static row => row.Max)) )
@@ -1254,11 +1326,23 @@ internal static class PerfReport
         html.AppendLine("</div>");
 
         html.AppendLine("<h2>Rules, by worst single file</h2>");
-        html.AppendLine("<div class=\"sub\">The budget is on <code>max</code>: a rule is allowed to be "
-            + "slow in total across a corpus and is not allowed to be slow on one keystroke. "
-            + "<code>total</code> is there for contrast - the two disagree often, and the ranking by "
-            + "total is the one that used to be the only one recorded.</div>");
-        ReportPage.TableStart(html, null, "rule", "max ms", "% of debounce", "status", "worst file", "total ms", "files");
+        html.AppendLine("<div class=\"sub\">The budget is on the worst file: a rule is allowed to be slow "
+            + "in total across a corpus and is not allowed to be slow on one keystroke. <code>all-files ms</code> "
+            + "is there for contrast - the two rankings disagree often.</div>");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("rule", "one lint rule. lint.FlowTyper.InferValues is the type inference the type-aware rules "
+                + "share, timed on its own"),
+            new Column("worst file", "the file this rule was slowest on, in this run"),
+            new Column("worst-file ms", "the rule's time on that file - the number the budget checks. "
+                + ReportPage.OneReadingNote),
+            new Column("% of debounce", $"worst-file ms against the {report.DebounceMilliseconds:F0} ms keystroke debounce"),
+            new Column("status", $"ok; watch above {report.WatchMilliseconds:F0} ms; OVER BUDGET above "
+                + $"{report.PerRuleBudgetMilliseconds:F0} ms"),
+            new Column("all-files ms", "the rule's time added up over every file: a corpus total, not what one "
+                + "keystroke pays"),
+            new Column("files", "files the rule ran in"),
+        ]);
 
         foreach ( LintRuleCost rule in report.Rules )
         {
@@ -1267,10 +1351,10 @@ internal static class PerfReport
                 : rule.Max > report.WatchMilliseconds ? "watch" : "ok";
 
             html.AppendLine($"<tr><td><code>{ReportPage.Escape(rule.Name)}</code></td>"
+                + $"<td class=\"path\"><code>{ReportPage.Escape(ReportPage.Relative(rule.WorstPath, report.CorpusRoot))}</code></td>"
                 + $"<td class=\"n\">{rule.Max:F2}</td>"
                 + ReportPage.BarCell(rule.Max / report.DebounceMilliseconds * 100)
                 + $"<td>{ReportPage.Escape(status)}</td>"
-                + $"<td class=\"path\"><code>{ReportPage.Escape(ReportPage.Relative(rule.WorstPath, report.CorpusRoot))}</code></td>"
                 + $"<td class=\"n\">{rule.Total:F0}</td>"
                 + $"<td class=\"n\">{rule.Files}</td></tr>");
         }
@@ -1281,7 +1365,13 @@ internal static class PerfReport
         html.AppendLine("<div class=\"sub\">The whole pass for one file, with its three most expensive "
             + "rules. This is where a rule's worst reading can be checked against the file that "
             + "produced it.</div>");
-        ReportPage.TableStart(html, null, "ms", "% of debounce", "file", "where it went");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("whole-pass ms", "every rule's time on this file, added up. " + ReportPage.OneReadingNote),
+            new Column("% of debounce", $"whole-pass ms against the {report.DebounceMilliseconds:F0} ms keystroke debounce"),
+            new Column("file", "path under the corpus root"),
+            new Column("where it went", "its three most expensive rules"),
+        ]);
 
         foreach ( LintFileCost file in report.SlowestFiles )
         {

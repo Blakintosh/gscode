@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
 using GSCode.Core;
@@ -388,19 +389,20 @@ public sealed class FlowTyper
                 // on both paths. Typed against the live environment for that reason.
                 TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
 
-                // The two arms are alternatives, so each walks its own copy and the results
-                // are joined. Sharing one environment would let whichever arm ran last win.
-                Dictionary<string, ScrValue> thenEnvironment = Clone(environment);
+                // The two arms are alternatives, so they walk separate environments and the results
+                // are joined. Sharing one would let whichever arm ran last win. The then-arm walks
+                // the live one and only the else-arm is copied: the join lands in the then-arm's
+                // environment anyway, so a second copy would only be copied back.
                 Dictionary<string, ScrValue> elseEnvironment = Clone(environment);
-                ApplyIsDefinedNarrowing(ifNode.Condition, thenEnvironment, elseEnvironment);
+                ApplyIsDefinedNarrowing(ifNode.Condition, environment, elseEnvironment);
 
-                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints, writes);
+                WalkStatement(ifNode.Then, environment, hinted, hints, writes);
                 if ( ifNode.Else is not null )
                 {
                     WalkStatement(ifNode.Else, elseEnvironment, hinted, hints, writes);
                 }
 
-                MergeAlternatives(environment, thenEnvironment, elseEnvironment);
+                MergeAlternatives(environment, elseEnvironment);
                 return;
             }
             case WhileNode whileNode:
@@ -510,7 +512,7 @@ public sealed class FlowTyper
             WalkStatement(statement, blockEnvironment, hinted, hints, writes);
         }
 
-        MergeAlternatives(environment, environment, blockEnvironment);
+        MergeAlternatives(environment, blockEnvironment);
     }
 
     /// <summary>How many silent warm-up passes <see cref="MergeLoopBody"/> takes to reach a fixpoint.</summary>
@@ -569,7 +571,7 @@ public sealed class FlowTyper
             }
 
             Dictionary<string, ScrValue> joined = Clone(environment);
-            MergeAlternatives(joined, joined, warmupBody);
+            MergeAlternatives(joined, warmupBody);
 
             if ( EnvironmentsEqual(joined, candidate) )
             {
@@ -590,7 +592,7 @@ public sealed class FlowTyper
             WalkStatement(increment, bodyEnvironment, hinted, hints, writes);
         }
 
-        MergeAlternatives(environment, environment, bodyEnvironment);
+        MergeAlternatives(environment, bodyEnvironment);
     }
 
     /// <summary>Runs a warm-up pass with scratch bookkeeping, so nothing it finds is recorded twice.</summary>
@@ -665,7 +667,7 @@ public sealed class FlowTyper
         // foreach binding is the same kind of variable — so after the loop the name holds the last
         // element, or is undefined where the collection was empty. Removing it here said instead
         // that the name kept whatever it held BEFORE the loop, which is the one thing it cannot be.
-        MergeAlternatives(environment, environment, bodyEnvironment);
+        MergeAlternatives(environment, bodyEnvironment);
     }
 
     /// <summary>
@@ -725,7 +727,7 @@ public sealed class FlowTyper
             Dictionary<string, ScrValue> caseEnvironment = Clone(environment);
             if ( previousFallsThrough && previousExit is not null )
             {
-                MergeAlternatives(caseEnvironment, caseEnvironment, previousExit);
+                MergeAlternatives(caseEnvironment, previousExit);
             }
 
             if ( ContainsCursor(group) )
@@ -762,7 +764,7 @@ public sealed class FlowTyper
         Dictionary<string, ScrValue> merged = paths[0];
         for ( int index = 1; index < paths.Count; index++ )
         {
-            MergeAlternatives(merged, merged, paths[index]);
+            MergeAlternatives(merged, paths[index]);
         }
 
         CopyInto(environment, merged);
@@ -891,7 +893,8 @@ public sealed class FlowTyper
     }
 
     /// <summary>
-    /// Replaces <paramref name="destination"/> with the join of two alternative paths.
+    /// Replaces <paramref name="destination"/> with its join with <paramref name="other"/>, an
+    /// alternative path.
     ///
     /// The join is now a set UNION rather than a collapse. Two arms assigning an int and a string
     /// produce <c>int|string</c>, where the flat lattice produced nothing usable — and the
@@ -900,34 +903,32 @@ public sealed class FlowTyper
     /// A name typed on only one path unions with <c>undefined</c> rather than becoming anonymously
     /// unknown, because that is what is actually true: the other path did not assign it. That is
     /// also what makes a later <c>isdefined</c> narrowing able to recover the type exactly.
+    ///
+    /// Joined IN PLACE, into the path that is kept. Building the join in a fresh dictionary and
+    /// copying it back was the largest single allocation in the whole lint pass — a new table per
+    /// branch, loop and switch case, grown from empty. The values are updated
+    /// through a reference rather than the indexer so the enumeration is never invalidated, and the
+    /// destination stays the LEFT side of every union, as it was: a union keeps the left side's
+    /// constant spelling and class-name casing when the two agree.
     /// </summary>
-    private static void MergeAlternatives(
-        Dictionary<string, ScrValue> destination,
-        Dictionary<string, ScrValue> first,
-        Dictionary<string, ScrValue> second)
+    private static void MergeAlternatives(Dictionary<string, ScrValue> destination, Dictionary<string, ScrValue> other)
     {
-        Dictionary<string, ScrValue> joined = new(StringComparer.OrdinalIgnoreCase);
         ScrValue unassigned = ScrValue.Of(ScrTypeSet.Undefined);
 
-        foreach ( KeyValuePair<string, ScrValue> entry in first )
+        foreach ( KeyValuePair<string, ScrValue> entry in destination )
         {
-            joined[entry.Key] = second.TryGetValue(entry.Key, out ScrValue other)
-                ? ScrValue.Union(entry.Value, other)
-                : ScrValue.Union(entry.Value, unassigned);
+            ref ScrValue value = ref CollectionsMarshal.GetValueRefOrNullRef(destination, entry.Key);
+            value = other.TryGetValue(entry.Key, out ScrValue otherValue)
+                ? ScrValue.Union(value, otherValue)
+                : ScrValue.Union(value, unassigned);
         }
 
-        foreach ( KeyValuePair<string, ScrValue> entry in second )
+        foreach ( KeyValuePair<string, ScrValue> entry in other )
         {
-            if ( !joined.ContainsKey(entry.Key) )
+            if ( !destination.ContainsKey(entry.Key) )
             {
-                joined[entry.Key] = ScrValue.Union(entry.Value, unassigned);
+                destination[entry.Key] = ScrValue.Union(entry.Value, unassigned);
             }
-        }
-
-        destination.Clear();
-        foreach ( KeyValuePair<string, ScrValue> entry in joined )
-        {
-            destination[entry.Key] = entry.Value;
         }
     }
 

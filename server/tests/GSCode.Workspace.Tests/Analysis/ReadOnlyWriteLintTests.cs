@@ -52,7 +52,7 @@ public class ReadOnlyWriteLintTests
         ObjectFields fields = ObjectFields.Create(s_fields, []);
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), fields);
 
-        return ReadOnlyWriteLint.Analyze(result, fields, typer);
+        return ReadOnlyWriteLint.Analyze(result, fields, typer.InferValues(result));
     }
 
     // --- The reported bug ---

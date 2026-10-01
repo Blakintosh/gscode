@@ -47,7 +47,7 @@ public class PreferBooleanLiteralLintTests
             (node, into) => PreferBooleanLiteralLint.InspectNode(node, api, into)));
 
         // The second half, which the server calls once per file outside the shared walk.
-        PreferBooleanLiteralLint.InspectRest(result, fields, new FlowTyper(api, fields), diagnostics);
+        PreferBooleanLiteralLint.InspectRest(result, fields, new FlowTyper(api, fields).InferValues(result), diagnostics);
         return diagnostics.ToImmutable();
     }
 

@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Runtime.CompilerServices;
 using System.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -27,40 +26,6 @@ public sealed class HoverHandler : HoverHandlerBase
     private readonly BuiltinApiSet _builtins;
     private readonly ObjectFields _objectFields;
     private readonly TextDocumentSelector _selector;
-
-    /// <summary>
-    /// One assignment-inference walk per document VERSION, not per hover.
-    ///
-    /// <see cref="InferredFieldType"/> asks <see cref="FlowTyper.InferAssignments(ParseResult)"/>,
-    /// which walks every function in the file — and unlike <see cref="FlowTyper.InferValues"/> it
-    /// carries NO memoisation of its own, so building a fresh typer per request (which this did)
-    /// re-walked the whole file for every hover over a field. Hovering is a mouse-move away.
-    ///
-    /// Keyed by <see cref="ParseResult"/> reference, the same identity
-    /// <see cref="InlayHintHandler"/>'s own cache uses and for the same reason: an unchanged
-    /// document hands back the SAME instance, and a ConditionalWeakTable entry is collectible the
-    /// moment nothing else holds its ParseResult — when the document closes or is next edited.
-    ///
-    /// Only the RESULT is shared, never the typer. A <see cref="FlowTyper"/> carries a cursor and a
-    /// recording table as instance state, so two concurrent requests holding one would interfere;
-    /// an <c>ImmutableArray</c> cannot.
-    /// </summary>
-    private readonly ConditionalWeakTable<ParseResult, InferredAssignments> _assignmentCache = new();
-
-    /// <summary>
-    /// A box for the array, because <see cref="ConditionalWeakTable{TKey, TValue}"/> takes a
-    /// reference type and an <c>ImmutableArray</c> is a struct. Holding the builder instead would
-    /// have meant copying the array back out on every read, which is the cost being removed.
-    /// </summary>
-    private sealed class InferredAssignments
-    {
-        public InferredAssignments(ImmutableArray<InferredAssignment> assignments)
-        {
-            Assignments = assignments;
-        }
-
-        public ImmutableArray<InferredAssignment> Assignments { get; }
-    }
 
     public HoverHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
@@ -414,24 +379,16 @@ public sealed class HoverHandler : HoverHandlerBase
     }
 
     /// <summary>
-    /// This document's inferred assignments, walked once per version. See
-    /// <see cref="_assignmentCache"/>.
+    /// This document's inferred assignments, walked once per document VERSION, not per hover.
+    ///
+    /// <see cref="InferredFieldType"/> reads every assignment in the file, and hovering is a
+    /// mouse-move away, so a walk per request re-typed the whole file for every hover over a field.
+    /// Read through <see cref="FlowTyper.InferValuesShared"/>, the same answer the lint pass and the
+    /// inlay hints use, so a hover after an edit usually finds the lint pass already paid for it.
     /// </summary>
     internal ImmutableArray<InferredAssignment> AssignmentsOf(NavigationTarget target)
     {
-        if ( _assignmentCache.TryGetValue(target.Result, out InferredAssignments? cached) )
-        {
-            return cached.Assignments;
-        }
-
-        InferredAssignments inferred = new(
-            new FlowTyper(_builtins.For(target.Language), _objectFields).InferAssignments(target.Result));
-
-        // AddOrUpdate rather than Add: two hovers on the same unchanged document can race this
-        // miss, and the walk is pure, so the race costs a duplicate computation rather than a wrong
-        // answer. Add would throw on the loser instead.
-        _assignmentCache.AddOrUpdate(target.Result, inferred);
-        return inferred.Assignments;
+        return FlowTyper.InferValuesShared(target.Result, _builtins.For(target.Language), _objectFields).Assignments;
     }
 
     /// <summary>

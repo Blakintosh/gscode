@@ -19,9 +19,9 @@ namespace GSCode.Workspace.Analysis;
 /// silence beats a false error on correct code.
 ///
 /// Owner types come from <see cref="FlowTyper"/>'s own walk rather than a second inference pass,
-/// so this can never disagree with the types shown in hovers and inlay hints. The walk is asked
-/// for through <c>InferValues</c>, which memoises it per parse, so the three rules reading the
-/// typer share one pass over the file instead of taking one each.
+/// so this can never disagree with the types shown in hovers and inlay hints. The caller hands
+/// over the walk's answer, so the three rules reading it share one pass over the file instead of
+/// taking one each.
 ///
 /// The two rules carry different severities because they carry different confidence. `.size`
 /// being read-only is a language-spec fact, so that is an error. A field's read-only flag comes
@@ -29,9 +29,9 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class ReadOnlyWriteLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, ObjectFields objectFields, FlowTyper typer)
+    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, ObjectFields objectFields, ScriptTypes types)
     {
-        ImmutableArray<FieldWrite> writes = typer.InferValues(result).FieldWrites;
+        ImmutableArray<FieldWrite> writes = types.FieldWrites;
         if ( writes.IsEmpty )
         {
             return [];

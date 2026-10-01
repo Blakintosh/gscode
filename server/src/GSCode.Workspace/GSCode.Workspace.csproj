@@ -28,6 +28,9 @@
          the walk the server actually runs. Each rule used to keep a public Analyze that walked the
          tree itself, and nothing outside the tests called it. -->
     <InternalsVisibleTo Include="GSCode.Workspace.Tests" />
+    <!-- FlowTyper.SharedFor, so a handler test can show that the parse the server lints is the one
+         the inlay hints and hover then read without typing it again. -->
+    <InternalsVisibleTo Include="GSCode.Server.Tests" />
   </ItemGroup>
 
   <ItemGroup>

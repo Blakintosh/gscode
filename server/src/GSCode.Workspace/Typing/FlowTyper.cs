@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
@@ -132,6 +133,22 @@ public sealed class FlowTyper
     /// </summary>
     private ParseResult? _typedParse;
     private ScriptTypes? _typed;
+
+    /// <summary>
+    /// One <see cref="InferValues"/> answer per parse, shared by every surface that asks for it.
+    ///
+    /// The per-instance memo above lives for one lint pass, and the inlay-hint and hover handlers
+    /// each kept a table of their own, so one edit typed the same parse once for the lints and again
+    /// for the hints. Keyed weakly by the parse, like those tables were: an entry goes when nothing
+    /// else holds its <c>ParseResult</c>, which is when the document is next edited or closed.
+    ///
+    /// The inputs are part of the entry, not just the parse, because the answer depends on all of
+    /// them: a caller with a different library, field table or game misses rather than reading an
+    /// answer computed against someone else's.
+    /// </summary>
+    private static readonly ConditionalWeakTable<ParseResult, SharedTypes> s_shared = new();
+
+    private sealed record SharedTypes(BuiltinApi Builtins, ObjectFields ObjectFields, GameProfile Game, ScriptTypes Types);
 
     /// <summary>
     /// The bookkeeping a loop's silent warm-up passes write into and nobody reads. Shared across
@@ -332,6 +349,44 @@ public sealed class FlowTyper
         {
             _recorded = null;
         }
+    }
+
+    /// <summary>
+    /// <see cref="InferValues"/>, computed once per parse for the whole server rather than once per
+    /// caller. See <see cref="s_shared"/>.
+    ///
+    /// Not what a measurement wants: a perf sweep that warms a file and then times it would time a
+    /// cache hit. Those construct a typer and call <see cref="InferValues"/> directly.
+    /// </summary>
+    public static ScriptTypes InferValuesShared(ParseResult result, BuiltinApi builtins, ObjectFields objectFields)
+    {
+        GameProfile game = GameProfile.Active;
+
+        if ( s_shared.TryGetValue(result, out SharedTypes? cached)
+            && ReferenceEquals(cached.Builtins, builtins)
+            && ReferenceEquals(cached.ObjectFields, objectFields)
+            && ReferenceEquals(cached.Game, game) )
+        {
+            return cached.Types;
+        }
+
+        ScriptTypes types = new FlowTyper(builtins, objectFields, game).InferValues(result);
+
+        // AddOrUpdate rather than Add: the lint pass and an inlay-hint request can race the same
+        // miss, and the walk is pure, so the race costs a duplicate computation rather than a wrong
+        // answer. Add would throw on the loser instead.
+        s_shared.AddOrUpdate(result, new SharedTypes(builtins, objectFields, game, types));
+        return types;
+    }
+
+    /// <summary>
+    /// The shared answer for a parse if one has been computed, without computing it. For a test
+    /// asking which callers fill the cache: a hit and a fresh walk return equal-looking answers,
+    /// so whether one was stored is the only thing that tells them apart.
+    /// </summary>
+    internal static ScriptTypes? SharedFor(ParseResult result)
+    {
+        return s_shared.TryGetValue(result, out SharedTypes? cached) ? cached.Types : null;
     }
 
     /// <summary>

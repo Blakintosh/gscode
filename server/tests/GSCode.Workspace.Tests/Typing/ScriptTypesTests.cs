@@ -239,4 +239,33 @@ public class ScriptTypesTests
         Assert.NotSame(first, other);
         Assert.Equal(first.Count, other.Count);
     }
+
+    [Fact]
+    public void TheSharedAnswerIsComputedOncePerParse()
+    {
+        // The lint pass, the inlay hints and hover all read this one, so asking twice for one parse
+        // has to hand back the same object, and a new parse of the same text has to walk again.
+        BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+        ObjectFields fields = ObjectFields.Load(ApiDirectory);
+        ParseResult result = Parse("    x = 1;");
+
+        ScriptTypes first = FlowTyper.InferValuesShared(result, builtins, fields);
+
+        Assert.Same(first, FlowTyper.InferValuesShared(result, builtins, fields));
+        Assert.NotSame(first, FlowTyper.InferValuesShared(Parse("    x = 1;"), builtins, fields));
+    }
+
+    [Fact]
+    public void ACallerWithOtherInputsDoesNotReadAnotherCallersAnswer()
+    {
+        // The answer depends on the field table and the library as well as the parse. A caller
+        // with different ones has to get its own walk, not one computed against someone else's.
+        BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+        ParseResult result = Parse("    x = 1;");
+
+        ScriptTypes withFields = FlowTyper.InferValuesShared(result, builtins, ObjectFields.Load(ApiDirectory));
+        ScriptTypes withoutFields = FlowTyper.InferValuesShared(result, builtins, ObjectFields.Empty);
+
+        Assert.NotSame(withFields, withoutFields);
+    }
 }

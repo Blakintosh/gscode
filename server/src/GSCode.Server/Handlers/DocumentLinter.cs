@@ -43,10 +43,16 @@ public sealed class DocumentLinter
     /// produced it, and re-reading <c>LatestResult</c> here would let a concurrent analysis swap it
     /// for a different parse than the one they published a version number for.
     /// </param>
+    /// <remarks>
+    /// The flow typer's answer is left in the shared cache for an OPEN document only, where the
+    /// inlay hints and hover will ask for the same parse next. Nothing asks about a closed file.
+    /// </remarks>
     public ImmutableArray<Diagnostic> Analyze(
         OpenDocument document, ParseResult result, CancellationToken cancellationToken = default)
     {
-        return Analyze(document.Language, document.Path, result, cancellationToken);
+        return WorkspaceLints.Analyze(
+            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields,
+            cancellationToken, shareTypes: true);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
@@ -73,5 +74,45 @@ public class InlayHintTypeCacheTests
 
         Assert.NotSame(before.Result, after.Result);
         Assert.NotSame(beforeTypes, afterTypes);
+    }
+
+    [Fact]
+    public async Task TheHintsReadTheWalkTheServersLintPassDid()
+    {
+        // The point of sharing: after an edit the linter types the new parse, and the hint request
+        // that follows resolves to that SAME parse and finds its answer already there. Both halves
+        // are needed: a lint that did not fill the cache, or a request that resolved a different
+        // parse of the same text, would each mean typing the file twice per edit.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        OpenDocument document = workspace.Open(RelativePath, Source);
+        DocumentLinter linter = new(
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
+
+        ParseResult linted = workspace.Documents.AnalyzeIfStale(document);
+        linter.Analyze(document, linted);
+
+        NavigationTarget target = Resolve(workspace);
+
+        Assert.Same(linted, target.Result);
+        Assert.NotNull(FlowTyper.SharedFor(target.Result));
+    }
+
+    [Fact]
+    public async Task HoverReadsTheSameWalkAsTheHints()
+    {
+        // Hover kept a table of its own and walked the file again for its assignments. Both now read
+        // the one shared answer, so the hover's array is the very array the hints' answer carries.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        workspace.Open(RelativePath, Source);
+        InlayHintHandler hints = HandlerOver(workspace);
+        HoverHandler hover = new(
+            workspace.Navigation,
+            new BuiltinApiSet(BuiltinApi.Empty, BuiltinApi.Empty),
+            ObjectFields.Empty,
+            HandlerWorkspace.Selector);
+
+        NavigationTarget target = Resolve(workspace);
+
+        Assert.True(hints.InferTypes(target).Assignments == hover.AssignmentsOf(target));
     }
 }

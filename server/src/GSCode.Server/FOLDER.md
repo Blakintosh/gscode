@@ -184,12 +184,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   cursor is NOT on a classified reference, it renders a documented keyword/directive
   (`TryKeywordDocHover` over `KeywordDocs`: isdefined, notify, `#using`, …), then falls back to
   FlowTyper's `TryGetLocalTypeAt` to show `(local) name: type` for an inferred local variable.
-- `_assignmentCache` — one `InferAssignments` walk per document VERSION, keyed by `ParseResult`
-  reference exactly as `InlayHintHandler`'s own cache is. Unlike `InferValues`, that walk carries no
-  memoisation of its own, so the fresh `FlowTyper` this built per request re-walked every function in
-  the file for every hover over a field — and hovering is a mouse-move away. Only the RESULT is
-  shared, never the typer: a `FlowTyper` keeps a cursor and a recording table as instance state, so
-  two concurrent requests holding one would interfere, and an `ImmutableArray` cannot.
+- `AssignmentsOf(target)` — the file's inferred assignments, read through
+  `FlowTyper.InferValuesShared`: one walk per document VERSION, shared with the lint pass and the
+  inlay hints, rather than one per hover over a field — hovering is a mouse-move away. Only the
+  RESULT is shared, never a typer: a `FlowTyper` keeps a cursor and a recording table as instance
+  state, so two concurrent requests holding one would interfere.
 - `DefinitionLink(path, range)` puts a markdown link to the declaration under the signature of a
   function, class or macro — a fenced `scripts\zm\_util.gsc:118` linked to `file:///…#L118,10`, the label
   script-relative and fenced so a path's backslashes and underscores survive markdown, the target a
@@ -457,8 +456,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   instead, because their callee is a VALUE and the syntax only names a local: `[[ ptr ]]( … )`
   reads the `ScrFunctionRef` the pointer carries, and `[[ obj ]]->method( … )` reads the object's
   `InstanceClass`. Both showed nothing at all before, which on a BO3 script is most of the
-  dispatch in some files. That is why the handler runs `FlowTyper.InferValues` once per request
-  when parameter hints are on, rather than a position query per call site.
+  dispatch in some files. That is why the handler reads the file's whole `ScriptTypes` when
+  parameter hints are on, rather than a position query per call site. It reads it through
+  `FlowTyper.InferValuesShared`, so after an edit it is usually the walk the lint pass already did.
 
   Macro hints are a separate pass rather than a relaxation of the call pass's macro guard. By the
   time there is a tree the invocation is gone: the author's call was replaced by the body it

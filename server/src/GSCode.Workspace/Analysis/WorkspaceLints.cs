@@ -24,6 +24,7 @@ public static class WorkspaceLints
     /// <summary>
     /// The file's own diagnostics plus every cross-file lint that applies to it.
     /// </summary>
+    /// <param name="shareTypes">See <see cref="LintsOnly"/>.</param>
     public static ImmutableArray<Diagnostic> Analyze(
         ParseResult result,
         ScriptLanguage language,
@@ -32,10 +33,12 @@ public static class WorkspaceLints
         PathResolver resolver,
         BuiltinApiSet builtins,
         ObjectFields objectFields,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool shareTypes = false)
     {
         ImmutableArray<Diagnostic> lints = LintsOnly(
-            result, language, path, database, resolver, builtins, objectFields, cancellationToken);
+            result, language, path, database, resolver, builtins, objectFields, cancellationToken,
+            shareTypes: shareTypes);
 
         ImmutableArray<Diagnostic> all =
             lints.IsEmpty ? result.AllDiagnostics : result.AllDiagnostics.AddRange(lints);
@@ -88,6 +91,12 @@ public static class WorkspaceLints
     /// instrumented build's <c>PerfTracker</c> ones and nothing else. See <see cref="LintTimings"/>
     /// for why the gate cannot read PerfTracker instead.
     /// </param>
+    /// <param name="shareTypes">
+    /// Reads the flow typer's answer through <see cref="FlowTyper.InferValuesShared"/>, so the
+    /// inlay-hint and hover handlers reuse the walk this pass paid for. The server's own linter
+    /// sets it. Off by default because a sweep that warms each file and then times it would
+    /// otherwise time a cache hit, and report the most expensive step in the pass as free.
+    /// </param>
     public static ImmutableArray<Diagnostic> LintsOnly(
         ParseResult result,
         ScriptLanguage language,
@@ -97,7 +106,8 @@ public static class WorkspaceLints
         BuiltinApiSet builtins,
         ObjectFields objectFields,
         CancellationToken cancellationToken = default,
-        LintTimings? timings = null)
+        LintTimings? timings = null,
+        bool shareTypes = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -175,24 +185,19 @@ public static class WorkspaceLints
         {
             lints.AddRange(ArgumentCountLint.Analyze(result, store, contextId, path, languageBuiltins));
         }
-        // One typer for all three rules that read it, and — because InferValues memoises per parse
-        // — one inference walk between them: separate walks cost 30% of BO3's lint pass, shared 20%.
-        FlowTyper typer;
-        using ( LintScope.For("lint.FlowTyper.ctor", timings) )
-        {
-            typer = new FlowTyper(languageBuiltins, objectFields);
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The inference walk in a scope of its own, BEFORE any rule reads it. Whichever caller asks
-        // first pays for the walk, and when that was an argument inside NodeLintPass's scope the
-        // report charged the whole flow typer to the nine per-node rules: 458 ms of cod4's
+        // One inference walk for all three rules that read it: separate walks cost 30% of BO3's
+        // lint pass, shared 20%. In a scope of its own, BEFORE any rule reads it. Whichever caller
+        // asks first pays for the walk, and when that was an argument inside NodeLintPass's scope
+        // the report charged the whole flow typer to the nine per-node rules: 458 ms of cod4's
         // "NodeLintPass" was 252 ms of inference and 69 ms of the rules themselves.
         ScriptTypes types;
         using ( LintScope.For("lint.FlowTyper.InferValues", timings) )
         {
-            types = typer.InferValues(result);
+            types = shareTypes
+                ? FlowTyper.InferValuesShared(result, languageBuiltins, objectFields)
+                : new FlowTyper(languageBuiltins, objectFields).InferValues(result);
         }
 
         // The nine rules whose judgement is about one node, in ONE descent of the tree rather than
@@ -207,7 +212,7 @@ public static class WorkspaceLints
         // field writes the typer collected, and the declaration-level constant checks.
         using ( LintScope.For("lint.PreferBooleanLiteralLint.FieldWrites", timings) )
         {
-            PreferBooleanLiteralLint.InspectRest(result, objectFields, typer, lints);
+            PreferBooleanLiteralLint.InspectRest(result, objectFields, types, lints);
         }
         using ( LintScope.For("lint.ConstDeclarationLint.Declarations", timings) )
         {
@@ -253,7 +258,7 @@ public static class WorkspaceLints
         }
         using ( LintScope.For("lint.ReadOnlyWriteLint", timings) )
         {
-            lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, typer));
+            lints.AddRange(ReadOnlyWriteLint.Analyze(result, objectFields, types));
         }
         using ( LintScope.For("lint.DevBlockCallLint", timings) )
         {

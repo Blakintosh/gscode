@@ -805,7 +805,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Analysis/ReadOnlyWriteLint.cs
 
-- `static ReadOnlyWriteLint.Analyze(result, objectFields, typer)` — reports writes to `.size` (Error;
+- `static ReadOnlyWriteLint.Analyze(result, objectFields, types)` — reports writes to `.size` (Error;
   a language-spec fact) and to engine fields the curated data marks read-only (Warning, since
   that data can carry mistakes). Assignments including compound forms and `++`/`--` all count
   as writes. A field is only flagged when EVERY entity kind declaring the name agrees it is
@@ -1033,6 +1033,12 @@ are out.
   would make the three zeroes in `( 0, 0, 0 )` one key). The field-write and type-mismatch lints and
   the pointer-call inlay hints read it. `TryGetValueAt` is the position query that returns the union
   rather than the label, for go-to-type-definition.
+- `static FlowTyper.InferValuesShared(result, builtins, objectFields)` — the same answer, computed
+  once per parse for the whole server: the server's lint pass (`WorkspaceLints` with `shareTypes`),
+  the inlay hints and hover all read it, so one edit is typed once rather than once per surface.
+  Weakly keyed by the parse, and a hit only when the library, field table and game match too. Not
+  for a measurement: a sweep that warms a file and then times it would time a cache hit, which is
+  why `shareTypes` is off by default.
 
 ## Api/
 

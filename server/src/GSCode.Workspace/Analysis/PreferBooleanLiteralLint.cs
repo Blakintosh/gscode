@@ -33,10 +33,10 @@ public static class PreferBooleanLiteralLint
     private static void InspectFieldWrites(
         ParseResult result,
         ObjectFields objectFields,
-        FlowTyper typer,
+        ScriptTypes types,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        ImmutableArray<FieldWrite> writes = typer.InferValues(result).FieldWrites;
+        ImmutableArray<FieldWrite> writes = types.FieldWrites;
 
         foreach ( FieldWrite write in writes )
         {
@@ -114,10 +114,10 @@ public static class PreferBooleanLiteralLint
     internal static void InspectRest(
         ParseResult result,
         ObjectFields objectFields,
-        FlowTyper typer,
+        ScriptTypes types,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        InspectFieldWrites(result, objectFields, typer, diagnostics);
+        InspectFieldWrites(result, objectFields, types, diagnostics);
     }
 
     private static void InspectCall(CallNode call, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)

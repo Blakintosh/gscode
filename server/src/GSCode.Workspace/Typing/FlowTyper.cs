@@ -314,7 +314,12 @@ public sealed class FlowTyper
             return _typed;
         }
 
-        _recorded = new Dictionary<ExprNode, ScrValue>(ReferenceEqualityComparer.Instance);
+        // Sized from the token count rather than grown from empty. Every resize copies every
+        // value recorded so far, and the doubling was a quarter of the walk's allocation.
+        // Across bo3 and cod4 a file records 0.19-0.55 entries per token, 0.27-0.31 at the median,
+        // so two in five leaves the usual file one table and the densest one resize.
+        int capacity = result.Preprocessed.Tokens.Length * 2 / 5;
+        _recorded = new Dictionary<ExprNode, ScrValue>(capacity, ReferenceEqualityComparer.Instance);
 
         try
         {

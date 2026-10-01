@@ -142,6 +142,6 @@ only by reading fixture source.
 
 `FOLLOWUPS.md` holds only what still needs a decision, and is the single place that tracks it. The
 larger items there today: modelling variadic builtins (which is what blocks restoring the upper
-bound on argument counts), the type-derived diagnostic family 1.5 raised and this tree does not,
-the opt-in `apiUpdate.ts` refresh, the optional headless CLI, and two corpus grammar gaps
-consciously left alone.
+bound on argument counts), the six of 1.5's type-derived diagnostics still blocked (mostly on
+wrong types in the bundled game data), the opt-in `apiUpdate.ts` refresh, the optional headless
+CLI, and one corpus grammar gap consciously left alone.

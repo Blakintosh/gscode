@@ -100,12 +100,10 @@ reasoning sits on `InspectBuiltin`; this is the entry `ARCHITECTURE.md` points a
 bundled JSON (`"type": { "dataType": …, "isArray": … }`) and `vararg` is one of its spellings — 34 of
 BO3's 2,191 GSC entries carry it and 15 of its 803 CSC ones, both names above among them.
 
-**Step 1 below is now done** (corrected 2026-08-12; this entry said the marker was still being lost
-in `FormatType`, and it is not). `ApiLoader` passes `IsVararg(parameter.Type)` into
-`BuiltinParameter.IsVariadic`, and alongside it `ParseType` puts the declared type on the lattice as
-`BuiltinParameter.Types`. Neither has a production reader: `IsVariadic` is read only by
-`ApiTypeParsingTests`, `Types` by nothing at all, and `ArgumentCountLint` still consults only
-`Mandatory`. So the remaining work is steps 2 and 3 — the per-game measurement — not the carrying.
+**The marker is carried.** `ApiLoader` passes `IsVararg(parameter.Type)` into
+`BuiltinParameter.IsVariadic`. It has no production reader — only `ApiTypeParsingTests` reads it,
+and `ArgumentCountLint` still consults only `Mandatory` — so what is left is the per-game
+measurement, not the plumbing.
 
 **Carrying the marker is the easy half; coverage is the whole problem.** The bound is only worth
 having where `HasReliableBuiltinSignatures` holds, which is CoD4 and BO3 — and CoD4's 819 entries
@@ -115,285 +113,109 @@ on a marker that is mostly-there is the 634 again.
 
 Route, in order:
 
-1. Carry `vararg` as a flag on `BuiltinParameter` rather than losing it in `FormatType`. Additive —
-   nothing reads the current string for anything but display.
-2. Re-run the upper-bound check per game with vararg parameters exempt, and read the TOP REPORTED
+1. Re-run the upper-bound check per game with vararg parameters exempt, and read the TOP REPORTED
    NAMES rather than the count: a shape shared across them is another library gap, not a user
    mistake. `tests/GSCode.Server.Tests/harvest/*_client_arity.json` is already this measurement in
    miniature — it records `declaredMax` against observed counts (`PlaySound`: 1 declared, 2–4
    observed across 190 calls).
-3. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
+2. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
    earned in the first place.
 
-Worth knowing before step 3: the JSON also carries per-entry `flags` and `confidence` that the loader
-drops entirely (BO3's GSC library: 157 `verified` against 2,032 `processed`; BO1's and MW2's carry 259
-and 264 `aiGenerated`). If a game's remainder will not reach zero, that is the discriminator for a
-weaker severity rather than none — it is what 1.5 used to split `ArgumentTypeMismatch` from its
-`Unverified` twin.
+If a game's remainder will not reach zero, the data already holds the discriminator for a weaker
+severity rather than none: `BuiltinFunction.Confidence` (loaded, not yet read). The JSON's per-entry
+`flags` (BO3's GSC library: 157 `verified` against 2,032 `processed`; BO1's and MW2's carry 259 and
+264 `aiGenerated`) are still dropped by the loader. The same split is what `ArgumentTypeMismatch`
+needs, in the entry below.
 
-### 1.5's type-derived diagnostics have no counterpart here
+### 1.5's type-derived diagnostics: ten restored, four ruled out, six blocked
 
-This tree is at parity with 1.5 or ahead of it in every diagnostic layer but one — lexing, preprocessing,
-parsing, extraction, resolution and arity, across five dialects rather than one — and the exception is a
-coherent family rather than a scatter. 1.5 ran an abstract-interpretation pass — `CFA/ControlFlowAnalyser`
-built a CFG and `DFA/TypeFlowAnalyser` (3,166 lines across three partials; the `DFA/` and `CFA/` folders
-together ~290 KB with `ScrData`, `ScrEntity` and `OperatorSemantics`) walked it over a 17-BIT FLAG
-lattice with real unions (`Int = 1 << 1 | Bool`, `Number = Int | Float`) and entity subtypes.
-Seventeen codes came out of it that nothing here raises, plus the type half of an eighteenth:
+1.5 ran an abstract-interpretation pass (`CFA/ControlFlowAnalyser` then `DFA/TypeFlowAnalyser`, live
+on every analysis — `v1.5.0:server/GSCode.Parser/Script/Script.cs:315-321`) over a flag lattice, and
+raised twenty-one codes from it and its neighbours that the rewrite dropped as a family. The rewrite's
+rule for bringing them back: one at a time, each swept over all five corpora before it gets a
+severity, because the family restored at once is what 1.5 shipped and then had to hold back with
+false-positive regression tests. This tree is at parity with 1.5 or ahead of it in every other
+diagnostic layer.
 
-**Correction — this entry used to credit 1.5 with "constant-value tracking" as well. It had none.**
-`ScrData` carried exactly one value-level fact, `bool? BooleanValue`; every arithmetic operator
-returned a fresh valueless type, and its divide-by-zero check tested `right.BooleanValue == false` —
-falsiness standing in for zero, which misses `2 - 2` and fires on `x / ""`. Constant folding was a
-from-scratch build here, not a port.
+The type model it needed now exists: `ScrValue` (Core/Symbols) is a union lattice with disjoint bits,
+folded constants and tri-state truthiness — 1.5 tracked only `bool? BooleanValue` and folded nothing —
+and `FlowTyper.InferValues` gives the value of every expression. The builtin library is on the lattice
+too: `ApiLoader.ParseType` puts each parameter's declared type on `BuiltinParameter.Types`, and
+`ApiLoader.ParseConfidence` keeps each entry's `high`/`medium`/`low` on `BuiltinFunction.Confidence`.
+Neither of those two has a reader yet; both exist for `ArgumentTypeMismatch` below.
 
-| family | 1.5 codes |
+| status | codes |
 |---|---|
-| operators and conversions | `OperatorNotSupportedOnTypes`, `NoImplicitConversionExists`, `DivisionByZero` |
-| argument types vs. the builtin library | `ArgumentTypeMismatch`, `ArgumentTypeMismatchUnverified` |
-| `const` | `CannotAssignToConstant`, `ExpectedConstantExpression` |
-| member, index, enumeration, vector component | `DoesNotContainMember`, `CannotUseAsIndexer`, `CannotEnumerateType`, `InvalidVectorComponent` |
-| engine field data | `PredefinedFieldTypeMismatch`, `CannotAssignToImmutableEntity` |
-| function values | `StoreFunctionAsPointer`, `ExpectedFunction` |
-| threaded calls | `ConsumedThreadedCallResult` |
-| statements | `InvalidExpressionStatement`, and the type-compatibility half of `UnreachableCase` |
+| **Restored, no types needed (8)** | `2017`/`2018` duplicate macro and parameter · `5027` second `default:` · `5028` using a threaded call's result (1.5's `ConsumedThreadedCallResult` and `AssignOnThreadedFunction`, one mistake counted twice) · `5029`/`5030` the `const` pair · `5031` literal-zero divisor · `5032` statement with no effect |
+| **Restored on the lattice (2)** | `5033` enumerating a non-array · `5034` a vector component that cannot be a number |
+| **Ruled out (4)** | `DoesNotContainMember`, `NoImplicitConversionExists`, `OperatorNotSupportedOnTypes`, the type half of `UnreachableCase` — see the end of this entry |
+| **Blocked (6)** | `ArgumentTypeMismatch` (+ `Unverified`), `PredefinedFieldTypeMismatch`, `CannotUseAsIndexer`, `ExpectedFunction`, `StoreFunctionAsPointer`, `CannotAssignToImmutableEntity` |
 
-Three more went in the same removal and are NOT type-derived, which makes them separable and much
-cheaper: `MultipleDefaultLabels` (duplicate `default:`, raised from the CFG builder — it belongs beside
-`CaseLabelLint`'s 5017 and needs no types at all), `AssignOnThreadedFunction` (an assignment whose
-right-hand side contains a `thread` call — a plain AST walk in `SPA/ScriptDiagnosticsAnalyser`, no
-lattice involved), and `DuplicateMacroDefinition`/`DuplicateMacroParameter` from 1.5's preprocessor,
-which are a 2xxx-band rule about directives.
+Every restored code reports zero on all five corpora except `5028`, whose 172 are genuine. `5033` and
+`5034` report zero everywhere, so their tests carry controls that must fire.
 
-**Correction — an earlier version of this entry said 1.5's analysis "was largely switched off", and
-that is wrong.** The commented-out files it cited are real: `SPA/Logic/Analysers/Analysers.cs` is 398
-of 399 non-blank lines commented, `AST/Expressions/OperatorData.cs` 913 of 926 (12 live lines, no type
-declared), `ExpressionAnalyzer.cs` 143 of 157. But those were a SUPERSEDED generation, not the live
-one, and the inference drawn from them was backwards. Checked against the tag:
+**The blockers, and what unblocks each:**
 
-- `v1.5.0:server/GSCode.Parser/Script/Script.cs:315-321` constructs and runs `ControlFlowAnalyser`
-  then `DataFlowAnalyser` unconditionally, on every analysis, wrapped in nothing but `try`/`catch`.
-- The `Silent` flag that looks like a kill switch (`DFA/AnalysisFlags.cs:5`, defaulting `true`) is the
-  two-pass shape of a worklist fixpoint: `TypeFlowAnalyser.AnalyseFunction` sets it `true` while
-  iterating (`:104`) and flips it `false` at `:351` for a final emitting pass over every visited node.
-- The live operator implementation is `DFA/OperatorSemantics.cs`, raising `OperatorNotSupportedOnTypes`
-  at 20 sites and `DivisionByZero` at 2.
-- `GSCode.NET/LSP/Handlers/CodeActionHandler.cs` shipped quick fixes keyed off five of these codes
-  (`:70`, `:78`, `:86`, `:106`, `:134`), and `GSCode.Tests/ScrDataApiTypeTests.cs:149,181` is a
-  false-positive regression test for `OperatorNotSupportedOnTypes`.
+| code | blocker | unblocked by |
+|---|---|---|
+| `ArgumentTypeMismatch` | 211 findings on bo3 and 17 on cod4, none real (2026-09-28) | game-data fixes, below |
+| `PredefinedFieldTypeMismatch` | 46 findings on bo3, none real | the object-field fixes, below |
+| `CannotUseAsIndexer` | `FlowTyper.TypeOf` returns a value for an `IndexNode` without typing the index expression | typing the index; additive |
+| `ExpectedFunction` | nothing types the operand of `[[ x ]]()` | typing a pointer dereference's operand |
+| `StoreFunctionAsPointer` | a resolution question, not a type one; `5016` already reports the same identifier | replacing `5016` on that range rather than stacking a second diagnostic |
+| `CannotAssignToImmutableEntity` | `ObjectField` has a per-field `ReadOnly` and nothing marks a whole entity kind immutable | a data-model addition |
 
-Zero of the twenty-one were switched off. Only `AssignOnThreadedFunction` was gated at all, and only
-to editor mode (`Script.cs:325`). What remains true is the narrower point: the parts still live carried
-their own noise admission, since the `ArgumentTypeMismatch`/`Unverified` split exists precisely because
-the library's declared types could not be trusted enough for one severity. `client/CHANGELOG.md`
-carried the same wrong claim and has been corrected with it.
-
-**What this tree already has to build on:**
-
-**Correction — this bullet described the state before the lattice landed, and was left standing after
-it did.** It said `FlowTyper` was 910 lines over a flat `ScrType`, and that against 1.5 the tree was
-missing unions, constant values, entity subtypes and an environment retained per position. All four
-of those exist now, and the entry below on step 1 contradicted this one for weeks rather than editing
-it. That is the failure mode this file keeps producing: a reader arriving here first gets the old
-picture and no signal to keep reading. What follows is the current state.
-
-- `Typing/FlowTyper.cs` — a forward per-function walk that types assignments from literals,
-  arithmetic, globals and builtin return types. It carries `ScrValue` internally and projects to
-  `ScrType` for hover and inlay-hint labels; the field-write lints (`PreferBooleanLiteralLint` 5002,
-  `ReadOnlyWriteLint` 5004/5005) and `TypeMismatchLint` (5033/5034) read the `ScrValue` union
-  directly. What produces nothing is still UNCERTAINTY, but the reason moved down a layer:
-  `ScrValue.ToScrType` collapses any disagreement to `Unknown` because it is a PROJECTION of a
-  union, not because no union was computed.
-- Three of the four gaps against 1.5 are closed. Unions are `ScrTypeSet`'s disjoint bits with
-  `ScrValue.Union`; constant values are `ScrConstant`; and the per-position environment is
-  `InferValues` returning a `ScriptTypes` node map, with
-  `FlowTyper.TryGetValueAt(result, position, out ScrValue)` for a single query. The fourth, entity
-  subtypes, was built as `ScrValue.EntityKinds` and removed: nothing in the pass ever inferred an
-  owner's kind, so the field was never filled outside its own tests. A reason attached to every
-  imprecision was built and removed the same way, since nothing read it.
-- The API data is on the lattice too. `ApiLoader.ParseType` maps each parameter's and return's
-  declared type onto `ScrTypeSet` once at load, including the pipe-separated unions (`"int | string"`)
-  and `number`, and `ApiLoader.ParseConfidence` keeps the per-entry `high`/`medium`/`low`.
-  `FlowTyper` reads the return types; **nothing reads the parameter types or the confidence**, which
-  is `ArgumentTypeMismatch`'s row in the table below. `VoidResultLint` (5019) remains the standing
-  proof that a rule can be driven off this data without a lattice at all.
-
-**The route back, and the order it has to go in:**
-
-1. **Compute and emit have to separate first.** The two lints that use FlowTyper today read
-   `InferAssignments` — a list of assignment SITES — and emit from their own walks. A type rule needs
-   the environment AT a position instead, and the walk does not retain one; that is the same missing
-   piece as the hover-join limitation below. Built once it serves hover, the join and every rule after;
-   built per rule it serves none of them.
-2. **One rule at a time, each measured over the corpus before it is given a severity.** `add-diagnostic`
-   step 6 is not optional here, and this family is exactly the shape that fails it: `GSCode.Workspace/FOLDER.md`
-   states the rule as an Error must never land on code that ships and works, and GSC's typelessness means
-   most of these can honestly only ever be Warnings. The evidence that the data cannot carry an Error
-   already exists — the mandatory-COUNT check alone reported 141, 280 and 157 findings on CoD4, WaW and
-   BO1 from library errors, and the builtin upper bound 634 on BO3. A type check depends on the same data
-   more heavily than a count does.
-3. **Cheapest first, because each is worth having alone.** Duplicate `default:` needs no types.
-   `DivisionByZero` on a literal zero divisor needs constant folding of a literal, not a lattice. `const`
-   validation needs neither: `ConstDeclNode` is already in the AST and both `UnassignedVariableLint` and
-   `UnusedLocalLint` already walk it, so "assigned after declaration" is a syntactic question.
-
-Restoring the family AS a family is the one approach to rule out. It is what 1.5 did, and commenting the
-result out is what 1.5 then had to do about it.
-
-### Step 1 is done — the lattice exists, and nothing raises a diagnostic off it
-
-`ScrValue` (Core/Symbols) is a union lattice with disjoint bits, constant values, tri-state
-truthiness. `ScrOperators` is the operator table.
-`FlowTyper` carries it and projects to `ScrType` at its public boundary, so hover, inlay hints and
-the two typing lints are untouched and every one of the 42 typing tests passed unedited.
-
-What that bought, none of it surfaced to a user:
-
-- The `NumericResult` bug above is fixed. `vector * 0.5` types as a vector.
-- Builtins can produce an array. `isArray` was dropped by the loader, so `ScrType.Array` was never
-  once produced by a call — the engine was confident about structs and entities, which are the SAFE
-  kinds, and silent on arrays, the only unsafe one.
-- `number` (349 declarations on BO3's GSC library) and pipe-separated unions (`"int | string"`) now
-  parse, and `confidence` survives loading — which is where `ArgumentTypeMismatchUnverified` would
-  get its severity split from, if that pair is ever restored.
-- `InferValues` gives a per-node map, which the field-write and type-mismatch lints have since
-  been built on.
-
-Two things it did NOT change, deliberately: no new diagnostic, and no movement in the corpus. Every
-sweep across the five games reported identical counts before and after.
-
-### What has since been restored, and what the attempt taught
-
-Eight of the twenty-one are back, all from the tier that needs no type information at all — the third
-step above, taken in order. `2017`/`2018` (the duplicate-macro pair), `5027` (a second `default:`),
-`5028` (reading the value of a threaded call, merging 1.5's `ConsumedThreadedCallResult` and
-`AssignOnThreadedFunction`, which were one mistake counted twice), `5029`/`5030` (the `const` pair),
-`5031` (a literal-zero divisor) and `5032` (a statement with no effect). Each was swept over the five
-corpora before being given a severity; all report zero on shipped code except `5028`, whose 172 are
-genuine instances of the pattern.
-
-Two of them only became sound because the sweep contradicted the obvious implementation, which is
-worth keeping:
-
-- `5030` collecting `const` names FILE-wide reported ten writes on BO3, every one an ordinary local in
-  a different function that shared the name (`_hud_message.gsc`'s `duration`,
-  `vehicle_death_shared.gsc`'s `max_angluar_vel`). The scope is per function.
-- `5032` reported nine statements across the five games and not one was a statement with no effect —
-  every one was recovery wreckage after a parse error, including the known `gib.gsc(58)` gap and
-  bo1's `= % o_full_interstitial_01_camera;`. It now stands down on a file the parser could not read.
-
-**`PredefinedFieldTypeMismatch` was written, measured and withdrawn**, which is the useful part. It
-needs no lattice — `FlowTyper` knows the assigned value's type and the object-field data states the
-field's — and it was built by exclusion (only combinations that cannot be right), scalar declared types
-only, `undefined` always allowed. It still reported **46 findings on BO3 and zero elsewhere, none of
-them real**, from two separate causes:
-
-1. **The object-field data is wrong for several fields.** `self.team = self.sessionteam;`
-   (`_globallogic_player.gsc:968`) reports because the data types `team` as `int` and `sessionteam` as
-   `string` — the two contradict each other and both hold team strings. `horzalign`/`vertalign` are
-   typed `int` and are assigned `"user_right"` throughout `hud_util_shared.gsc`; `combatmode` and
-   `type` are the same shape. Fixing the data is the prerequisite, and this list is the worklist.
-2. **A real bug in our own inference.** `NumericResult` (`FlowTyper.cs:847`) returns `Float` whenever
-   either side is `Float`, so `vector * 0.5` types as Float and `self.velocity = self.origin * 0.5`
-   reports. This is wrong for hover and inlay hints TODAY, independently of any lint — 1.5's
-   `OperatorSemantics` had it right, casting upward to vector when one side is numeric. Worth fixing
-   on its own; it needs the operator passed in, since `vector * vector` is not `vector + vector`.
-
-So the tier-3 warning above is now measured rather than predicted: a type rule fails on this data
-before it fails on the lattice.
-
-**`CannotEnumerateType` (5033) and `InvalidVectorComponent` (5034) are now restored**, which is what the
-union lattice bought. Both report zero across all five corpora and both carry controls that must fire,
-since a rule that is silent everywhere is indistinguishable from one that does not work.
-
-**`OperatorNotSupportedOnTypes` was written alongside them, measured and withdrawn** at 752 findings
-on code that ships and works — the same ending as `PredefinedFieldTypeMismatch`, and worth the same
-detail because the two causes are different traps:
-
-1. The guard tested `ScrValue.IsUnknown`, which is exact equality with the universe. A value narrowed
-   by `isdefined` is the universe MINUS undefined, so it is no longer "unknown" by that test while
-   still knowing nothing. Any future rule guarding on `IsUnknown` has this hole.
-2. `vector + scalar` reports as unsupported and appears throughout the stock scripts. The operator
-   table is stricter than the engine, so the table itself is not yet a sound basis for a diagnostic
-   even though it is a fine basis for TYPING. Fixing the rule cannot fix that; the table has to be
-   corrected against the corpus first, and nothing establishes what the engine actually does here.
-
-**Still not restored, and what each needs:**
-
-| Code | Blocker |
-|---|---|
-| `CannotUseAsIndexer` | `FlowTyper.TypeOf` returns a value for an `IndexNode` without typing the index EXPRESSION, so there is nothing to judge. Additive, but its own change. |
-| `ExpectedFunction` | Needs `[[ x ]]()` to resolve what `x` holds. The lattice can say Function; what is missing is that nothing types a pointer dereference's operand. |
-| `StoreFunctionAsPointer` | Not a type question: it needs to know a bare identifier names a function, which is resolution. Its complication is that `UnassignedVariableLint` already reports that identifier as `5016`, so it must REPLACE that diagnostic rather than stack a second one on the same range. |
-| `PredefinedFieldTypeMismatch` | The two causes above. |
-| `CannotAssignToImmutableEntity` | Not expressible in the data. `ObjectField` carries a per-FIELD `ReadOnly` flag and an `EntityKind`, and nothing marks a kind immutable as a whole. |
-| `ArgumentTypeMismatch` / `…Unverified` | The bundled library's parameter types. Measured 2026-09-28 at 211 findings on BO3 and 17 on CoD4, none real — see below. |
-
-**`ArgumentTypeMismatch` is the one of the twenty-one that went unaccounted for**, listed in the
-family table at the top and named in neither this table nor the ruled-out list. That was an
-oversight rather than a decision, and it matters because the pair is the piece the lattice most
-directly enables — checking a call's arguments against the library's declared parameter types.
-
-Its plumbing is already finished, which is the surprising part:
-
-- `BuiltinParameter.Types` is the declared type **already parsed onto `ScrTypeSet` at load**, once
-  per entry rather than re-switched per call. Nothing in the tree reads it — not one production
-  caller, not one test. It exists solely for this rule.
-- `BuiltinFunction.Confidence` is loaded and carries `high`/`medium`/`low` (1,291 / 684 / 80 on
-  BO3's GSC library). That is precisely where the `Unverified` twin's severity split comes from, and
-  the reason 1.5 needed a whole second CODE is that it had nowhere to put the distinction. We do.
-- `FlowTyper` already reads `ReturnTypes`, so the parsed-at-load half of the pattern is in service
-  elsewhere. Nothing reads `Confidence` yet; this rule is its only intended reader.
-
-So the blocker is step 2 of `add-diagnostic`, not step 1: **measure it over the five corpora before
-it is given a severity, and read the top reported NAMES rather than the count.** Treat a high count
-as a library defect until proven otherwise. Every precedent points that way — the mandatory-COUNT
-check alone reported 141, 280 and 157 findings on CoD4, WaW and BO1 purely from library errors, the
-builtin upper bound 634 on BO3, `PredefinedFieldTypeMismatch` 46 and `OperatorNotSupportedOnTypes`
-752, and in all five cases the inference was right and the data was wrong. A type check leans on
-that data harder than a count does, so this rule is the most likely of the family to end the same
-way. Ship it per game only where the remainder is zero, the way `HasReliableBuiltinSignatures` was
-earned.
-
-**Measured 2026-09-28, and it ended the same way.** An exploratory sweep over cod4 and bo3 reported
-an argument only when NO type the flow allows for it is accepted by ANY overload with a parameter at
-that position, after the obvious coercions (numbers and bools interchange, the three string kinds
-interchange, undefined is always allowed). Unqualified calls only, outside classes, skipping names
-the file declares and macro-sourced callees. The sweep was not kept; this is its record.
+**`ArgumentTypeMismatch` is the most valuable of the six and the one closest to shipping** — its
+plumbing is finished, and `BuiltinFunction.Confidence` is exactly where 1.5's `Unverified` twin gets
+its severity split, without a second code. An exploratory sweep (not kept) reported an argument only
+when no type the flow allows is accepted by any overload with a parameter at that position, after the
+obvious coercions (numbers and bools interchange, the three string kinds interchange, `undefined` is
+always allowed); unqualified calls outside classes only.
 
 | game | builtin calls | findings | real, of those sampled |
 |---|---|---|---|
 | cod4 | 39,426 | 17 | 0 |
-| bo3 | 31,640 | 211 (244 before `2a4fd572`) | 0 |
+| bo3 | 31,640 | 211 | 0 |
 
-The first run also found a real TYPING bug rather than a script bug: `"at " + self.origin` typed as
-a vector, because `ScrOperators.Additive` decided vector-with-scalar before concatenation. That was
-44 of the 244, and is fixed in `2a4fd572`. Every remaining finding sampled had one of three causes:
+Every finding sampled had one of three causes, and they are the route, in this order:
 
-1. **The engine coerces and the data does not say so** — about 160 of bo3's 211. An int, bool, float
-   or vector passed where the library declares `string`: `SetDvar( "ui_guncycle", 0 )` (78 of them),
-   `assert( cond, arr.size )`, `profilelog_endtiming( 4, ... )`. Accepting scalar-to-string as a
-   coercion leaves roughly 47 on bo3.
-2. **The library or field data is wrong**, and this is the worklist:
+1. **The engine coerces scalars to string and the data does not say so** — about 160 of bo3's 211:
+   `SetDvar( "ui_guncycle", 0 )` (78), `assert( cond, arr.size )`, `profilelog_endtiming( 4, ... )`.
+   One decision, not a data edit: accepting scalar-to-string leaves roughly 47 on bo3.
+2. **The data is wrong.** This list is the worklist for `tools/field-data`:
    - `RecordSphere` parameter 4 is declared `bool`; the scripts pass `"Script"` (11).
    - `GetDvarInt`'s default is declared `int`; the scripts pass `"7"` (10).
-   - `GetWeaponAmmoClip` declares `entity`; BO3 passes a weapon object (7), and the field it is
-     read from (`dualWieldWeapon`) is typed `string`.
-   - `IsWeapon` declares `entity`, but it is a type TEST and takes anything (2).
+   - `GetWeaponAmmoClip` declares `entity`; BO3 passes a weapon object (7), read from
+     `dualWieldWeapon`, which is typed `string`.
+   - `IsWeapon` declares `entity`, but it is a type test and takes anything (2).
    - `GroundTrace`'s ignore-entity parameter is declared `entity`; the scripts pass `false` (2).
-   - The object fields `team` (typed `int`, holds team strings — `GetPlayers( player.team )`,
-     `SetTeamForTrigger`, `Objective_Team`), `type` (`ToLower( s_obj.type )`) and `attachments`
-     (`GetArrayKeys( ...attachments )`), the first two already listed under
-     `PredefinedFieldTypeMismatch` above.
-   - CoD4: `AnimCustom` takes a function pointer, not a `string` (8); `SetGoalPos` takes a vector,
-     not an `entity` (5); `CheckGrenadeThrowPos` argument 2 is the string `"min energy"`, not a
-     vector (3).
-3. **Method form is not distinguished**: `self spawn( origin, angles )` was judged against the
-   global `Spawn( classname, ... )` (13). A real rule has to match `call.Target` against
-   `BuiltinOverload.CalledOn`.
+   - Object fields: `team` is typed `int` and holds team strings (`GetPlayers( player.team )`,
+     `self.team = self.sessionteam`); `type`, `attachments`, `horzalign`/`vertalign` (assigned
+     `"user_right"` throughout `hud_util_shared.gsc`) and `combatmode` are the same shape. These are
+     also every one of `PredefinedFieldTypeMismatch`'s 46.
+   - CoD4: `AnimCustom` takes a function pointer, not a `string` (8); `SetGoalPos` takes a vector, not
+     an `entity` (5); `CheckGrenadeThrowPos` argument 2 is the string `"min energy"`, not a vector (3).
+3. **Method form is not distinguished**: `self spawn( origin, angles )` was judged against the global
+   `Spawn( classname, ... )` (13). The rule has to match `call.Target` against `BuiltinOverload.CalledOn`.
 
-So the rule stays unshipped until the data is fixed per game, and the order is the list above: the
-coercion first (it is one decision, not a data edit), then the worklist, then a re-sweep.
+Then re-sweep, read the top reported NAMES rather than the count, and ship per game only where the
+remainder is zero — the way `HasReliableBuiltinSignatures` was earned. Treat any high count as a
+library defect until proven otherwise: the mandatory-count check (141, 280 and 157 on CoD4, WaW and
+BO1), the builtin upper bound (634 on BO3), `PredefinedFieldTypeMismatch` (46) and
+`OperatorNotSupportedOnTypes` (752) all ended with the inference right and the data wrong.
+
+**Traps the restorations found, for whoever writes the next one:**
+
+- `ScrValue.IsUnknown` is exact equality with the universe. A value narrowed by `isdefined` is the
+  universe minus undefined: no longer "unknown" by that test while still knowing nothing. A rule that
+  guards on `IsUnknown` has this hole; `OperatorNotSupportedOnTypes` fell into it.
+- Scope a name per function, not per file: `5030` collecting `const` names file-wide reported ten
+  writes on BO3, every one an unrelated local sharing the name.
+- Stand down on a file the parser could not read: `5032`'s first nine findings were all recovery
+  wreckage after a parse error.
+- The first argument-type sweep also found a typing bug — `"at " + self.origin` typed as a vector,
+  because vector-with-scalar was decided before concatenation. Fixed in `2a4fd572`; a type rule is a
+  good test of the typer.
 
 **Ruled out permanently**, with reasons, so they are not revisited as oversights:
 
@@ -401,13 +223,15 @@ coercion first (it is one decision, not a data edit), then the worklist, then a 
   "does not contain" is never knowable. 1.5 shipped it as an Error and needed a false-positive
   regression test (`StringSizeAndBreakTests.cs:73`) to hold it back.
 - `NoImplicitConversionExists` — GSC truthiness accepts nearly everything, so the broad form has no
-  sound core to narrow down to. Unions did not change that: the problem was never the lattice.
+  sound core to narrow down to. Unions did not change that.
 - `OperatorNotSupportedOnTypes` — written against the union lattice, measured at 752 findings on
-  shipped code, withdrawn. See the entry above for the two causes; the second of them says the
-  operator table is stricter than the engine, which is a data problem rather than a rule problem.
+  shipped code, withdrawn. Half was the `IsUnknown` trap above; the other half is that `ScrOperators`
+  rejects `vector + scalar`, which the stock scripts do throughout. The operator table is stricter than
+  the engine — fine for typing, not a basis for a diagnostic — and nothing establishes what the engine
+  actually does there.
 - The type half of `UnreachableCase` — needs the switch subject and every label typed exactly, and a
   label is usually a macro or a bare literal while the subject is usually a parameter. The
-  duplicate-label half already ships as `5017`, and the duplicate-`default:` half now as `5027`.
+  duplicate-label half ships as `5017` and the duplicate-`default:` half as `5027`.
 
 ### A macro can hide the end of an unbraced body from the formatter
 
@@ -484,11 +308,8 @@ spelled like the script function rather than the builtin, say — is where it wo
 
 ## Known limitations from the triage pass
 
-Recorded because each was a deliberate stopping point, not an oversight. P0, P1 and the
-hover/doc half of P2 are done; the remaining items below are the decisions still worth making.
-
-The field half of the old entry here is done: `HoverHandler.InferredFieldType` reports an inferred
-type for a field the scripts invented, and `ScrValue` carries the reason when it cannot.
+Recorded because each was a deliberate stopping point, not an oversight. Neither needs work unless
+a real file shows the gap.
 
 ### `#using` is treated as non-transitive for class completion
 
@@ -540,8 +361,8 @@ Three things to settle before building it:
   contributor there, not the owner, so it is not ours to decide unilaterally.
 - **It forces a full reindex.** `ServerBuildIdentity` SHA-256s the bundled API files into the
   cache identity, deliberately, so analysis can never survive an API change. Overriding them
-  changes that identity, wiping the SQLite cache and triggering a cold index (~5.5 s on 1,105
-  files). Correct behaviour, but it should be a conscious trade rather than a surprise.
+  changes that identity, wiping the SQLite cache and triggering a cold index (about 0.5 s on
+  bo3's stock scripts today, 11.5 s at 50,000 files — PERF.md). Correct behaviour, but it should be a conscious trade rather than a surprise.
 - **Validate before replacing.** A truncated or empty 200 must not wipe the builtin library:
   parse it, require a `revision` newer than the bundled one and a non-empty `api[]`, and only
   then swap.
@@ -554,7 +375,7 @@ two CSC entries the site lacked entirely (`DebugStar`, `Print3d`). Nothing detec
 REVISION did not move — a curation pass edits entries without bumping the number the endpoint
 reports.
 
-So the version marker below answers "is there a newer revision", not "is this the same data", and
+So the version marker above answers "is there a newer revision", not "is this the same data", and
 an update path built on `revision` alone would have carried the stale copy forward indefinitely.
 Whatever gets built should compare content, and the duplication that allowed the drift — the same
 library tracked in `server/src/GSCode.Workspace/Api/` and again in `site/src/lib/apiSource/` —
@@ -610,7 +431,11 @@ the two rejections so nobody re-adds them from the description alone.
 The plan's original P13: `gscode check <folder>` (workspace-only resolver, full diagnostics,
 non-zero exit on errors) and `gscode format --check|--write`, packaged as a dotnet tool for
 mod-project CI. Cheap to build because the layering already isolates OmniSharp in
-`GSCode.Server`, so Workspace + Parser are a complete LSP-free engine. Ships only if wanted.
+`GSCode.Server`, so Workspace + Parser are a complete LSP-free engine — the composition is what
+`TestWorkspace` and `HandlerWorkspace` already do in the test suites. Nobody has asked for it, so it
+ships only if wanted. The decisions it would need: how a folder outside a game install finds its raw
+root (the `gscode.rawPath`/`modsPath` settings have no CLI home yet), and which severities fail the
+run.
 
 ### 4. The scale levers measured and parked
 
@@ -647,11 +472,6 @@ shape rather than re-deriving it.
   and line-splits it about six. The guard lex must stay; the aligners run in sequence on
   progressively rewritten text, so sharing one lex between them is a redesign of how they hand work
   along rather than a rename.
-- ~~**Inlay hints** walk the whole tree in `CollectCalls` and discard what is outside the requested
-  window afterwards, rather than filtering before the walk.~~ Done 2026-09-23: `CollectCalls` takes
-  the window and prunes as it descends, and resolution is memoised per request (PERF.md). The
-  discard-afterwards was also a correctness bug — it tested the CALL's start, so a multi-line
-  argument list below the top of the viewport lost every label.
 - **`Foo::bar()` where `Foo` is both a namespace and a class resolves differently in signature
   help and in inlay hints.** Signature help tries the class first, the hints try the namespace
   first, and each says so where it does it. `CallResolution` shares everything else the two ask

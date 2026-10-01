@@ -38,6 +38,14 @@ The three suites:
 | `tests/GSCode.Workspace.Tests` | resolution, database, completion, lints, typing, cache |
 | `tests/GSCode.Server.Tests` | LSP handlers, formatter, and the real-corpus sweeps |
 
+## The batch files
+
+`scripts\*.bat` wrap the runs below for the user: `test`, `sweep`, `corpus`, `perf`, `scale` and
+`build-vsix`. They pick the configuration the running server is not using (and refuse perf,
+scale and packaging while a Release server holds the DLLs), clear the corpus variables of games
+not asked for, and fail when no corpus is left rather than no-op. Useful to point the user at;
+when running a suite yourself, the explicit commands below say more about what ran.
+
 ## The corpus environment variables
 
 Every one is optional, and an absent corpus makes its tests **no-op and pass**. Each names the

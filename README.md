@@ -139,6 +139,11 @@ Warnings are errors. Two categories are excluded above, and both for the same re
 sweep reads real game installs through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}` and, without those
 set, silently sweeps nothing; the perf sweep needs the same installs and makes a second pass over
 every script. This is the filter CI uses.
+
+On Windows, `scripts\` wraps the common runs in batch files: `test.bat` (the command above, per
+project), `sweep.bat`, `corpus.bat`, `perf.bat` and `scale.bat` (the game-corpus suites, cod4 and
+bo3 unless given `all` or a list of games), and `build-vsix.bat` (packages the extension without
+publishing it). Double-click one or run it from a terminal; each file's header says what it takes.
 [server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
 `FOLDER.md` describing its own contents.
 

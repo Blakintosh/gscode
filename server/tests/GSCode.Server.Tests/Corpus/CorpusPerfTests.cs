@@ -1126,5 +1126,6 @@ public class CorpusPerfTests
         string path = Path.Combine(directory, ReportPage.PerfPage(name));
         PerfReport.Write(path, game, sweep, timings, root, worlds, memory, cachedHeaders, entryCounts);
         _output.WriteLine($"Report [{name}]: {path}");
+        _output.WriteLine($"Every row [{name}]: {Path.Combine(directory, ReportPage.DetailFile(name))}");
     }
 }

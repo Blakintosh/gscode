@@ -1829,6 +1829,13 @@ eleven requests per file into one row, drops time per kilobyte (a completion cos
 workspace costs, not what the file costs), and shows how many entries the requests returned — the
 check that the sample reached the store-querying arm at all.
 
+Every sweep also writes `gscode-detail-<sweep>.json` (`gscode-detail-bo3-lints.json`, and so on):
+every row of the page's "All files" table, slowest first, with each row's named scopes. On the lint
+sweep that is every file's time in every rule, which the page only summarises. The four analysis
+phases appear on the analysis sweep only; a completion sweep has one row per request. The
+`gscode-perf-<sweep>.json` beside it is the summary the hub reads, and keeps only totals,
+percentiles and the slowest 50 files.
+
 - **Headline stats, distribution, phases, sub-phases** — the run in summary. The distribution gives
   each band's share of the rows AND of the time, which is what says whether a tail is worth chasing.
 - **Slowest by absolute time** (top 25) — where the wall-clock went.

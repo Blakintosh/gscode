@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using GSCode.Server.Handlers;
 
 namespace GSCode.Server.Tests.Corpus;
@@ -69,6 +70,35 @@ internal sealed record SubPhaseRow(
     double Max);
 
 internal sealed record FileRow(string Path, double Milliseconds, long Bytes);
+
+/// <summary>
+/// One sweep's every row, for reading outside the page: the sidecar keeps only what the hub needs
+/// (totals, percentiles, the slowest 50), and a question nobody built a table for needs the rest.
+/// <see cref="Rows"/> is one per file, or one per REQUEST on a completion sweep.
+/// </summary>
+internal sealed record PerfDetail(
+    string Sweep,
+    string Name,
+    string Root,
+    string GeneratedAt,
+    List<PerfDetailRow> Rows);
+
+/// <summary>
+/// One timed row. The four phases are only measured by the analysis sweep and are null elsewhere,
+/// rather than zero, so a lint row does not claim it lexed in no time. <see cref="Scopes"/> is the
+/// row's named scopes - per rule on a lint sweep - and is null when nothing was recorded.
+/// </summary>
+internal sealed record PerfDetailRow(
+    string Path,
+    long Bytes,
+    double Milliseconds,
+    double? Lex,
+    double? Preprocess,
+    double? Parse,
+    double? Extract,
+    SortedDictionary<string, PerfDetailScope>? Scopes);
+
+internal sealed record PerfDetailScope(double Milliseconds, long Count);
 
 /// <summary>
 /// How big a completion sweep's returned lists were. Only the statement-scope arm reaches the store
@@ -418,7 +448,52 @@ internal static class PerfReport
         ReportPage.Save(outputPath, html);
 
         WriteSummary(directory, SidecarName(game, sweep), generatedAt, items, corpusRoot, sorted, subPhases, entries);
+        WriteDetail(directory, sweep, SidecarName(game, sweep), generatedAt, items, corpusRoot);
         WriteAggregate(directory);
+    }
+
+    private static readonly JsonSerializerOptions s_detailJson = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    /// <summary>
+    /// Every row the page's "All files" table holds, with each row's scopes, as JSON beside the page.
+    /// Slowest first, which is the order the page lists them in.
+    /// </summary>
+    private static void WriteDetail(
+        string directory, PerfSweep sweep, string name, string generatedAt, IReadOnlyList<Item> items, string root)
+    {
+        bool phases = sweep == PerfSweep.Analysis;
+        List<PerfDetailRow> rows = new(items.Count);
+
+        foreach ( Item item in items.OrderByDescending(static i => i.Milliseconds) )
+        {
+            SortedDictionary<string, PerfDetailScope>? scopes = null;
+            if ( item.SubPhases is not null && item.SubPhases.Count > 0 )
+            {
+                scopes = new SortedDictionary<string, PerfDetailScope>(StringComparer.Ordinal);
+                foreach ( KeyValuePair<string, (double Milliseconds, long Count)> scope in item.SubPhases )
+                {
+                    scopes[scope.Key] = new PerfDetailScope(scope.Value.Milliseconds, scope.Value.Count);
+                }
+            }
+
+            rows.Add(new PerfDetailRow(
+                ReportPage.Relative(item.Path, root),
+                item.Bytes,
+                item.Milliseconds,
+                phases ? item.Lex : null,
+                phases ? item.Preprocess : null,
+                phases ? item.Parse : null,
+                phases ? item.Extract : null,
+                scopes));
+        }
+
+        PerfDetail detail = new(KindOf(sweep), name, root, generatedAt, rows);
+        string path = Path.Combine(directory, ReportPage.DetailFile(name));
+        File.WriteAllText(path, JsonSerializer.Serialize(detail, s_detailJson));
     }
 
     private static string Describe(PerfSweep sweep, IReadOnlyList<Item> items)

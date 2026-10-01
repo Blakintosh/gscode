@@ -31,6 +31,7 @@ set "RESULT=%ERRORLEVEL%"
 
 echo.
 echo Reports: %ROOT%\temp\gscode-perf-*.html
+echo Every row, as JSON: %ROOT%\temp\gscode-detail-*.json
 
 :end
 call "%~dp0_pause.bat"

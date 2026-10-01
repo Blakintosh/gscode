@@ -27,6 +27,16 @@ internal static class ReportPage
         return $"gscode-perf-{sidecarName}.html";
     }
 
+    /// <summary>
+    /// Every row of one perf sweep as JSON. Not <c>gscode-perf-*.json</c>: the hub reads every file of
+    /// that shape as a summary, and a record with a positional constructor deserialises from any
+    /// object without complaint, so a detail file there would join the tables as a run of zeros.
+    /// </summary>
+    public static string DetailFile(string sidecarName)
+    {
+        return $"gscode-detail-{sidecarName}.json";
+    }
+
     public static string BudgetPage(string game)
     {
         return $"gscode-lint-budget-{game}.html";

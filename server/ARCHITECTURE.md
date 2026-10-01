@@ -144,4 +144,5 @@ only by reading fixture source.
 larger items there today: modelling variadic builtins (which is what blocks restoring the upper
 bound on argument counts), the six of 1.5's type-derived diagnostics still blocked (mostly on
 wrong types in the bundled game data), the opt-in `apiUpdate.ts` refresh, the optional headless
-CLI, and one corpus grammar gap consciously left alone.
+CLI, the dialect-to-dialect transpiler whose groundwork was removed unused (with the route back),
+and one corpus grammar gap consciously left alone.

@@ -550,6 +550,81 @@ shape rather than re-deriving it.
   if the gap is not there: it is the most structural item here and the only one that touches indexing
   order.
 
+### 6. Dialect-to-dialect transpiler — groundwork removed, and how to bring it back
+
+The idea: translate a script between GSC dialects, BO3 to the earlier games or back. **No transpiler
+was ever written** — no rewriter, no plan, no entry here. What existed was groundwork in the typing
+layer, built ahead of it on 2026-08-12 (`751c2711..a7d719fb`) and removed on 2026-09-28 (`20aeeded`,
+`dd7a2081`) because nothing outside its own tests called it, while the docs justified the whole
+typing layer by a transpiler that had no code. Restoring it is reasonable; restoring it with no
+caller again is not — that is exactly why it went.
+
+**What stayed, because other features read it:**
+
+- `ScrValue` / `ScrTypeSet` / `ScrOperators` (Core/Symbols) — the union lattice with constant
+  folding. Read by the typing lints, hover, inlay hints and go-to-type-definition.
+- `FlowTyper.InferValues` → `ScriptTypes`, the value of every expression keyed by node, and
+  `FlowTyper.TryGetValueAt`. This per-node map is the surface a rewriter walks; it was built for one
+  (`7a2c9101`) and kept because the lints adopted it.
+- `GameProfile.ArraysPassedByReference` (set on BO3 only). It has no reader today.
+- `GAME_PROFILES.md`'s category matrix, which is in effect the list of what a translation has to
+  change: import style (`#using` + `#namespace` vs `#include`), pointer style (`&foo` vs
+  `maps\x::foo`), path calls, keywords (`foreach`, `class`, `function`, `do`, `const`, …), the
+  preprocessor and `#insert` (BO3 only), ScriptDoc style, global objects, and the array fork below.
+
+**What was removed, and where to get it back:**
+
+| removed | was | restore from |
+|---|---|---|
+| `Workspace/Typing/ParameterTypes.cs` + `ParameterTypesTests` (13 tests) | what each parameter holds, unioned from the arguments every call site in the SAME FILE passes; omission folded in from both directions | `git checkout 20aeeded^ -- server/src/GSCode.Workspace/Typing/ParameterTypes.cs server/tests/GSCode.Workspace.Tests/Typing/ParameterTypesTests.cs` |
+| `ScrValues.IsByReference(type, arraysByReference)` | whether a value aliases when passed, given the dialect | `git show 20aeeded -- server/src/GSCode.Core/Symbols/ScrValue.cs` |
+| `ScrValues.IsAssignableTo`, `ScrTypeSet.AlwaysByReference`, `ScrValue.Nothing` / `IsExact` / `OfEntity` / `EntityKinds` | assignability with coercions; entity subtypes (never filled in production) | same diff |
+| `ScriptTypes.ImprecisionHistogram` | how many expressions were unknown, by reason — the coverage number a rewriter would be budgeted against, per game | same commit, `ScriptTypes.cs` |
+| `ScrImprecision` and `ScrValue.Imprecision`, `ScrValue.EngineBound` | WHY a value is unknown (untyped parameter, array element, script return — twelve reasons) | `git show dd7a2081` |
+
+The ScrValue pieces cannot be restored by checking the old file out: `ScrValue.cs` has changed since
+(the 2026-09-30 allocation work packed `ScrConstant`). Re-apply them from the diff by hand.
+`ParameterTypes.cs` refers to `ScrImprecision.UntypedParameter`; without the reasons it returns
+`ScrValue.Unknown` there instead.
+
+**The hard part is one question: is this parameter an array?** Arrays are the only kind whose pass
+semantics fork — BO3 passes them by reference, every earlier game copies them, while entities and
+structs alias everywhere (`GAME_PROFILES.md`, the reference-semantics table). So a callee that
+mutates an array parameter behaves differently after translation in either direction, and "is this
+an array" has three answers — certainly, certainly not, cannot tell — where the third has to be
+escalated to the user rather than guessed. The lattice already answers `MustBe(Array)` separately
+from `MayBe(Array)`; what it cannot do alone is know what a parameter holds, which is what
+`ParameterTypes` was for.
+
+**Same-file inference is not enough for shared utilities.** A call's arguments live in the caller's
+syntax tree and `ScriptRecord` keeps no tree, so cross-file means re-parsing the callers. The
+original ParameterTypes comment priced that at ~44 ms a file; that was the corpus harness's
+wall-clock, and analysis is ~0.4 ms a file across the indexing cores (PERF.md, 2026-09-15). So
+re-parsing on demand is affordable at stock size and is not for a utility called from thousands of
+files. The scaling answer is an argument index built during indexing and stored on the record — per
+call site, the callee key and the typed value of each argument — which is a record-format change
+(`RecordSerializer` + `CacheSchema.RecordFormatVersion`).
+
+**A route back, if it is wanted.** A proposal, not a decision:
+
+0. Write the plan and its entry here first, naming the caller that will use each piece. Nothing below
+   lands ahead of the code that reads it.
+1. Decide the direction and scope: which source and target games, whole files or a folder, and what
+   the tool emits when it cannot decide (a comment, a diagnostic, a refusal).
+2. Build it as its own LSP-free project over Workspace + Parser — the same composition the tests'
+   `TestWorkspace` uses, and the one the headless CLI (item 3) would use. A transpile command could be
+   a CLI verb.
+3. Restore `ParameterTypes` and `IsByReference`, and give `ArraysPassedByReference` its first reader.
+4. Restore `ScrImprecision` only if the rewriter's output depends on WHY a value is unknown. It took
+   part in `ScrValue` equality, which is what the flow pass's fixpoint compares, so re-adding it needs
+   the before/after corpus diff `dd7a2081` ran.
+5. Measure coverage per game over the corpora (the histogram) before writing rewrite rules, so the
+   unknowns worth attacking first are known rather than guessed.
+6. Add the cross-file argument index when same-file coverage proves insufficient.
+7. Verify on the corpora: every translated stock script parses under the target profile with no
+   1xxx/3xxx errors and no new 5xxx Errors, and translating there and back reproduces the original
+   token stream wherever no array question was escalated.
+
 ---
 
 ## Decided — not doing

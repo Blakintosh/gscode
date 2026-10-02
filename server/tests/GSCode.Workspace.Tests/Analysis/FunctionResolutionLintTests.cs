@@ -287,8 +287,8 @@ public class FunctionResolutionLintTests
 
     // --- Path calls (`maps\mp\_util::foo()`) name a FILE outright ---
     //
-    // #include merges scope, but the call itself still only ever runs the function that SPECIFIC
-    // file declares. Neither the broad by-name lookup (which searches every file the merge dialect
+    // The call reaches what the NAMED file can run: its own functions and what its #include chain
+    // merges into it. Neither the broad by-name lookup (which searches every file the merge dialect
     // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
     // able to make a path call resolve on anyone else's say-so.
 
@@ -341,6 +341,34 @@ public class FunctionResolutionLintTests
         string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
 
         Assert.Empty(LintPathCall(source, (TestPaths.Raw(@"maps\mp\_util.gsc"), "foo()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionTheTargetFileIncludes_IsSilent()
+    {
+        // Stock CoD4: maps\_documents.gsc calls `maps\_utility::trigger_off()`, and trigger_off is
+        // declared in common_scripts\utility, which maps\_utility includes. It ships and works, and
+        // this reported it as an Error once the check stopped at the named file's own functions.
+        // Two hops, since the compiler flattens the whole chain.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(
+            source,
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\utility;\nbar()\n{\n}\n"),
+            (TestPaths.Raw(@"common_scripts\utility.gsc"), "#include common_scripts\\deeper;\nbaz()\n{\n}\n"),
+            (TestPaths.Raw(@"common_scripts\deeper.gsc"), "foo()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_IntoATargetWhoseIncludeChainDoesNotResolve_StandsDown()
+    {
+        // The function may well live in the include nobody can find, so "not found" would be a
+        // guess. Same condition IncludeUsageLint holds itself to: only a complete closure can say no.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(
+            source,
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\missing;\nbar()\n{\n}\n")));
     }
 
     [Fact]

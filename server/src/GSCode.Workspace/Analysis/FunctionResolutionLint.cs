@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -122,13 +123,20 @@ public static class FunctionResolutionLint
         // MISSING FILE is reported once and its calls are left alone: one cause, one diagnostic.
         HashSet<string> missingTargets = new(StringComparer.OrdinalIgnoreCase);
 
-        // What each path call's TARGET FILE itself declares — a path call still only ever runs the
-        // function that SPECIFIC file declares, whatever #include merges into ordinary scope.
-        // Neither "this file happens to declare the same name" nor "some unrelated file in the
-        // workspace declares it" make the call resolve, and the lookup below asks a NAME-only
-        // question that cannot tell those apart from the one thing that actually matters: does the
-        // file named on the call have it.
+        // What each path call's TARGET FILE can run: its own functions and every function its
+        // #include chain merges into it, transitively, since the compiler flattens the chain. Stock
+        // CoD4 settles it: maps\_documents.gsc calls `maps\_utility::trigger_off()`, and trigger_off
+        // is declared in common_scripts\utility, which maps\_utility includes on its first line. The
+        // file ships and works. Neither "this file happens to declare the same name" nor "some
+        // unrelated file in the workspace declares it" make the call resolve, and the lookup below
+        // asks a NAME-only question that cannot tell those apart from the one thing that matters:
+        // can the file named on the call reach it.
         Dictionary<string, HashSet<string>> targetFunctionNames = new(StringComparer.OrdinalIgnoreCase);
+
+        // Targets whose reach cannot be known: the file is not indexed, or something in its include
+        // chain does not resolve. A rule may only say a name is out of reach against a complete
+        // closure, the same condition IncludeUsageLint holds itself to, so calls into these stand down.
+        HashSet<string> unknowableTargets = new(StringComparer.OrdinalIgnoreCase);
         if ( resolver is not null && pathCallTargets.Count > 0 )
         {
             ResolutionContext context = resolver.GetContext(askingPath);
@@ -147,15 +155,32 @@ public static class FunctionResolutionLint
                 {
                     missingTargets.Add(call.Value);
                 }
-                else if ( store.TryGet(resolved, out ScriptRecord targetRecord) )
+                else if ( store.TryGet(PathUtil.NormalizeAbsolute(resolved), out ScriptRecord targetRecord) )
                 {
-                    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-                    foreach ( FunctionSymbol function in targetRecord.Functions )
-                    {
-                        names.Add(function.KeyName);
-                    }
+                    IncludeClosure reach = DatabaseQueries.IncludeClosure(
+                        store, resolver, result, askingPath, extension, directIncludes: [targetRecord]);
 
-                    targetFunctionNames[call.Value] = names;
+                    if ( reach.Complete )
+                    {
+                        HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+                        foreach ( ScriptRecord reached in reach.Records )
+                        {
+                            foreach ( FunctionSymbol function in reached.Functions )
+                            {
+                                names.Add(function.KeyName);
+                            }
+                        }
+
+                        targetFunctionNames[call.Value] = names;
+                    }
+                    else
+                    {
+                        unknowableTargets.Add(call.Value);
+                    }
+                }
+                else
+                {
+                    unknowableTargets.Add(call.Value);
                 }
 
                 firstSite[call.Value] = call.Key;
@@ -224,9 +249,9 @@ public static class FunctionResolutionLint
             // `maps\mp\_util.gsc` actually declaring `foo` does.
             if ( pathCallTargets.TryGetValue(entry.Range, out string? pathTarget) )
             {
-                if ( missingTargets.Contains(pathTarget) )
+                if ( missingTargets.Contains(pathTarget) || unknowableTargets.Contains(pathTarget) )
                 {
-                    // Already reported once, for the missing file itself.
+                    // Already reported once, for the missing file itself — or not knowable, above.
                     continue;
                 }
 

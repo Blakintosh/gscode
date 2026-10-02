@@ -917,6 +917,55 @@ rest of the pass is in that number, and inference was never most of its tail. A 
 sweep on both sides printed identical findings: 37 tests, 434 lines, differing only in xUnit's own
 timestamps.
 
+### 2026-10-01: the 2.1.0 release check, and a baseline that was the machine
+
+Run before tagging 2.1.0, after the last fixes landed: the full-mode diagnostics paths, the
+inlay-hint defaults, and path calls reaching the named file's include closure. Release, cod4 and
+bo3, the editor's own Release server running alongside.
+
+Compared first against the reports the last perf run left on 2026-09-30, bo3's lint pass read 782
+→ 1,196 ms and p99 6.8 → 15.6 ms, every rule 40–80% slower including rules nothing had touched.
+That pattern is the machine, not the code, and the A/B says so: the commit those reports came from,
+`d11c1637`, built in a worktree and run back to back with the release head:
+
+| | `d11c1637` | release head |
+|---|---:|---:|
+| bo3 lint pass, total / p99 | 1,145 ms / 13.2 ms | 1,130 ms / 13.5 ms |
+| cod4 lint pass, total / p99 | 719 ms / 9.5 ms | 782 ms / 9.5 ms |
+| cod4 `lint.FunctionResolutionLint`, total / worst file | 28 ms / 0.5 ms | 99 ms / 5.0 ms |
+| completion p99, bo3 / cod4 | 1.65 / 0.59 ms | 1.79 / 0.62 ms |
+
+**The one real cost is the path-call fix, and it is small.** A path call now checks the target
+file's transitive include closure (`DatabaseQueries.IncludeClosure`) rather than its own functions,
+once per distinct target per file. On cod4 that is about 0.08 ms a file, a 5 ms worst file against
+the per-rule budget of 100 ms, and the whole pass's p99 did not move. bo3 has no path calls and pays
+nothing. A memo shared across files would remove most of it; not worth the invalidation it needs
+until a row climbs.
+
+**The scale suite agrees.** The same release head at 10K, 25K and 50K on bo3, and 10K and 50K on
+cod4, against the reused generated workspaces. Every per-request row stayed flat across sizes and
+inside its budget; at 50K:
+
+| 50,000 files | budget | bo3 | cod4 |
+|---|---:|---:|---:|
+| warm start | 10 s | 3.9 s | 4.2 s |
+| dropped cache writes / restored | 0 / all | 0 / all | 0 / all |
+| retained memory | ~3 GB | 2,203 MB | 2,327 MB |
+| full-mode lint sweep | 60 s | 14.7 s | 14.6 s |
+| completion / literal / field p99 | flat | 1.10 / 2.65 / 2.03 ms | 0.87 / 3.63 / 0.99 ms |
+| one file's lint pass, worst | flat | 8.1 ms | 9.5 ms |
+| CodeLens / references / rename p99 | flat | 9.7 / 79.6 / 87.0 ms | 3.9 / 0.6 / 0.5 ms |
+| cold index | 35 s | 24.7 s | 21.6 s |
+
+The cold index read twice the 2026-09-21 figure (11.5 and 13.4 s). Four alternating runs at bo3 50K
+settle it as the disk, not the code: `d11c1637` 12.0 then 10.9 s, the release head 11.1 then 10.8 s.
+The 24.7 s was the session's first 50K pass over a cold OS file cache. In the same four runs the
+release head's references p99 was 72–73 ms against the base's 100–102, and every other row matched.
+
+**Read a stored report as a reading of that machine on that day.** A report left in `temp/` is not
+a baseline unless it is re-run beside the change; the drift here was larger than any change made
+that week.
+
 ## Measured: COMPLETION, and why it is NOT worth optimising
 
 `CorpusPerfTests.Completion_WhereTheTimeGoes` times `CompletionEngine.Complete` at ten evenly spaced

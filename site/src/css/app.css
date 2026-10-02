@@ -119,7 +119,7 @@
 
 /* ── Dark — the native mode ──────────────────────────────────────────────── */
 .dark {
-	--background: #07080c; /* ground */
+	--background: #111317; /* ground — L 0.185, lifted 5 points from #07080c */
 	--foreground: #e2eaec; /* chalk  */
 	--card: #111720; /* panel  */
 	--card-foreground: #e2eaec;

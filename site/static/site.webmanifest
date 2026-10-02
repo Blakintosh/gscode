@@ -3,8 +3,8 @@
 	"short_name": "gscode",
 	"start_url": "/",
 	"display": "browser",
-	"background_color": "#07080C",
-	"theme_color": "#07080C",
+	"background_color": "#111317",
+	"theme_color": "#111317",
 	"icons": [
 		{
 			"src": "/icon-192.png",

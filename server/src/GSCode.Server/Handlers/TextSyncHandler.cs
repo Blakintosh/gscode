@@ -7,6 +7,7 @@ using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
@@ -58,6 +59,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly DependentDiagnosticsRefresher _dependents;
     private readonly InsertCache _inserts;
     private readonly ConnectionSettleGate _settleGate;
+    private readonly WorkspaceLintSweep _lintSweep;
 
     /// <summary>
     /// Coalesces concurrent analysis requests for one document into one running plus at most one
@@ -78,8 +80,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
         DependentDiagnosticsRefresher dependents,
         InsertCache inserts,
-        ConnectionSettleGate settleGate)
+        ConnectionSettleGate settleGate,
+        WorkspaceLintSweep lintSweep)
     {
+        _lintSweep = lintSweep;
         _settleGate = settleGate;
         _inserts = inserts;
         _dependents = dependents;
@@ -365,7 +369,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         }
 
         _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
-        CommitAndScheduleDependents(document, result);
+        CommitAndScheduleDependents(document, result, diagnostics);
 
         double elapsedMilliseconds = Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
 
@@ -406,7 +410,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     /// this event, and sent per analysis it would re-request lenses about four times a second while
     /// a function's name is typed.
     /// </summary>
-    private void CommitAndScheduleDependents(OpenDocument document, ParseResult result)
+    private void CommitAndScheduleDependents(
+        OpenDocument document, ParseResult result, ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> published)
     {
         ResolutionContext context = _resolver.Current.GetContext(document.Path);
 
@@ -418,6 +423,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         ScriptRecord committed = _database.Commit(
             result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
+
+        // In full mode a closed file reports its cross-file problems, and this record is what it
+        // reports once the document closes — so it keeps what was just published, not the parse
+        // diagnostics alone. See WorkspaceLintSweep.KeepOnRecord.
+        if ( _settings.IndexingMode == IndexingMode.Full )
+        {
+            _lintSweep.KeepOnRecord(committed, published);
+        }
 
         // Other open files' diagnostics are computed against this one, and nothing else republishes
         // them. Only when something they can actually SEE moved — an ordinary keystroke inside a

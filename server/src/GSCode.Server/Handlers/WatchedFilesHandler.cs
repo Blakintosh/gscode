@@ -7,6 +7,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Serilog;
 using GSCode.Core;
+using GSCode.Core.Paths;
+using GSCode.Server.Configuration;
 using FileSystemWatcher = OmniSharp.Extensions.LanguageServer.Protocol.Models.FileSystemWatcher;
 
 namespace GSCode.Server.Handlers;
@@ -23,14 +25,20 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
     private readonly DocumentStore _documents;
     private readonly DependentDiagnosticsRefresher _dependents;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly WorkspaceLintSweep _lintSweep;
+    private readonly ServerSettings _settings;
 
     public WatchedFilesHandler(
         WatchedFileUpdater updater,
         ScriptDatabase database,
         DocumentStore documents,
         DependentDiagnosticsRefresher dependents,
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        WorkspaceLintSweep lintSweep,
+        ServerSettings settings)
     {
+        _lintSweep = lintSweep;
+        _settings = settings;
         _updater = updater;
         _database = database;
         _documents = documents;
@@ -56,10 +64,15 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
         };
     }
 
-    public override Task<Unit> Handle(DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
+    public override async Task<Unit> Handle(DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
     {
-        bool exportsMoved = false;
         bool applied = false;
+
+        // Every record the batch rewrote — a changed file, and every file a changed header is
+        // inserted into — and the files whose exports moved, which are what other files'
+        // diagnostics are computed against.
+        HashSet<string> touched = new(StringComparer.Ordinal);
+        List<string> exportsMoved = [];
 
         // The editor's buffer wins for any open file the update would rewrite — the changed file
         // itself, and every dependent of a changed header. The text-sync handler analyses an open
@@ -87,13 +100,32 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
                 // side of the update, the same test the edit path uses — a branch switch that
                 // rewrites a hundred bodies moves no signature and needs no re-linting.
                 ulong before = SignatureOf(path);
-                _updater.Apply(path, kind, OwnedByEditor);
-                exportsMoved |= SignatureOf(path) != before;
+                touched.UnionWith(_updater.Apply(path, kind, OwnedByEditor));
+                if ( SignatureOf(path) != before )
+                {
+                    exportsMoved.Add(PathUtil.NormalizeAbsolute(path));
+                }
+
                 applied = true;
             }
             catch ( Exception exception )
             {
                 Log.Error(exception, "Failed to apply watched-file change for {Uri}", change.Uri);
+            }
+        }
+
+        // A re-index stores the parse diagnostics alone. In full mode a closed file reports its
+        // cross-file problems too, so every record the update rewrote is linted again before it is
+        // published — a branch switch otherwise emptied the Problems panel of every file it touched.
+        if ( touched.Count > 0 && _settings.IndexingMode == IndexingMode.Full && _database.HasCompletedIndex )
+        {
+            try
+            {
+                await _lintSweep.RelintClosedFilesAsync(touched, cancellationToken).ConfigureAwait(false);
+            }
+            catch ( OperationCanceledException )
+            {
+                // The next change, or the next start, lints these again.
             }
         }
 
@@ -105,14 +137,16 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
             _workspaceDiagnostics.Refresh();
         }
 
-        // Open files are computed against the changed ones, and a change arriving behind the
-        // editor's back belongs to no open document — so every one of them is a dependent.
-        if ( exportsMoved )
+        // Open files are computed against the changed ones, so every one of them is a dependent.
+        // Naming each changed file as an origin also re-lints, in full mode, the CLOSED files that
+        // call its functions. A deleted file has no record left to read its functions from, so its
+        // closed callers wait for the next change or start; the open ones are still refreshed.
+        foreach ( string origin in exportsMoved )
         {
-            _dependents.Schedule();
+            _dependents.Schedule(origin);
         }
 
-        return Unit.Task;
+        return Unit.Value;
     }
 
     /// <summary>The file's export signature, or 0 when it is not (or no longer) indexed.</summary>

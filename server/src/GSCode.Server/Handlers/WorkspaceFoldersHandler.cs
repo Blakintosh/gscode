@@ -36,6 +36,9 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     private readonly ScriptDatabase _database;
     private readonly WorkspaceIndexer _indexer;
     private readonly DocumentStore _documents;
+    private readonly WorkspaceLintSweep _lintSweep;
+    private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly DependentDiagnosticsRefresher _dependents;
 
     public WorkspaceFoldersHandler(
         ResolverHolder resolver,
@@ -43,8 +46,14 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         IFileSystem fileSystem,
         ScriptDatabase database,
         WorkspaceIndexer indexer,
-        DocumentStore documents)
+        DocumentStore documents,
+        WorkspaceLintSweep lintSweep,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        DependentDiagnosticsRefresher dependents)
     {
+        _lintSweep = lintSweep;
+        _workspaceDiagnostics = workspaceDiagnostics;
+        _dependents = dependents;
         _resolver = resolver;
         _settings = settings;
         _fileSystem = fileSystem;
@@ -78,9 +87,10 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
             // reloadSnapshot, not a separate ReloadRestoreSnapshot() call before this: both happen
             // under the indexer's own pass gate, so a startup pass in flight cannot have its snapshot
             // swapped out from under it in the gap between two calls.
+            IndexingMode mode = _settings.IndexingMode;
             IndexOutcome outcome = await _indexer
                 .IndexAsync(
-                    IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken,
+                    mode, NullIndexProgressListener.Instance, cancellationToken,
                     reloadSnapshot: true, ownedByEditor: _documents.IsOpen)
                 .ConfigureAwait(false);
 
@@ -88,7 +98,22 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
                 "Re-indexed after folder change: {Total} files ({Restored} from cache)",
                 outcome.Total,
                 outcome.Restored);
+
+            // The new folder's files were indexed with their parse diagnostics alone. Startup sweeps
+            // the cross-file lints in full mode, and a folder added later has to be swept the same
+            // way, or its files report less than the ones that were there at start. The whole set,
+            // not the new folder's: an added file can resolve a call another file reported missing.
+            if ( mode == IndexingMode.Full )
+            {
+                await _lintSweep.RunFullSweepAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
+
+        // Either way the set of files moved under every diagnostic in the Problems panel: a removed
+        // folder's problems have to be taken back, an added one's published, and every open file
+        // was linted against the old set. Startup does the same pair after its own index.
+        _workspaceDiagnostics.Refresh();
+        _dependents.Schedule();
 
         return Unit.Value;
     }
@@ -217,20 +242,5 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
             settings.ModsPath.Length == 0 ? null : settings.ModsPath,
             workspaceFolders,
             fileSystem);
-    }
-
-    private static IndexingMode IndexingModeFor(ServerSettings settings)
-    {
-        if ( string.Equals(settings.WorkspaceIndexingMode, "off", StringComparison.OrdinalIgnoreCase) )
-        {
-            return IndexingMode.Off;
-        }
-
-        if ( string.Equals(settings.WorkspaceIndexingMode, "full", StringComparison.OrdinalIgnoreCase) )
-        {
-            return IndexingMode.Full;
-        }
-
-        return IndexingMode.Partial;
     }
 }

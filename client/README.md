@@ -50,8 +50,11 @@ and the like) still only apply to files you have open. Use `"full"` to run those
 lints over every indexed file, so a script's Problems entry is complete even when it is closed —
 this costs a background pass after indexing finishes, on top of the index itself. Use `"off"` when
 only open files should be analyzed — note that some diagnostics need the index to answer at all
-(an unresolved function call, a missing or duplicate import) and simply do not run with indexing
-off. `gscode.diagnostics.scope` controls which indexed files publish
+(an unresolved function call, an unused import, most missing-import checks) and simply
+do not run with indexing off; a `#using` naming no file and a duplicate import are still reported,
+since they need only the file and the disk. In `"full"` mode a closed file's problems stay complete
+through everything that rewrites it: opening and closing it, a change on disk such as a branch
+switch, and a workspace folder added mid-session. `gscode.diagnostics.scope` controls which indexed files publish
 diagnostics at all: `open`, `workspace` (default, your workspace/mod files), or `all` (including
 stock raw files) — `full` decides how COMPLETE a published file's diagnostics are, `diagnostics.scope`
 decides WHICH files get any.

@@ -70,12 +70,7 @@ internal sealed class StartupIndexRunner
         // Kick off cold-start indexing only once the server is fully started — the
         // client connection is ready to receive gscode/indexing* notifications now
         // (sending them during OnInitialized drops them). Editor traffic is unaffected.
-        IndexingMode mode = _settings.WorkspaceIndexingMode.ToLowerInvariant() switch
-        {
-            "off" => IndexingMode.Off,
-            "full" => IndexingMode.Full,
-            _ => IndexingMode.Partial,
-        };
+        IndexingMode mode = _settings.IndexingMode;
 
         WorkspaceIndexer indexer = services.GetRequiredService<WorkspaceIndexer>();
 

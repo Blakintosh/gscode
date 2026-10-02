@@ -14,6 +14,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Configuration/ServerSettings.cs
 
+- `IndexingMode` is the one parse of `workspaceIndexingMode` (unrecognised reads as partial);
+  startup, the folder handler and the full-mode paths all ask it.
 - `sealed class ServerSettings` — the parsed gscode.* view. It covers EVERY key
   `client/package.json` contributes and reads nothing else, which is the invariant worth stating
   rather than a list that goes stale: the game and script roots (game, serverLogLevel, raw.enabled,
@@ -122,6 +124,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - didChangeWatchedFiles → applies each create/change/delete via WatchedFileUpdater
   (registers **/*.gsc|csc|gsh watchers). A branch switch's whole batch applies before
   returning.
+- In `full` mode it re-lints every record the batch rewrote (`RelintClosedFilesAsync` over the
+  paths `Apply` returns), since a re-index stores the parse diagnostics alone and a branch switch
+  otherwise emptied the Problems panel of every closed file it touched. Then it republishes, and
+  names each file whose exports moved as a `DependentDiagnosticsRefresher` origin, which covers the
+  open tabs and, in full mode, the closed callers. A deleted file has no record to name its
+  functions from, so only its open dependents refresh.
 
 ## Handlers/WorkspaceSymbolHandler.cs
 
@@ -374,6 +382,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   objects — the latter drops ONLY workspace-context records, since raw and mod files stay
   reachable regardless of which folders are open. `BuildConfig` is shared with `Program.cs`, so
   a rebuild cannot drift from what initialize constructed.
+- After the change it does what startup does after its index: in `full` mode sweeps again (the
+  whole set, since an added file can resolve a call another reported missing), then republishes
+  closed-file problems — taking back a removed folder's — and re-lints the open tabs.
 
 ## Handlers/PlanRenameHandler.cs
 
@@ -863,6 +874,9 @@ that chose it. These are the pieces that implement it:
   none. Skips any path that is open (the live-analysis path already covers it, from text that may
   be ahead of disk); `SetDiagnostics`'s content-hash gate skips a path that changed underneath the
   sweep, in either direction, rather than writing diagnostics that no longer describe the record.
+  `KeepOnRecord` is the same write for an OPEN document: in `full` mode `TextSyncHandler` stores the
+  set it just published on the record its analysis committed, because a commit stores the parse
+  diagnostics alone and the record is what the file reports once it closes.
 - `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
   `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
   those and publishes a richer set for them — which is why every caller of its `Refresh()` has to

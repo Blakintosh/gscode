@@ -368,7 +368,7 @@
 							"full"
 						],
 						"enumDescriptions": [
-							"No background indexing; only open files are analyzed, and diagnostics that need to know about other files (missing/duplicate imports, unresolved calls) do not run.",
+							"No background indexing; only open files are analyzed. Diagnostics that need the index to answer (unresolved calls, unused imports, most missing-import checks) do not run; checks that read the file or the disk alone (a #using naming no file, a duplicate import) still do.",
 							"Symbols, navigation, and references work across the workspace; cross-file diagnostics only for open files.",
 							"Partial, plus cross-file diagnostics for every indexed file, not just open ones."
 						],

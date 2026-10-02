@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Database;
@@ -79,6 +80,24 @@ public sealed class WorkspaceLintSweep
         }
 
         return await SweepAsync(targets, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Stores an OPEN document's full diagnostic set — the parse diagnostics and the cross-file
+    /// lints, exactly what was just published for it — on the record its analysis committed.
+    ///
+    /// <c>full</c> mode only, and the caller decides that. A commit stores the parse diagnostics
+    /// alone, and the record is what <see cref="WorkspaceDiagnosticsPublisher"/> hands back to the
+    /// Problems panel when the document closes, so without this a file opened and closed again lost
+    /// every cross-file finding the startup sweep had given it, until the next start. In
+    /// <c>partial</c> mode the parse diagnostics alone are the promise for a closed file.
+    ///
+    /// Same content-hash gate as the sweep: false, and nothing written, when the record has already
+    /// moved past the analysis these diagnostics describe.
+    /// </summary>
+    public bool KeepOnRecord(ScriptRecord committed, ImmutableArray<Diagnostic> diagnostics)
+    {
+        return _database.SetDiagnostics(committed.Path, committed.Language, committed.ContentHash, diagnostics);
     }
 
     private async Task<LintSweepOutcome> SweepAsync(List<ScriptRecord> targets, CancellationToken cancellationToken)

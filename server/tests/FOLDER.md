@@ -433,6 +433,14 @@ both dialect families, found under the key the references were indexed with rath
 from the declaration · `WorkspaceLintSweepTests` the `workspaceIndexingMode: full` sweep — a closed
 record's stored diagnostics gain the cross-file lints, an open document is skipped and left
 untouched, and `RelintClosedFilesAsync` upgrades only the file it was given ·
+`FullModeDiagnosticsTests` a closed file keeping its cross-file problems after the startup sweep,
+through an open-and-close, a change on disk and a folder added mid-session, and partial mode
+keeping parse diagnostics only ·
+`IndexingModeContractTests` the other two modes against their descriptions: off indexes nothing and
+never marks the index complete, so 5013/5014 and the unused-import hint stand down while 5009 and
+5018 still report; partial lints open files with the index behind it and leaves closed files at
+parse diagnostics, including a folder added mid-session; and a folder change republishes, taking a
+removed folder's problems back ·
 `CodeLensArgumentTests` the lens command payload, which must be primitives so no serializer can
 case-mangle it · `CompletionResolveDataTests` · `DiagnosticsScopeTests` `gscode.diagnostics.scope` ·
 `BuiltinAtTests` the builtin-under-cursor request · `OnTypeBlockScopeTests` ·

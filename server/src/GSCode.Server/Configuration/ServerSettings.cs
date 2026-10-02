@@ -1,3 +1,4 @@
+using GSCode.Workspace.Indexing;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -65,6 +66,31 @@ public sealed class ServerSettings
     {
         get { return _current.WorkspaceIndexingMode; }
         set { _current = _current with { WorkspaceIndexingMode = value }; }
+    }
+
+    /// <summary>
+    /// <see cref="WorkspaceIndexingMode"/> read once, in one place. Anything unrecognised is
+    /// <c>partial</c>, the default. Startup, the folder handler, and every path that has to keep a
+    /// closed file's cross-file diagnostics in <c>full</c> mode ask this rather than comparing the
+    /// string themselves.
+    /// </summary>
+    public IndexingMode IndexingMode
+    {
+        get
+        {
+            string mode = _current.WorkspaceIndexingMode;
+            if ( string.Equals(mode, "off", StringComparison.OrdinalIgnoreCase) )
+            {
+                return IndexingMode.Off;
+            }
+
+            if ( string.Equals(mode, "full", StringComparison.OrdinalIgnoreCase) )
+            {
+                return IndexingMode.Full;
+            }
+
+            return IndexingMode.Partial;
+        }
     }
 
     public bool EnableWorkspaceCache

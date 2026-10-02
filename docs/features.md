@@ -153,9 +153,14 @@ Every `gscode.*` key the client contributes, and the server file that reads it. 
 window reload. `reloadPrompt.ts` offers that reload for `gscode.game`, `gscode.rawPath`,
 `gscode.modsPath` and `gscode.raw.enabled` only; the indexing and cache settings wait for the user to
 reload. "Live" means the value is read per request or re-applied by `ConfigurationHandler`.
-The `workspaceIndexingMode` values: `off` analyses open files only and skips the lints that need the
-index; `partial` indexes everything for navigation and lints open files; `full` also lints every
-closed file (`WorkspaceLintSweep`).
+The `workspaceIndexingMode` values (`ServerSettings.IndexingMode` is the one parse of them): `off`
+analyses open files only and skips the lints that need the index (unresolved calls, unused imports,
+most missing-import checks; `5009` and `5018` still run, needing only the file and the disk); `partial` indexes
+everything for navigation and lints open files; `full` also lints every closed file
+(`WorkspaceLintSweep`) and keeps those results through an open-and-close (`TextSyncHandler` →
+`KeepOnRecord`), a change on disk (`WatchedFilesHandler` → `RelintClosedFilesAsync`) and a folder
+added mid-session (`WorkspaceFoldersHandler` → `RunFullSweepAsync`). `FullModeDiagnosticsTests`
+pins all three, and `IndexingModeContractTests` pins `off` and `partial`.
 
 To check this table: `grep -n "public .* { get" server/src/GSCode.Server/Configuration/ServerSettings.cs`
 against `contributes.configuration` in `client/package.json`. `SettingsReachTheServerTests` fails when

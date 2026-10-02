@@ -110,7 +110,8 @@ Where the time goes, and what each step measured at: `server/PERF.md`, sections 
    4. `DiagnosticsPublisher.Publish` sends `textDocument/publishDiagnostics`, stamped with the
       version that was analysed.
    5. `CommitAndScheduleDependents`: `ScriptDatabase.Commit` swaps the file's record into its
-      `LanguageStore` and diffs every index. If the file's `ExportSignature` changed (a function
+      `LanguageStore` and diffs every index. In `full` mode the record then keeps the published set
+      (`WorkspaceLintSweep.KeepOnRecord`), since it is what the file reports once it closes. If the file's `ExportSignature` changed (a function
       added, renamed, re-parametered — not a body edit), `DependentDiagnosticsRefresher.Schedule`
       re-lints the other open tabs after a 900 ms debounce, and in `full` mode the closed files
       that reference what changed (`ClosedDependentsOf`, `WorkspaceLintSweep.RelintClosedFilesAsync`).
@@ -222,7 +223,13 @@ Every formatting rule and the corpus measurements behind it: `server/FORMATTING.
    it (`DatabaseQueries.ScriptsInserting`). A create or delete clears the resolver's memo
    (`InvalidateResolutionCache`), since "does this path exist" may have changed.
 3. Files open in the editor are skipped: the buffer may hold unsaved edits.
-4. The handler then refreshes closed-file problems and schedules the open-tab re-lint.
+4. In `full` mode, every record the update rewrote (the changed files and every file a changed
+   header is inserted into) is linted again (`WorkspaceLintSweep.RelintClosedFilesAsync`), since a
+   re-index stores the parse diagnostics alone.
+5. The handler then refreshes closed-file problems, and names each file whose exports moved as an
+   origin for `DependentDiagnosticsRefresher`, which re-lints open tabs and, in `full` mode, the
+   closed files calling its functions. A deleted file has no record left to name its functions, so
+   only its open dependents are refreshed.
 
 ---
 
@@ -234,7 +241,8 @@ Every formatting rule and the corpus measurements behind it: `server/FORMATTING.
   need a reload; `client/src/reloadPrompt.ts` offers one.
 - **A workspace folder is added or removed.** `WorkspaceFoldersHandler`: swap the resolver first,
   drop workspace-context records under removed folders, then index added folders (unchanged files
-  restore from cache).
+  restore from cache), and in `full` mode sweep again. Either way it then republishes closed-file
+  problems (taking back a removed folder's) and re-lints the open tabs, as startup does.
 - **The game is changed.** `gscode.selectGame` (`client/src/gamePicker.ts`) asks the server for the
   roster (`gscode/supportedGames`), writes `gscode.game` and reloads the window. The game is a
   launch argument, so nothing short of a new server process applies it.

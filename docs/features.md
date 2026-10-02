@@ -138,8 +138,8 @@ Every `gscode.*` key the client contributes, and the server file that reads it. 
 | `gscode.diagnostics.scope` | `workspace` | `WorkspaceDiagnosticsPublisher`, `ConfigurationHandler` | Live (republishes) |
 | `gscode.outline.showAssignments` | `true` | `DocumentSymbolHandler` | Live |
 | `gscode.codeLens.enabled` | `false` | `CodeLensHandler` | Live |
-| `gscode.inlayHints.parameterNames` | `true` | `InlayHintHandler` | Live (refresh sent) |
-| `gscode.inlayHints.inferredTypes` | `true` | `InlayHintHandler` | Live (refresh sent) |
+| `gscode.inlayHints.parameterNames` | `false` | `InlayHintHandler` | Live (refresh sent) |
+| `gscode.inlayHints.inferredTypes` | `false` | `InlayHintHandler` | Live (refresh sent) |
 | `gscode.inlayHints.macroParameterNames` | `false` | `InlayHintHandler` | Live (refresh sent) |
 | `gscode.completion.autoImport` | `true` | `CompletionHandler` | Live |
 | `gscode.completion.literals` | `true` | `CompletionHandler` | Live |

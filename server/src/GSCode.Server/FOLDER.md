@@ -452,7 +452,7 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   `InferredAssignment` name-range end (gated by inlayHints.inferredTypes), and parameter-name
   hints (`amount:`) before each call argument (gated by inlayHints.parameterNames), and macro
   parameter-name hints (`__a:`) before the arguments of a `#define` invocation (gated by
-  inlayHints.macroParameterNames, which is OFF by default). The FlowTyper it builds is seeded
+  inlayHints.macroParameterNames). All three families are OFF by default, as is the code lens. The FlowTyper it builds is seeded
   with the shared ObjectFields for field-type inference, and is built only when one of the first
   two families is on — the macro pass reads the preprocessor's invocation list and needs no flow
   analysis. ResolveProvider is false, so the resolve handler is a passthrough.

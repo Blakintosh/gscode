@@ -460,7 +460,7 @@ hierarchies for files not open · `NamespaceImportFixTests` the add-`#using` fix
 handler · `WorkspaceSymbolShadowingTests` · `KeywordHoverTests`, `BuiltinMacroHoverTests`
 (`__FUNCTION__`/`__FILE__` where written), `HoverInferenceReuseTests` one assignment walk per
 version · `CompletionLabelDetailsTests`, `CompletionSortTextTests` · `InlayHintMacroTests`,
-`InlayHintTypeCacheTests` one flow pass per version · `InlayHintParameterTests` the on-by-default
+`InlayHintTypeCacheTests` one flow pass per version · `InlayHintParameterTests` the
 parameter-name family, as the user sees it · `InlayHintMergeDialectTests` the same hints on a
 cross-file call under a merge dialect · `FieldNavigationTests` navigation from a field, answered
 from its writes (definition) and from what a write binds (type definition, implementation, the

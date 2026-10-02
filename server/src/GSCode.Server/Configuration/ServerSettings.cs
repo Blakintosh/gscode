@@ -29,8 +29,8 @@ public sealed class ServerSettings
         public string RawFileWarningMode { get; init; } = "stock";
         public bool OutlineShowAssignments { get; init; } = true;
         public bool CodeLensEnabled { get; init; }
-        public bool InlayParameterNames { get; init; } = true;
-        public bool InlayInferredTypes { get; init; } = true;
+        public bool InlayParameterNames { get; init; }
+        public bool InlayInferredTypes { get; init; }
         public bool InlayMacroParameterNames { get; init; }
         public bool CompletionLiterals { get; init; } = true;
         public bool CompletionAutoImport { get; init; } = true;

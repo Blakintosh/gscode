@@ -417,14 +417,14 @@
 					},
 					"gscode.inlayHints.parameterNames": {
 						"type": "boolean",
-						"default": true,
-						"description": "Show parameter-name hints before arguments at call sites.",
+						"default": false,
+						"description": "Show parameter-name hints before arguments at call sites. Off by default, like every inlay hint and the code lens: each one adds text between the characters of a line.",
 						"scope": "window"
 					},
 					"gscode.inlayHints.inferredTypes": {
 						"type": "boolean",
-						"default": true,
-						"description": "Show inferred-type hints on local variable assignments.",
+						"default": false,
+						"description": "Show inferred-type hints on local variable assignments. Off by default, like every inlay hint and the code lens.",
 						"scope": "window"
 					},
 					"gscode.inlayHints.macroParameterNames": {

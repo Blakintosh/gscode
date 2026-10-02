@@ -162,8 +162,8 @@ code it suppresses and says where it stops.
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `gscode.codeLens.enabled` | `false` | "N references" above each function and class declaration. |
-| `gscode.inlayHints.parameterNames` | `true` | Parameter-name hints before arguments at call sites. An argument that already spells the parameter's name — a local, or a macro named after it — is left unlabelled. |
-| `gscode.inlayHints.inferredTypes` | `true` | Inferred-type hints on local variable assignments. |
+| `gscode.inlayHints.parameterNames` | `false` | Parameter-name hints before arguments at call sites. An argument that already spells the parameter's name — a local, or a macro named after it — is left unlabelled. |
+| `gscode.inlayHints.inferredTypes` | `false` | Inferred-type hints on local variable assignments. |
 | `gscode.inlayHints.macroParameterNames` | `false` | Parameter-name hints inside a `#define` invocation. Off because macro parameters are named for the macro's body, not the caller. |
 | `gscode.completion.autoImport` | `true` | Offer functions from scripts this file has not imported, adding the `#using` / `#include` when one is accepted. Waits for three characters, so names already in scope come first. |
 | `gscode.completion.literals` | `true` | Offer the workspace's known strings, localized strings and hash strings while typing inside a literal — notify and waittill names especially. |

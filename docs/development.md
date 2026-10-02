@@ -102,22 +102,43 @@ BO3 macro data for the site lives in `data/macros/` (`SCHEMA.md` there).
 
 ## Packaging and release
 
-1. Bump `<Version>` in `server/Directory.Build.props` and `version` in `client/package.json`
-   together. Move `## Unreleased` in `client/CHANGELOG.md` under the new version, and update the
-   release notes in `client/README.md`.
+**Version numbers.** The Marketplace allows no semver suffixes, so pre-releases and releases share
+one `major.minor.patch` namespace, split the way VS Code documents it: **even minors are releases,
+odd minors are pre-releases.** While stable is on 2.0.x, previews publish as 2.1.N; once stable moves
+to 2.2.0, previews become 2.3.N. Never ship a full release on the odd minor the previews are using,
+and take the next stable minor to the even number above the current preview minor, or pre-release
+users are never moved onto it. `.github/workflows/prerelease.yml` states the same rule.
+
+**Locally:**
+
+1. Bump `<Version>` in `server/Directory.Build.props`, `version` in `client/package.json` and
+   `client/package-lock.json`, and `extensionVersion` in `site/src/lib/data/site.ts`, together.
+   Move `## Unreleased` in `client/CHANGELOG.md` under the new version, and update the release
+   notes in `client/README.md`.
 2. `scripts\build-vsix.bat`. It runs `npm run package`: type-check, `dotnet publish` the server in
    Release into `client/service/`, esbuild bundle, `vsce package`. Output:
    `client/gscode-<version>.vsix`. Nothing is published.
 3. Install locally to check: `code --install-extension client\gscode-<version>.vsix`.
-4. Nothing in this repository publishes the package; uploading it is a separate, manual step.
 
-The package publishes the working tree as it is, uncommitted changes included. Close any editor
-running the Release server first.
+The local package publishes the working tree as it is, uncommitted changes included. Close any
+editor running the Release server first.
+
+**Publishing** is the GitHub workflows' job, on the upstream repository where the Marketplace
+token lives:
+
+- **Release:** push a tag `v<version>` matching `client/package.json` exactly
+  (`.github/workflows/release.yml`). It checks the match, builds the VSIX (`build-vsix.yml`), then
+  waits for a required reviewer to approve the `marketplace` environment before publishing. The
+  VSIX is attached to the run while it waits, for a smoke test, and to the GitHub Release after.
+- **Pre-release:** every push to `preview` or `preview/**` publishes a Marketplace pre-release
+  automatically (`prerelease.yml`), versioned `<major>.<next odd minor>.<run number>` from
+  `client/package.json`.
 
 ## CI
 
 `.github/workflows/ci.yml`, on push to `main`, `next`, `next-major` and on pull requests, on
-Windows: build the server solution, run the unit filter, `npm ci`, compile and lint the client. Read
+Windows: build the server solution, run the unit filter, `npm ci`, compile and lint the client. The
+other three workflows are the publishing ones above. Read
 the per-assembly test totals, not only the step colour: a crashed test host still prints "Passed!"
 for the tests that finished.
 

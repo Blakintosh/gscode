@@ -66,7 +66,7 @@ server/
 scripts/                Windows batch wrappers: test, sweep, corpus, perf, scale, build-vsix
 data/macros/            BO3 macro data for the site
 site/                   the gscode.net website (SvelteKit) — the API library shift+F1 opens
-.github/workflows/      CI
+.github/workflows/      CI, and the Marketplace release and pre-release publishing
 ```
 
 `site/` has its own `README.md` and is not covered by this handbook.

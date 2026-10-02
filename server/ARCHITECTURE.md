@@ -78,8 +78,11 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
 - **Assist**: completion + signature help, code lens (reference counts), rename (+prepareRename),
   call and type hierarchy, inlay hints (inferred types + parameter names).
 - **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions —
-  remove-duplicate and add-missing `#using`, add-missing `#include` (5026), and the pair offered for
-  a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it.
+  remove-duplicate and add-missing `#using`, add-missing `#include` (5026), the pair offered for
+  a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it,
+  and Organize Imports (remove unused, then sort the block with the formatter's `DirectiveSorter`).
+  Generate ScriptDoc block is deliberately not a code action: it is the `gscode/generateScriptDoc`
+  request behind a right-click command, so undocumented functions carry no lightbulb.
 
 Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass seeded
 with engine object-field types; it feeds inlay hints, hovers and two lints. It carries `ScrValue`
@@ -100,7 +103,9 @@ indexing counter driven by `gscode/indexingStarted|Progress|Complete` notificati
 `gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, `gscode.selectGame`
 (the game picker, whose roster comes from the server over `gscode/supportedGames` so the client
 never keeps its own list of which dialects exist), `gscode.openApiLibrary` (`shift+f1` in GSC,
-CSC, and GSH files), and the `gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
+CSC, and GSH files), `gscode.organizeImports`, `gscode.generateScriptDoc`, and the
+`gscode.showReferences` bridge for code-lens clicks. Every command but the last is also in a
+**GSCode** submenu of the editor's right-click menu. Settings flow to the server via
 `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
 ## Dev-time tooling

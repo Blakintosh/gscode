@@ -9,6 +9,24 @@ This repository holds two halves: the GSCode **language server** (C#), which spe
 For the extension user guide — including setup, settings, commands, formatting, and in-source
 pragmas — see the [client README](client/README.md). Release notes live there as well.
 
+## What's new in 2.2
+
+The largest release since 2.0: nearly 400 commits across the server, the extension and the tests.
+
+- **Scale.** Every per-request cost is flat from 1,000 to 50,000 files, a warm start at 50,000 is
+  about 4 seconds, and an ordinary Black Ops III workspace indexes in well under a second.
+- **Reliability.** Diagnostics no longer go stale, reappear on closed files or race the startup
+  index, and the cache survives changes made between sessions.
+- **Features.** Go to Implementations and Type Definition, navigation on fields and class members,
+  call hierarchy for methods, macro-aware signature help, hover and lints, auto-import completion,
+  cross-file problems for every file in `full` indexing mode, and a GSCode right-click menu.
+- **Formatting.** Casing fixes, new indentation settings, output closer to the stock scripts, and
+  edits that keep the caret in place.
+
+Upgrading rebuilds the workspace cache once. The [release notes](client/README.md#220-latest) list
+what users will notice, and [CHANGELOG.md](client/CHANGELOG.md) has everything. For engineers, the
+[handbook](docs/README.md) explains how it all fits together.
+
 ## Supported games
 
 Black Ops III is the verified target and the most complete. Four earlier games are supported with

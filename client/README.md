@@ -225,7 +225,61 @@ guideline](../server/FORMATTING.md).
 
 ## Release Notes
 
-### 2.0.2 (latest)
+### 2.2.0 (latest)
+
+**Before you upgrade.** The workspace cache rebuilds once on the first start, in a new binary format.
+Format Document re-indents existing files once, to the new formatter rules below.
+`gscode.completion.fieldScope` is removed, `gscode.serverLogLevel` now defaults to `warning`, and the
+inlay hints (parameter names, inferred types) now default to off, like the code lens.
+
+**Faster, at any size.**
+- A Black Ops III workspace indexes in about 0.6 s, and opening the root of a game install no longer
+  walks its tool-output folders.
+- At 50,000 files a warm start is about 4 seconds, and completion, a file's lint pass, CodeLens and
+  find-references cost what they cost at 1,000.
+- `gscode.workspaceIndexingMode: "full"` reports the cross-file problems of every indexed file, not
+  only open ones, and re-checks only the files an edit reaches.
+
+**Navigation.**
+- Go to Implementations (method overrides, a field's assignments) and Go to Type Definition (the
+  class a variable holds, the function a pointer names).
+- Go to Definition, references and rename on fields and class members.
+- Call hierarchy for class methods and for files that are not open.
+- Hover links to the declaration.
+
+**Macros.** Signature help and hover show what a macro expands to, `__FILE__` and `__FUNCTION__` hover
+with their value, macro arguments can carry inlay hints, and the lints report what a macro expands
+to at the place it is used.
+
+**Completion.**
+- Functions from scripts you have not imported, with the import written for you.
+- The full list outside any function.
+- `sys::` for the engine library.
+- Function pointers without parentheses.
+- Field and literal lists cut to what you have typed.
+
+**Formatting.**
+- New settings: `fixCasing` gives keywords and calls their declared spelling; `indentCaseLabels` and
+  `indentDevBlocks` set the two indentations the stock scripts split on; `alignMaxPadding` caps
+  alignment.
+- Output now matches the stock scripts more closely: continuation lines, split conditions, blank
+  lines after blocks, spaced `?:` and base-class colons, one `case` label per line.
+- Formatting edits stay on the lines they change, so the caret stays where it was.
+
+**The right-click menu** has a **GSCode** submenu: Organize Imports (which now also sorts the import
+block), Generate ScriptDoc Block for the function under the cursor, Open Documentation for Symbol,
+Select Game, and the server commands. The extension also runs in Restricted Mode now.
+
+**Fixes.** Over fifty, among them: `full` indexing mode keeping every closed file's cross-file
+problems through edits, branch switches and folder changes, diagnostics that went stale or
+reappeared on closed files, `.gsh`
+edits not reaching the files that insert them, a cache that missed files changed between sessions,
+`#define` bodies the formatter could break, CRLF files formatted as one whole-file edit, and false
+positives on shipped scripts.
+
+The full list is in [CHANGELOG.md](CHANGELOG.md).
+
+### 2.0.2
 
 - `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
 - `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`. Independent of `padParens`, so every combination of keyword space and interior padding is reachable.

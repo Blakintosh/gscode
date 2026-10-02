@@ -917,9 +917,9 @@ rest of the pass is in that number, and inference was never most of its tail. A 
 sweep on both sides printed identical findings: 37 tests, 434 lines, differing only in xUnit's own
 timestamps.
 
-### 2026-10-01: the 2.1.0 release check, and a baseline that was the machine
+### 2026-10-01: the 2.2.0 release check, and a baseline that was the machine
 
-Run before tagging 2.1.0, after the last fixes landed: the full-mode diagnostics paths, the
+Run before tagging 2.2.0, after the last fixes landed: the full-mode diagnostics paths, the
 inlay-hint defaults, and path calls reaching the named file's include closure. Release, cod4 and
 bo3, the editor's own Release server running alongside.
 

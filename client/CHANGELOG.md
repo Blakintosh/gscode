@@ -4,65 +4,148 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 2.2.0
+
+2.2.0 rather than 2.1.0: the Marketplace keeps odd minors for pre-releases, which are published as
+2.1.N from the 2.0 line, so the next full release takes the even minor above them.
+
+Upgrading: the workspace cache moves to a new binary format and rebuilds once on the first start.
+Format Document will re-indent existing files once (see **Changed**). `gscode.completion.fieldScope`
+is gone (see **Removed**). Inlay hints are now off by default; turn on the ones you want.
 
 ### Added
-- **GSCode: Select Game** can be opened on purpose from the Command Palette, and lists only the games
-  the server has a dialect for, ticking the one actually in force.
-- `workspaceIndexingMode: "full"` now runs the cross-file lints over every indexed file, not just
-  open ones, and re-lints only the closed files an edit reaches.
-- Macros: signature help on a macro invocation shows what it expands to; macro parameter-name inlay
-  hints (`gscode.inlayHints.macroParameterNames`, off by default); hover follows a chain of macros;
-  `__FUNCTION__` and `__FILE__` hover where they are written; keyword-shaped macro names such as
-  `DEFAULT` get the macro colour.
-- Organize Imports removes every unused `#using`/`#include` in the file, not only the one under the
-  cursor, and then groups and sorts the directive block the same way Format Document does.
-- **GSCode: Generate ScriptDoc Block** (right-click > GSCode, or the palette) writes the doc block
-  for the function the cursor is in, anywhere in it: the tags the stock scripts use, with the
-  parameters filled in from the signature and marked mandatory or optional. It is a command, not a
-  lightbulb, so undocumented functions are not flagged.
+
+**Navigation**
+- **Go to Implementations** on a class method lists the subclasses that override it. On a field it
+  lists the field's plain assignments, plus the function a callback field is bound to
+  (`level.callback = &on_damage`).
+- **Go to Type Definition** on a local jumps to the class it holds or the function it points at; on a
+  field, to the class or function the scripts put in it.
+- **Go to Definition** on a field (`level.foo`) goes to the places it is written. It used to do
+  nothing, since a field is declared nowhere.
+- A class `var` gets the navigation every other symbol has — definition, references, hover, rename —
+  including its uses in subclasses in other files.
+- Call hierarchy works for class methods end to end, for files you do not have open, and for callers
+  on CoD4, WaW, MW2 and BO1, where expanding a caller used to show nothing.
+- Find All References on an engine builtin finds every call site in the workspace, not only the ones
+  in the namespace you asked from.
+- Hovering a script function, class or macro shows where it is declared, as a link to that file and
+  line — the answer a macro's hover could not give before, since an `#insert`ed `#define` lives in a
+  header the file never names.
+
+**Macros**
+- Signature help on a macro invocation shows what it expands to, and hover follows a chain of macros.
+- Macro parameter-name inlay hints (`gscode.inlayHints.macroParameterNames`, off by default).
+- `__FUNCTION__` and `__FILE__` hover with the value they resolve to, where they are written.
+- Keyword-shaped macro names such as `DEFAULT` get the macro colour.
+- The lints see through macros: a private, dev-only, ambiguous or unresolved call that a macro
+  expands to is reported at the invocation, and a missing `#using`/`#include` it needs is asked for.
+
+**Completion**
 - Completion offers functions from scripts you have not imported and writes the `#using` /
   `#include` for you when you accept one (`gscode.completion.autoImport`, on by default). It waits
   for three characters, so what is already in scope still comes first.
-- Hovering a script function, class or macro now shows where it is declared, as a link to that
-  file and line — the answer a macro's hover could not give before, since an `#insert`ed
-  `#define` lives in a header the file never names.
-- **Go to Implementations** on a class method lists the subclasses that override it, and
-  **Go to Type Definition** on a local jumps to the class it holds or the function it points at.
+- Outside any function, completion offers what a function body gets — macros such as
+  `REGISTER_SYSTEM`, functions, classes — instead of nothing but snippets.
+- `sys::` offers the engine's builtin library. A `sys::` call's hover shows the builtin, and its
+  argument count is checked against it.
+- A field written in more than one casing is one row, labelled with this file's spelling or else
+  the most-used one, with a `+N spellings` hint and the spellings listed in the details pane.
+
+**Commands and the editor**
+- A **GSCode** submenu in the right-click menu of GSC, CSC and GSH files: Organize Imports, Generate
+  ScriptDoc Block, Open Documentation for Symbol, Select Game, Show Server Output, Restart Language
+  Server, and Clear Cache and Reindex.
+- **GSCode: Generate ScriptDoc Block** writes the doc block for the function the cursor is in,
+  anywhere in it: the tags the stock scripts use, with the parameters filled in from the signature
+  and marked mandatory or optional. It is a command, not a lightbulb, so undocumented functions are
+  not flagged.
+- **GSCode: Organize Imports** as a palette command, which says so when there is nothing to do
+  instead of VS Code's "No code actions available".
+- **GSCode: Select Game** can be opened on purpose from the Command Palette, and lists only the games
+  the server has a dialect for, ticking the one actually in force.
+- `workspaceIndexingMode: "full"` runs the cross-file lints over every indexed file, not just open
+  ones, and re-lints only the closed files an edit reaches.
 - A status-bar warning when indexing fails, instead of a spinner that never stops.
-- The lints now see through macros: a private, dev-only, ambiguous or unresolved call that a macro
-  expands to is reported at the invocation, and a missing `#using`/`#include` it needs is asked for.
-- Two formatter settings for indentation the stock scripts split on:
-  `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
-  `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block).
-- `gscode.format.alignMaxPadding` (20): consecutive alignment no longer pushes a short name's `=`
-  across the screen to match a deeply subscripted neighbour. A line further than this from the rest
-  of its run keeps a single space, and the rest still align.
+
+**Formatting settings**
 - `gscode.format.fixCasing` (on): formatting lowercases keywords and writes functions, namespaces
   and classes the way they are declared — `isDefined()` becomes `isdefined()`, `getplayers()`
   becomes `GetPlayers()`, `FOo()` becomes `foo()`, `Util::` becomes `util::`. A bare call takes the
   builtin's spelling when there is one, since it resolves to the builtin first. Macros match exactly
   and are never recased.
+- `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
+  `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block), for the two
+  indentations the stock scripts split on.
+- `gscode.format.alignMaxPadding` (20): consecutive alignment no longer pushes a short name's `=`
+  across the screen to match a deeply subscripted neighbour. A line further than this from the rest
+  of its run keeps a single space, and the rest still align.
 
 ### Changed
-- The formatter indents a line that continues an open `(` or `[` one level past its statement,
-  as the stock scripts do. It used to pull such lines back flush, so Format Document re-indents
-  split calls and conditions in existing files once.
-- Large workspaces stay fast. Measured on generated 50,000-file workspaces: a warm start is about
-  4 seconds, and completion, one file's lint pass, CodeLens and find-references cost the same as in
-  a 1,000-file one. The workspace cache uses a new binary format, so it rebuilds once on first start.
+
+**Formatter output.** Each rule follows what the stock scripts do; Format Document re-indents
+existing files once.
+- A line continuing an open `(` or `[` is indented one level past its statement, rather than pulled
+  back flush.
+- A control-flow header split across lines keeps its breaks and aligns the continuation under its
+  opening parenthesis, the way stock writes long chains of conditions.
+- A blank line follows a closed block, and the statement that ends an unbraced body, before the next
+  statement (still capped by `maxBlankLines`).
+- Ternary and base-class colons are spaced (`a ? b : c`, `class Derived : Base`), and each `case`
+  label stands on its own line.
+- A braced case body stays in its label's column.
+- A function-pointer call is set apart from its caller (`self [[ level.callback ]]()`), and nested
+  subscripts are padded (`a[ b[ c ] ]`).
+- In a run of aligned assignments, a compound operator's `=` lines up with the others' `=`.
+- `vararg[ i ]` is subscripted like the variable it is.
+
+**Organize Imports** removes every unused `#using`/`#include` in the file, not only the one under the
+cursor, and then groups and sorts the directive block the same way Format Document does.
+
+**Performance.**
+- Large workspaces stay fast. Measured on generated 50,000-file workspaces: a warm start is about 4
+  seconds, and completion, one file's lint pass, CodeLens and find-references cost the same as in a
+  1,000-file one.
+- Ordinary starts are faster too: a Black Ops III workspace indexes in about 0.6 s rather than 2.2 s,
+  and a workspace opened at the root of a game install no longer walks its 170,000 tool-output files
+  (0.7 s rather than 2.8 s to index).
+- Completion inside a string or after a `.` sends only the entries matching what has been typed.
+
+**Diagnostics.** `5006` is renamed `DevOnlyFunctionCalledOutsideDevBlock`, and its message now says
+what a dev block is: a runtime switch the game skips unless developer script is enabled, not code
+compiled out of a "release build". The number is unchanged, so pragmas keep working.
+
+**Other.**
 - `gscode.serverLogLevel` defaults to `warning` rather than `off`.
+- Every inlay hint starts off: `gscode.inlayHints.parameterNames` and
+  `gscode.inlayHints.inferredTypes` now default to `false`, joining
+  `gscode.inlayHints.macroParameterNames` and `gscode.codeLens.enabled`. Each adds text between the
+  characters of a line, so they are something to turn on deliberately. A value you have set
+  yourself is kept.
+- The description of `workspaceIndexingMode: "off"` says what it actually turns off: the checks
+  that need the index. A `#using` naming no file and a duplicate import are still reported.
 - Diagnostics for closed files are only re-sent when they change.
 - GSCode runs in Restricted Mode, reading `gscode.rawPath` and `gscode.modsPath` from user settings
   only until the workspace is trusted. It used to be disabled there entirely.
 - The GSCode commands no longer appear in the Command Palette of a workspace with no GSC in it, and
   **Open Documentation for Symbol** only appears in a GSC, CSC or GSH editor.
-- The editor's right-click menu has a **GSCode** submenu in GSC, CSC and GSH files: Organize Imports,
-  Generate ScriptDoc Block, Open Documentation for Symbol, Select Game, Show Server Output, Restart Language Server, and Clear
-  Cache and Reindex. **GSCode: Organize Imports** is also a new palette command, and says so when
-  there is nothing to do instead of VS Code's "No code actions available".
+- Completing `function` inserts the bare keyword rather than a declaration snippet, so `private` and
+  `autoexec` can follow it; the modifiers are offered next.
+- A function pointer completes without parentheses (`&foo`, not `&foo()`), and macros are offered
+  only on Black Ops III, the one game with a preprocessor.
+- Parameter-name inlay hints leave out a label that repeats the argument (`give( player )`, not
+  `give( player: player )`), and an inlay-hint setting takes effect as soon as it is changed.
+- The extension ships as one bundled file, and only what it runs.
+
+### Removed
+
+- `gscode.completion.fieldScope`. Field completion offers every field after any `x.` and narrows by
+  what has been typed. Scoping by the variable before the dot hid fields the object has: `self` is
+  whatever a function was called on, and after `blah = level;`, `blah.` offered nothing `level` has.
 
 ### Fixed
+
+**Formatting**
 - Formatting a CRLF file no longer returns an edit covering the whole file every time, and no
   longer does so on every `;` and `}` with format-on-type. Output keeps the file's line endings.
 - Format Document keeps the caret where it was on a large file. VS Code applies a thousand edits or
@@ -71,26 +154,57 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   whose formatting changed lines throughout, one `;` used to rewrite the whole file and move the
   caret thousands of lines. Formatting edits are now one per changed line, and computing them is
   about three times faster on the largest stock scripts.
-- The `doc` snippet on the four pre-BO3 games now writes the `///ScriptDocBegin`/`///ScriptDocEnd`
+- A `#define` body is never split across lines (`#define WAIT_SERVER_FRAME {wait(0.05);}` used to
+  come out as an empty macro followed by a block), and an object-like `#define HALF ( 1 / 2 )` is no
+  longer rewritten into a function-like one. Both changed what the macro means.
+- The `doc` snippet on the four pre-BO3 games writes the `///ScriptDocBegin`/`///ScriptDocEnd`
   fence, without which what it inserted read back as an ordinary comment and the function it
   documented hovered with no documentation at all.
+
+**Diagnostics and analysis**
+- With `workspaceIndexingMode: "full"`, a closed file keeps its cross-file problems after it has
+  been opened and closed again, after it changes on disk (a branch switch, a checkout, another
+  tool), and when a workspace folder is added mid-session. Each used to drop it back to the problems
+  parsing alone finds, until the next start.
+- Adding or removing a workspace folder republishes the closed files' problems and re-checks the
+  open ones. A removed folder's problems used to stay in the Problems panel, and an added folder's
+  never appeared.
 - Diagnostics from an older analysis no longer replace newer ones, reappear on a closed file, or
   show twice under two spellings of the same path.
+- Editing or saving a `.gsh` updates every file that inserts it, including through other headers.
+  Hover on a macro used to show the old value until something was typed in the file using it.
 - The startup index no longer overwrites an open document, runs twice at once, or survives
   **Clear Cache and Reindex**; clearing the cache now actually deletes it on Windows.
 - A cache restored in a new session picks up headers created or deleted in between, files deleted
   in between, and a workspace-folder change.
-- A mod overlay now hides the raw file it replaces everywhere: references, completion, workspace
+- The outline, folding and selection ranges answer for a file opened during startup, before its
+  first analysis has finished.
+- A mod overlay hides the raw file it replaces everywhere: references, completion, workspace
   symbols, and declarations it no longer contains.
+- Path calls (`maps\mp\_utility::foo()`) resolve against the file they name, not a same-named
+  function elsewhere.
+- One unreadable import no longer silences the unused-import hints for the rest of the file.
+- Unreachable code directly inside a `switch` case is reported.
+- Argument counts, ambiguous-call, unused-local and unused-binding lints: several false positives on
+  shipped scripts, including `waittillmatch`'s trailing argument read as an output and class member
+  writes in a method read as unused locals.
 - Type inference: subscript writes, compound assignments, `++`/`--`, loops, `switch` and `if`
-  conditions now update what a variable is known to hold.
-- Completion no longer pops up inside comments or right after a closed string, offers functions
-  from unrelated files sharing a name stem, or misses a function just written.
+  conditions now update what a variable is known to hold, and `"text" + vector` is a string.
+
+**Editor features**
+- Completion no longer pops up inside comments or right after a closed string, opens the directive
+  list when typing the `/#` dev-block opener, offers functions from unrelated files sharing a name
+  stem, or misses a function just written.
+- Parameter-name inlay hints are back on CoD4, WaW, MW2 and BO1; hints no longer stack on one spot,
+  and a call that starts above the visible area keeps its labels.
 - Signature help on merge dialects (`#include`) and on call-shaped keywords; go-to-definition on
   locals created by a subscript write; call hierarchy lists each calling function separately; a
   rename refuses a name that is not a valid identifier.
-- Argument counts, ambiguous-call and unused-binding lints: several false positives on shipped
-  scripts, including `waittillmatch`'s trailing argument read as an output.
+- A builtin's hover no longer repeats its main signature in the overload list, or shows `Name()` for
+  a builtin with no signature data.
+- `__FILE__` inside an `#insert`ed header names the script it ends up in.
+- Quick Fix from the right-click menu finds the fixes for the cursor's line.
+- ScriptDoc blocks are coloured as the stock headers actually write them.
 - Renaming or moving a folder updates the `#using` and `#insert` paths that name the scripts inside
   it, as renaming a single script already did. Moving a `.gsc` and its `.csc` together no longer
   loses the update either.

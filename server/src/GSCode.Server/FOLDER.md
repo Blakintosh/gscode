@@ -575,14 +575,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
     `SymbolExtractor.RecordCalleeReference`). Qualifying is therefore an insert at the range start,
     and a wrong qualifier is replaced over the range scanned back from it.
 
-- `AddGenerateScriptDocAction` — "Generate ScriptDoc block" on a function or method whose `Doc` is
-  `None`, rendering `ScriptDocTemplate` in the dialect's style with the declaration's own
-  indentation and inserting it above the declaration line. A `Refactor`, not a `QuickFix`, and with
-  no diagnostic behind it on purpose: an undocumented function is not a fault — the stock scripts
-  ship thousands — so there is no rule to bind to and one would be noise on code that works. Both
-  declaration lists are walked, since `Extraction.Functions` holds top-level functions only.
-  Skips a nameless declaration (half-typed code is the normal state) and one that arrived through an
-  `#insert`, whose ranges are true in the header and whose edit would land in the wrong file.
+- "Generate ScriptDoc block" is NOT a code action here: as a refactor it put a lightbulb on every
+  undocumented function. It is `GenerateScriptDocHandler`, below.
 
 ## Formatting/GscFormatter.cs
 
@@ -807,6 +801,14 @@ that chose it. These are the pieces that implement it:
 
 ## Handlers/ — the remainder
 
+- `GenerateScriptDocHandler` — serves `gscode/generateScriptDoc`, behind the right-click menu's
+  Generate ScriptDoc Block. Finds the function or method whose range contains the cursor —
+  anywhere in it, declaration or body — and answers `generated` with the `ScriptDocTemplate` block
+  (the dialect's style, indented to the declaration) and the line it goes above, `documented` when
+  it has one, or `none`. Fresh analysis, since the answer is a line. Skips a nameless declaration
+  and one an `#insert` brought in, whose ranges are true in the header. A request rather than a code
+  action because an undocumented function is not a fault — the stock scripts ship thousands — and
+  a lightbulb on each of them was noise on code that works.
 - `BuiltinAtHandler` — serves the `gscode/builtinAt` request behind `shift+f1`, since the client has
   no symbol knowledge of its own and cannot tell a builtin from a script function.
 - `CodeLensRefresh` — `ICodeLensRefreshSink`, the one thing the dependent refresher asks of the

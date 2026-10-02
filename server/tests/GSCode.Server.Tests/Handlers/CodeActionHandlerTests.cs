@@ -302,46 +302,108 @@ public class CodeActionHandlerTests
 
     private static DocumentUri TestUri => DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\t.gsc"));
 
+    /// <summary>The document after applying the single Organize Imports edit.</summary>
+    private static string Organized(string source, params LspDiagnostic[] unused)
+    {
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), unused, actions);
+
+        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
+        Assert.Equal(CodeActionKind.SourceOrganizeImports, organize.Kind);
+
+        TextEdit edit = SingleEditOf(organize);
+        SourceText text = SourceText.From(source);
+        int start = text.GetOffset(new GSCode.Core.Text.Position(edit.Range.Start.Line, edit.Range.Start.Character));
+        int end = text.GetOffset(new GSCode.Core.Text.Position(edit.Range.End.Line, edit.Range.End.Character));
+        return source[..start] + edit.NewText + source[end..];
+    }
+
     [Fact]
     public void UnusedImport_OffersAnOrganizeImportsAction_EvenJustOne()
     {
         // Unlike the QuickFix bulk action (OneUnusedUsing_DoesNotOfferABulkFix, above), Organize
         // Imports has no per-line neighbour to be redundant with — it is offered from one unused
         // import already.
-        List<CommandOrCodeAction> actions = [];
-        CodeActionHandler.AddOrganizeImportsAction(
-            TestUri, [Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17)], actions);
+        string source = "#using scripts\\a;\n#using scripts\\b;\n\nfunction f(){}\n";
 
-        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
-        Assert.Equal(CodeActionKind.SourceOrganizeImports, organize.Kind);
-        Assert.Equal("", SingleEditOf(organize).NewText);
+        Assert.Equal(
+            "#using scripts\\a;\n\nfunction f(){}\n",
+            Organized(source, Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17)));
     }
 
     [Fact]
-    public void OrganizeImportsAction_CombinesEveryUnusedImportIntoOneEdit()
+    public void OrganizeImportsAction_RemovesEveryUnusedImportInOneEdit()
     {
-        // Two diagnostics on DIFFERENT lines — proving the action combines whatever set it is
-        // given rather than assuming they share a line, which is exactly what a file-wide scan
-        // (several imports, scattered through the file) hands it in practice.
-        List<CommandOrCodeAction> actions = [];
-        CodeActionHandler.AddOrganizeImportsAction(
-            TestUri,
-            [
+        // Two diagnostics on lines that are not adjacent — the action combines whatever set it is
+        // given, which is what a file-wide scan hands it in practice.
+        string source = "#using scripts\\a;\n#using scripts\\b;\n#using scripts\\c;\n\nfunction f(){}\n";
+
+        Assert.Equal(
+            "#using scripts\\b;\n\nfunction f(){}\n",
+            Organized(
+                source,
                 Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
-                Reported(GscDiagnosticCode.UnusedUsing, 5, 0, 17),
-            ],
-            actions);
-
-        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
-        Assert.Equal(2, Assert.Single(organize.Edit!.Changes!).Value.Count());
-        Assert.Equal(2, organize.Diagnostics!.Count());
+                Reported(GscDiagnosticCode.UnusedUsing, 2, 0, 17)));
     }
 
     [Fact]
-    public void NoUnusedImports_OffersNoOrganizeImportsAction()
+    public void OrganizeImportsAction_SortsTheBlock_WithNothingUnused()
     {
+        // The reported gap: Organize Imports only removed. It now sorts too, through the
+        // formatter's own DirectiveSorter, so the two cannot disagree about the order.
+        string source = "#using scripts\\zeta;\n#using scripts\\alpha;\n\nfunction f(){}\n";
+
+        Assert.Equal(
+            "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n",
+            Organized(source));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_RemovesThenSorts()
+    {
+        string source = "#using scripts\\zeta;\n#using scripts\\unused;\n#using scripts\\alpha;\n\nfunction f(){}\n";
+
         List<CommandOrCodeAction> actions = [];
-        CodeActionHandler.AddOrganizeImportsAction(TestUri, [], actions);
+        CodeActionHandler.AddOrganizeImportsAction(
+            TestUri, SourceText.From(source), [Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 22)], actions);
+        Assert.Equal("Organize imports (remove 1 unused, sort)", Assert.Single(actions).CodeAction!.Title);
+
+        Assert.Equal(
+            "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n",
+            Organized(source, Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 22)));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_KeepsACrlfDocumentCrlf()
+    {
+        string source = "#using scripts\\zeta;\r\n#using scripts\\alpha;\r\n\r\nfunction f(){}\r\n";
+
+        Assert.Equal(
+            "#using scripts\\alpha;\r\n#using scripts\\zeta;\r\n\r\nfunction f(){}\r\n",
+            Organized(source));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_EditsOnlyTheLinesThatChange()
+    {
+        // A whole-document replacement would move every caret in the file to its end.
+        string source = "#using scripts\\zeta;\n#using scripts\\alpha;\n\nfunction f()\n{\n}\n";
+
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), [], actions);
+        TextEdit edit = SingleEditOf(Assert.Single(actions).CodeAction!);
+
+        Assert.Equal(0, edit.Range.Start.Line);
+        Assert.Equal(2, edit.Range.End.Line);
+    }
+
+    [Fact]
+    public void NothingUnusedAndAlreadySorted_OffersNoOrganizeImportsAction()
+    {
+        string source = "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n";
+
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), [], actions);
 
         Assert.Empty(actions);
     }

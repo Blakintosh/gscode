@@ -61,6 +61,7 @@ internal static class ServerServices
             .AddHandler<ClearCacheHandler>()
             .AddHandler<SupportedGamesHandler>()
             .AddHandler<BuiltinAtHandler>()
+            .AddHandler<GenerateScriptDocHandler>()
             .AddHandler<HoverHandler>()
             .AddHandler<DefinitionHandler>()
             .AddHandler<ImplementationHandler>()

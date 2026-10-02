@@ -13,8 +13,13 @@ The VSCode extension sources. Five small files; the heavy lifting lives in the s
   stop indexing and delete only this workspace's database — the server is the side that knows which
   file that is — then reloads the window for a fresh cold index), `gscode.selectGame` (the game picker, see `gamePicker.ts`),
   `gscode.openApiLibrary` (opens the gscode.net library for the active editor's
-  language; bound to `shift+f1` in gsc/csc/gsh files), and the `gscode.showReferences` bridge for
-  code-lens clicks.
+  language; bound to `shift+f1` in gsc/csc/gsh files), `gscode.organizeImports`
+  (through `applyServerCodeAction`), `gscode.generateScriptDoc` (sends `gscode/generateScriptDoc`
+  with the cursor and inserts the block the server returns), and the `gscode.showReferences`
+  bridge for code-lens clicks. All but the last are in the right-click menu's **GSCode** submenu.
+- `applyServerCodeAction(kind, nothingToDo, log)` — asks the providers for one code-action kind at
+  the cursor (`vscode.executeCodeActionProvider`) and applies the first one's edit, or says
+  `nothingToDo`. The server attaches every edit up front, so there is nothing to resolve.
 - `registerIndexingStatusBar(context, client)` — the live indexing counter: a spinner whose
   number races upward on `gscode/indexingStarted|Progress|Complete` notifications.
 - `registerRenameDirectiveFixup(context, client, log)` — on `onWillRenameFiles`, asks the server

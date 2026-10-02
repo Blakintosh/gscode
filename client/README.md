@@ -189,6 +189,14 @@ code it suppresses and says where it stops.
   the setting says — the two differ when a setting names something unrecognised.
 - **GSCode: Clear Cache and Reindex** deletes this workspace's cache and reloads the window.
 - **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/), for the game the server has selected — a Call of Duty 4 workspace opens Call of Duty 4's library, not Black Ops III's. It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
+- **GSCode: Organize Imports** removes every unused `#using`/`#include` in the file and sorts the
+  directive block, in the same order Format Document uses (also
+  `Shift+Alt+O` and **Source Action...**).
+- **GSCode: Generate ScriptDoc Block** writes the doc block for the function the cursor is in —
+  anywhere in it — with its parameters filled in, in the dialect's own ScriptDoc form.
+
+Every command above is also in the editor's right-click menu, under **GSCode**, in GSC, CSC and GSH
+files.
 
 GSCode provides diagnostics, hover, completion, signature help, go-to-definition, references,
 rename, document/workspace symbols, semantic tokens, folding, code lens, call/type hierarchy,
@@ -237,7 +245,7 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - Completion offers functions from scripts the file has not imported yet, once three characters have been typed, and adds the `#using` (or `#include`) line when one is accepted — qualified on Black Ops III, bare on the merge dialects, which is what each game actually needs. Turn it off with `gscode.completion.autoImport`.
 - Type-flow inference powers inferred-type inlay hints and local-variable hovers, seeded with engine object-field types.
 - Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
-- Code actions cover remove-duplicate-`#using`, add-missing-`#using`, Organize Imports, and **Generate ScriptDoc block** — a doc block for an undocumented function, with its parameters filled in and written in the dialect's own ScriptDoc form.
+- Code actions cover remove-duplicate-`#using`, add-missing-`#using` and Organize Imports. **Generate ScriptDoc Block** is a command — a doc block for the function under the cursor, with its parameters filled in and written in the dialect's own ScriptDoc form.
 - Macros defined in `.gsh` headers are first-class symbols with go-to-definition, references, and hover via token provenance.
 - Added support for four earlier games — Call of Duty 4, World at War, Modern Warfare 2 and Black Ops — with each dialect's keywords, import style, function-pointer and ScriptDoc syntax, and bundled engine data driven by one game profile rather than by branching.
 - Replaced `TA_TOOLS_PATH` with `gscode.rawPath` and `gscode.modsPath`, both derived from the game install where possible, so a mod or a loose folder of scripts resolves against the game's own scripts.

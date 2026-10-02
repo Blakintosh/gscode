@@ -1,13 +1,13 @@
 using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Docs;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Server.Formatting;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -15,8 +15,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
 using Position = GSCode.Core.Text.Position;
-using ClassSymbol = GSCode.Core.Symbols.ClassSymbol;
-using FunctionSymbol = GSCode.Core.Symbols.FunctionSymbol;
 using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
 using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
@@ -60,12 +58,11 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             // only QuickFix registered, both menus showed nothing to pick, not an empty result
             // from an actual request.
             //
-            // Refactor is here for "Generate ScriptDoc block", which cannot be a QuickFix: a quick
-            // fix with no diagnostic behind it is never presented as the fix FOR anything, and
-            // there is no missing-documentation diagnostic — nor should there be, since it would
-            // fire on the thousands of undocumented functions the stock scripts ship.
+            // "Generate ScriptDoc block" is not here: it is the gscode/generateScriptDoc request,
+            // run from the right-click menu, because as a refactor it put a lightbulb on every
+            // undocumented function in the file.
             CodeActionKinds = new Container<CodeActionKind>(
-                CodeActionKind.QuickFix, CodeActionKind.Refactor, CodeActionKind.SourceOrganizeImports),
+                CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports),
         };
     }
 
@@ -125,8 +122,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, lints, cancellationToken), target);
 
-        AddGenerateScriptDocAction(request.TextDocument.Uri, result, selection, actions);
-
         // Same TriggerKind gate as DiagnosticsForFixes: VS Code never polls a Source Action
         // request the way it polls QuickFix for the lightbulb, so this only ever runs on an
         // explicit ask — but the gate is kept anyway rather than assumed, for the same
@@ -134,7 +129,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) == CodeActionTriggerKind.Invoked )
         {
             AddOrganizeImportsAction(
-                request.TextDocument.Uri, AllUnusedImportDiagnostics(lints, cancellationToken), actions);
+                request.TextDocument.Uri, result.Text, AllUnusedImportDiagnostics(lints, cancellationToken), actions);
         }
 
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
@@ -479,31 +474,117 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     }
 
     /// <summary>
-    /// The one SourceOrganizeImports action: every unused #using/#include it is GIVEN, in a single
-    /// edit, with no scoping of its own — the file-wide-versus-current-line distinction lives
-    /// entirely in what <see cref="AllUnusedImportDiagnostics"/> gathers (<c>internal</c> so a test
-    /// can pin that). Offered whenever there is at least one, unlike the QuickFix bulk action, which
-    /// needs two because a lone unused import already has its own per-line fix: Organize Imports is
-    /// the command a user reaches for regardless of count.
+    /// The one SourceOrganizeImports action: remove every unused #using/#include it is GIVEN, then
+    /// group and sort the directive block, as one edit. No scoping of its own — the
+    /// file-wide-versus-current-line distinction lives entirely in what
+    /// <see cref="AllUnusedImportDiagnostics"/> gathers (<c>internal</c> so a test can pin that).
+    ///
+    /// The sort is the formatter's own <see cref="DirectiveSorter"/>, so Organize Imports and Format
+    /// Document cannot disagree about the order, and it carries the sorter's guarantees: a line is
+    /// moved but never dropped or edited, and a block whose order matters (a #define above an
+    /// #insert, an #using_animtree) is left alone. It sorts whatever <c>gscode.format.sortDirectives</c>
+    /// says: that setting is about what formatting does unasked, and this is the explicit ask.
+    ///
+    /// Offered whenever it would change something — one unused import, or an unsorted block —
+    /// unlike the QuickFix bulk action, which needs two unused imports because a lone one already
+    /// has its own per-line fix.
     /// </summary>
     internal static void AddOrganizeImportsAction(
         DocumentUri uri,
+        SourceText text,
         IReadOnlyCollection<LspDiagnostic> unused,
         List<CommandOrCodeAction> actions)
     {
-        if ( unused.Count == 0 )
+        HashSet<int> removed = [];
+        foreach ( LspDiagnostic diagnostic in unused )
+        {
+            removed.Add(diagnostic.Range.ToCore().Start.Line);
+        }
+
+        // Worked in LF throughout: DirectiveSorter splits on '\n' and writes its separators as
+        // '\n', so a CRLF document is converted on the way in and back on the way out rather than
+        // coming back with mixed endings.
+        string original = text.Text;
+        bool crlf = original.Contains("\r\n", StringComparison.Ordinal);
+        string[] lines = original.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        List<string> kept = [];
+        for ( int line = 0; line < lines.Length; line++ )
+        {
+            if ( !removed.Contains(line) )
+            {
+                kept.Add(lines[line]);
+            }
+        }
+
+        string pruned = string.Join('\n', kept);
+        string? sorted = DirectiveSorter.Sort(pruned);
+        string organized = sorted ?? pruned;
+        if ( crlf )
+        {
+            organized = organized.Replace("\n", "\r\n", StringComparison.Ordinal);
+        }
+
+        if ( string.Equals(organized, original, StringComparison.Ordinal) )
         {
             return;
         }
 
-        List<TextEdit> edits = LineDeletions(unused);
+        string title = (removed.Count, sorted is not null) switch
+        {
+            (> 0, true) => "Organize imports (remove " + removed.Count + " unused, sort)",
+            (> 0, false) => "Organize imports (remove " + removed.Count + " unused)",
+            _ => "Organize imports (sort)",
+        };
 
         actions.Add(new CommandOrCodeAction(BuildAction(
-            "Organize imports (remove " + edits.Count + " unused)",
+            title,
             uri,
-            edits,
-            new Container<LspDiagnostic>(unused),
+            [ChangedLinesEdit(text, organized)],
+            unused.Count > 0 ? new Container<LspDiagnostic>(unused) : null,
             CodeActionKind.SourceOrganizeImports)));
+    }
+
+    /// <summary>
+    /// One edit replacing only the run of whole lines that differ between the document and
+    /// <paramref name="replacement"/>, so the rest of the file — and every caret in it — is
+    /// untouched. The common prefix and suffix are snapped outward to line boundaries, which keeps
+    /// the edit to whole lines and never splits a CRLF.
+    /// </summary>
+    private static TextEdit ChangedLinesEdit(SourceText text, string replacement)
+    {
+        string original = text.Text;
+
+        int prefix = 0;
+        int limit = Math.Min(original.Length, replacement.Length);
+        while ( prefix < limit && original[prefix] == replacement[prefix] )
+        {
+            prefix++;
+        }
+
+        // Back to the start of the line the first difference is on. The splice below is exact
+        // wherever the boundaries fall; snapping them only keeps the edit to whole lines.
+        prefix = prefix == 0 ? 0 : original.LastIndexOf('\n', prefix - 1, prefix) + 1;
+
+        int suffix = 0;
+        while ( suffix < original.Length - prefix
+            && suffix < replacement.Length - prefix
+            && original[original.Length - 1 - suffix] == replacement[replacement.Length - 1 - suffix] )
+        {
+            suffix++;
+        }
+
+        // Shrink the shared suffix until it starts at a line boundary in the original.
+        while ( suffix > 0 && original[original.Length - suffix - 1] != '\n' )
+        {
+            suffix--;
+        }
+
+        int originalEnd = original.Length - suffix;
+        int replacementEnd = replacement.Length - suffix;
+
+        TextRange range = new(text.GetPosition(prefix), text.GetPosition(originalEnd));
+        return new TextEdit { Range = range.ToLsp(), NewText = replacement[prefix..replacementEnd] };
     }
 
     /// <summary>
@@ -1227,106 +1308,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         bool preferred = false)
     {
         return BuildAction(title, uri, edits, diagnostics, CodeActionKind.QuickFix, preferred);
-    }
-
-    /// <summary>
-    /// "Generate ScriptDoc block" on a function or method that has none.
-    ///
-    /// A Refactor rather than a QuickFix, and deliberately without a diagnostic behind it: an
-    /// undocumented function is not a fault. The stock scripts ship thousands of them, so a
-    /// missing-documentation rule would be noise on code that works, which is the bar
-    /// <c>add-diagnostic</c> sets. The action stands on its own.
-    ///
-    /// Offered on the declaration the selection sits in — both loops, because
-    /// <c>Extraction.Functions</c> holds top-level functions only and a class's methods hang off
-    /// the class, the same split <see cref="CodeLensHandler"/> walks.
-    /// </summary>
-    private static void AddGenerateScriptDocAction(
-        DocumentUri uri, ParseResult result, TextRange selection, List<CommandOrCodeAction> actions)
-    {
-        FunctionSymbol? declaration = UndocumentedDeclarationAt(result, selection.Start);
-        if ( declaration is null )
-        {
-            return;
-        }
-
-        int line = declaration.FullRange.Start.Line;
-        string block = ScriptDocTemplate.Render(
-            declaration.Name,
-            declaration.Parameters,
-            declaration.HasVarargs,
-            GameProfile.Active.ScriptDocStyle,
-            IndentOf(result, line));
-
-        TextRange insertAt = new(new Position(line, 0), new Position(line, 0));
-        actions.Add(new CommandOrCodeAction(BuildAction(
-            "Generate ScriptDoc block for '" + declaration.Name + "'",
-            uri,
-            [new TextEdit { Range = insertAt.ToLsp(), NewText = block }],
-            diagnostics: null,
-            CodeActionKind.Refactor)));
-    }
-
-    /// <summary>
-    /// The function or method whose body contains <paramref name="position"/> and which has no doc
-    /// block, or null.
-    ///
-    /// A nameless declaration is skipped rather than offered an empty block: a handler runs on
-    /// every keystroke, so a function whose name has not been typed yet is the normal state, not a
-    /// fault.
-    /// </summary>
-    private static FunctionSymbol? UndocumentedDeclarationAt(ParseResult result, Position position)
-    {
-        foreach ( FunctionSymbol function in result.Extraction.Functions )
-        {
-            if ( IsUndocumentedAt(function, position) )
-            {
-                return function;
-            }
-        }
-
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            foreach ( FunctionSymbol method in classSymbol.Methods )
-            {
-                if ( IsUndocumentedAt(method, position) )
-                {
-                    return method;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsUndocumentedAt(FunctionSymbol function, Position position)
-    {
-        // SourceFile names the header an #insert brought the declaration in from, where the ranges
-        // are true and the edit would land in the wrong file entirely.
-        return function.SourceFile.Length == 0
-            && function.Name.Length > 0
-            && function.Doc.IsNone
-            && function.FullRange.Contains(position);
-    }
-
-    /// <summary>The leading whitespace of a line, which a generated block has to repeat — a method
-    /// sits inside a class body and a block flush left above it would be the only thing in the file
-    /// at column zero.</summary>
-    private static string IndentOf(ParseResult result, int line)
-    {
-        if ( line < 0 || line >= result.Text.LineCount )
-        {
-            return "";
-        }
-
-        int start = result.Text.GetOffset(new Position(line, 0));
-        int cursor = start;
-        while ( cursor < result.Text.Length && (result.Text.Text[cursor] == ' ' || result.Text.Text[cursor] == '\t') )
-        {
-            cursor++;
-        }
-
-        return result.Text.Text[start..cursor];
     }
 
     /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>

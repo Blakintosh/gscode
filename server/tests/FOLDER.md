@@ -460,8 +460,9 @@ hierarchies) · `ClassMemberNavigationTests` a class `var` read as a bare name i
 · `ImplementationAndTypeDefinitionTests` overriding subclasses and what a local holds, both
 declining rather than falling back to the declaration · `HoverDefinitionLinkTests` the definition
 link under a hover's signature, and none for a builtin · `AutoImportCompletionTests` the directive
-edit an unimported candidate carries · `GenerateScriptDocTests` a generated ScriptDoc block reading
-back as documentation in both dialect forms · `NarrowedCompletionTests` a list cut to the typed
+edit an unimported candidate carries · `GenerateScriptDocTests` the `gscode/generateScriptDoc` request:
+found from anywhere in the function, never offered as a code action, and the block reading back as
+documentation in both dialect forms · `NarrowedCompletionTests` a list cut to the typed
 text marked incomplete · `SysQualifiedHoverTests` a `sys::` hover describing the engine function.
 `TestDiagnosticsSinks` holds `RecordingDiagnosticsSink`, which keeps every publish for a test to
 assert on, and `DiscardingDiagnosticsSink`.
@@ -480,6 +481,8 @@ published.
 what the server SELECTED rather than what was asked for, and the two cross-file checks that close
 the gap the original bug lived in: that the roster and the `gscode.game` enum are the same list,
 and that `gscode.selectGame` is both declared in the manifest and registered in `extension.ts` ·
+`ClientCommandsTests` the same for every command: each declared one registered in `client/src`,
+and each menu and submenu entry naming a declared command ·
 `EffectiveSummaryTests` · `DiagnosticMappingTests` our diagnostics to LSP · `SettingsSnapshotTests` a
 settings push applied all at once · `InlayFamiliesTests` the change detector behind the inlay refresh ·
 `StartupLogControllerTests`, `StartupLogLevelTests` the startup log channel · `TransportSelectionTests`

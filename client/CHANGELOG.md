@@ -15,9 +15,12 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   hints (`gscode.inlayHints.macroParameterNames`, off by default); hover follows a chain of macros;
   `__FUNCTION__` and `__FILE__` hover where they are written; keyword-shaped macro names such as
   `DEFAULT` get the macro colour.
-- Organize Imports removes every unused `#using` in the file, not only the one under the cursor.
-- **Generate ScriptDoc block**, offered on a function that has none: the tags the stock scripts
-  use, with the parameters filled in from the signature and marked mandatory or optional.
+- Organize Imports removes every unused `#using`/`#include` in the file, not only the one under the
+  cursor, and then groups and sorts the directive block the same way Format Document does.
+- **GSCode: Generate ScriptDoc Block** (right-click > GSCode, or the palette) writes the doc block
+  for the function the cursor is in, anywhere in it: the tags the stock scripts use, with the
+  parameters filled in from the signature and marked mandatory or optional. It is a command, not a
+  lightbulb, so undocumented functions are not flagged.
 - Completion offers functions from scripts you have not imported and writes the `#using` /
   `#include` for you when you accept one (`gscode.completion.autoImport`, on by default). It waits
   for three characters, so what is already in scope still comes first.
@@ -53,8 +56,11 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 - GSCode runs in Restricted Mode, reading `gscode.rawPath` and `gscode.modsPath` from user settings
   only until the workspace is trusted. It used to be disabled there entirely.
 - The GSCode commands no longer appear in the Command Palette of a workspace with no GSC in it, and
-  **Open Documentation for Symbol** only appears in a GSC, CSC or GSH editor. It is also on the
-  editor's right-click menu there.
+  **Open Documentation for Symbol** only appears in a GSC, CSC or GSH editor.
+- The editor's right-click menu has a **GSCode** submenu in GSC, CSC and GSH files: Organize Imports,
+  Generate ScriptDoc Block, Open Documentation for Symbol, Select Game, Show Server Output, Restart Language Server, and Clear
+  Cache and Reindex. **GSCode: Organize Imports** is also a new palette command, and says so when
+  there is nothing to do instead of VS Code's "No code actions available".
 
 ### Fixed
 - Formatting a CRLF file no longer returns an edit covering the whole file every time, and no

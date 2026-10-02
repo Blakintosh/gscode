@@ -86,6 +86,38 @@ function requireClient(log: vscode.LogOutputChannel): LanguageClient | undefined
     return client;
 }
 
+/**
+ * Asks the providers for code actions of one kind at the cursor and applies the first.
+ *
+ * The server attaches every edit up front (no lazy resolve), so the action's `edit` is the whole
+ * change. Several actions of one kind is not a case the server produces; the first is taken.
+ */
+async function applyServerCodeAction(
+    kind: vscode.CodeActionKind,
+    nothingToDo: string,
+    log: vscode.LogOutputChannel,
+): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (editor === undefined || requireClient(log) === undefined) {
+        return;
+    }
+
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        "vscode.executeCodeActionProvider",
+        editor.document.uri,
+        editor.selection,
+        kind.value,
+    ) ?? [];
+
+    const action = actions.find((candidate) => candidate.kind !== undefined && kind.contains(candidate.kind));
+    if (action?.edit === undefined) {
+        void vscode.window.showInformationMessage(nothingToDo);
+        return;
+    }
+
+    await vscode.workspace.applyEdit(action.edit);
+}
+
 function registerCommands(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): void {
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.showOutput", () => {
@@ -222,6 +254,56 @@ function registerCommands(context: vscode.ExtensionContext, log: vscode.LogOutpu
             }
 
             await vscode.env.openExternal(vscode.Uri.parse(page));
+        }),
+    );
+
+    // Organize Imports, one click away in the context menu. It is a server code action that already
+    // appears under "Source Action..."; this command says why nothing happened when there is
+    // nothing to do, which the built-in "No code actions available" message does not.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.organizeImports", () =>
+            applyServerCodeAction(
+                vscode.CodeActionKind.SourceOrganizeImports,
+                "Imports are already organized: nothing unused, and the block is sorted.",
+                log,
+            )),
+    );
+
+    // Write the ScriptDoc block for the function the cursor is in, from the right-click menu.
+    //
+    // A request rather than a code action: offered as one it put a lightbulb on every undocumented
+    // function. The server finds the function from the cursor (anywhere in it, declaration or
+    // body), since only it has the parse, and answers with the block and the line it goes above.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.generateScriptDoc", async () => {
+            const editor = vscode.window.activeTextEditor;
+            const running = requireClient(log);
+            if (editor === undefined || running === undefined) {
+                return;
+            }
+
+            const response = await running.sendRequest<{
+                status: string;
+                function: string;
+                line: number;
+                text: string;
+            }>("gscode/generateScriptDoc", {
+                uri: editor.document.uri.toString(),
+                line: editor.selection.active.line,
+                character: editor.selection.active.character,
+            });
+
+            if (response.status === "documented") {
+                void vscode.window.showInformationMessage(`'${response.function}' already has a ScriptDoc block.`);
+                return;
+            }
+
+            if (response.status !== "generated") {
+                void vscode.window.showInformationMessage("Put the cursor inside a function to document it.");
+                return;
+            }
+
+            await editor.edit((builder) => builder.insert(new vscode.Position(response.line, 0), response.text));
         }),
     );
 

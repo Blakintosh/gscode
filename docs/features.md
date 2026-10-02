@@ -42,7 +42,7 @@ that pin it, so a change to a feature starts from the right file and ends at the
 | Format selection | `textDocument/rangeFormatting` | `DocumentRangeFormattingHandler` | same | same | `LocalFormatEditTests` |
 | Format on type (`}` `;`) | `textDocument/onTypeFormatting` | `DocumentOnTypeFormattingHandler` | same + `FormatScope` | `editor.formatOnType` | `OnTypeBlockScopeTests` |
 | Quick fixes | `textDocument/codeAction` | `CodeActionHandler`, `ImportEdits` | lint results + `DatabaseQueries` | — | `CodeActionHandlerTests`, `NamespaceImportFixTests`, `CodeActionLintReuseTests` |
-| Generate ScriptDoc | `textDocument/codeAction` (refactor) | `CodeActionHandler.AddGenerateScriptDocAction` | `Core/Docs/ScriptDocTemplate` | — | `GenerateScriptDocTests` |
+| Generate ScriptDoc | `gscode/generateScriptDoc` (command, not a code action) | `GenerateScriptDocHandler` | `Core/Docs/ScriptDocTemplate` | — | `GenerateScriptDocTests` |
 | Workspace symbol search | `workspace/symbol` | `WorkspaceSymbolHandler` | both language stores | — | `WorkspaceSymbolShadowingTests` |
 | Watched file changes | `workspace/didChangeWatchedFiles` | `WatchedFilesHandler` | `WatchedFileUpdater` | — | `WatchedFileUpdaterTests`, `WatcherRaceTests`, `HeaderChangeReachTests` |
 | Multi-root folders | `workspace/didChangeWorkspaceFolders` | `WorkspaceFoldersHandler` | `RootConfig`, `WorkspaceIndexer` | — | `WorkspaceFoldersHandlerTests` |
@@ -56,10 +56,9 @@ Quick fixes currently offered by `CodeActionHandler`:
 | 5000 namespace not imported | Add the `#using` for the file declaring the namespace |
 | 5026 function not included | Add `#include` for a file declaring the function |
 | 5013 / 5014 unresolved call | Create the function in this file; or add `#using` and qualify the call (namespace dialects) |
-| 5001 / 5012 unused import | Remove it (also "remove all unused imports") |
+| 5001 / 5012 unused import | Remove it (also "remove all unused imports"). Organize Imports removes them and sorts the directive block |
 | 3009 `#using` after a declaration | Move it up |
 | 5002 prefer boolean literal | Replace `0`/`1` with `false`/`true` |
-| (none) | Generate a ScriptDoc block for an undocumented function |
 
 To confirm this list against the code: `grep -n "GscDiagnosticCode\." server/src/GSCode.Server/Handlers/CodeActionHandler.cs`.
 
@@ -84,6 +83,7 @@ Everything the client and server say to each other outside standard LSP. The two
 | `gscode/clearCache` | client → server request | `ClearCacheHandler` | Stop indexing, close and delete this workspace's cache |
 | `gscode/planRename` | client → server request | `PlanRenameHandler` | Directive edits for a file being renamed |
 | `gscode/builtinAt` | client → server request | `BuiltinAtHandler` | Is the symbol under the cursor an engine builtin (for `shift+f1`) |
+| `gscode/generateScriptDoc` | client → server request | `GenerateScriptDocHandler` | The ScriptDoc block for the function at a position, and the line it goes above |
 
 To regenerate this table: `grep -rhoE '"gscode/[A-Za-z]+"' client/src server/src | sort -u`.
 
@@ -100,6 +100,14 @@ Declared in `client/package.json` (`contributes.commands`), registered in `clien
 | `gscode.selectGame` | GSCode: Select Game | Picker over `gscode/supportedGames`, writes `gscode.game`, reloads |
 | `gscode.clearCacheAndReindex` | GSCode: Clear Cache and Reindex | Modal confirm, `gscode/clearCache`, then window reload |
 | `gscode.openApiLibrary` | GSCode: Open Documentation for Symbol | `shift+f1`. Opens gscode.net for the builtin under the cursor (`gscode/builtinAt`) or the library index |
+| `gscode.organizeImports` | GSCode: Organize Imports | Asks for the `source.organizeImports` action at the cursor and applies it (`applyServerCodeAction`): removes unused imports and sorts the block with `DirectiveSorter`; says so when there is nothing to do |
+| `gscode.generateScriptDoc` | GSCode: Generate ScriptDoc Block | Sends `gscode/generateScriptDoc` with the cursor and inserts the block it returns; says why when the cursor is in no function or the function is already documented |
+
+Every command except `gscode.showReferences` is in the editor right-click menu under a **GSCode**
+submenu (`contributes.submenus`, `menus["gscode.editorContext"]`), shown in gsc/csc/gsh editors.
+Commands carry `"category": "GSCode"`, so the palette shows "GSCode: …" while the submenu shows the
+bare title. `ClientCommandsTests` fails when a declared command is not registered, or a menu names an
+undeclared command.
 | `gscode.showReferences` | (internal) | Bridge the CodeLens command calls to open the references peek |
 
 Client-only behaviour with no server counterpart: the rename fix-up listener

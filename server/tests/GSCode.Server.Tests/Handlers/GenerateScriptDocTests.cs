@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
@@ -10,8 +9,8 @@ using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
-/// "Generate ScriptDoc block": the action offered on a function that has none, and the block it
-/// writes.
+/// "Generate ScriptDoc block": the gscode/generateScriptDoc request the right-click menu sends, and
+/// the block it writes.
 ///
 /// The round trip is what these pin. A generated block is only worth anything if the extractor
 /// reads it back as documentation, and the two dialects disagree about what makes that true — BO3
@@ -22,67 +21,82 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class GenerateScriptDocTests
 {
-    private static async Task<ImmutableArray<CodeAction>> ActionsAtAsync(string source, int line, int character)
+    private const string Path = @"scripts\main.gsc";
+
+    /// <summary>The request as the client sends it, through the handler and the document store.</summary>
+    private static async Task<GenerateScriptDocResponse> RequestAtAsync(string source, int line, int character)
     {
-        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
-            [new TestFile(@"scripts\main.gsc", source)]);
-        workspace.Open(@"scripts\main.gsc");
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([new TestFile(Path, source)]);
+        workspace.Open(Path);
 
-        DocumentLinter linter = new(
-            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
-        CodeActionHandler handler = new(workspace.Documents, workspace.Navigation, linter, HandlerWorkspace.Selector);
-
-        CodeActionParams request = new()
-        {
-            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
-            Range = new LspRange(line, character, line, character),
-            Context = new CodeActionContext { Diagnostics = new Container<Diagnostic>() },
-        };
-
-        CommandOrCodeActionContainer? result = await handler.Handle(request, CancellationToken.None);
-        if ( result is null )
-        {
-            return [];
-        }
-
-        return [.. result.Where(entry => entry.CodeAction is not null).Select(entry => entry.CodeAction!)];
-    }
-
-    private static CodeAction? ScriptDocAction(ImmutableArray<CodeAction> actions)
-    {
-        return actions.FirstOrDefault(action => action.Title.StartsWith("Generate ScriptDoc", StringComparison.Ordinal));
-    }
-
-    private static string InsertedText(CodeAction action)
-    {
-        return action.Edit!.Changes!.Values.Single().Single().NewText;
+        GenerateScriptDocHandler handler = new(workspace.Documents);
+        return await handler.Handle(
+            new GenerateScriptDocParams
+            {
+                Uri = HandlerWorkspace.Identify(Path).Uri.ToString(),
+                Line = line,
+                Character = character,
+            },
+            CancellationToken.None);
     }
 
     [Fact]
-    public async Task AnUndocumentedFunctionIsOfferedABlock()
+    public async Task AnUndocumentedFunctionGetsABlock()
     {
         string source = "#namespace game;\nfunction give( weapon, count = 1 )\n{\n}\n";
 
-        CodeAction? action = ScriptDocAction(await ActionsAtAsync(source, 1, 12));
+        GenerateScriptDocResponse response = await RequestAtAsync(source, 1, 12);
 
-        Assert.NotNull(action);
-        Assert.Equal(CodeActionKind.Refactor, action!.Kind);
-
-        string block = InsertedText(action);
-        Assert.Contains("\"Name: give( <weapon>, [count] )\"", block, StringComparison.Ordinal);
+        Assert.Equal("generated", response.Status);
+        Assert.Equal("give", response.Function);
+        Assert.Equal(1, response.Line);
+        Assert.Contains("\"Name: give( <weapon>, [count] )\"", response.Text, StringComparison.Ordinal);
 
         // A parameter with a default is one the caller may leave out, which is what OptionalArg means.
-        Assert.Contains("\"MandatoryArg: <weapon> : <description>\"", block, StringComparison.Ordinal);
-        Assert.Contains("\"OptionalArg: [count] : <description>\"", block, StringComparison.Ordinal);
+        Assert.Contains("\"MandatoryArg: <weapon> : <description>\"", response.Text, StringComparison.Ordinal);
+        Assert.Contains("\"OptionalArg: [count] : <description>\"", response.Text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(1, 4)]
+    [InlineData(1, 9)]
+    [InlineData(1, 14)]
+    [InlineData(1, 28)]
+    [InlineData(2, 0)]
+    [InlineData(3, 1)]
+    [InlineData(4, 0)]
+    public async Task AnywhereInTheFunctionFindsIt(int line, int character)
+    {
+        // The keyword, the name, a parameter, the body and both braces: the reported bug was a block
+        // offered only with the cursor on `function`.
+        string source = "#namespace game;\nfunction give( weapon, count = 1 )\n{\n\tx = 1;\n}\n";
+
+        GenerateScriptDocResponse response = await RequestAtAsync(source, line, character);
+
+        Assert.Equal("generated", response.Status);
+        Assert.Equal(1, response.Line);
     }
 
     [Fact]
-    public async Task AFunctionThatAlreadyHasADocBlockIsNotOffered()
+    public async Task OutsideAnyFunctionThereIsNothingToDocument()
+    {
+        string source = "#namespace game;\n\nfunction give()\n{\n}\n";
+
+        Assert.Equal("none", (await RequestAtAsync(source, 0, 3)).Status);
+    }
+
+    [Fact]
+    public async Task AFunctionThatAlreadyHasADocBlockIsReportedAsSuch()
     {
         string source =
             "#namespace game;\n/@\n\"Name: give()\"\n\"Summary: Gives.\"\n@/\nfunction give()\n{\n}\n";
 
-        Assert.Null(ScriptDocAction(await ActionsAtAsync(source, 5, 12)));
+        GenerateScriptDocResponse response = await RequestAtAsync(source, 5, 12);
+
+        Assert.Equal("documented", response.Status);
+        Assert.Equal("give", response.Function);
+        Assert.Equal("", response.Text);
     }
 
     [Fact]
@@ -90,16 +104,42 @@ public class GenerateScriptDocTests
     {
         string source = "#namespace game;\nclass cScene\n{\n    function play()\n    {\n    }\n}\n";
 
-        CodeAction? action = ScriptDocAction(await ActionsAtAsync(source, 3, 14));
+        GenerateScriptDocResponse response = await RequestAtAsync(source, 3, 14);
 
-        Assert.NotNull(action);
+        Assert.Equal("generated", response.Status);
+        Assert.Equal(3, response.Line);
 
         // Flush left, a block above a method would be the only thing in the file at column zero.
-        string block = InsertedText(action!);
-        foreach ( string blockLine in block.TrimEnd('\n').Split('\n') )
+        foreach ( string blockLine in response.Text.TrimEnd('\n').Split('\n') )
         {
             Assert.StartsWith("    ", blockLine, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task ItIsNotACodeAction()
+    {
+        // The point of the request: as a refactor it put a lightbulb on every undocumented function.
+        string source = "#namespace game;\nfunction give()\n{\n}\n";
+
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([new TestFile(Path, source)]);
+        workspace.Open(Path);
+        DocumentLinter linter = new(
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
+        CodeActionHandler handler = new(workspace.Documents, workspace.Navigation, linter, HandlerWorkspace.Selector);
+
+        CommandOrCodeActionContainer? actions = await handler.Handle(
+            new CodeActionParams
+            {
+                TextDocument = HandlerWorkspace.Identify(Path),
+                Range = new LspRange(1, 10, 1, 10),
+                Context = new CodeActionContext { Diagnostics = new Container<Diagnostic>() },
+            },
+            CancellationToken.None);
+
+        Assert.DoesNotContain(
+            actions ?? [],
+            entry => entry.CodeAction?.Title.Contains("ScriptDoc", StringComparison.Ordinal) == true);
     }
 
     [Theory]

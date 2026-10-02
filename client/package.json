@@ -176,23 +176,44 @@
 		"commands": [
 			{
 				"command": "gscode.showOutput",
-				"title": "GSCode: Show Server Output"
+				"category": "GSCode",
+				"title": "Show Server Output"
 			},
 			{
 				"command": "gscode.restartServer",
-				"title": "GSCode: Restart Language Server"
+				"category": "GSCode",
+				"title": "Restart Language Server"
 			},
 			{
 				"command": "gscode.selectGame",
-				"title": "GSCode: Select Game"
+				"category": "GSCode",
+				"title": "Select Game"
 			},
 			{
 				"command": "gscode.clearCacheAndReindex",
-				"title": "GSCode: Clear Cache and Reindex"
+				"category": "GSCode",
+				"title": "Clear Cache and Reindex"
 			},
 			{
 				"command": "gscode.openApiLibrary",
-				"title": "GSCode: Open Documentation for Symbol"
+				"category": "GSCode",
+				"title": "Open Documentation for Symbol"
+			},
+			{
+				"command": "gscode.organizeImports",
+				"category": "GSCode",
+				"title": "Organize Imports"
+			},
+			{
+				"command": "gscode.generateScriptDoc",
+				"category": "GSCode",
+				"title": "Generate ScriptDoc Block"
+			}
+		],
+		"submenus": [
+			{
+				"id": "gscode.editorContext",
+				"label": "GSCode"
 			}
 		],
 		"menus": {
@@ -200,6 +221,14 @@
 				{
 					"command": "gscode.openApiLibrary",
 					"when": "editorLangId =~ /^(gsc|csc|gsh)$/"
+				},
+				{
+					"command": "gscode.organizeImports",
+					"when": "editorLangId =~ /^(gsc|csc)$/ && !editorReadonly"
+				},
+				{
+					"command": "gscode.generateScriptDoc",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/ && !editorReadonly"
 				},
 				{
 					"command": "gscode.showOutput",
@@ -220,9 +249,41 @@
 			],
 			"editor/context": [
 				{
-					"command": "gscode.openApiLibrary",
+					"submenu": "gscode.editorContext",
 					"when": "editorLangId =~ /^(gsc|csc|gsh)$/",
-					"group": "navigation@100"
+					"group": "1_modification@60"
+				}
+			],
+			"gscode.editorContext": [
+				{
+					"command": "gscode.organizeImports",
+					"when": "editorLangId =~ /^(gsc|csc)$/ && !editorReadonly",
+					"group": "1_edit@1"
+				},
+				{
+					"command": "gscode.generateScriptDoc",
+					"when": "!editorReadonly",
+					"group": "1_edit@2"
+				},
+				{
+					"command": "gscode.openApiLibrary",
+					"group": "2_docs@1"
+				},
+				{
+					"command": "gscode.selectGame",
+					"group": "3_game@1"
+				},
+				{
+					"command": "gscode.showOutput",
+					"group": "4_server@1"
+				},
+				{
+					"command": "gscode.restartServer",
+					"group": "4_server@2"
+				},
+				{
+					"command": "gscode.clearCacheAndReindex",
+					"group": "4_server@3"
 				}
 			]
 		},

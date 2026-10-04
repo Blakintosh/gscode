@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -22,8 +18,7 @@ public class AssignmentAlignerTests
 
     private static string Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, s_aligned)!;
     }
@@ -44,20 +39,30 @@ public class AssignmentAlignerTests
             + "{\n"
             + "\tlevel.wasp_enabled          = true;\n"
             + "\tlevel.wasp_round_count_blah = 1;\n"
-            + "\tlevel.wasp_round_count      += 1;\n"
+            + "\tlevel.wasp_round_count     += 1;\n"
             + "}\n";
 
         Assert.Equal(expected, formatted);
     }
 
     [Fact]
-    public void CompoundOperatorsStartAtTheColumn_NotAlignedOnTheEquals()
+    public void ACompoundOperatorsEqualsSharesTheColumn()
     {
-        // '+' sits at the operator column; the '=' of '+=' is one past. The user's example.
+        // The '=' of '+=' lines up with every other '='; its '+' hangs one column left.
         string formatted = Format("function f()\n{\nlevel.aaaa = 1;\nlevel.b += 2;\n}\n");
 
         Assert.Contains("\tlevel.aaaa = 1;\n", formatted, StringComparison.Ordinal);
-        Assert.Contains("\tlevel.b    += 2;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.b   += 2;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACompoundOperatorOnTheLongestSidePushesTheColumnOut()
+    {
+        // No room before the '=' for the '<<', so the column moves right to make it.
+        string formatted = Format("function f()\n{\nlevel.aaaa <<= 1;\nlevel.bbbb = 2;\n}\n");
+
+        Assert.Contains("\tlevel.aaaa <<= 1;\n", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.bbbb   = 2;\n", formatted, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -175,8 +180,7 @@ public class AssignmentAlignerTests
     {
         string once = Format("function f()\n{\na = 1;\nbbbbbb = 2;\ncc = 3;\n}\n");
 
-        ParseResult reparsed = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+        ParseResult reparsed = TestParse.Analyze(once);
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_aligned));
     }
@@ -185,17 +189,63 @@ public class AssignmentAlignerTests
     public void OffByDefault_LeavesSingleSpacing()
     {
         // FormatOptions.Default has alignment off, so the same input keeps ordinary spacing.
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\na = 1;\nbbbbbb = 2;\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f()\n{\na = 1;\nbbbbbb = 2;\n}\n");
 
         string formatted = GscFormatter.Format(result, FormatOptions.Default with { UseTabs = true })!;
 
         Assert.Contains("\ta = 1;\n", formatted, StringComparison.Ordinal);
         Assert.Contains("\tbbbbbb = 2;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALeftHandSideTooFarFromItsRunIsNotPushedAcross()
+    {
+        // The reported pair: caching a value, then writing a deeply subscripted one. Aligning them
+        // put `nextID`'s '=' ninety columns out.
+        string formatted = Format("""
+            function f()
+            {
+            	nextID = level.releasedObjectives[localClientNum][ level.releasedObjectives[localClientNum].size - 1 ];
+            	level.releasedObjectives[localClientNum][ level.releasedObjectives[localClientNum].size - 1 ] = undefined;
+            }
+            """);
+
+        Assert.Contains("\tnextID = level.releasedObjectives[ localClientNum ]", formatted, StringComparison.Ordinal);
+        Assert.Contains("\tlevel.releasedObjectives[ localClientNum ][ level.releasedObjectives[ localClientNum ].size - 1 ] = undefined;", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OneOutlierLeavesTheRunAndTheRestStillAlign()
+    {
+        string formatted = Format("""
+            function f()
+            {
+            	a = 1;
+            	bb = 2;
+            	ccc = 3;
+            	level.a_very_long_field_name_that_is_far_wider = 4;
+            }
+            """);
+
+        Assert.Contains("\ta   = 1;\n\tbb  = 2;\n\tccc = 3;\n\tlevel.a_very_long_field_name_that_is_far_wider = 4;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACapOfZeroAlignsEverything()
+    {
+        ParseResult result = TestParse.Analyze("function f()\n{\na = 1;\nlevel.a_very_long_field_name_that_is_far_wider = 4;\n}\n");
+
+        string formatted = GscFormatter.Format(result, s_aligned with { AlignMaxPadding = 0 })!;
+
+        Assert.Contains("\ta                                              = 1;\n", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCapIsIdempotent()
+    {
+        string once = Format("function f()\n{\na = 1;\nbb = 2;\nlevel.a_very_long_field_name_that_is_far_wider = 4;\n}\n");
+
+        Assert.Equal(once, GscFormatter.Format(TestParse.Analyze(once), s_aligned));
     }
 
     // Subscript-interior alignment for array left-hand sides lives in ColumnAlignerTests; this

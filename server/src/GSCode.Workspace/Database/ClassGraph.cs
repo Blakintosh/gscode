@@ -9,11 +9,10 @@ namespace GSCode.Workspace.Database;
 /// — <c>class cScene</c> in <c>scene_shared.gsc</c> and in <c>scene_shared.csc</c> live in separate
 /// graphs and cannot see each other.
 ///
-/// Exists because every class question used to be a full linear scan of every record in the store:
-/// <c>LookupClasses</c> per parent link, <c>AllVisibleClasses</c> per keystroke, and
-/// <c>NamespaceUsageLint</c>'s class-name set once PER FILE LINTED, which is a store scan per file
-/// across the whole workspace. Method resolution walks parent chains constantly, so it would have
-/// multiplied that; instead it makes those four queries dictionary hits.
+/// It turns every class question into a dictionary hit rather than a scan of every record in the
+/// store: <c>LookupClasses</c> per parent link, <c>AllVisibleClasses</c> per keystroke,
+/// <c>NamespaceUsageLint</c>'s class-name set per file linted, and the parent-chain walks method
+/// resolution makes constantly.
 ///
 /// The reverse maps are all PATH-valued, never name-valued. That is what makes replacing one file's
 /// contribution exact: a file is removed from precisely the buckets its previous contribution
@@ -30,6 +29,13 @@ public sealed class ClassGraph
 {
     private readonly Dictionary<string, ImmutableArray<ClassSymbol>> _classesByPath = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _pathsByClassName = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The same as <see cref="_pathsByClassName"/>, keyed by namespace as well. A qualified lookup
+    /// read the bare-name list and dropped every other namespace's declarer; see
+    /// <see cref="PathsDeclaring(string, string)"/>.
+    /// </summary>
+    private readonly Dictionary<(string Namespace, string KeyName), HashSet<string>> _pathsByQualifiedName = new();
     private readonly Dictionary<string, HashSet<string>> _pathsByParentName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _pathsByMethodName = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
@@ -37,7 +43,13 @@ public sealed class ClassGraph
     /// <summary>
     /// Replaces everything one file contributes. The previous contribution is read from the graph
     /// itself rather than passed in, so the index cannot drift out of step with a caller that
-    /// supplied the wrong "before" — and <see cref="Remove"/> is just an empty contribution.
+    /// supplied the wrong "before".
+    ///
+    /// REMOVAL IS AN EMPTY CONTRIBUTION — <c>Apply(path, [])</c> — and there is no separate method
+    /// for it, because a second entry point would be one more place for the buckets to be emptied
+    /// differently. <c>LanguageStore.ApplyIndexes</c> removes a file exactly this way, passing the
+    /// gone record's empty class list, which is what every other index here means by an empty new
+    /// set.
     /// </summary>
     public void Apply(string path, ImmutableArray<ClassSymbol> classes)
     {
@@ -48,6 +60,7 @@ public sealed class ClassGraph
                 foreach ( ClassSymbol classSymbol in previous )
                 {
                     Detach(_pathsByClassName, classSymbol.KeyName, path);
+                    Detach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                     if ( classSymbol.ParentKeyName is not null )
                     {
@@ -72,6 +85,7 @@ public sealed class ClassGraph
             foreach ( ClassSymbol classSymbol in classes )
             {
                 Attach(_pathsByClassName, classSymbol.KeyName, path);
+                Attach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                 if ( classSymbol.ParentKeyName is not null )
                 {
@@ -86,18 +100,31 @@ public sealed class ClassGraph
         }
     }
 
-    /// <summary>Drops everything a file contributed (it was deleted from disk).</summary>
-    public void Remove(string path)
-    {
-        Apply(path, []);
-    }
-
     /// <summary>Paths of files declaring a class of this name (snapshot).</summary>
     public ImmutableArray<string> PathsDeclaring(string classKeyName)
     {
         lock ( _gate )
         {
             if ( !_pathsByClassName.TryGetValue(classKeyName, out HashSet<string>? paths) )
+            {
+                return [];
+            }
+
+            return [.. paths];
+        }
+    }
+
+    /// <summary>
+    /// Paths of files declaring a class of this name INTO this namespace (snapshot) — the subset of
+    /// <see cref="PathsDeclaring(string)"/> a namespace filter would keep. In a workspace where many
+    /// copies of a class-declaring file each carry their own namespace, the bare-name list holds
+    /// every copy, and a qualified parent link or <c>ns::Class</c> read all of them to keep one.
+    /// </summary>
+    public ImmutableArray<string> PathsDeclaring(string namespaceName, string classKeyName)
+    {
+        lock ( _gate )
+        {
+            if ( !_pathsByQualifiedName.TryGetValue((namespaceName, classKeyName), out HashSet<string>? paths) )
             {
                 return [];
             }
@@ -119,24 +146,8 @@ public sealed class ClassGraph
                 return [];
             }
 
-            HashSet<string> names = new(StringComparer.Ordinal);
-            foreach ( string path in paths )
-            {
-                if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
-                {
-                    continue;
-                }
-
-                foreach ( ClassSymbol classSymbol in classes )
-                {
-                    if ( string.Equals(classSymbol.ParentKeyName, classKeyName, StringComparison.Ordinal) )
-                    {
-                        names.Add(classSymbol.KeyName);
-                    }
-                }
-            }
-
-            return [.. names];
+            return ClassNamesIn(paths, classKeyName, static (classSymbol, parent) =>
+                string.Equals(classSymbol.ParentKeyName, parent, StringComparison.Ordinal));
         }
     }
 
@@ -155,28 +166,8 @@ public sealed class ClassGraph
                 return [];
             }
 
-            HashSet<string> names = new(StringComparer.Ordinal);
-            foreach ( string path in paths )
-            {
-                if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
-                {
-                    continue;
-                }
-
-                foreach ( ClassSymbol classSymbol in classes )
-                {
-                    foreach ( FunctionSymbol method in classSymbol.Methods )
-                    {
-                        if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
-                        {
-                            names.Add(classSymbol.KeyName);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return [.. names];
+            return ClassNamesIn(paths, methodKeyName, static (classSymbol, method) =>
+                DeclaresMethod(classSymbol, method));
         }
     }
 
@@ -190,8 +181,9 @@ public sealed class ClassGraph
     }
 
     /// <summary>
-    /// Paths of every file declaring at least one class (snapshot). Lets a caller that wants all
-    /// visible classes iterate the ~20 files that have one instead of every record in the store.
+    /// Paths of every file declaring at least one class (snapshot). No production caller:
+    /// <c>AllVisibleClasses</c> reads the asking file's imports by path instead, and the corpus and
+    /// scale tests keep this as the walk that answer is checked against.
     /// </summary>
     public ImmutableArray<string> AllDeclaringPaths()
     {
@@ -201,7 +193,8 @@ public sealed class ClassGraph
         }
     }
 
-    private static void Attach(Dictionary<string, HashSet<string>> index, string key, string path)
+    private static void Attach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
+        where TKey : notnull
     {
         if ( !index.TryGetValue(key, out HashSet<string>? paths) )
         {
@@ -212,7 +205,8 @@ public sealed class ClassGraph
         paths.Add(path);
     }
 
-    private static void Detach(Dictionary<string, HashSet<string>> index, string key, string path)
+    private static void Detach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
+        where TKey : notnull
     {
         if ( !index.TryGetValue(key, out HashSet<string>? paths) )
         {
@@ -224,5 +218,46 @@ public sealed class ClassGraph
         {
             index.Remove(key);
         }
+    }
+
+    /// <summary>
+    /// The distinct names of the classes in <paramref name="paths"/> that <paramref name="matches"/>
+    /// accepts. Deduplicated, because an overlay and the raw script it shadows declare the same
+    /// class. Called under <see cref="_gate"/>.
+    /// </summary>
+    private ImmutableArray<string> ClassNamesIn(
+        HashSet<string> paths, string key, Func<ClassSymbol, string, bool> matches)
+    {
+        HashSet<string> names = new(StringComparer.Ordinal);
+        foreach ( string path in paths )
+        {
+            if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
+            {
+                continue;
+            }
+
+            foreach ( ClassSymbol classSymbol in classes )
+            {
+                if ( matches(classSymbol, key) )
+                {
+                    names.Add(classSymbol.KeyName);
+                }
+            }
+        }
+
+        return [.. names];
+    }
+
+    private static bool DeclaresMethod(ClassSymbol classSymbol, string methodKeyName)
+    {
+        foreach ( FunctionSymbol method in classSymbol.Methods )
+        {
+            if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

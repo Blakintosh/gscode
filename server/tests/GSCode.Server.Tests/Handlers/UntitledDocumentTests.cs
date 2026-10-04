@@ -42,8 +42,7 @@ public class UntitledDocumentTests
     [Fact]
     public void DocumentStore_RoundTripsAnUntitledBuffer()
     {
-        DocumentStore documents = new(
-            _ => GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new GSCode.Core.NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
 
         string key = KeyFor("untitled:Untitled-1.gsc");
         documents.Open(key, "function f()\n{\n}\n", version: 1);
@@ -64,8 +63,7 @@ public class UntitledDocumentTests
         // and it enumerates files from the resolver — an open buffer is never a target. This
         // test documents the invariant so a future "commit open documents" change has to
         // confront it deliberately.
-        DocumentStore documents = new(
-            _ => GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new GSCode.Core.NameTable());
+        DocumentStore documents = TestDocuments.Standalone();
 
         string key = KeyFor("untitled:Untitled-1.gsc");
         OpenDocument document = documents.Open(key, "function f()\n{\n}\n", version: 1);

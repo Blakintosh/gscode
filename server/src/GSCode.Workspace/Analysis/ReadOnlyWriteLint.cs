@@ -14,12 +14,14 @@ namespace GSCode.Workspace.Analysis;
 /// The governing rule is **report only when the owner's type makes the field read-only**, never
 /// on the field name alone. Names collide across worlds — `name` is read-only on the engine's
 /// player and weapon, but is an ordinary field on a struct you made — so
-/// <c>state_machine = SpawnStruct(); state_machine.name = name;</c> is perfectly legal and was
-/// previously flagged. An owner the flow typer cannot type yields Unknown and is left alone;
+/// <c>state_machine = SpawnStruct(); state_machine.name = name;</c> is perfectly legal. An owner
+/// the flow typer cannot type yields Unknown and is left alone;
 /// silence beats a false error on correct code.
 ///
 /// Owner types come from <see cref="FlowTyper"/>'s own walk rather than a second inference pass,
-/// so this can never disagree with the types shown in hovers and inlay hints.
+/// so this can never disagree with the types shown in hovers and inlay hints. The caller hands
+/// over the walk's answer, so the three rules reading it share one pass over the file instead of
+/// taking one each.
 ///
 /// The two rules carry different severities because they carry different confidence. `.size`
 /// being read-only is a language-spec fact, so that is an error. A field's read-only flag comes
@@ -27,9 +29,9 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class ReadOnlyWriteLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, ObjectFields objectFields, FlowTyper typer)
+    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, ObjectFields objectFields, ScriptTypes types)
     {
-        typer.InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+        ImmutableArray<FieldWrite> writes = types.FieldWrites;
         if ( writes.IsEmpty )
         {
             return [];
@@ -58,7 +60,7 @@ public static class ReadOnlyWriteLint
     /// </summary>
     private static void InspectSizeWrite(FieldWrite write, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        if ( write.OwnerType is not (ScrType.Array or ScrType.String) )
+        if ( !write.OwnerType.MustBe(ScrTypeSet.Array | ScrTypeSet.String) )
         {
             return;
         }
@@ -68,9 +70,15 @@ public static class ReadOnlyWriteLint
     }
 
     /// <summary>
-    /// Engine object fields belong to entities, so only an owner known to be one is reported.
-    /// The field must also be read-only on EVERY entity kind that declares it: the owner's exact
-    /// kind is not inferred, so disagreement between kinds means we cannot be sure.
+    /// Engine object fields belong to entities, so only an owner that MAY be one is reported — an
+    /// owner CONFIRMED to be something else (a struct from `SpawnStruct()`, an array literal) is
+    /// excluded, and so is an owner the flow truly could not type at all (`IsUnknown`), which is
+    /// the "silence beats a false error" case this rule exists to protect. `self` sits in between:
+    /// it is never confirmed to be one specific thing (GSC allows threading onto an entity or a
+    /// struct — see FlowTyper's `self` case), but it is also never the
+    /// TOTAL uncertainty an untyped parameter or an unresolved call result carries, so it still
+    /// passes this gate. The field must also be read-only on EVERY entity kind that declares it:
+    /// the owner's exact kind is not inferred, so disagreement between kinds means we cannot be sure.
     ///
     /// Weapon declarations are excluded outright. Weapon fields ARE documented read-only, but on
     /// the weapon value `GetWeapon()` returns — and a weapon is not an entity, so that fact says
@@ -89,7 +97,13 @@ public static class ReadOnlyWriteLint
         ObjectFields objectFields,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        if ( write.OwnerType != ScrType.Entity )
+        // MayBe rather than exact equality, so `self` (Entity|Struct — see
+        // FlowTyper's `self` case) still counts as a possible entity. IsUnknown excluded
+        // separately: an owner the flow truly could not type (mystery_function()'s return, an
+        // untyped parameter) is the full universe too, and MayBe(Entity) would be trivially true
+        // for it as well — the lint's whole design is silence on that genuine uncertainty, so it
+        // must stay excluded even though self, structurally, ends up MayBe-ing the same bit.
+        if ( !write.OwnerType.MayBe(ScrTypeSet.Entity) || write.OwnerType.IsUnknown )
         {
             return;
         }

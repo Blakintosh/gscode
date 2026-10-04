@@ -3,7 +3,6 @@ using GSCode.Core;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Resolution;
@@ -14,20 +13,19 @@ namespace GSCode.Workspace.Tests.Resolution;
 /// </summary>
 public class DependencyRewriteTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static ScriptDatabase BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define IS_TRUE(__a) (isdefined(__a) && __a)\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\shared.gsh"), "#define IS_TRUE(__a) (isdefined(__a) && __a)\n")
             .AddFile(
-                @$"{Raw}\scripts\a.gsc",
+                TestPaths.Raw(@"scripts\a.gsc"),
                 "#using scripts\\shared\\util;\n#insert scripts\\shared\\shared.gsh;\nfunction run()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\b.gsc", "#using scripts\\shared\\util;\nfunction other()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\c.gsc", "#using scripts\\shared\\other_thing;\nfunction third()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\b.gsc"), "#using scripts\\shared\\util;\nfunction other()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\c.gsc"), "#using scripts\\shared\\other_thing;\nfunction third()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());

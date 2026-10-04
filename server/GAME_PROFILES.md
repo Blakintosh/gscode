@@ -40,6 +40,8 @@ HasClasses         => Keywords contains "class"
 HasFunctionKeyword => Keywords contains "function"
 HasForeach         => Keywords contains "foreach"
 HasDoWhile         => Keywords contains "do"
+HasVarargBinding   => Keywords contains "vararg"
+HasPrivateFunctions => Keywords contains "private"
 ```
 
 ### `BaseKeywords` — the true base (CoD4 / WaW / BO1, and every core)
@@ -55,8 +57,8 @@ class words, `childthread`/`call`, the profiler pair, and the BO3 intrinsics (`w
 `vectorscale`, `profilestart`, `profilestop`) — each is an addition made by a specific game.
 
 `waittillmatch` IS in the base: it is used in every game from CoD4 to BO3 (205/218/245/57 uses in
-CoD4/WaW/MW2/BO1). It was briefly mistaken for a missing builtin by the corpus harvest, which is
-what a language feature looks like when it is absent from the keyword set.
+CoD4/WaW/MW2/BO1). Absent from the keyword set, a language feature shows up in the corpus harvest as
+a missing builtin.
 
 ### `ClassKeywords` — the class system, added as one group
 
@@ -112,6 +114,11 @@ no bundled data).
 parentheses would call it. `&` = BO3 makes the pointer explicit (`level.f = &foo;` / `&ns::foo`), and
 a bare `ns::foo` is always a call.
 
+Completion reads this axis too, not just the parser: after a BO3 `&` a suggestion is inserted as the
+bare name, since `&foo()` would call the function and point at what it returns. The gate has to be
+the style rather than the character, because in the `::` line an `&` is arithmetic — the shipped
+scripts hold 4,564 `&name` pointers in BO3 and none in CoD4.
+
 **Import style and resolution are two claims, not one.** `ImportStyle` is purely lexical — whether
 the directive is spelled `#using` or `#include` — and that is all the lexer, directive completion and
 shape detection need. `ResolvesByNamespace` is the deeper question: whether a function's *identity*
@@ -122,11 +129,10 @@ how a function is KEYED (`KeyNamespace`, and the extractor that builds the key),
 offer bare, and which code actions apply. They coincide for every game today (a test asserts it), and
 BO3 is the only game that is namespace-driven.
 
-**A namespace does not pin a file, and scoping is not conditional on the dialect.** Go-to-definition
-and reference narrowing used to skip BO3 entirely, on the theory that a namespace in the key already
-made the answer unique. It does not: a namespace is shared freely across files, and the stock scripts
-declare the same `#namespace` in an `mp` copy and a `zm` copy of the same script 565 times over (the
-count is `AmbiguousFunctionLint`'s). So `globallogic_utils::get_time_remaining` names two
+**A namespace does not pin a file, and scoping is not conditional on the dialect.** A namespace in
+the key does not make the answer unique: a namespace is shared freely across files, and the stock
+scripts declare the same `#namespace` in an `mp` copy and a `zm` copy of the same script 565 times
+over (the count is `AmbiguousFunctionLint`'s). So `globallogic_utils::get_time_remaining` names two
 declarations, and only the asking file's `#using` list says which. Both dialect families therefore
 narrow by the same rule — the file itself plus what it links against — and the only difference is
 which directive spells "links against". `DatabaseQueries.LinkedScriptPaths` owns that one choice;
@@ -145,7 +151,7 @@ either side, even there.
 | classes `class`/`new`/`->` (`HasClasses`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `function` keyword on decls (`HasFunctionKeyword`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `const` keyword | ✗ | ✗ | ✗ | ✗ | ✓ |
-| `autoexec` / `private` modifiers | ✗ | ✗ | ✗ | ✗ | ✓ |
+| `autoexec` / `private` modifiers (`HasPrivateFunctions`) | ✗ | ✗ | ✗ | ✗ | ✓ |
 | `childthread` / `call` | ✗ | ✗ | ✓ | ✗ | ✗ |
 | `thisthread`, the running thread as a value | ✗ | ✗ | ✓ | ✗ | ✗ |
 | file-scope constants `CONST = 4;` (`HasFileScopeConstants`) | ✗ | ✗ | ✓ | ✗ | ✗ |
@@ -203,9 +209,8 @@ translation in either direction. Everything else that aliases, aliases in *every
 Worth stating both halves, because "arrays copy" invites the assumption that structs copy too, and
 they do not — `spawnstruct` is used in all five corpora (cod4 117 files, waw 173, mw2 190, bo1 363,
 bo3 177), so both kinds sit side by side in real code. This changes aliasing analysis, not syntax:
-telling an array from a struct is what a rewriter has to get right, and it is why
-`Workspace/Typing` grew a union lattice that can answer "must this be an array" separately from
-"might it be".
+telling an array from a struct is what an aliasing rule has to get right, and the union lattice in
+`Workspace/Typing` answers "must this be an array" separately from "might it be".
 
 `HasMacros` and `HasHeaders` coincide today and are still separate flags, because they are separate
 claims: a header IS macros, but a dialect could define them in-file with nowhere to put them. What
@@ -225,10 +230,10 @@ Directives are gated by capability flags, **not** by the keyword set, and each n
 depends on. `#include` is the IW import; `#using`/`#namespace`/`#insert`/`#precache` are BO3;
 `#define` and the `#if`/`#elif`/`#else`/`#endif` family are BO3's too, on `HasMacros`.
 
-**Only the animtree pair is ungated**, because only it is genuinely universal. Both
-`GscKeywords.IsAvailable` and `Keywords.IsDirectiveEnabled` used to end in "anything else beginning
-with `#` exists across the whole lineage", which is how CoD4 came to be offered a preprocessor it
-does not have. The default for a new directive is gated; universal has to be earned from the corpus.
+**Only the animtree pair is ungated**, because only it is genuinely universal. A blanket "anything
+beginning with `#` exists across the whole lineage" in `GscKeywords.IsAvailable` or
+`Keywords.IsDirectiveEnabled` would offer CoD4 a preprocessor it does not have. The default for a
+new directive is gated; universal has to be earned from the corpus.
 
 The two lists a directive can appear in are not interchangeable. `TopLevelKeywords` is file scope
 and `BodyDirectives` is inside a function — `#animtree` belongs to the second in every game, since
@@ -255,12 +260,12 @@ The layout is per-game, and this is the one path fact a profile carries:
 | BO3 | `<install>\share\raw` | `<install>\mods` |
 | every earlier game | `<install>\raw` | `<install>\mods` |
 
-Nothing is read from the **environment**, which is the part that never generalised. BO3 once resolved
-itself from `%TA_TOOLS_PATH%`, but that variable is set by Treyarch's mod tools and CoD4, WaW, MW2 and
-BO1 ship nothing equivalent — so it was one mechanism serving one game while the rest went without.
-Deriving from the workspace instead gives all five the same zero-configuration path, and keeps
-**where you are editing** separable from **where the game is** whenever they genuinely differ.
-`TA_TOOLS_PATH` still exists on a BO3 install; the extension simply does not read it.
+Nothing is read from the **environment**, which is the part that never generalised.
+`%TA_TOOLS_PATH%` is set by Treyarch's mod tools and CoD4, WaW, MW2 and BO1 ship nothing equivalent,
+so it could only ever serve one game. Deriving from the workspace instead gives all five the same
+zero-configuration path, and keeps **where you are editing** separable from **where the game is**
+whenever they genuinely differ. `TA_TOOLS_PATH` still exists on a BO3 install; the extension simply
+does not read it.
 
 The server log says which route each root took, since "why is it using *that* raw folder" is
 otherwise unanswerable:
@@ -327,8 +332,8 @@ exactly one name; WaW and BO1 produce 204 and 387 under names their own librarie
 borrows and the other two stay gated: a second incomplete list does not add up to a trustworthy one.
 
 `HasTrustedEngineNames` is the single predicate for "may a rule say a name is NOT an engine
-function" — this game's library is complete, or it ships none and borrows. It exists because the
-condition was once spelled three ways across two assemblies, and two of the three could disagree.
+function" — this game's library is complete, or it ships none and borrows. One predicate, so the
+profile flags, the loader and the lints cannot disagree about it.
 
 **`HasCompleteBuiltinLibrary` is a separate claim from `Verified`.** Verified is about the DIALECT —
 proven against the game's own scripts. Completeness is about the FUNCTION LIST, and WaW's and BO1's
@@ -340,8 +345,7 @@ NOT an engine function — `BuiltinFunctionNotFound` stands down for them.
 **Do not quote that 529 as current.** It is the figure `GameProfile.HasCompleteBuiltinLibrary`'s own
 summary carries, and it was true when the flag was set; the library has grown since. The live count
 is `tests/GSCode.Server.Tests/harvest/<game>_missing_builtins.json`, regenerated by
-`BuiltinHarvestTests` on a corpus run — a number in prose here is a snapshot, and this paragraph
-carried two different ones (620 and 529) at the same time before anybody noticed.
+`BuiltinHarvestTests` on a corpus run — a number in prose here is a snapshot.
 
 **`HasReliableBuiltinSignatures` is a third, narrower claim** — that the *parameters* on each entry
 can be judged against, which is not implied by the name list being complete. BO3's come from a data
@@ -351,11 +355,11 @@ rather than a verified one for theirs. Measured rather than assumed: checking a 
 mandatory count reported 4 findings across BO3's shipped scripts and 141 / 280 / 157 across CoD4's,
 WaW's and BO1's, and `WrongBuiltinArgumentCount` is gated on it.
 
-**Two games set it: BO3 and CoD4.** CoD4 did not at first — the 141 above is why — and it was
-earned rather than granted: the 44 signatures behind those findings were corrected against the
-documentation pages, which took CoD4 to ZERO across its 894 scripts, and the flag followed the
-measurement. WaW's and BO1's still inherit, so they still do not set it. See the remark on
-`SupportedProfiles.cs`'s CoD4 entry, which records the correction.
+**Two games set it: BO3 and CoD4.** CoD4's was earned rather than granted — the 141 above is why it
+needed earning: the 44 signatures behind those findings were corrected against the documentation
+pages, which took CoD4 to ZERO across its 894 scripts, and the flag followed the measurement. WaW's
+and BO1's still inherit, so they still do not set it. See the remark on `SupportedProfiles.cs`'s
+CoD4 entry, which records the correction.
 
 **A missing name is added on the inherited-sibling layer, cited both ways.** CoD4 lacked `Abs`;
 WaW and BO1 lacked that plus `AddSpawnPoints`, `LookAtEntity`, `SetTeam`, `SetInvisibleToAll`,
@@ -481,8 +485,7 @@ GSCODE_CORPUS_BO1    …\Call of Duty Black Ops 42740\raw
 GSCODE_CORPUS_BO3    …\Call of Duty Black Ops III\share\raw
 ```
 
-BO3 used to be the exception here too, located from `%TA_TOOLS_PATH%` with `share\raw` appended by
-the fixture. It now follows the same convention as the other four.
+BO3 follows the same convention as the other four.
 
 ### Dialect gaps this exposed
 

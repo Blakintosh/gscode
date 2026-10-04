@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using GSCode.Parser.Preprocessing;
 using System.Collections.Immutable;
 using GSCode.Core;
@@ -71,16 +73,22 @@ public readonly record struct LocalTypeHover(string Name, TextRange Range, ScrVa
 }
 
 /// <summary>
-/// One write to `owner.field`, carrying the owner's inferred type AT THAT POINT. Lets a lint decide
-/// whether a field is read-only without re-deriving types: `SpawnStruct()` gives Struct, `self`
-/// gives Entity, and an owner the flow cannot type gives Unknown.
+/// One write to `owner.field`, carrying the owner's inferred value AT THAT POINT. Lets a lint decide
+/// whether a field is read-only without re-deriving types: `SpawnStruct()` gives an exact Struct,
+/// `self` gives the honest `Entity|Struct` union (see the `self` case in <c>TypeOfIdentifier</c>),
+/// and an owner the flow truly cannot type gives the full Unknown union.
+///
+/// Carries the whole <see cref="ScrValue"/> rather than the coarse <see cref="ScrType"/> precisely
+/// so a consumer can ask <c>MayBe</c> instead of exact equality — `self`'s union has no single
+/// projection (<c>ToScrType()</c> collapses it to Unknown), so a consumer still comparing against
+/// one exact <see cref="ScrType"/> would silently stop seeing `self` as a possible entity at all.
 ///
 /// <paramref name="Value"/> is the assigned expression for a plain `=`, and null for a compound
 /// assignment or `++`/`--` — those have no single assigned value, and a rule about what was
 /// assigned must not fire on them.
 /// </summary>
 public readonly record struct FieldWrite(
-    TextRange NameRange, string FieldName, ScrType OwnerType, ExprNode? Value = null);
+    TextRange NameRange, string FieldName, ScrValue OwnerType, ExprNode? Value = null);
 
 /// <summary>
 /// A deliberately-small forward type-flow pass, per function. It types each assignment's
@@ -111,6 +119,46 @@ public sealed class FlowTyper
     /// for a whole file's map to answer it.
     /// </summary>
     private Dictionary<ExprNode, ScrValue>? _recorded;
+
+    /// <summary>
+    /// The last <see cref="InferValues"/> answer, and the parse it was computed from, so the three
+    /// lints that all want a file's types share one walk instead of taking one each.
+    ///
+    /// Keyed by REFERENCE, like <see cref="ScriptTypes"/>'s own keys and for the same reason: a
+    /// <c>ParseResult</c> is a record, so structural equality would compare two whole trees to
+    /// settle what reference identity settles exactly. A keystroke produces a new
+    /// <c>ParseResult</c>, so a stale answer can never be served, and every instance of this class
+    /// is a local in one request or one lint pass — the memo dies with the pass rather than
+    /// retaining a tree.
+    /// </summary>
+    private ParseResult? _typedParse;
+    private ScriptTypes? _typed;
+
+    /// <summary>
+    /// One <see cref="InferValues"/> answer per parse, shared by every surface that asks for it.
+    ///
+    /// The per-instance memo above lives for one lint pass, and the inlay-hint and hover handlers
+    /// each kept a table of their own, so one edit typed the same parse once for the lints and again
+    /// for the hints. Keyed weakly by the parse, like those tables were: an entry goes when nothing
+    /// else holds its <c>ParseResult</c>, which is when the document is next edited or closed.
+    ///
+    /// The inputs are part of the entry, not just the parse, because the answer depends on all of
+    /// them: a caller with a different library, field table or game misses rather than reading an
+    /// answer computed against someone else's.
+    /// </summary>
+    private static readonly ConditionalWeakTable<ParseResult, SharedTypes> s_shared = new();
+
+    private sealed record SharedTypes(BuiltinApi Builtins, ObjectFields ObjectFields, GameProfile Game, ScriptTypes Types);
+
+    /// <summary>
+    /// The bookkeeping a loop's silent warm-up passes write into and nobody reads. Shared across
+    /// every warm-up rather than allocated per pass, which a loop takes up to three of: the walk
+    /// only ever adds to these, and what it adds is thrown away, so a nested warm-up clearing them
+    /// mid-walk loses nothing.
+    /// </summary>
+    private HashSet<string>? _silentHinted;
+    private ImmutableArray<InferredAssignment>.Builder? _silentHints;
+    private ImmutableArray<FieldWrite>.Builder? _silentWrites;
 
     /// <summary>
     /// <paramref name="profile"/> defaults to the active one, matching how every <c>Analyze</c>
@@ -195,7 +243,7 @@ public sealed class FlowTyper
         Dictionary<string, ScrValue> environment = EnvironmentAt(function, position);
 
         // Projected onto the coarse lattice at the boundary: a union has no single-value answer for
-        // a hover label, which is exactly what the old behaviour was.
+        // a hover label.
         if ( !environment.TryGetValue(name, out ScrValue value) )
         {
             return false;
@@ -217,16 +265,14 @@ public sealed class FlowTyper
     /// Parameters seed it as unknown so that a name is at least KNOWN to be a local — an assignment
     /// to a parameter then types it from that point, which is exactly what the flow says, while an
     /// untyped parameter still reports nothing rather than a guess. Typing one properly needs
-    /// call-site analysis, which is a different pass — and the seed says so, carrying
-    /// <see cref="ScrImprecision.UntypedParameter"/> rather than an anonymous unknown.
+    /// call-site analysis, which is a different pass.
     /// </summary>
     private Dictionary<string, ScrValue> EnvironmentAt(FunctionNode function, Position position)
     {
         Dictionary<string, ScrValue> environment = new(StringComparer.OrdinalIgnoreCase);
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            environment[parameter.NameToken.Text] =
-                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
+            environment[parameter.NameToken.Text] = ScrValue.Unknown;
         }
 
         ImmutableArray<InferredAssignment>.Builder hints = ImmutableArray.CreateBuilder<InferredAssignment>();
@@ -256,8 +302,7 @@ public sealed class FlowTyper
         // pass could not tell an assignment to a parameter from one to a fresh local.
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            environment[parameter.NameToken.Text] =
-                ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UntypedParameter);
+            environment[parameter.NameToken.Text] = ScrValue.Unknown;
         }
 
         HashSet<string> hinted = new(StringComparer.OrdinalIgnoreCase);
@@ -267,18 +312,38 @@ public sealed class FlowTyper
     /// <summary>
     /// Every value the pass worked out for a file, keyed by the expression that produced it.
     ///
-    /// The transpiler entry point. Unlike <see cref="InferAssignments(ParseResult)"/>, which reports
-    /// the sites an editor wants to decorate, this keeps the value of EVERY expression walked —
-    /// including the ones nothing is reported about, which is most of them.
+    /// Unlike <see cref="InferAssignments(ParseResult)"/>, which reports the sites an editor wants to
+    /// decorate, this keeps the value of EVERY expression walked, so a rule or a hint can ask about a
+    /// node no assignment names — a <c>foreach</c> collection, a vector component, a pointer being
+    /// called.
+    ///
+    /// The answer is memoised per <c>ParseResult</c>, which is what makes it the entry point for the
+    /// FIELD-WRITE lints as well: a <see cref="ScriptTypes"/> already carries the assignments and
+    /// the writes, so three rules asking three different questions of one file pay for one walk
+    /// between them. Asking <see cref="InferAssignments(ParseResult, out ImmutableArray{FieldWrite})"/>
+    /// instead is still right for the hover and hint surfaces, which want one name or one position
+    /// and should not pay to record a whole file.
     /// </summary>
     public ScriptTypes InferValues(ParseResult result)
     {
-        _recorded = new Dictionary<ExprNode, ScrValue>(ReferenceEqualityComparer.Instance);
+        if ( _typed is not null && ReferenceEquals(_typedParse, result) )
+        {
+            return _typed;
+        }
+
+        // Sized from the token count rather than grown from empty. Every resize copies every
+        // value recorded so far, and the doubling was a quarter of the walk's allocation.
+        // Across bo3 and cod4 a file records 0.19-0.55 entries per token, 0.27-0.31 at the median,
+        // so two in five leaves the usual file one table and the densest one resize.
+        int capacity = result.Preprocessed.Tokens.Length * 2 / 5;
+        _recorded = new Dictionary<ExprNode, ScrValue>(capacity, ReferenceEqualityComparer.Instance);
 
         try
         {
             ImmutableArray<InferredAssignment> assignments = InferAssignments(result, out ImmutableArray<FieldWrite> writes);
-            return new ScriptTypes(_recorded, assignments, writes);
+            _typed = new ScriptTypes(_recorded, assignments, writes);
+            _typedParse = result;
+            return _typed;
         }
         finally
         {
@@ -287,9 +352,47 @@ public sealed class FlowTyper
     }
 
     /// <summary>
+    /// <see cref="InferValues"/>, computed once per parse for the whole server rather than once per
+    /// caller. See <see cref="s_shared"/>.
+    ///
+    /// Not what a measurement wants: a perf sweep that warms a file and then times it would time a
+    /// cache hit. Those construct a typer and call <see cref="InferValues"/> directly.
+    /// </summary>
+    public static ScriptTypes InferValuesShared(ParseResult result, BuiltinApi builtins, ObjectFields objectFields)
+    {
+        GameProfile game = GameProfile.Active;
+
+        if ( s_shared.TryGetValue(result, out SharedTypes? cached)
+            && ReferenceEquals(cached.Builtins, builtins)
+            && ReferenceEquals(cached.ObjectFields, objectFields)
+            && ReferenceEquals(cached.Game, game) )
+        {
+            return cached.Types;
+        }
+
+        ScriptTypes types = new FlowTyper(builtins, objectFields, game).InferValues(result);
+
+        // AddOrUpdate rather than Add: the lint pass and an inlay-hint request can race the same
+        // miss, and the walk is pure, so the race costs a duplicate computation rather than a wrong
+        // answer. Add would throw on the loser instead.
+        s_shared.AddOrUpdate(result, new SharedTypes(builtins, objectFields, game, types));
+        return types;
+    }
+
+    /// <summary>
+    /// The shared answer for a parse if one has been computed, without computing it. For a test
+    /// asking which callers fill the cache: a hit and a fresh walk return equal-looking answers,
+    /// so whether one was stored is the only thing that tells them apart.
+    /// </summary>
+    internal static ScriptTypes? SharedFor(ParseResult result)
+    {
+        return s_shared.TryGetValue(result, out SharedTypes? cached) ? cached.Types : null;
+    }
+
+    /// <summary>
     /// The full value of the local under a cursor, where <see cref="TryGetLocalTypeAt"/> gives the
-    /// coarse projection an editor label needs. A caller deciding how to translate a parameter wants
-    /// the union and the reason, not a single name.
+    /// coarse projection an editor label needs. Go-to-type-definition wants the class or function
+    /// the value holds, which the projection drops.
     /// </summary>
     public bool TryGetValueAt(ParseResult result, Position position, out ScrValue value)
     {
@@ -335,6 +438,10 @@ public sealed class FlowTyper
                 // Walking the containing arm directly is what makes the answer the arm's own.
                 if ( ContainsCursor(ifNode.Then) )
                 {
+                    // The condition runs on every path, including this one — an assignment inside
+                    // it (the deliberate `if ( ( x = f() ) )` form) was never typed here, so `x`
+                    // had no entry in the environment at all inside the arm that reads it.
+                    TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
                     ApplyIsDefinedNarrowing(ifNode.Condition, environment, Clone(environment));
                     WalkStatement(ifNode.Then, environment, hinted, hints, writes);
                     return;
@@ -342,6 +449,7 @@ public sealed class FlowTyper
 
                 if ( ifNode.Else is not null && ContainsCursor(ifNode.Else) )
                 {
+                    TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
                     ApplyIsDefinedNarrowing(ifNode.Condition, Clone(environment), environment);
                     WalkStatement(ifNode.Else, environment, hinted, hints, writes);
                     return;
@@ -351,19 +459,20 @@ public sealed class FlowTyper
                 // on both paths. Typed against the live environment for that reason.
                 TypeExpressionForEffects(ifNode.Condition, environment, hinted, hints, writes);
 
-                // The two arms are alternatives, so each walks its own copy and the results
-                // are joined. Sharing one environment would let whichever arm ran last win.
-                Dictionary<string, ScrValue> thenEnvironment = Clone(environment);
+                // The two arms are alternatives, so they walk separate environments and the results
+                // are joined. Sharing one would let whichever arm ran last win. The then-arm walks
+                // the live one and only the else-arm is copied: the join lands in the then-arm's
+                // environment anyway, so a second copy would only be copied back.
                 Dictionary<string, ScrValue> elseEnvironment = Clone(environment);
-                ApplyIsDefinedNarrowing(ifNode.Condition, thenEnvironment, elseEnvironment);
+                ApplyIsDefinedNarrowing(ifNode.Condition, environment, elseEnvironment);
 
-                WalkStatement(ifNode.Then, thenEnvironment, hinted, hints, writes);
+                WalkStatement(ifNode.Then, environment, hinted, hints, writes);
                 if ( ifNode.Else is not null )
                 {
                     WalkStatement(ifNode.Else, elseEnvironment, hinted, hints, writes);
                 }
 
-                MergeAlternatives(environment, thenEnvironment, elseEnvironment);
+                MergeAlternatives(environment, elseEnvironment);
                 return;
             }
             case WhileNode whileNode:
@@ -399,22 +508,19 @@ public sealed class FlowTyper
                 WalkSwitch(switchNode, environment, hinted, hints, writes);
                 return;
             case DevBlockStmtNode devBlock:
-                // `/# … #/` is real code — it runs in a debug build, and assignments inside it want
-                // their hints exactly as anywhere else. It was simply never visited, so nothing
-                // inside a dev block had an inferred type at all.
+                // `/# … #/` is real code — it runs when developer script is enabled, and
+                // assignments inside it want their hints exactly as anywhere else.
                 //
                 // Walked as an ALTERNATIVE path rather than inline, on the same reasoning as a loop
-                // body: the block is compiled out of a release build, so code after it cannot
-                // assume anything it assigned still holds. Inside the block the assignments are
-                // exact; outside, a name typed only there joins with the environment as it stood
-                // before and becomes Unknown, which is the honest answer.
+                // body: the block is skipped at runtime without developer script, so code after it
+                // cannot assume anything it assigned still holds. Inside the block the assignments
+                // are exact; outside, a name typed only there joins with the environment as it
+                // stood before and becomes Unknown, which is the honest answer.
                 MergeDevBlock(devBlock, environment, hinted, hints, writes);
                 return;
             case ConstDeclNode constDecl:
             {
-                // A `const` binds a name for the rest of the function exactly as an assignment
-                // does, and it was falling through the default case — so `const MAX = 4;` left MAX
-                // untyped and unhinted while `MAX = 4;` was both.
+                // A `const` binds a name for the rest of the function exactly as an assignment does.
                 ScrValue value = TypeOf(constDecl.Value, environment);
                 environment[constDecl.NameToken.Text] = value;
 
@@ -476,8 +582,11 @@ public sealed class FlowTyper
             WalkStatement(statement, blockEnvironment, hinted, hints, writes);
         }
 
-        MergeAlternatives(environment, environment, blockEnvironment);
+        MergeAlternatives(environment, blockEnvironment);
     }
+
+    /// <summary>How many silent warm-up passes <see cref="MergeLoopBody"/> takes to reach a fixpoint.</summary>
+    private const int LoopFixpointPasses = 3;
 
     /// <summary>
     /// Walks a loop body as an alternative path: the body may run zero times, so its effects
@@ -503,7 +612,50 @@ public sealed class FlowTyper
             return;
         }
 
-        Dictionary<string, ScrValue> bodyEnvironment = Clone(environment);
+        // A SINGLE pass reads the body against the environment as it stood BEFORE the loop, so a
+        // read that happens before the corresponding write LATER IN THE SAME BODY — which a second
+        // iteration would see, since GSC has no per-iteration scoping — never does:
+        //
+        //   p = undefined;
+        //   for ( i = 0; i < 3; i++ ) { if ( i ) foreach ( e in p ) {} p = getplayers(); }
+        //
+        // `p` stays `undefined` at the foreach on every reading of this loop, though the second
+        // and third iterations reach it with whatever `getplayers()` left there. "A union only
+        // ever grows, so one join suffices" is true of the join itself but answers a different
+        // question — that join only folds in what flows out the FAR END of the body, once; it
+        // never feeds that back in as a starting point the body's OWN statements are read against.
+        //
+        // Found by silent warm-up passes (their own scratch hinted set and hint/write builders, so
+        // re-running the body to find the fixpoint does not also duplicate every hint and field
+        // write it records) that converge the environment REACHABLE AT THE TOP of the body across
+        // any number of prior iterations. The lattice only grows and is finite, so this always
+        // terminates; capped as a safety bound rather than a belief that real loops need it.
+        Dictionary<string, ScrValue> candidate = Clone(environment);
+        for ( int pass = 0; pass < LoopFixpointPasses; pass++ )
+        {
+            Dictionary<string, ScrValue> warmupBody = Clone(candidate);
+            WalkStatementSilently(body, warmupBody);
+            if ( increment is not null )
+            {
+                WalkStatementSilently(increment, warmupBody);
+            }
+
+            Dictionary<string, ScrValue> joined = Clone(environment);
+            MergeAlternatives(joined, warmupBody);
+
+            if ( EnvironmentsEqual(joined, candidate) )
+            {
+                break;
+            }
+
+            candidate = joined;
+        }
+
+        // The real, hint-recording pass starts from the CONVERGED candidate rather than the raw
+        // pre-loop environment — the only difference from before the fix — so a read anywhere in
+        // the body sees what a prior iteration could have left there. Walked in place: nothing
+        // reads the candidate after this, so a copy of it would only be garbage.
+        Dictionary<string, ScrValue> bodyEnvironment = candidate;
         WalkStatement(body, bodyEnvironment, hinted, hints, writes);
 
         if ( increment is not null )
@@ -511,20 +663,66 @@ public sealed class FlowTyper
             WalkStatement(increment, bodyEnvironment, hinted, hints, writes);
         }
 
-        // One join suffices: a union only ever grows, so iterating to a fixpoint could not narrow
-        // the answer this single pass gives.
-        MergeAlternatives(environment, environment, bodyEnvironment);
+        MergeAlternatives(environment, bodyEnvironment);
+    }
+
+    /// <summary>
+    /// Runs a warm-up pass with scratch bookkeeping, so nothing it finds is recorded twice.
+    ///
+    /// The per-expression map is switched off for the same reason: the real pass walks the same
+    /// body and records every one of these nodes again, so recording them here was only overwritten.
+    /// </summary>
+    private void WalkStatementSilently(AstNode statement, Dictionary<string, ScrValue> environment)
+    {
+        _silentHinted ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _silentHints ??= ImmutableArray.CreateBuilder<InferredAssignment>();
+        _silentWrites ??= ImmutableArray.CreateBuilder<FieldWrite>();
+        _silentHinted.Clear();
+        _silentHints.Clear();
+        _silentWrites.Clear();
+
+        Dictionary<ExprNode, ScrValue>? recorded = _recorded;
+        _recorded = null;
+        try
+        {
+            WalkStatement(statement, environment, _silentHinted, _silentHints, _silentWrites);
+        }
+        finally
+        {
+            _recorded = recorded;
+        }
+    }
+
+    /// <summary>
+    /// Whether two environments agree on every value — a false negative (two structurally equal
+    /// values compared unequal) only costs one more warm-up pass, never an incorrect fixpoint, since
+    /// the pass count is capped.
+    /// </summary>
+    private static bool EnvironmentsEqual(Dictionary<string, ScrValue> first, Dictionary<string, ScrValue> second)
+    {
+        if ( first.Count != second.Count )
+        {
+            return false;
+        }
+
+        foreach ( KeyValuePair<string, ScrValue> entry in first )
+        {
+            if ( !second.TryGetValue(entry.Key, out ScrValue other) || !entry.Value.Equals(other) )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
     /// A <c>foreach</c>, whose BINDINGS were never entered into the environment — so
     /// <c>foreach ( item in items )</c> left <c>item</c> untracked and nothing downstream could say
-    /// anything about it. That is also the blocker for lowering a foreach into a <c>for</c> over
-    /// <c>getarraykeys</c>, which needs to know the collection is an array.
+    /// anything about it.
     ///
-    /// The collection is typed but its ELEMENT type is not modelled, so the value binding is an
-    /// unknown carrying <see cref="ScrImprecision.ArrayElement"/> — enough to say the name is a
-    /// local and to say why nothing more is known. A key, where the two-variable form is used, is a
+    /// The collection is typed but its ELEMENT type is not modelled, so the value binding is
+    /// unknown — enough to say the name is a local. A key, where the two-variable form is used, is a
     /// string or an int, which is the array-key rule rather than a guess.
     /// </summary>
     private void WalkForeach(
@@ -557,7 +755,7 @@ public sealed class FlowTyper
         // foreach binding is the same kind of variable — so after the loop the name holds the last
         // element, or is undefined where the collection was empty. Removing it here said instead
         // that the name kept whatever it held BEFORE the loop, which is the one thing it cannot be.
-        MergeAlternatives(environment, environment, bodyEnvironment);
+        MergeAlternatives(environment, bodyEnvironment);
     }
 
     /// <summary>
@@ -567,19 +765,24 @@ public sealed class FlowTyper
     /// </summary>
     private static void BindLoopVariables(ForeachNode foreachNode, Dictionary<string, ScrValue> environment)
     {
-        environment[foreachNode.ValueToken.Text] =
-            ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+        environment[foreachNode.ValueToken.Text] = ScrValue.Unknown;
 
         if ( foreachNode.KeyToken is PToken keyToken )
         {
-            environment[keyToken.Text] =
-                ScrValue.Of(ScrTypeSet.Int | ScrTypeSet.String, ScrImprecision.ArrayElement);
+            environment[keyToken.Text] = ScrValue.Of(ScrTypeSet.Int | ScrTypeSet.String);
         }
     }
 
     /// <summary>
-    /// Walks each case group as its own alternative path. Without a default label no group
-    /// need run at all, so the pre-switch environment joins in as a further alternative.
+    /// Walks each case group as its own alternative path, chaining a group with no leading
+    /// break/return/continue onto the group above it — which reaches it exactly as much as
+    /// matching its own label does. Without a default label the pre-switch environment joins in
+    /// as a further alternative, for the same reason an if with no else does.
+    ///
+    /// A cursor inside one group is on THAT path, not at the merge of every path the switch could
+    /// take, the same shortcut <c>IfNode</c> and foreach already take — and here it also has to
+    /// honour fallthrough up to the cursor's own group rather than starting from the pre-switch
+    /// environment.
     /// </summary>
     private void WalkSwitch(
         SwitchNode switchNode,
@@ -588,17 +791,52 @@ public sealed class FlowTyper
         ImmutableArray<InferredAssignment>.Builder hints,
         ImmutableArray<FieldWrite>.Builder writes)
     {
-        List<Dictionary<string, ScrValue>> paths = new();
+        // The subject is evaluated once, before any case is tested, and every case label's own
+        // value is an ordinary expression too (even one that never matches) — both were simply
+        // never walked, leaving a hole in the per-node map for each.
+        TypeExpressionForEffects(switchNode.Subject, environment, hinted, hints, writes);
+        foreach ( CaseGroupNode labelGroup in switchNode.Cases )
+        {
+            foreach ( CaseLabel label in labelGroup.Labels )
+            {
+                if ( label.Value is not null )
+                {
+                    TypeOf(label.Value, environment);
+                }
+            }
+        }
+
+        List<Dictionary<string, ScrValue>> paths = [];
+        Dictionary<string, ScrValue>? previousExit = null;
+        bool previousFallsThrough = false;
 
         foreach ( CaseGroupNode group in switchNode.Cases )
         {
             Dictionary<string, ScrValue> caseEnvironment = Clone(environment);
+            if ( previousFallsThrough && previousExit is not null )
+            {
+                MergeAlternatives(caseEnvironment, previousExit);
+            }
+
+            if ( ContainsCursor(group) )
+            {
+                foreach ( AstNode child in group.Statements )
+                {
+                    WalkStatement(child, caseEnvironment, hinted, hints, writes);
+                }
+
+                CopyInto(environment, caseEnvironment);
+                return;
+            }
+
             foreach ( AstNode child in group.Statements )
             {
                 WalkStatement(child, caseEnvironment, hinted, hints, writes);
             }
 
             paths.Add(caseEnvironment);
+            previousExit = caseEnvironment;
+            previousFallsThrough = !EndsInTerminator(group.Statements);
         }
 
         if ( !HasDefaultLabel(switchNode) )
@@ -614,13 +852,24 @@ public sealed class FlowTyper
         Dictionary<string, ScrValue> merged = paths[0];
         for ( int index = 1; index < paths.Count; index++ )
         {
-            MergeAlternatives(merged, merged, paths[index]);
+            MergeAlternatives(merged, paths[index]);
         }
 
-        environment.Clear();
-        foreach ( KeyValuePair<string, ScrValue> entry in merged )
+        CopyInto(environment, merged);
+    }
+
+    /// <summary>Whether a case group's own statements end without falling through to the next one.</summary>
+    private static bool EndsInTerminator(ImmutableArray<AstNode> statements)
+    {
+        return statements.Length > 0 && statements[^1] is ReturnNode or BreakNode or ContinueNode;
+    }
+
+    private static void CopyInto(Dictionary<string, ScrValue> destination, Dictionary<string, ScrValue> source)
+    {
+        destination.Clear();
+        foreach ( KeyValuePair<string, ScrValue> entry in source )
         {
-            environment[entry.Key] = entry.Value;
+            destination[entry.Key] = entry.Value;
         }
     }
 
@@ -732,7 +981,8 @@ public sealed class FlowTyper
     }
 
     /// <summary>
-    /// Replaces <paramref name="destination"/> with the join of two alternative paths.
+    /// Replaces <paramref name="destination"/> with its join with <paramref name="other"/>, an
+    /// alternative path.
     ///
     /// The join is now a set UNION rather than a collapse. Two arms assigning an int and a string
     /// produce <c>int|string</c>, where the flat lattice produced nothing usable — and the
@@ -741,34 +991,32 @@ public sealed class FlowTyper
     /// A name typed on only one path unions with <c>undefined</c> rather than becoming anonymously
     /// unknown, because that is what is actually true: the other path did not assign it. That is
     /// also what makes a later <c>isdefined</c> narrowing able to recover the type exactly.
+    ///
+    /// Joined IN PLACE, into the path that is kept. Building the join in a fresh dictionary and
+    /// copying it back was the largest single allocation in the whole lint pass — a new table per
+    /// branch, loop and switch case, grown from empty. The values are updated
+    /// through a reference rather than the indexer so the enumeration is never invalidated, and the
+    /// destination stays the LEFT side of every union, as it was: a union keeps the left side's
+    /// constant spelling and class-name casing when the two agree.
     /// </summary>
-    private static void MergeAlternatives(
-        Dictionary<string, ScrValue> destination,
-        Dictionary<string, ScrValue> first,
-        Dictionary<string, ScrValue> second)
+    private static void MergeAlternatives(Dictionary<string, ScrValue> destination, Dictionary<string, ScrValue> other)
     {
-        Dictionary<string, ScrValue> joined = new(StringComparer.OrdinalIgnoreCase);
         ScrValue unassigned = ScrValue.Of(ScrTypeSet.Undefined);
 
-        foreach ( KeyValuePair<string, ScrValue> entry in first )
+        foreach ( KeyValuePair<string, ScrValue> entry in destination )
         {
-            joined[entry.Key] = second.TryGetValue(entry.Key, out ScrValue other)
-                ? ScrValue.Union(entry.Value, other)
-                : ScrValue.Union(entry.Value, unassigned);
+            ref ScrValue value = ref CollectionsMarshal.GetValueRefOrNullRef(destination, entry.Key);
+            value = other.TryGetValue(entry.Key, out ScrValue otherValue)
+                ? ScrValue.Union(value, otherValue)
+                : ScrValue.Union(value, unassigned);
         }
 
-        foreach ( KeyValuePair<string, ScrValue> entry in second )
+        foreach ( KeyValuePair<string, ScrValue> entry in other )
         {
-            if ( !joined.ContainsKey(entry.Key) )
+            if ( !destination.ContainsKey(entry.Key) )
             {
-                joined[entry.Key] = ScrValue.Union(entry.Value, unassigned);
+                destination[entry.Key] = ScrValue.Union(entry.Value, unassigned);
             }
-        }
-
-        destination.Clear();
-        foreach ( KeyValuePair<string, ScrValue> entry in joined )
-        {
-            destination[entry.Key] = entry.Value;
         }
     }
 
@@ -781,7 +1029,21 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 incremented.NameToken.RootRange,
                 incremented.NameToken.Text,
-                TypeOf(incremented.Object, environment).ToScrType()));
+                TypeOf(incremented.Object, environment)));
+            return;
+        }
+
+        // `x++`/`x--` on a plain local reads and writes it in the same step, same as a member's.
+        // Left unhandled, this fell to the bare-expression branch below: typed for its value (which
+        // IS correct — see the PostfixNode arm of TypeOf) and then thrown away, so the environment
+        // kept whatever `x` was BEFORE the increment — including a stale CONSTANT, since
+        // `old.Restrict(Number)` is a no-op once the value is already a number.
+        if ( IncrementedIdentifier(expression) is { } incrementedLocal )
+        {
+            string incrementedName = incrementedLocal.Token.Text;
+            ScrValue previousValue = environment.TryGetValue(incrementedName, out ScrValue priorValue) ? priorValue : ScrValue.Unknown;
+            ScrBinaryOp incrementOp = IsIncrement(expression) ? ScrBinaryOp.Add : ScrBinaryOp.Subtract;
+            environment[incrementedName] = ScrOperators.Apply(incrementOp, previousValue, ScrValue.OfConstant(ScrConstant.OfInt(1))).Value;
             return;
         }
 
@@ -809,7 +1071,7 @@ public sealed class FlowTyper
             writes.Add(new FieldWrite(
                 member.NameToken.RootRange,
                 member.NameToken.Text,
-                TypeOf(member.Object, environment).ToScrType(),
+                TypeOf(member.Object, environment),
                 assignment.Operator == TokenKind.Assign ? assignment.Value : null));
 
             // A field assignment is an assignment: `level.foo = "text"` says as much about foo as
@@ -837,10 +1099,60 @@ public sealed class FlowTyper
             return;
         }
 
-        // Only plain `local = value` (the '=' operator) yields a type; compound ops keep
-        // the existing type.
-        if ( assignment.Operator != TokenKind.Assign || assignment.Target is not IdentifierNode target )
+        // `a[ i ] = v` is how GSC creates or grows an array, so the target written through is exactly
+        // as informative about `a` as `a = value` is. Left untouched, a variable that started as
+        // `undefined` would stay so for the rest of the flow, and 5033 (CannotEnumerateType) would
+        // warn on `spots = undefined; spots[ spots.size ] = s; foreach ( p in spots ) {}`.
+        if ( assignment.Operator == TokenKind.Assign && assignment.Target is IndexNode indexTarget )
         {
+            // Every index expression along an `a[ i ][ j ]` chain is an ordinary expression and
+            // must still be walked for its own effects (a call, a nested field write) even though
+            // only the chain's base identifier is bound below.
+            ExprNode chainBase = indexTarget;
+            while ( chainBase is IndexNode chainIndex )
+            {
+                TypeOf(chainIndex.Index, environment);
+                chainBase = chainIndex.Object;
+            }
+
+            TypeOf(chainBase, environment);
+            TypeOf(assignment.Value, environment);
+
+            // Only a chain bottoming out at a plain local binds anything — `a.b[ i ] = v` and
+            // `foo()[ i ] = v` say nothing about a local the environment tracks.
+            if ( chainBase is IdentifierNode baseIdentifier )
+            {
+                string baseName = baseIdentifier.Token.Text;
+                ScrValue previous = environment.TryGetValue(baseName, out ScrValue existing) ? existing : ScrValue.Unknown;
+                environment[baseName] = ScrValue.Union(previous.Without(ScrTypeSet.Undefined), ScrValue.Of(ScrTypeSet.Array));
+            }
+
+            return;
+        }
+
+        if ( assignment.Target is not IdentifierNode target )
+        {
+            return;
+        }
+
+        // A compound assignment (`+=` and friends) both reads and writes: `x += 0.5` narrows the
+        // environment the same way `x = x + 0.5` would. Left unhandled, this was silently a no-op —
+        // the value was never even typed for effects — so `x = 0; x += 0.5;` kept reporting `int`
+        // for x, though adding a float promotes the result.
+        if ( assignment.Operator != TokenKind.Assign )
+        {
+            if ( TryMapCompoundAssign(assignment.Operator, out ScrBinaryOp compoundOp) )
+            {
+                ScrValue rhs = TypeOf(assignment.Value, environment);
+                string compoundName = target.Token.Text;
+                ScrValue previous = environment.TryGetValue(compoundName, out ScrValue existing) ? existing : ScrValue.Unknown;
+                environment[compoundName] = ScrOperators.Apply(compoundOp, previous, rhs).Value;
+            }
+            else
+            {
+                TypeOf(assignment.Value, environment);
+            }
+
             return;
         }
 
@@ -887,12 +1199,58 @@ public sealed class FlowTyper
         return kind == TokenKind.PlusPlus || kind == TokenKind.MinusMinus;
     }
 
+    /// <summary>The local a ++/-- applies to, or null when the expression is not one (or applies to a member).</summary>
+    private static IdentifierNode? IncrementedIdentifier(ExprNode expression)
+    {
+        if ( expression is PostfixNode postfix && IsIncrementOrDecrement(postfix.Operator) )
+        {
+            return postfix.Operand as IdentifierNode;
+        }
+
+        if ( expression is PrefixNode prefix && IsIncrementOrDecrement(prefix.Operator) )
+        {
+            return prefix.Operand as IdentifierNode;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether a ++/-- expression is the incrementing half, rather than the decrementing one.</summary>
+    private static bool IsIncrement(ExprNode expression)
+    {
+        return expression switch
+        {
+            PostfixNode postfix => postfix.Operator == TokenKind.PlusPlus,
+            PrefixNode prefix => prefix.Operator == TokenKind.PlusPlus,
+            _ => true,
+        };
+    }
+
+    /// <summary>Maps a compound-assignment token onto the binary operator it applies before storing.</summary>
+    private static bool TryMapCompoundAssign(TokenKind kind, out ScrBinaryOp op)
+    {
+        switch ( kind )
+        {
+            case TokenKind.PlusAssign: op = ScrBinaryOp.Add; return true;
+            case TokenKind.MinusAssign: op = ScrBinaryOp.Subtract; return true;
+            case TokenKind.StarAssign: op = ScrBinaryOp.Multiply; return true;
+            case TokenKind.SlashAssign: op = ScrBinaryOp.Divide; return true;
+            case TokenKind.PercentAssign: op = ScrBinaryOp.Modulo; return true;
+            case TokenKind.AmpersandAssign: op = ScrBinaryOp.BitAnd; return true;
+            case TokenKind.PipeAssign: op = ScrBinaryOp.BitOr; return true;
+            case TokenKind.CaretAssign: op = ScrBinaryOp.BitXor; return true;
+            case TokenKind.ShiftLeftAssign: op = ScrBinaryOp.ShiftLeft; return true;
+            case TokenKind.ShiftRightAssign: op = ScrBinaryOp.ShiftRight; return true;
+            default: op = default; return false;
+        }
+    }
+
     /// <summary>
     /// Types one expression, recording the answer when a caller asked for the whole map.
     ///
     /// Wrapped rather than folded into the switch so every return path is captured — including the
-    /// early ones and the default — which is the difference between a map a rewriter can rely on
-    /// and one with holes wherever a case returns directly.
+    /// early ones and the default — which is the difference between a map a caller can rely on and
+    /// one with holes wherever a case returns directly.
     /// </summary>
     private ScrValue TypeOf(ExprNode expression, Dictionary<string, ScrValue> environment)
     {
@@ -920,7 +1278,7 @@ public sealed class FlowTyper
                 return ScrValue.Of(ScrTypeSet.Array);
             case NewNode newNode:
                 // A class instance, not a bare struct: the class name is part of the value's
-                // identity and a rewriter lowering BO3 objects needs it.
+                // identity, and hovers, go-to-type-definition and `->` call hints use it.
                 return ScrValue.Of(ScrTypeSet.Instance) with { InstanceClass = newNode.ClassToken.Text };
             case IdentifierNode identifier:
                 return TypeOfIdentifier(identifier.Token.Text, environment);
@@ -935,13 +1293,13 @@ public sealed class FlowTyper
 
             // `a[ i ]`. The element type is not modelled — neither did v1.5, whose indexer analysis
             // returned "any" unconditionally — but the BASE being indexed is the question that
-            // matters, and the reason says so rather than leaving an anonymous unknown.
+            // matters.
             //
             // This arm is what blocks v1.5's `CannotUseAsIndexer`: the INDEX expression is never
             // typed, so there is nothing for that rule to judge. Typing it is additive and belongs
             // in its own change — see FOLLOWUPS.md.
             case IndexNode:
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ArrayElement);
+                return ScrValue.Unknown;
 
             // Both arms are live, so the value is one or the other. The flat lattice had no way to
             // say that and returned Unknown.
@@ -970,7 +1328,7 @@ public sealed class FlowTyper
                     TypeOf(argument, environment);
                 }
 
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
+                return ScrValue.Unknown;
 
             // A bare `ns::foo` or `path\to\file::foo` with no argument list is a function pointer;
             // the parser only produces these outside call position.
@@ -990,8 +1348,10 @@ public sealed class FlowTyper
             // function the pointer holds, and a call site with no way to ask that can show nothing
             // about the function it is calling.
             case PointerDerefNode deref:
-                return ScrValue.Of(ScrTypeSet.Function)
-                    with { FunctionTarget = TypeOf(deref.Pointer, environment).FunctionTarget };
+                return ScrValue.Of(ScrTypeSet.Function) with
+                {
+                    FunctionTarget = TypeOf(deref.Pointer, environment).FunctionTarget,
+                };
 
             default:
                 return ScrValue.Unknown;
@@ -1053,9 +1413,8 @@ public sealed class FlowTyper
         ImmutableArray<ObjectField> fields = _objectFields.FindField(fieldName);
         if ( fields.Length == 0 )
         {
-            // A field the scripts invented, which is most of them. Named as such rather than left
-            // anonymously unknown, so a rewriter can tell it from a field we simply failed to type.
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.StructField);
+            // A field the scripts invented, which is most of them. The engine data says nothing.
+            return ScrValue.Unknown;
         }
 
         ScrTypeSet agreed = MapDeclaredType(fields[0].Type);
@@ -1065,12 +1424,12 @@ public sealed class FlowTyper
             {
                 // The declaring kinds disagree and the owner's kind is not inferred, so no
                 // declaration can be the one that applies.
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnknownFieldOwner);
+                return ScrValue.Unknown;
             }
         }
 
         return agreed == ScrTypeSet.None
-            ? ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped)
+            ? ScrValue.Unknown
             : ScrValue.Of(agreed);
     }
 
@@ -1125,7 +1484,7 @@ public sealed class FlowTyper
 
             default:
                 // Anim references and #animtree are literals too, and nothing here can type them.
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.UnsupportedExpression);
+                return ScrValue.Unknown;
         }
     }
 
@@ -1138,8 +1497,15 @@ public sealed class FlowTyper
 
         switch ( name.ToLowerInvariant() )
         {
+            // self is whichever object the CALLER threaded the function onto, which this
+            // per-function pass has no way to see — usually an entity (including a sentient AI),
+            // but GSC also allows threading onto a struct (including level itself); never an
+            // array, and never a primitive. Honest about that instead of asserting Entity: the
+            // union still lets a consumer ask
+            // MayBe(Entity), which is what ReadOnlyWriteLint/PreferBooleanLiteralLint need to keep
+            // firing on self.field without falsely asserting self IS always an entity.
             case "self":
-                return ScrValue.Of(ScrTypeSet.Entity);
+                return ScrValue.Of(ScrTypeSet.Entity | ScrTypeSet.Struct);
             // world is a BO3+ global; where the dialect has no world, a bare "world" is an ordinary
             // name (the case falls through to default), so it isn't mistyped as the world struct.
             case "world" when _game.HasWorldObject:
@@ -1149,10 +1515,9 @@ public sealed class FlowTyper
             case "game":
                 return ScrValue.Of(ScrTypeSet.Array);
 
-            // `world` where the dialect has none. Reported as a distinct reason rather than an
-            // anonymous unknown, since a transpiler re-homing world's fields needs to see it.
+            // `world` where the dialect has none: an ordinary name, so nothing is known.
             case "world":
-                return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.DialectGlobalAbsent);
+                return ScrValue.Unknown;
 
             default:
                 return ScrValue.Unknown;
@@ -1211,10 +1576,9 @@ public sealed class FlowTyper
     /// <summary>
     /// A binary operator, delegated to <see cref="ScrOperators"/>.
     ///
-    /// This is where the <c>vector * 0.5</c> bug is actually fixed: the old code routed every
-    /// arithmetic operator through a helper that took no operator and knew only Int/Float/Unknown,
-    /// so a scaled vector came out a float. The operand diagnosis is discarded here — this pass
-    /// types expressions and does not report — but it is what a rule or a rewriter would read.
+    /// Typed by the operator, so <c>vector * 0.5</c> stays a vector rather than every arithmetic operator
+    /// yielding a number. The operand diagnosis is discarded here — this pass types expressions and
+    /// does not report — but it is what a rule would read.
     /// </summary>
     private ScrValue TypeOfBinary(BinaryNode binary, Dictionary<string, ScrValue> environment)
     {
@@ -1272,15 +1636,14 @@ public sealed class FlowTyper
 
     private ScrValue TypeOfCall(CallNode call, Dictionary<string, ScrValue> environment)
     {
-        // The arguments are expressions in their own right and were never typed — the old code read
-        // only the callee's name. A per-node map with holes wherever an argument sits is no use to a
-        // rewriter, and inferring a parameter from its call sites needs exactly these values.
+        // The arguments are typed in their own right, so the per-node map has no holes wherever an
+        // argument sits.
         //
         // Except `self waittill( "damage", attacker, amount );`, which BINDS its trailing
         // arguments — outputs the engine fills in, not reads (the same convention
         // UnassignedVariableLint and LocalReferences honour). They must be REBOUND here, not
         // typed through: reusing a name across a wait is ordinary GSC, and letting the old
-        // type survive the rebind is what made 5033 warn on `x = "s"; self waittill( "e", x );
+        // type survive the rebind would make 5033 warn on `x = "s"; self waittill( "e", x );
         // foreach ( i in x )`. The first argument is the event name, a genuine read.
         bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
 
@@ -1288,7 +1651,7 @@ public sealed class FlowTyper
         {
             if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
             {
-                environment[bound.Token.Text] = ScrValue.EngineBound;
+                environment[bound.Token.Text] = ScrValue.Unknown;
                 continue;
             }
 
@@ -1333,28 +1696,20 @@ public sealed class FlowTyper
         if ( builtin is null || builtin.Overloads.Length == 0 )
         {
             // Either a script function, whose body is not re-typed here, or a name the game's
-            // library does not carry. Both are worth telling apart from an untypeable expression.
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.ScriptFunctionReturn);
+            // library does not carry.
+            return ScrValue.Unknown;
         }
 
-        // The union across EVERY overload, parsed at load. The old code read overload zero and no
-        // further, so a builtin whose overloads return different things was reported as returning
-        // whichever happened to be listed first.
+        // The union across EVERY overload, parsed at load: a builtin whose overloads return different
+        // things may return any of them.
         ScrTypeSet mapped = builtin.ReturnTypes;
 
         if ( mapped == ScrTypeSet.None )
         {
-            return ScrValue.Of(ScrTypeSet.Universe, ScrImprecision.BuiltinTypeUnmapped);
+            return ScrValue.Unknown;
         }
 
-        // A low-confidence entry is a weaker fact than a verified one, and saying so is what lets a
-        // consumer decide for itself — v1.5 shipped a whole second diagnostic code because it had
-        // nowhere to record this.
-        return ScrValue.Of(
-            mapped,
-            builtin.Confidence == BuiltinConfidence.Low
-                ? ScrImprecision.BuiltinUnverified
-                : ScrImprecision.None);
+        return ScrValue.Of(mapped);
     }
 
     /// <summary>
@@ -1363,9 +1718,7 @@ public sealed class FlowTyper
     ///
     /// Still text-driven and still dropping <c>any[]</c>, unions and <c>number</c> — the loader
     /// flattens the structured JSON to a display string before anything here can see it, and
-    /// unpicking that is its own change. What is different is that failure is now REPORTED as
-    /// <see cref="ScrImprecision.BuiltinTypeUnmapped"/> instead of being indistinguishable from
-    /// every other unknown.
+    /// unpicking that is its own change.
     /// </summary>
     private static ScrTypeSet MapDeclaredType(string typeText)
     {

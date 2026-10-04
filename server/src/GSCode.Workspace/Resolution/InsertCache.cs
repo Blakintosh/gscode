@@ -1,7 +1,4 @@
 using System.Collections.Concurrent;
-using System.Collections.Immutable;
-using GSCode.Core.Text;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 
 namespace GSCode.Workspace.Resolution;
@@ -36,7 +33,29 @@ public sealed class InsertCache : IHeaderMacroCache
 {
     private sealed record Entry(InsertedFile File, DateTime LastWriteUtc);
 
-    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    // Ordinal, not OrdinalIgnoreCase: PathUtil.NormalizeAbsolute keeps exact case on Linux (a
+    // case-sensitive filesystem, where two names differing only by case really are two different
+    // files), lowercasing only on Windows/macOS — so an ignore-case comparer here would collide
+    // two DISTINCT headers on Linux into one cache entry, silently serving one file's content
+    // for the other. Matches LanguageStore's own key comparer for the same reason.
+    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+
+    private long _generation;
+
+    /// <inheritdoc />
+    public long Generation
+    {
+        get { return Interlocked.Read(ref _generation); }
+    }
+
+    /// <summary>
+    /// Records that a header stopped being what it was. Called from every point that replaces or
+    /// drops an entry, so no caller has to remember to announce a change separately from making it.
+    /// </summary>
+    private void Moved()
+    {
+        Interlocked.Increment(ref _generation);
+    }
 
     /// <summary>
     /// The header at this resolved path, lexed once and reused until the file changes. Null when it
@@ -60,8 +79,38 @@ public sealed class InsertCache : IHeaderMacroCache
 
         // The file moved, so whatever it used to contribute is no longer what it contributes.
         _contributions.TryRemove(resolvedPath, out _);
+
+        // Only a REPLACEMENT is a change; the first read of a header is not, and counting it would
+        // make every file analysed during indexing invalidate every other one's parse.
+        if ( cached is not null )
+        {
+            Moved();
+        }
+
         _entries[resolvedPath] = new Entry(file, stamp);
         return file;
+    }
+
+    /// <summary>
+    /// Offers a header the caller has already read and lexed, if nothing holds one yet.
+    ///
+    /// A <c>.gsh</c> is an index target in its own right AND an insert source, and those two paths
+    /// each read and lexed it independently. The indexer's analysis of the header produces exactly
+    /// what <see cref="GetOrAdd"/> would go on to build from scratch, so it is offered here instead.
+    ///
+    /// Offered rather than assigned, because the race is real and unordered: a <c>.gsc</c> that
+    /// inserts this header may be processed first and fill the entry itself. Whoever arrives first
+    /// wins, and the two would produce identical content anyway - same file, same lexer, same
+    /// profile. So this halves the header work rather than eliminating it, and it never discards a
+    /// contribution already walked against an entry that is equally current.
+    ///
+    /// <paramref name="lastWriteUtc"/> must be read BEFORE the content it describes. Taken after,
+    /// a write landing between the two would be stamped as already seen, and the entry would stay
+    /// stale until the file changed again.
+    /// </summary>
+    public void SeedIfAbsent(string resolvedPath, InsertedFile file, DateTime lastWriteUtc)
+    {
+        _entries.TryAdd(resolvedPath, new Entry(file, lastWriteUtc));
     }
 
     /// <summary>
@@ -71,7 +120,7 @@ public sealed class InsertCache : IHeaderMacroCache
     /// timestamp moved drops both together.
     /// </summary>
     private readonly ConcurrentDictionary<string, HeaderContribution> _contributions =
-        new(StringComparer.OrdinalIgnoreCase);
+        new(StringComparer.Ordinal);
 
     public bool TryGet(string resolvedPath, out HeaderContribution contribution)
     {
@@ -86,15 +135,80 @@ public sealed class InsertCache : IHeaderMacroCache
     /// <summary>Drops one header, for a caller that knows it changed and will not wait for the stat.</summary>
     public void Invalidate(string resolvedPath)
     {
-        _entries.TryRemove(resolvedPath, out _);
-        _contributions.TryRemove(resolvedPath, out _);
+        bool held = _entries.TryRemove(resolvedPath, out _);
+        held |= _contributions.TryRemove(resolvedPath, out _);
+        held |= DropContributionsIncluding(resolvedPath);
+
+        if ( held )
+        {
+            Moved();
+        }
     }
 
-    /// <summary>Drops everything — used when the resolution roots change, so paths mean new files.</summary>
-    public void Clear()
+    /// <summary>
+    /// Drops the stored contribution of every header that reaches this one through its own nested
+    /// <c>#insert</c>s, however many hops away.
+    ///
+    /// A contribution is what the WALK left behind, and the walk of an outer header descends into
+    /// the ones it inserts — "a definition recorded inside this header also belongs to whatever
+    /// header inserted it", as the preprocessor puts it while adding them. So a wrapper's entry
+    /// carries copies of the macros the header underneath it defined, frozen at the moment it was
+    /// walked. Dropping the inner header alone would leave those copies standing, and every file
+    /// inserting the wrapper would replay values the inner header no longer holds until the session
+    /// ended — a re-parse replays them again.
+    /// The reverse edges come from the contributions themselves: each records the nested inserts it
+    /// carries, so no separate graph has to be built or kept in step. Only contributions go — an
+    /// ancestor's lexed TOKENS are still its own bytes, which have not changed.
+    /// </summary>
+    private bool DropContributionsIncluding(string resolvedPath)
     {
-        _entries.Clear();
-        _contributions.Clear();
+        HashSet<string> dropped = new(StringComparer.Ordinal) { resolvedPath };
+        bool any = false;
+
+        bool grew = true;
+        while ( grew )
+        {
+            grew = false;
+            foreach ( KeyValuePair<string, HeaderContribution> held in _contributions )
+            {
+                if ( dropped.Contains(held.Key) || !Inserts(held.Value, dropped) )
+                {
+                    continue;
+                }
+
+                _contributions.TryRemove(held.Key, out _);
+                dropped.Add(held.Key);
+                any = true;
+                grew = true;
+            }
+        }
+
+        return any;
+    }
+
+    /// <summary>Whether a contribution's nested inserts name any of the given headers.</summary>
+    private static bool Inserts(HeaderContribution contribution, HashSet<string> headers)
+    {
+        foreach ( InsertEdge nested in contribution.Inserts )
+        {
+            if ( nested.ResolvedPath is not null && headers.Contains(nested.ResolvedPath) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Records that a header appeared or vanished, which changes what an insert path resolves to
+    /// without changing any header this holds. <see cref="Invalidate"/> deliberately says nothing
+    /// in that case — a header nobody has read cannot be in anyone's parse — and the file that has
+    /// been waiting for this one to exist is precisely the file it says nothing about.
+    /// </summary>
+    public void NoteHeaderSetChanged()
+    {
+        Moved();
     }
 
     /// <summary>How many headers are held. For diagnostics and tests.</summary>

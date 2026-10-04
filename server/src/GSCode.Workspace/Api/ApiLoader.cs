@@ -28,7 +28,8 @@ public static class ApiLoader
     /// Loads the library for a language from the given Api directory, using the profile's data-file
     /// naming. Empty when the profile ships no data (non-BO3 today) or the file is absent.
     /// </summary>
-    public static BuiltinApi Load(string apiDirectory, ScriptLanguage language, GameProfile? profile = null)
+    public static BuiltinApi Load(
+        string apiDirectory, ScriptLanguage language, GameProfile? profile = null, Action<string, Exception>? onParseFailure = null)
     {
         string? fileName = (profile ?? GameProfile.Active).ApiFileName(language);
         if ( fileName is null )
@@ -36,15 +37,23 @@ public static class ApiLoader
             return BuiltinApi.Empty;
         }
 
-        return LoadFile(Path.Combine(apiDirectory, fileName));
+        return LoadFile(Path.Combine(apiDirectory, fileName), onParseFailure);
     }
 
     /// <summary>
     /// Loads one API file by full path. Split out of <see cref="Load"/> so a caller that has already
     /// decided WHICH file it wants — the engine-name fallback, which reads a sibling game's — is not
     /// forced to go back through profile-based naming to ask for it.
+    ///
+    /// A missing file is silent either way — that is the profile saying it ships no data, which
+    /// the server's own aggregate warning already reports. A file that EXISTS but fails to parse
+    /// is a different fact — corrupt or truncated bundled data — and this layer has no logger of
+    /// its own (see the project's dependency rule in ARCHITECTURE.md), so
+    /// <paramref name="onParseFailure"/> is the caller's seam for reporting it. Optional and null
+    /// by default, so every caller that does not need to distinguish the two silent cases keeps
+    /// its previous behaviour exactly.
     /// </summary>
-    public static BuiltinApi LoadFile(string path)
+    public static BuiltinApi LoadFile(string path, Action<string, Exception>? onParseFailure = null)
     {
         if ( !File.Exists(path) )
         {
@@ -57,8 +66,23 @@ public static class ApiLoader
             using FileStream stream = File.OpenRead(path);
             file = JsonSerializer.Deserialize(stream, ApiJsonContext.Default.ApiFile);
         }
-        catch ( JsonException )
+        catch ( JsonException exception )
         {
+            onParseFailure?.Invoke(path, exception);
+            return BuiltinApi.Empty;
+        }
+        catch ( IOException exception )
+        {
+            // The file EXISTS (checked above) but could not be read — locked by another process,
+            // an AV scan, a sharing violation. That is corrupt-or-unreadable bundled data exactly
+            // as much as a JSON parse failure is, and deserves the same "report it, carry on empty"
+            // treatment rather than taking down whatever called Load.
+            onParseFailure?.Invoke(path, exception);
+            return BuiltinApi.Empty;
+        }
+        catch ( UnauthorizedAccessException exception )
+        {
+            onParseFailure?.Invoke(path, exception);
             return BuiltinApi.Empty;
         }
 
@@ -156,17 +180,13 @@ public static class ApiLoader
     /// Parses a declared type onto the lattice, ONCE at load rather than re-switching on display
     /// text at every call.
     ///
-    /// The data is richer than the old text switch could see, and all of this was being dropped:
+    /// It keeps what a switch on display text would drop:
     ///
-    /// - <c>isArray</c>. 114 of BO3's GSC declarations set it, and an array return produced nothing
-    ///   at all — so <see cref="ScrTypeSet.Array"/> was never once produced by a builtin call. Given
-    ///   that arrays are the only kind whose pass semantics differ between dialects, that was the
-    ///   single most costly omission here.
-    /// - Unions, spelled pipe-separated inside <c>dataType</c>: <c>"int | string"</c>,
-    ///   <c>"bool | int"</c>, <c>"number | vector"</c>. The flat lattice had no way to hold one, so
-    ///   they were dropped; this one splits them.
-    /// - <c>number</c>, which is 349 declarations in BO3's GSC library alone and is exactly
-    ///   <c>int|float</c> — expressible now, and previously discarded as vague.
+    /// - <c>isArray</c>, set on 114 of BO3's GSC declarations — and arrays are the only kind whose
+    ///   pass semantics differ between dialects.
+    /// - Unions, spelled pipe-separated inside <c>dataType</c> (<c>"int | string"</c>,
+    ///   <c>"bool | int"</c>, <c>"number | vector"</c>), split into the union.
+    /// - <c>number</c>, 349 declarations in BO3's GSC library alone, which is exactly <c>int|float</c>.
     /// - <c>vararg</c>, the parameter pack, which is an array.
     ///
     /// Returns <see cref="ScrTypeSet.None"/> for a spelling the lattice genuinely cannot express —

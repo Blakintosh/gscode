@@ -19,8 +19,13 @@ public static class MarkdownDocRenderer
     /// because for an inherited method it is the answer the reader does not have: the call is
     /// written inside the subclass, and which ancestor it lands on is exactly what is not visible
     /// from the call site.
+    ///
+    /// <paramref name="definitionLink"/> is markdown the caller has already built pointing at the
+    /// declaration. Only hover passes one: completion detail and signature help share this renderer
+    /// but their widgets are not navigable, so a link there is text the reader cannot click.
     /// </summary>
-    public static string RenderFunction(FunctionSymbol function, ClassSymbol? ownerClass = null)
+    public static string RenderFunction(
+        FunctionSymbol function, ClassSymbol? ownerClass = null, string definitionLink = "")
     {
         StringBuilder markdown = new();
 
@@ -33,6 +38,13 @@ public static class MarkdownDocRenderer
 
         markdown.Append(FunctionSignature(function));
         markdown.Append("\n```");
+
+        // Directly under the signature and above the documentation: where the function lives is
+        // the reader's next question, and a doc body long enough to scroll would bury the answer.
+        if ( definitionLink.Length > 0 )
+        {
+            markdown.Append("\n\n").Append(definitionLink);
+        }
 
         ScriptDocComment doc = function.Doc;
         if ( !doc.IsNone )
@@ -68,11 +80,11 @@ public static class MarkdownDocRenderer
         markdown.Append(BuiltinSignature(builtin, primary));
         markdown.Append("\n```");
 
-        // Above the description: calling this outside a /# #/ block breaks a shipped mod, which
-        // matters more than anything else the hover has to say.
+        // Above the description: calling this outside a /# #/ block breaks on a server without
+        // developer script, which matters more than anything else the hover has to say.
         if ( builtin.IsDevOnly )
         {
-            markdown.Append("\n\n**Development only** — calling this outside a `/# #/` block will not work in a release build.");
+            markdown.Append("\n\n**Development only** — call this from inside a `/# #/` block, which only runs when developer script is enabled on the server.");
         }
 
         if ( builtin.Description.Length > 0 )
@@ -83,13 +95,15 @@ public static class MarkdownDocRenderer
         AppendBuiltinParameters(markdown, primary);
         AppendBuiltinReturn(markdown, primary);
 
-        // Additional overloads listed compactly under the primary prototype.
+        // Additional overloads listed compactly under the primary prototype — starting at 1,
+        // since index 0 IS primary and is already the fenced signature above. Iterating the
+        // whole array here repeated it as the list's own first bullet.
         if ( builtin.Overloads.Length > 1 )
         {
             markdown.Append("\n\nOverloads:\n");
-            foreach ( BuiltinOverload overload in builtin.Overloads )
+            for ( int index = 1; index < builtin.Overloads.Length; index++ )
             {
-                markdown.Append("* `").Append(BuiltinSignature(builtin, overload)).Append("`\n");
+                markdown.Append("* `").Append(BuiltinSignature(builtin, builtin.Overloads[index])).Append("`\n");
             }
         }
 
@@ -143,14 +157,19 @@ public static class MarkdownDocRenderer
         markdown.Append("\n\nReturns: `").Append(overload.ReturnTypeText).Append('`');
     }
 
-    /// <summary>Markdown for a class: its declaration line, with the parent when it has one.</summary>
-    public static string RenderClass(ClassSymbol classSymbol)
+    /// <summary>
+    /// Markdown for a class: its declaration line, with the parent when it has one, and
+    /// <paramref name="definitionLink"/> under it when the caller built one. See
+    /// <see cref="RenderFunction"/> for why only hover passes a link.
+    /// </summary>
+    public static string RenderClass(ClassSymbol classSymbol, string definitionLink = "")
     {
         string header = classSymbol.ParentKeyName is null
             ? $"class {classSymbol.Name}"
             : $"class {classSymbol.Name} : {classSymbol.ParentKeyName}";
 
-        return "```gsc\n" + header + "\n```";
+        string markdown = "```gsc\n" + header + "\n```";
+        return definitionLink.Length > 0 ? markdown + "\n\n" + definitionLink : markdown;
     }
 
     /// <summary>
@@ -159,7 +178,7 @@ public static class MarkdownDocRenderer
     /// macro bodies are deliberately not retained per record — a header inserted by hundreds
     /// of files would otherwise store its bodies hundreds of times over.
     /// </summary>
-    public static string RenderMacro(MacroRecord macro, string expansion = "")
+    public static string RenderMacro(MacroRecord macro, string expansion = "", string definitionLink = "")
     {
         StringBuilder markdown = new();
 
@@ -178,9 +197,50 @@ public static class MarkdownDocRenderer
 
         markdown.Append("\n```");
 
+        // Above the documentation, as for a function — and this is the kind that needs it most: a
+        // macro reached through an #insert is defined in a header the reader cannot see from here,
+        // and the hover is the only place that names it.
+        if ( definitionLink.Length > 0 )
+        {
+            markdown.Append("\n\n").Append(definitionLink);
+        }
+
         if ( macro.Documentation.Length > 0 )
         {
             markdown.Append("\n\n---\n\n").Append(CleanComment(macro.Documentation));
+        }
+
+        return markdown.ToString();
+    }
+
+    /// <summary>
+    /// Markdown for a macro whose DEFINE FORM is already on screen: the expansion and the
+    /// trailing-comment documentation, without the `#define` line.
+    ///
+    /// Signature help is the caller. Its label IS the define form — rendered by the client, above
+    /// the documentation and with the active argument highlighted — so repeating it here printed
+    /// the parameter list twice in a widget the reader is looking at mid-keystroke. Hover has no
+    /// label above it and keeps the full form.
+    /// </summary>
+    public static string RenderMacroExpansion(string expansion, string documentation)
+    {
+        StringBuilder markdown = new();
+
+        if ( expansion.Length > 0 )
+        {
+            markdown.Append("```gsc\n").Append(expansion).Append("\n```");
+        }
+
+        if ( documentation.Length > 0 )
+        {
+            // The rule is separating two things that are both there. A body-less #define with a
+            // comment has only the comment, and a bare line above it reads as a missing expansion.
+            if ( markdown.Length > 0 )
+            {
+                markdown.Append("\n\n---\n\n");
+            }
+
+            markdown.Append(CleanComment(documentation));
         }
 
         return markdown.ToString();
@@ -255,6 +315,14 @@ public static class MarkdownDocRenderer
                     signature.Append('?');
                 }
             }
+        }
+        else
+        {
+            // No overload data at all — 270 of BO1's 1,377 GSC builtins, 222 of WAW's, 55 of
+            // MW2's, 43 of CoD4's (BO3's own library documents every one). Leaving this empty
+            // read as "takes nothing", which is a claim the data never made; "..." says the
+            // truth instead, that the signature just is not known.
+            signature.Append("...");
         }
 
         signature.Append(')');

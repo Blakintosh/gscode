@@ -36,6 +36,17 @@ public static class ExportSignature
         // Identity: a file that moves changes what a path call or import resolves to.
         rendered.Append(record.RelativePath).Append('\n');
 
+        // A header is pasted into every file that #inserts it, so every BYTE of it is observable —
+        // a macro's body decides the dependent's tokens, and with them its parse, its diagnostics
+        // and its hover. The macro rendering below carries names and arities only, so
+        // `#define CAP 5` becoming `#define CAP 99` would leave it identical and every open
+        // dependent showing 5. Content is the honest answer for a header and costs nothing: headers
+        // are not what anyone types into all day, and the hash is already stored.
+        if ( record.Language == ScriptLanguage.Gsh )
+        {
+            rendered.Append("gsh:").Append(record.ContentHash).Append('\n');
+        }
+
         foreach ( string declared in record.DeclaredNamespaces )
         {
             rendered.Append("ns:").Append(declared).Append('\n');

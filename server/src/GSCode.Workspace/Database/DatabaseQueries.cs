@@ -1,8 +1,11 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
 using GSCode.Parser.Extraction;
 using GSCode.Core.Symbols;
+using GSCode.Parser;
+using GSCode.Parser.Syntax.Ast;
+using GSCode.Workspace.Resolution;
 
 namespace GSCode.Workspace.Database;
 
@@ -14,10 +17,44 @@ public sealed record ResolvedFunction(FunctionSymbol Function, ScriptRecord Reco
     /// existing <c>new ResolvedFunction(function, record)</c> sites keep compiling unchanged.
     /// </summary>
     public ClassSymbol? OwnerClass { get; init; }
+
+    /// <summary>
+    /// The file <see cref="FunctionSymbol.NameRange"/> is actually a position IN —
+    /// <see cref="Record"/>'s path, unless the function arrived through <c>#insert</c>, in which
+    /// case NameRange is a true
+    /// position in the header named by <see cref="FunctionSymbol.SourceFile"/> instead. A caller
+    /// building a diagnostic relation or similar file+range pair from a
+    /// <see cref="ResolvedFunction"/> must use THIS as the file, not <c>Record.Path</c> directly —
+    /// pairing the header-true range with the including file's path points at whatever text
+    /// happens to sit at that line and column over there, which has nothing to do with where the
+    /// function is actually declared.
+    /// </summary>
+    public string DeclaringPath
+    {
+        get { return Function.SourceFile.Length > 0 ? Function.SourceFile : Record.Path; }
+    }
 }
 
+/// <summary>
+/// A function this file could call, once it imported the script declaring it: the symbol, and the
+/// script-relative path the import directive would name.
+/// </summary>
+public readonly record struct UnimportedFunction(FunctionSymbol Function, string ImportPath);
+
 /// <summary>A resolved class with its declaring record.</summary>
-public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record);
+public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record)
+{
+    /// <summary>
+    /// The file <see cref="ClassSymbol.NameRange"/> is actually a position IN, by the rule
+    /// <see cref="ResolvedFunction.DeclaringPath"/> states at length: a class declared inside an
+    /// <c>#insert</c>ed header carries a header-true range, and pairing that with the including
+    /// file's path points at whatever text happens to sit at that line and column over there.
+    /// </summary>
+    public string DeclaringPath
+    {
+        get { return Class.SourceFile.Length > 0 ? Class.SourceFile : Record.Path; }
+    }
+}
 
 /// <summary>
 /// The files an <c>#include</c> chain reaches, and whether the walk saw all of them.
@@ -41,6 +78,13 @@ public static class DatabaseQueries
     /// lifts it entirely, which the private-access lint uses to tell "no such function" apart
     /// from "exists but is private".
     /// </summary>
+    /// <param name="limit">
+    /// Stop once this many functions are found - the first <paramref name="limit"/> of the full
+    /// answer, in the same order. For callers that only ask whether a name resolves (1) or resolves
+    /// to exactly one declaration (2). A bare name on a merge dialect has thousands of declarations
+    /// at 50,000 files - every <c>main</c> - and building all of them to answer "yes" was what kept
+    /// two lints growing with the workspace (PERF.md, the scale section).
+    /// </param>
     public static ImmutableArray<ResolvedFunction> LookupFunctions(
         LanguageStore store,
         string askingContextId,
@@ -48,7 +92,8 @@ public static class DatabaseQueries
         string? namespaceName,
         string keyName,
         bool includePrivate = false,
-        ImmutableArray<string> askingNamespaces = default)
+        ImmutableArray<string> askingNamespaces = default,
+        int limit = int.MaxValue)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
 
@@ -57,14 +102,19 @@ public static class DatabaseQueries
         // An empty asking path means "no asking file", which sees no private functions at all.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        // The files declaring this NAME, not every file. Asked of the declaration index, which keys
-        // on the same lowercase-canonical FunctionSymbol.KeyName this method compares ordinally, so
-        // the candidate set is exactly what the old scan of store.AllRecords produced — and every
-        // filter below it is unchanged. The index narrows where to look and decides nothing.
+        // The files declaring this NAME, from the declaration index. It keys on the same
+        // lowercase-canonical FunctionSymbol.KeyName compared ordinally below, so every filter below
+        // sees exactly the candidates a scan of every record would give it: the index narrows where
+        // to look and decides nothing. This runs once per CALL SITE for four lints, where a scan of
+        // thirty thousand symbols was 97% of the cross-file lint cost.
         //
-        // It is here because this method is called once per CALL SITE by four separate lints, and
-        // walking thirty thousand symbols each time made those four 97% of the cross-file lint cost.
-        foreach ( string declaringPath in store.FilesDeclaring(keyName) )
+        // With a namespace, the files declaring the name INTO it — the subset the namespace filter
+        // below would keep anyway. See DeclarationIndex for what the bare-name list costs at scale.
+        ImmutableArray<string> declaringPaths = namespaceName is null
+            ? store.FilesDeclaring(keyName)
+            : store.FilesDeclaring(namespaceName, keyName);
+
+        foreach ( string declaringPath in declaringPaths )
         {
             if ( !store.TryGet(declaringPath, out ScriptRecord record) )
             {
@@ -72,6 +122,17 @@ public static class DatabaseQueries
             }
 
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            // Overlay shadowing, decided per RECORD rather than in a second pass over the finished
+            // list, so the walk can stop early. It is ApplyShadowing's rule with a store: a raw
+            // record is dropped when an overlay visible to the asker sits at its relative path. The
+            // rule's other half - an overlay among the matches declaring the same name - adds
+            // nothing, since such an overlay is visible, non-raw and at that path, which is exactly
+            // what HasOverlayAt counts.
+            if ( record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId) )
             {
                 continue;
             }
@@ -95,59 +156,84 @@ public static class DatabaseQueries
                 }
 
                 matches.Add(new ResolvedFunction(function, record));
+                if ( matches.Count >= limit )
+                {
+                    return matches.ToImmutable();
+                }
             }
         }
 
-        return ApplyShadowing(
-            matches.ToImmutable(),
-            static match => match.Record,
-            static match => match.Function.KeyName);
+        return matches.ToImmutable();
     }
 
     /// <summary>
-    /// Overlay shadowing: when a mod/workspace copy and the raw copy of the SAME
-    /// script-relative file both match, the overlay wins and the raw copy drops out.
+    /// Overlay shadowing: when a mod/workspace copy exists at the SAME script-relative path as a
+    /// raw record, the engine loads ONLY the overlay — replacing the raw file WHOLESALE, whatever
+    /// each copy individually declares — so every raw-context match at that path drops out, not
+    /// only the ones the overlay happens to also declare under the same name.
     ///
-    /// Applies to functions and to classes alike, hence the selectors — the rule is one rule, and
-    /// the two were previously typed out separately, which meant a change to it had to be made
-    /// twice. For classes it also decides more than tidiness: without it a mod that overrides a raw
-    /// script contributes a SECOND class of the same name, and every consumer that takes the first
-    /// match — the parent-chain walks in <see cref="Analysis.ClassCycleLint"/> and in method
-    /// resolution — picks between them arbitrarily. Which copy wins then depends on record
+    /// A per-NAME check cannot stand in for that. <paramref name="matches"/> is already narrowed to
+    /// one name, so an overlay whose copy no longer declares it never appears here to be compared
+    /// against, and the raw declaration would survive, resolving to code the engine never loads.
+    ///
+    /// One rule for functions and classes alike, hence the selectors. For classes it also decides
+    /// more than tidiness: without it a mod that overrides a raw script contributes a SECOND class of
+    /// the same name, and every consumer that takes the first match — the parent-chain walks in
+    /// <see cref="Analysis.ClassCycleLint"/> and in method resolution — picks between them by record
     /// enumeration order, so the same edit can resolve to the raw base class one moment and the
     /// overridden one the next.
     /// </summary>
-    private static ImmutableArray<T> ApplyShadowing<T>(
+    /// <param name="store">
+    /// Where <see cref="LanguageStore.HasOverlayAt"/> is asked, for the per-path rule above. Optional
+    /// because one caller (<see cref="FindAllReferences"/>) aggregates across GSC, CSC and the GSH
+    /// store together, none of which is uniquely "the" store its matches came from; that caller
+    /// already sidesteps the per-name gap by keying <paramref name="keyNameOf"/> to a constant, so
+    /// nothing here loses correctness by leaving it out.
+    /// </param>
+    /// <param name="askingContextId">
+    /// Required whenever <paramref name="store"/> is given — <see cref="LanguageStore.HasOverlayAt"/>
+    /// is a visibility question, not a bare existence one: mod_a's overlay shadows raw only when
+    /// mod_a itself is asking, never a sibling mod or raw asking about its own file.
+    /// </param>
+    public static ImmutableArray<T> ApplyShadowing<T>(
         ImmutableArray<T> matches,
         Func<T, ScriptRecord> recordOf,
-        Func<T, string> keyNameOf)
+        Func<T, string> keyNameOf,
+        LanguageStore? store = null,
+        string askingContextId = "")
     {
-        if ( matches.Length < 2 )
+        if ( matches.Length == 0 )
         {
             return matches;
         }
 
-        HashSet<string> overlayIdentities = new(StringComparer.Ordinal);
+        // A TUPLE, not a joined string. This runs over every match, and the join allocated one
+        // string per match on the way in and another per match on the way out — on the
+        // workspace-symbol path with an empty query that is two strings per function in the
+        // workspace, to build a key nothing keeps. A value tuple compares the same two strings
+        // ordinally and allocates nothing, and it cannot be fooled by a separator appearing inside
+        // a path the way a join can.
+        HashSet<(string RelativePath, string KeyName)> overlayIdentities = [];
         foreach ( T match in matches )
         {
             ScriptRecord record = recordOf(match);
             if ( record.ContextId != "raw" && record.RelativePath.Length > 0 )
             {
-                overlayIdentities.Add(record.RelativePath + "|" + keyNameOf(match));
+                overlayIdentities.Add((record.RelativePath, keyNameOf(match)));
             }
-        }
-
-        if ( overlayIdentities.Count == 0 )
-        {
-            return matches;
         }
 
         ImmutableArray<T>.Builder kept = ImmutableArray.CreateBuilder<T>();
         foreach ( T match in matches )
         {
             ScriptRecord record = recordOf(match);
+
+            // Either the overlay declared this exact name too, or — whatever it declares — an
+            // overlay exists at this file's path at all, which is what actually decides whether
+            // the engine ever loads the raw copy.
             bool shadowedOut = record.ContextId == "raw"
-                && overlayIdentities.Contains(record.RelativePath + "|" + keyNameOf(match));
+                && (overlayIdentities.Contains((record.RelativePath, keyNameOf(match)))
+                    || (store?.HasOverlayAt(record.RelativePath, askingContextId) ?? false));
 
             if ( !shadowedOut )
             {
@@ -193,20 +279,6 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The lowercase-canonical namespaces a file declares, for the namespace-privacy rule.
-    /// Taken from the live parse result so unsaved edits count immediately.
-    ///
-    /// Read from the declarations, not from the namespace SPANS: the spans answer a positional
-    /// question and cover the whole file, so a file whose imports sit above its <c>#namespace</c>
-    /// line has a leading span named after itself. Counting that as declared handed a file the
-    /// private members of any namespace that happened to share its filename.
-    /// </summary>
-    public static ImmutableArray<string> DeclaredNamespaces(GSCode.Parser.ParseResult result)
-    {
-        return result.Extraction.DeclaredNamespaces;
-    }
-
-    /// <summary>
     /// Normalizes an asking path for same-file comparisons. Callers with no asking file pass
     /// an empty string, which must stay empty rather than resolving to the process directory.
     /// </summary>
@@ -233,8 +305,16 @@ public static class DatabaseQueries
         // Same normalization contract as LookupFunctions: the same-file test gates privacy.
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files that declare INTO this namespace, rather than every file in the store: this is
+        // asked once per namespace a file can see, on every keystroke, and all ~30,000 BO3 symbols
+        // would otherwise be read to keep the few dozen in one namespace.
+        foreach ( string declaringPath in store.FilesDeclaringInto(namespaceName) )
         {
+            if ( !store.TryGet(declaringPath, out ScriptRecord record) )
+            {
+                continue;
+            }
+
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;
@@ -257,6 +337,107 @@ public static class DatabaseQueries
         }
 
         return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// Functions whose name begins with <paramref name="prefix"/> and which this file CANNOT call
+    /// yet, paired with the script path an import would have to name.
+    ///
+    /// The set completion offers with the directive attached. Every other producer answers "what is
+    /// in scope here"; this one deliberately answers what is not, which is why it is the only query
+    /// here keyed by a typed prefix rather than by a name or a namespace.
+    ///
+    /// The prefix is not a convenience — it is what makes the query affordable and the list honest.
+    /// Statement scope already returns a median of 1,930 entries, and every function in a 50,000-file
+    /// workspace would swamp both the list and the editor's own scoring. It is matched against the
+    /// DECLARATION INDEX's keys, which are the distinct lowercase names, so the cost follows the
+    /// number of names that share a prefix rather than the number of files, and nothing here walks
+    /// the store.
+    ///
+    /// Reachability is decided by script path, not by namespace: a file is reachable when this file
+    /// links against it (<see cref="LinkedScriptPaths"/>) or IS it. That is deliberately the same
+    /// question in both dialect families — on BO3 an imported file's namespace is callable
+    /// qualified, and on a merge dialect an included file's functions are callable bare — and in
+    /// both, the fix for a function that is not reachable is one directive naming one file.
+    ///
+    /// Private functions are left out. Privacy is per namespace, and a file that has not imported
+    /// the declaring script is not in its namespace by any route that would make the call legal.
+    /// </summary>
+    /// <param name="limit">
+    /// The most candidates to return. The caller marks its list incomplete when this truncates, so
+    /// the editor re-asks as the word narrows rather than filtering a stale page client-side.
+    /// </param>
+    public static ImmutableArray<UnimportedFunction> UnimportedFunctions(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        ParseResult result,
+        string prefix,
+        int limit,
+        GameProfile? profile = null)
+    {
+        if ( prefix.Length == 0 || limit <= 0 )
+        {
+            return [];
+        }
+
+        GameProfile game = profile ?? GameProfile.Active;
+
+        HashSet<string> reachable = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( string linked in LinkedScriptPaths(result, game) )
+        {
+            reachable.Add(linked);
+        }
+
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        ImmutableArray<UnimportedFunction>.Builder found = ImmutableArray.CreateBuilder<UnimportedFunction>();
+
+        foreach ( string name in store.VisibleDeclaredNames(prefix.ToLowerInvariant(), askingContextId) )
+        {
+            foreach ( string declaringPath in store.FilesDeclaring(name) )
+            {
+                if ( string.Equals(declaringPath, normalizedAskingPath, StringComparison.OrdinalIgnoreCase) )
+                {
+                    continue;
+                }
+
+                if ( !store.TryGet(declaringPath, out ScriptRecord record)
+                    || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+                {
+                    continue;
+                }
+
+                string importPath = RelativePathIndex.Normalize(record.RelativePath);
+                if ( importPath.Length == 0 || reachable.Contains(importPath) )
+                {
+                    continue;
+                }
+
+                // A raw file a mod overlay replaces is never loaded by the engine, so offering an
+                // import of it would offer a file the game does not read.
+                if ( record.ContextId != askingContextId && store.HasOverlayAt(importPath, askingContextId) )
+                {
+                    continue;
+                }
+
+                foreach ( FunctionSymbol function in record.Functions )
+                {
+                    if ( function.IsPrivate
+                        || !string.Equals(function.KeyName, name, StringComparison.Ordinal) )
+                    {
+                        continue;
+                    }
+
+                    found.Add(new UnimportedFunction(function, importPath));
+                    if ( found.Count >= limit )
+                    {
+                        return found.ToImmutable();
+                    }
+                }
+            }
+        }
+
+        return found.ToImmutable();
     }
 
     /// <summary>
@@ -289,14 +470,11 @@ public static class DatabaseQueries
     {
         HashSet<string> names = new(StringComparer.Ordinal);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        // The files each import names, from the relative-path index, rather than every record's
+        // path normalized and compared — see RelativePathIndex for what that walk cost at scale.
+        foreach ( ScriptRecord record in RecordsAt(store, importedPaths) )
         {
             if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            if ( !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
             {
                 continue;
             }
@@ -314,6 +492,60 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The asking file's own record, then the records at each of <paramref name="normalizedPaths"/>
+    /// — the candidate scope behind <see cref="FunctionsInIncludeScope"/> and
+    /// <see cref="AllVisibleClasses"/>, which ask the same question about two different symbols.
+    ///
+    /// Only the CANDIDATES are shared. Each caller keeps its own dedupe and its own
+    /// <see cref="ApplyShadowing"/> pass, because their comparers differ and folding those together
+    /// would change an answer rather than tidy one.
+    /// </summary>
+    private static List<ScriptRecord> ScopeRecords(
+        LanguageStore store, string normalizedAskingPath, ImmutableArray<string> normalizedPaths)
+    {
+        List<ScriptRecord> records = [];
+        if ( normalizedAskingPath.Length > 0 && store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
+        {
+            records.Add(asking);
+        }
+
+        records.AddRange(RecordsAt(store, normalizedPaths));
+        return records;
+    }
+
+    /// <summary>
+    /// The records at each of <paramref name="normalizedPaths"/> (already in
+    /// <see cref="RelativePathIndex.Normalize"/>'s form), each path asked once.
+    /// </summary>
+    public static List<ScriptRecord> RecordsAt(LanguageStore store, ImmutableArray<string> normalizedPaths)
+    {
+        List<ScriptRecord> records = [];
+        if ( normalizedPaths.IsDefaultOrEmpty )
+        {
+            return records;
+        }
+
+        HashSet<string> asked = new(StringComparer.Ordinal);
+        foreach ( string normalizedPath in normalizedPaths )
+        {
+            if ( !asked.Add(normalizedPath) )
+            {
+                continue;
+            }
+
+            foreach ( string path in store.FilesAt(normalizedPath) )
+            {
+                if ( store.TryGet(path, out ScriptRecord record) )
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        return records;
+    }
+
+    /// <summary>
     /// The script-relative paths a file imports with <c>#using</c>, lowercased with backslash
     /// separators and no extension — the form <see cref="ScriptRecord.RelativePath"/> reduces to,
     /// and the form <c>#using</c> is written in.
@@ -321,7 +553,7 @@ public static class DatabaseQueries
     /// Read from the live parse result rather than the record's dependency edges, because a
     /// <c>#using</c> edge is stored with an empty ResolvedPath and so cannot be matched by path.
     /// </summary>
-    public static ImmutableArray<string> ImportedScriptPaths(GSCode.Parser.ParseResult result)
+    public static ImmutableArray<string> ImportedScriptPaths(ParseResult result)
     {
         return DirectivePaths(result, ImportStyle.Namespace);
     }
@@ -343,7 +575,7 @@ public static class DatabaseQueries
     /// of dialect, and the <c>#include</c> lints genuinely want <c>#include</c> only.
     /// </summary>
     public static ImmutableArray<string> LinkedScriptPaths(
-        GSCode.Parser.ParseResult result, GameProfile? profile = null)
+        ParseResult result, GameProfile? profile = null)
     {
         return DirectivePaths(result, (profile ?? GameProfile.Active).ImportStyle);
     }
@@ -355,16 +587,16 @@ public static class DatabaseQueries
     /// for the normalization to drift.
     /// </summary>
     private static ImmutableArray<string> DirectivePaths(
-        GSCode.Parser.ParseResult result, ImportStyle style)
+        ParseResult result, ImportStyle style)
     {
         ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
 
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
             string? path = element switch
             {
-                GSCode.Parser.Syntax.Ast.UsingNode node when style == ImportStyle.Namespace => node.Path,
-                GSCode.Parser.Syntax.Ast.IncludeNode node when style == ImportStyle.Include => node.Path,
+                UsingNode node when style == ImportStyle.Namespace => node.Path,
+                IncludeNode node when style == ImportStyle.Include => node.Path,
                 _ => null,
             };
 
@@ -373,7 +605,7 @@ public static class DatabaseQueries
                 continue;
             }
 
-            string normalized = NormalizeScriptPath(path);
+            string normalized = RelativePathIndex.Normalize(path);
             if ( normalized.Length > 0 && !paths.Contains(normalized) )
             {
                 paths.Add(normalized);
@@ -384,20 +616,11 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The comparison key for a script path written in a directive: canonical script form, minus
-    /// the extension, because <c>#using</c> and <c>#include</c> name a file without one.
-    /// </summary>
-    private static string NormalizeScriptPath(string path)
-    {
-        return PathUtil.WithoutExtension(PathUtil.NormalizeScriptPath(path));
-    }
-
-    /// <summary>
     /// The script-relative paths a file merges with <c>#include</c> (the Infinity Ward import),
     /// normalized like <see cref="ImportedScriptPaths"/>. These plus the file itself are the scope a
     /// merged, unqualified call resolves within.
     /// </summary>
-    public static ImmutableArray<string> IncludedScriptPaths(GSCode.Parser.ParseResult result)
+    public static ImmutableArray<string> IncludedScriptPaths(ParseResult result)
     {
         return DirectivePaths(result, ImportStyle.Include);
     }
@@ -434,22 +657,22 @@ public static class DatabaseQueries
     /// </param>
     public static IncludeClosure IncludeClosure(
         LanguageStore store,
-        Resolution.PathResolver resolver,
-        GSCode.Parser.ParseResult result,
+        PathResolver resolver,
+        ParseResult result,
         string askingPath,
         string extension,
         ImmutableArray<ScriptRecord> directIncludes = default)
     {
-        Dictionary<(Resolution.ResolutionContext Context, string Path), string?> resolved = [];
+        Dictionary<(ResolutionContext Context, string Path), string?> resolved = [];
         Queue<string> pending = new();
 
         if ( directIncludes.IsDefault )
         {
-            Resolution.ResolutionContext askingContext = resolver.GetContext(askingPath);
+            ResolutionContext askingContext = resolver.GetContext(askingPath);
 
-            foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+            foreach ( AstNode element in result.Tree.Root.Elements )
             {
-                if ( element is not GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+                if ( element is not IncludeNode includeNode )
                 {
                     continue;
                 }
@@ -487,7 +710,7 @@ public static class DatabaseQueries
             }
 
             reached.Add(record);
-            Resolution.ResolutionContext hop = resolver.GetContext(record.Path);
+            ResolutionContext hop = resolver.GetContext(record.Path);
 
             foreach ( DependencyEdge edge in record.Dependencies )
             {
@@ -509,9 +732,9 @@ public static class DatabaseQueries
     }
 
     private static string? Probe(
-        Resolution.PathResolver resolver,
-        Dictionary<(Resolution.ResolutionContext, string), string?> memo,
-        Resolution.ResolutionContext context,
+        PathResolver resolver,
+        Dictionary<(ResolutionContext, string), string?> memo,
+        ResolutionContext context,
         string rawPath,
         string extension)
     {
@@ -564,20 +787,146 @@ public static class DatabaseQueries
             return references;
         }
 
-        string declaring = NormalizeScriptPath(declaringRelativePath);
+        string declaring = RelativePathIndex.Normalize(declaringRelativePath);
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in references )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
-            if ( MeansDeclaringFile(game, record, entry, declaring) )
+            if ( MeansDeclaringFile(game, reference.Record, reference.Entry, declaring) )
             {
-                kept.Add((record, entry));
+                kept.Add(reference);
             }
         }
 
         return kept.ToImmutable();
+    }
+
+    /// <summary>
+    /// Exactly <c>ScopeToIncludeGraph(FindAllReferences(...), declaringRelativePath)</c> for a
+    /// function key, read from the files that can reach the declaring file instead of from every
+    /// file mentioning the key.
+    ///
+    /// Scoping keeps a reference only when its file is the declaring file or names it — through an
+    /// import edge or a path call (see <see cref="MeansDeclaringFile"/>) — so no other file can
+    /// contribute, and <see cref="LanguageStore.FilesAt"/> plus <see cref="LanguageStore.FilesNaming"/>
+    /// are all of them. On a merge dialect that is the difference between reading the few files that
+    /// include a script and reading every file with a <c>main</c> in it.
+    ///
+    /// Overlay shadowing is applied as <see cref="FindAllReferences"/> applies it, BEFORE scoping: a
+    /// raw file's references drop out when a visible overlay at the same relative path references
+    /// the key at all, whether or not that overlay reaches the declaring file.
+    /// </summary>
+    /// <param name="onlyPath">
+    /// When given, only this file's references are collected. Everything else is unchanged: the
+    /// reaching set is still built, because it is what decides whether this file contributes at
+    /// all, and the shadow test is already made per record here. What is skipped is READING every
+    /// other file's reference list — the part that costs, and the part a same-file question never
+    /// wanted. See <see cref="FindAllReferences"/>'s parameter of the same name.
+    /// </param>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesReaching(
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key,
+        string declaringRelativePath,
+        GameProfile? profile = null,
+        string onlyPath = "")
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+        string declaring = RelativePathIndex.Normalize(declaringRelativePath);
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder kept =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        foreach ( LanguageStore store in stores )
+        {
+            HashSet<string> reaching = new(StringComparer.Ordinal);
+            reaching.UnionWith(store.FilesAt(declaring));
+            reaching.UnionWith(store.FilesNaming(declaring));
+
+            // A file must both reach the declaring file AND mention the key, so walk whichever of
+            // the two lists is shorter and test membership in the other. A merge dialect's `main`
+            // is mentioned everywhere and reached from few files; a namespace dialect's shared
+            // utility is reached (#using'd) from nearly every file and one of its functions is
+            // mentioned by far fewer.
+            ImmutableArray<string> mentioning = store.FilesReferencing(key);
+            IEnumerable<string> walk = mentioning.Length < reaching.Count
+                ? mentioning.Where(reaching.Contains)
+                : reaching;
+
+            HashSet<string> visited = new(StringComparer.Ordinal);
+            foreach ( string path in walk )
+            {
+                if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
+                {
+                    continue;
+                }
+
+                if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record) )
+                {
+                    continue;
+                }
+
+                if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+                {
+                    continue;
+                }
+
+                if ( record.ContextId == "raw" && AnOverlayReferences(stores, askingContextId, record.RelativePath, key) )
+                {
+                    continue;
+                }
+
+                foreach ( ReferenceEntry entry in record.References )
+                {
+                    if ( entry.Key == key && MeansDeclaringFile(game, record, entry, declaring) )
+                    {
+                        kept.Add((record, entry));
+                    }
+                }
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
+    /// <summary>
+    /// Whether a visible non-raw record at exactly this relative path references the key — the
+    /// condition under which <see cref="FindAllReferences"/>' shadowing drops the raw copy's entries.
+    /// </summary>
+    private static bool AnOverlayReferences(
+        ImmutableArray<LanguageStore> stores, string askingContextId, string relativePath, SymbolKey key)
+    {
+        if ( relativePath.Length == 0 )
+        {
+            return false;
+        }
+
+        string normalized = RelativePathIndex.Normalize(relativePath);
+        foreach ( LanguageStore store in stores )
+        {
+            foreach ( string path in store.FilesAt(normalized) )
+            {
+                if ( !store.TryGet(path, out ScriptRecord overlay)
+                    || overlay.ContextId == "raw"
+                    || overlay.RelativePath != relativePath
+                    || !ScriptDatabase.CanSee(askingContextId, overlay.ContextId) )
+                {
+                    continue;
+                }
+
+                foreach ( ReferenceEntry entry in overlay.References )
+                {
+                    if ( entry.Key == key )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -600,7 +949,7 @@ public static class DatabaseQueries
         {
             if ( pathCall.NameRange == entry.Range )
             {
-                return NormalizeScriptPath(pathCall.Path) == declaring;
+                return RelativePathIndex.Normalize(pathCall.Path) == declaring;
             }
         }
 
@@ -618,7 +967,7 @@ public static class DatabaseQueries
 
         if ( declaresItself )
         {
-            return NormalizeScriptPath(record.RelativePath) == declaring;
+            return RelativePathIndex.Normalize(record.RelativePath) == declaring;
         }
 
         return CanReach(record, declaring);
@@ -652,19 +1001,19 @@ public static class DatabaseQueries
     /// </summary>
     public static bool Reaches(ScriptRecord record, string declaringRelativePath)
     {
-        return CanReach(record, NormalizeScriptPath(declaringRelativePath));
+        return CanReach(record, RelativePathIndex.Normalize(declaringRelativePath));
     }
 
     private static bool CanReach(ScriptRecord record, string declaring)
     {
-        if ( NormalizeScriptPath(record.RelativePath) == declaring )
+        if ( RelativePathIndex.Normalize(record.RelativePath) == declaring )
         {
             return true;
         }
 
         foreach ( DependencyEdge edge in record.Dependencies )
         {
-            if ( !edge.IsInsert && NormalizeScriptPath(edge.RawPath) == declaring )
+            if ( !edge.IsInsert && RelativePathIndex.Normalize(edge.RawPath) == declaring )
             {
                 return true;
             }
@@ -672,7 +1021,7 @@ public static class DatabaseQueries
 
         foreach ( PathCallReference pathCall in record.PathCallTargets )
         {
-            if ( NormalizeScriptPath(pathCall.Path) == declaring )
+            if ( RelativePathIndex.Normalize(pathCall.Path) == declaring )
             {
                 return true;
             }
@@ -690,8 +1039,8 @@ public static class DatabaseQueries
         string selfRelativePath,
         ImmutableArray<string> includedPaths)
     {
-        string relative = NormalizeScriptPath(recordRelativePath);
-        return relative == NormalizeScriptPath(selfRelativePath) || includedPaths.Contains(relative);
+        string relative = RelativePathIndex.Normalize(recordRelativePath);
+        return relative == RelativePathIndex.Normalize(selfRelativePath) || includedPaths.Contains(relative);
     }
 
     /// <summary>
@@ -726,6 +1075,65 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The ONE function an <c>#include</c> scope gives a bare name, or null when it gives none.
+    ///
+    /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
+    /// answer for every other name first. Signature help asks this on a merge dialect for every
+    /// keystroke inside an argument list — <c>,</c> is both a trigger and a retrigger character —
+    /// and building the full list to read one entry costs every function of the asking file and each
+    /// file it includes, shadowed and put in a dictionary: 465 of them on a CoD4 file that includes
+    /// <c>maps\_utility</c> alone.
+    ///
+    /// It must agree with the full list exactly, and does so by making the same decision per record
+    /// rather than over the set. Shadowing can be decided that way HERE, though not in
+    /// <see cref="ApplyShadowing"/>'s general case, because this scope has already dropped every
+    /// record the asker cannot see: what is left of the set rule — a non-raw record at the same
+    /// relative path — is then exactly what <see cref="LanguageStore.HasOverlayAt"/> answers on its
+    /// own. <c>IncludeScopeLookupTests</c> holds the full list as the reference implementation and
+    /// requires the two to agree across overlays, sibling mods and the same name declared twice.
+    /// </summary>
+    public static FunctionSymbol? FunctionInIncludeScope(
+        LanguageStore store,
+        string askingContextId,
+        string askingPath,
+        ImmutableArray<string> includedPaths,
+        string keyName)
+    {
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
+
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ScriptRecord record in inScope )
+        {
+            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            // The engine never loads a raw file an overlay replaces, so its declarations are not in
+            // scope however early they are reached. This is the per-record half of ApplyShadowing.
+            if ( record.ContextId == "raw"
+                && record.RelativePath.Length > 0
+                && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                // FIRST wins, which is what the full list's dictionary does with TryAdd over the
+                // same records in the same order.
+                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
+                {
+                    return function;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
     /// file's own, plus those in files it <c>#include</c>s DIRECTLY, all callable by bare name.
     /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
@@ -745,28 +1153,37 @@ public static class DatabaseQueries
         string askingPath,
         ImmutableArray<string> includedPaths)
     {
-        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        foreach ( ScriptRecord record in store.AllRecords )
+        ImmutableArray<(ScriptRecord Record, FunctionSymbol Function)>.Builder matches =
+            ImmutableArray.CreateBuilder<(ScriptRecord, FunctionSymbol)>();
+
+        // The asking file itself, then the files its includes name — read from the relative-path
+        // index rather than found by normalizing every record's path, which is what this walked.
+        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
+
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( ScriptRecord record in inScope )
         {
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            bool sameFile = normalizedAskingPath.Length > 0
-                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
-
-            if ( !sameFile && !includedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
+            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
             {
                 continue;
             }
 
             foreach ( FunctionSymbol function in record.Functions )
             {
-                byName.TryAdd(function.KeyName, function);
+                matches.Add((record, function));
             }
+        }
+
+        // Overlay shadowing: a raw file and the mod overlay replacing it both match the same
+        // #include-relative path, and without this a bare Dictionary.TryAdd kept whichever one
+        // enumerated first — dead-code raw signature or live overlay one, by dictionary luck.
+        Dictionary<string, FunctionSymbol> byName = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord Record, FunctionSymbol Function) match in ApplyShadowing(
+            matches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName, store, askingContextId) )
+        {
+            byName.TryAdd(match.Function.KeyName, match.Function);
         }
 
         return [.. byName.Values];
@@ -794,14 +1211,20 @@ public static class DatabaseQueries
         string askingPath,
         ImmutableArray<string> importedPaths)
     {
-        Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
 
-        // Only the handful of files that declare a class, not every record: this runs per keystroke
-        // behind statement-scope completion.
-        foreach ( string path in store.Classes.AllDeclaringPaths() )
+        ImmutableArray<(ScriptRecord Record, ClassSymbol Class)>.Builder matches =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
+
+        // The asking file and the files it imports, read by path: this runs per keystroke behind
+        // statement-scope completion, and in a large workspace every copy of a class-declaring file
+        // would otherwise be read to keep the imported ones.
+        List<ScriptRecord> candidates = ScopeRecords(store, normalizedAskingPath, importedPaths);
+
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach ( ScriptRecord record in candidates )
         {
-            if ( !store.TryGet(path, out ScriptRecord record) )
+            if ( record.Classes.IsDefaultOrEmpty || !seen.Add(record.Path) )
             {
                 continue;
             }
@@ -811,18 +1234,19 @@ public static class DatabaseQueries
                 continue;
             }
 
-            bool sameFile = normalizedAskingPath.Length > 0
-                && string.Equals(record.Path, normalizedAskingPath, StringComparison.OrdinalIgnoreCase);
-
-            if ( !sameFile && !importedPaths.Contains(NormalizeScriptPath(record.RelativePath)) )
-            {
-                continue;
-            }
-
             foreach ( ClassSymbol classSymbol in record.Classes )
             {
-                byName.TryAdd(classSymbol.KeyName, classSymbol);
+                matches.Add((record, classSymbol));
             }
+        }
+
+        // Overlay shadowing, as above: without it a mod's own override of a class is one arbitrary
+        // pick away from offering the raw base's members instead of the ones the mod actually ships.
+        Dictionary<string, ClassSymbol> byName = new(StringComparer.Ordinal);
+        foreach ( (ScriptRecord Record, ClassSymbol Class) match in ApplyShadowing(
+            matches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName, store, askingContextId) )
+        {
+            byName.TryAdd(match.Class.KeyName, match.Class);
         }
 
         return [.. byName.Values];
@@ -838,8 +1262,13 @@ public static class DatabaseQueries
         ImmutableArray<ResolvedClass>.Builder matches = ImmutableArray.CreateBuilder<ResolvedClass>();
 
         // Routed through the class graph rather than scanned: this runs once per parent link on
-        // every chain walk, and method resolution walks a chain per call site.
-        foreach ( string path in store.Classes.PathsDeclaring(keyName) )
+        // every chain walk, and method resolution walks a chain per call site. With a namespace,
+        // the files declaring the class INTO it — the subset the namespace filter below keeps.
+        ImmutableArray<string> declaringPaths = namespaceName is null
+            ? store.Classes.PathsDeclaring(keyName)
+            : store.Classes.PathsDeclaring(namespaceName, keyName);
+
+        foreach ( string path in declaringPaths )
         {
             if ( !store.TryGet(path, out ScriptRecord record) )
             {
@@ -870,7 +1299,137 @@ public static class DatabaseQueries
         return ApplyShadowing(
             matches.ToImmutable(),
             static match => match.Record,
-            static match => match.Class.KeyName);
+            static match => match.Class.KeyName,
+            store,
+            askingContextId);
+    }
+
+    /// <summary>
+    /// The GSC and CSC records whose analysis a header decides: the ones that <c>#insert</c> it,
+    /// directly or through other headers. What a file watcher re-indexes when a header changes.
+    ///
+    /// A file can reach the header THROUGH ANOTHER HEADER. Headers live in a store of their own, so
+    /// a direct query walks scripts alone and stops one hop in: with base.gsh inserted by
+    /// wrapper.gsh inserted by script.gsc, a change to base.gsh would leave script.gsc with a
+    /// record built against the old macro values for the rest of the session. The startup index
+    /// closes the same set over the same graph, for the same chain.
+    ///
+    /// And a file can be waiting for a header that RESOLVES NOWHERE YET. Its insert edge records no
+    /// resolved path, so no query keyed on one can find it — which is precisely the file a newly
+    /// created header exists to serve. Matching the written path as well catches it, and catches
+    /// the mod copy that starts shadowing a raw header too, where the dependent's edge names the
+    /// file it used to resolve to rather than the one that now wins.
+    /// </summary>
+    /// <param name="headerRelativePath">
+    /// The header as a directive would write it (<see cref="PathUtil.NormalizeScriptPath"/>'s form),
+    /// or "" to match on resolved paths alone.
+    /// </param>
+    public static List<ScriptRecord> ScriptsInserting(
+        ScriptDatabase database, string normalizedGshPath, string headerRelativePath)
+    {
+        // Candidates come from the directive index — the files inserting a header by its resolved
+        // path, plus those writing its path — and each is still put to InsertsAny, since the
+        // written-path key is looser than the comparison.
+        string writtenKey = headerRelativePath.Length > 0 ? DirectiveIndex.WrittenKey(headerRelativePath) : "";
+
+        HashSet<string> changed = new(StringComparer.Ordinal) { normalizedGshPath };
+        Queue<string> pending = new();
+        pending.Enqueue(normalizedGshPath);
+
+        // Close over the header graph first: a header that inserts a changed one contributes
+        // something different now, even though its own bytes did not move. A header whose only
+        // link is a written path qualifies from the start; one linked by resolved path is found
+        // when the header it inserts joins.
+        List<string> headerCandidates = [];
+        if ( writtenKey.Length > 0 )
+        {
+            headerCandidates.AddRange(database.GshFilesWriting(writtenKey));
+        }
+
+        while ( true )
+        {
+            while ( pending.Count > 0 )
+            {
+                headerCandidates.AddRange(database.GshFilesInserting(pending.Dequeue()));
+            }
+
+            if ( headerCandidates.Count == 0 )
+            {
+                break;
+            }
+
+            List<string> asking = headerCandidates;
+            headerCandidates = [];
+            foreach ( string path in asking )
+            {
+                if ( changed.Contains(path) || !database.TryGetGsh(path, out ScriptRecord header) )
+                {
+                    continue;
+                }
+
+                if ( InsertsAny(header, changed, headerRelativePath) )
+                {
+                    changed.Add(header.Path);
+                    pending.Enqueue(header.Path);
+                }
+            }
+        }
+
+        List<ScriptRecord> inserting = [];
+        foreach ( LanguageStore store in database.BothLanguageStores )
+        {
+            HashSet<string> seen = new(StringComparer.Ordinal);
+            List<string> candidates = [];
+            foreach ( string header in changed )
+            {
+                candidates.AddRange(store.FilesInserting(header));
+            }
+
+            if ( writtenKey.Length > 0 )
+            {
+                candidates.AddRange(store.FilesWriting(writtenKey));
+            }
+
+            foreach ( string path in candidates )
+            {
+                if ( !seen.Add(path) || !store.TryGet(path, out ScriptRecord record) )
+                {
+                    continue;
+                }
+
+                if ( InsertsAny(record, changed, headerRelativePath) )
+                {
+                    inserting.Add(record);
+                }
+            }
+        }
+
+        return inserting;
+    }
+
+    /// <summary>Whether one record inserts any header in the changed set, by resolved or written path.</summary>
+    private static bool InsertsAny(ScriptRecord record, HashSet<string> changed, string headerRelativePath)
+    {
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert )
+            {
+                continue;
+            }
+
+            if ( changed.Contains(edge.ResolvedPath) )
+            {
+                return true;
+            }
+
+            if ( headerRelativePath.Length > 0
+                && string.Equals(PathUtil.NormalizeScriptPath(edge.RawPath), headerRelativePath, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -879,30 +1438,155 @@ public static class DatabaseQueries
     /// deliberate exception to the language-guard rule, and the only way a macro defined in a
     /// header is reachable from the <c>.gsc</c>/<c>.csc</c> that inserts it.
     ///
-    /// Scans linearly: the GSH store carries no reference index, and header counts are small
-    /// next to script counts. Callers should only reach for this on macro keys.
+    /// Read through the header store's reference index rather than a scan of every header: header
+    /// counts are small next to a game's scripts, but a large workspace carries its own headers too
+    /// (PERF.md, the scale section).
     /// </summary>
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindGshReferences(
         ScriptDatabase database,
         string askingContextId,
-        SymbolKey key)
+        SymbolKey key,
+        string onlyPath = "")
     {
-        ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
+        return ReferencesIn(database.GshFilesReferencing(key), database.TryGetGsh, askingContextId, key, onlyPath);
+    }
+
+    /// <summary>
+    /// Every reference to a key that the asking file can see: its own language world(s) plus the
+    /// shared GSH store for macro keys, which is where a header's own definition and uses live.
+    ///
+    /// This is the one place that assembles the full set, so the CodeLens count and the peek list
+    /// opened by clicking it are computed the same way.
+    /// </summary>
+    /// <param name="macroSpansLanguages">
+    /// Whether a MACRO key widens to both language stores. Defaults true, which is right for a
+    /// macro genuinely reached through a shared <c>.gsh</c> — declared once, <c>#insert</c>ed into
+    /// <c>.gsc</c> and <c>.csc</c> alike, so a use in either world is a use of the same symbol and
+    /// the asking file's own language decides nothing (a rename started in a .gsc must still reach
+    /// every <c>.csc</c> use, or it expands to nothing — see <c>MacroRenameAcrossLanguagesTests</c>).
+    ///
+    /// Pass false when the CALLER already knows this key is a macro this file defines LOCALLY, no
+    /// <c>#insert</c> involved — the server's navigation layer is the one caller that can know
+    /// this, from the asking file's own <c>Preprocessed.Macros</c>. Left
+    /// true unconditionally, two independent same-named macros — one per language file, e.g.
+    /// <c>CF_CRACKS_ALL</c> separately <c>#define</c>d in <c>animation_shared.gsc</c> and its
+    /// sibling <c>.csc</c> — were conflated into one: the CodeLens on the .gsc's own definition
+    /// counted the .csc's unrelated one, and the peek list showed both. Ignored for anything but
+    /// <see cref="SymbolKind.Macro"/>, where the isolation between language worlds is never in
+    /// question — a same-named FUNCTION in the other world is a different function regardless.
+    /// </param>
+    /// <param name="onlyPath">
+    /// When given, only this file's references are collected — for a question that is same-file by
+    /// definition, such as document highlight.
+    ///
+    /// The ANSWER is the same, and the shadow rule is what makes that non-obvious.
+    /// <see cref="ApplyShadowing"/> decides over the SET: a raw file's entries drop out when some
+    /// visible non-raw record at the same relative path is also in it. Narrowing the set would lose
+    /// that, so it is not narrowed — the same per-record test <see cref="FindReferencesReaching"/>
+    /// already makes is used instead, and it is the same rule rather than a near one: every record
+    /// <see cref="LanguageStore.FilesReferencing"/> returns references the key by construction, so
+    /// "an overlay is in the match set" and "an overlay references the key" are one statement.
+    /// </param>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key,
+        bool macroSpansLanguages = true,
+        string onlyPath = "")
+    {
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( ScriptRecord record in database.AllGshRecords )
-        {
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
+        bool wideMacro = key.Kind == SymbolKind.Macro && macroSpansLanguages;
 
-            foreach ( ReferenceEntry entry in record.References )
+        // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is inserted
+        // into .gsc and .csc alike, so a use in either world is a use of the same name: scoped to the
+        // asking store, a rename started in a .gsc would leave every .csc use spelled the old way,
+        // expanding to nothing. Everything else keeps the isolation — a same-named FUNCTION in the
+        // other world is a different function.
+        ImmutableArray<LanguageStore> scope = wideMacro ? database.BothLanguageStores : stores;
+
+        foreach ( LanguageStore store in scope )
+        {
+            results.AddRange(FindReferences(store, askingContextId, key, onlyPath));
+        }
+
+        // A macro declared in a .gsh lives in the shared GSH store, which serves both languages,
+        // so its declaration and any header-to-header uses are invisible to a store query. Gated
+        // the same way as the store widening above: a macro this file defines LOCALLY has nothing
+        // in the GSH store under its name regardless, so this would return empty either way — the
+        // explicit gate is about intent, not about a result this changes.
+        if ( wideMacro )
+        {
+            results.AddRange(FindGshReferences(database, askingContextId, key, onlyPath));
+        }
+
+        // Overlay shadowing again: a mod overlay and the raw copy it shadows can both declare (and
+        // reference) the SAME key at the SAME script-relative path — the engine only ever loads the
+        // overlay, but nothing upstream of here knows that, so both copies' entries are collected.
+        // Without this, go-to-definition/find-references on such a key shows both, one of them dead.
+        if ( onlyPath.Length == 0 )
+        {
+            return ApplyShadowing(results.ToImmutable(), static r => r.Record, static _ => "");
+        }
+
+        // Narrowed: the set ApplyShadowing would have read is gone, so the same question is asked
+        // of the store instead. See the onlyPath parameter for why the two are one rule.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> narrowed = results.ToImmutable();
+        if ( narrowed.Length == 0 || narrowed[0].Record.ContextId != "raw" )
+        {
+            return narrowed;
+        }
+
+        return AnOverlayReferences(stores, askingContextId, narrowed[0].Record.RelativePath, key) ? [] : narrowed;
+    }
+
+    /// <summary>
+    /// Every call site of an ENGINE BUILTIN, which is not reachable under one key the way a script
+    /// function is.
+    ///
+    /// A builtin has no declaration, so extraction has nothing to key its call sites to and keys
+    /// each one by the scope it was WRITTEN in: `getentarray()` in `#namespace caller` is
+    /// `(caller, getentarray)`, the same call in `#namespace lib` is `(lib, getentarray)`, inside a
+    /// class it is keyed to the class, and `sys::getentarray()` is `(null, getentarray)`.
+    /// `SymbolExtractor.RecordCalleeReference` says so, and calls the builtin case "a query-time
+    /// concern" — this is that concern. Without it, find-references on a builtin finds only the
+    /// sites sharing the asking file's namespace, on a namespace dialect usually just the file.
+    ///
+    /// **A key is included only when nothing DECLARES it**, applied per key rather than once. A name
+    /// can be both an engine function and a script function in some namespace — and where a script
+    /// declares it, those call sites mean that script function and belong to a different answer.
+    /// Merge dialects need no special case: they key every unqualified call `(null, name)` already,
+    /// so the union is the single key they were already using.
+    /// </summary>
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindBuiltinReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        LanguageStore store,
+        string askingContextId,
+        string name,
+        string onlyPath = "",
+        GameProfile? profile = null)
+    {
+        GameProfile game = profile ?? GameProfile.Active;
+
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        HashSet<SymbolKey> asked = [];
+        foreach ( LanguageStore keyStore in stores )
+        {
+            foreach ( SymbolKey key in keyStore.ReferenceKeysNamed(name) )
             {
-                if ( entry.Key == key )
+                if ( !asked.Add(key) || AnyScriptDeclares(store, askingContextId, key, game) )
                 {
-                    results.Add((record, entry));
+                    continue;
                 }
+
+                results.AddRange(FindAllReferences(database, stores, askingContextId, key, onlyPath: onlyPath));
             }
         }
 
@@ -910,59 +1594,61 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// Every reference to a key that the asking file can see: its own language world(s) plus the
-    /// shared GSH store for macro keys, which is where a header's own definition and uses live.
-    ///
-    /// This is the one place that assembles the full set. Callers that assembled it themselves
-    /// drifted apart — the CodeLens count queried a single store while clicking the lens went
-    /// through the client's reference provider, so the number and the peek list disagreed.
+    /// Whether a SCRIPT declares this exact function key, visibly from the asking context — the test
+    /// that separates a call meaning the engine's function from one meaning a script's.
     /// </summary>
-    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        ScriptDatabase database,
-        ImmutableArray<LanguageStore> stores,
-        string askingContextId,
-        SymbolKey key)
+    private static bool AnyScriptDeclares(
+        LanguageStore store, string askingContextId, SymbolKey key, GameProfile game)
     {
-        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
-            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
-
-        // A MACRO is not a symbol of one language world. It is declared in a .gsh, which is
-        // inserted into .gsc and .csc alike, so a use in either world is a use of the same name and
-        // the asking file's own language decides nothing. Scoped to the asking store, a rename
-        // started in a .gsc rewrote the .gsc and the .gsh and left every .csc use spelled the old
-        // way — expanding to nothing — which is the failure RenameHandler's own comment says it
-        // exists to avoid. Everything else keeps the isolation: a same-named FUNCTION in the other
-        // world is a different function, and conflating the two is what the split is for.
-        ImmutableArray<LanguageStore> scope = key.Kind == SymbolKind.Macro
-            ? database.BothLanguageStores
-            : stores;
-
-        foreach ( LanguageStore store in scope )
+        if ( key.OwnerClass is not null )
         {
-            results.AddRange(FindReferences(store, askingContextId, key));
+            return MethodResolution.FindDeclaringClass(store, askingContextId, key.OwnerClass, key.Name) is not null;
         }
 
-        // A macro declared in a .gsh lives in the shared GSH store, which serves both languages,
-        // so its declaration and any header-to-header uses are invisible to a store query.
-        if ( key.Kind == SymbolKind.Macro )
+        // The explicit `sys::name` form. No script declaration can claim it, and asking the question
+        // below would hand it to any namespace that happens to declare the name: without this, a
+        // workspace where one file declares `getentarray()` hid every `sys::getentarray()` in the
+        // rest of it.
+        if ( BuiltinQualifier.IsBuiltinKey(key, game) )
         {
-            results.AddRange(FindGshReferences(database, askingContextId, key));
+            return false;
         }
 
-        return results.ToImmutable();
+        return LookupFunctions(
+            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true).Length > 0;
     }
 
+    /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferences(
         LanguageStore store,
         string askingContextId,
-        SymbolKey key)
+        SymbolKey key,
+        string onlyPath = "")
+    {
+        return ReferencesIn(store.FilesReferencing(key), store.TryGet, askingContextId, key, onlyPath);
+    }
+
+    private delegate bool RecordLookup(string normalizedPath, out ScriptRecord record);
+
+    /// <summary>
+    /// Every entry under exactly <paramref name="key"/> in the visible records at
+    /// <paramref name="paths"/> — the one body behind the script-store and header-store reads, which
+    /// differ only in where the paths and records come from.
+    /// </summary>
+    private static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ReferencesIn(
+        ImmutableArray<string> paths, RecordLookup tryGet, string askingContextId, SymbolKey key, string onlyPath)
     {
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
-        foreach ( string path in store.FilesReferencing(key) )
+        foreach ( string path in paths )
         {
-            if ( !store.TryGet(path, out ScriptRecord record) )
+            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
+            {
+                continue;
+            }
+
+            if ( !tryGet(path, out ScriptRecord record) )
             {
                 continue;
             }

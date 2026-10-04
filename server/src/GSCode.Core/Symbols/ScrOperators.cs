@@ -5,8 +5,7 @@ namespace GSCode.Core.Symbols;
 ///
 /// Deliberately not <c>TokenKind</c>: that lives in GSCode.Parser, which Core cannot reference, and
 /// the deeper reason is that this table answers "what does multiplication mean on these two types",
-/// a question with no tokens in it. A caller maps its own token kind onto this; a transpiler asking
-/// what an expression evaluates to needs no token stream at all.
+/// a question with no tokens in it. A caller maps its own token kind onto this.
 /// </summary>
 public enum ScrBinaryOp
 {
@@ -59,8 +58,8 @@ public enum ScrOperandDiagnosis
 /// v1.5 spread this over 536 lines in which the four equality operators and two logicals were six
 /// near-identical 36-line bodies and the five bitwise operators were five copies of a three-line
 /// function — so its vector rules were buried inside a shared numeric helper and its holes were
-/// invisible. This tree's version is smaller but wrong in a way that ships today: <c>NumericResult</c>
-/// takes no operator and knows only Int/Float/Unknown, so <c>vector * 0.5</c> types as
+/// invisible. This tree's version before this table was smaller but wrong: its <c>NumericResult</c>
+/// took no operator and knew only Int/Float/Unknown, so <c>vector * 0.5</c> typed as
 /// <c>float</c>, which is one of the two causes that got <c>PredefinedFieldTypeMismatch</c>
 /// withdrawn after it reported 46 findings on Black Ops III with none of them real.
 ///
@@ -185,8 +184,10 @@ public static class ScrOperators
     }
 
     /// <summary>
-    /// <c>+</c> and <c>-</c>. Vector arithmetic is decided first, then string concatenation, then
-    /// numbers — the order is the fix for v1.5 typing <c>vector + float</c> as a string.
+    /// <c>+</c> and <c>-</c>. Two vectors first, then string concatenation, then a vector with a
+    /// scalar, then numbers. Checking concatenation by the STRING side is what keeps
+    /// <c>vector + float</c> from typing as a string, v1.5's bug, without also making
+    /// <c>"at " + vector</c> a vector.
     /// </summary>
     private static ScrOperatorResult Additive(ScrBinaryOp op, ScrValue left, ScrValue right)
     {
@@ -200,15 +201,9 @@ public static class ScrOperators
             return ScrOperatorResult.Ok(FoldVectorPair(op, left, right));
         }
 
-        // A vector on exactly one side. Adding a scalar to a vector is not a thing the engine does,
-        // and v1.5 returned `string` for it through a mask that asked whether one side carried both
-        // the Vector and Number bits.
-        if ( leftVector != rightVector && (leftVector || rightVector)
-            && !left.IsUnknown && !right.IsUnknown )
-        {
-            return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Vector), ScrOperandDiagnosis.UnsupportedOperands);
-        }
-
+        // A string on either side makes `+` a concatenation, and a vector concatenates like any
+        // other value — `"at " + self.origin` is how the stock scripts build messages. Decided
+        // before the vector-with-scalar arm below, which typed that expression as a vector.
         if ( op == ScrBinaryOp.Add && (left.MustBe(ScrTypeSet.AnyString) || right.MustBe(ScrTypeSet.AnyString)) )
         {
             // Content rather than Text: a literal keeps its quotes, and concatenating those would
@@ -221,6 +216,26 @@ public static class ScrOperators
             }
 
             return ScrOperatorResult.Ok(ScrValue.Of(ScrTypeSet.String));
+        }
+
+        // A vector CERTAINLY on exactly one side. Adding a scalar to a vector is not a thing the
+        // engine does, and v1.5 returned `string` for it through a mask that asked whether one
+        // side carried both the Vector and Number bits.
+        if ( leftVector != rightVector )
+        {
+            ScrValue other = leftVector ? right : left;
+
+            // The other side is judged by MayBe/MustBe too, per this file's own rule 2 — matching
+            // it only against "is it the full universe" reported UnsupportedOperands on anything
+            // short of Unknown, INCLUDING a value that may itself be a vector (e.g. Vector|Undefined
+            // from an isdefined narrowing), where the analysis cannot rule out a legal vector+vector.
+            // Report only when the other side definitely cannot be a vector AND definitely is one
+            // of the kinds a vector genuinely does not combine with.
+            if ( !other.MayBe(ScrTypeSet.Vector)
+                && other.MustBe(ScrTypeSet.Number | ScrTypeSet.Bool | ScrTypeSet.AnyString) )
+            {
+                return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Vector), ScrOperandDiagnosis.UnsupportedOperands);
+            }
         }
 
         return ScrOperatorResult.Ok(Arithmetic(op, left, right));
@@ -277,7 +292,13 @@ public static class ScrOperators
             return new ScrOperatorResult(ScrValue.Of(ScrTypeSet.Int), ScrOperandDiagnosis.DivisionByZero);
         }
 
-        if ( left.Constant is { Type: ScrTypeSet.Int } a && right.Constant is { Type: ScrTypeSet.Int } b && b.Integer != 0 )
+        // long.MinValue % -1 throws OverflowException in .NET regardless of checked/unchecked
+        // context, because the mathematical result (2^63) does not fit back into a signed 64-bit
+        // integer. Reachable purely through folding — e.g. `(-9223372036854775807 - 1) % -1` — so
+        // this pass declines to fold it rather than letting the exception take down analysis of
+        // the whole file.
+        if ( left.Constant is { Type: ScrTypeSet.Int } a && right.Constant is { Type: ScrTypeSet.Int } b
+            && b.Integer != 0 && !(a.Integer == long.MinValue && b.Integer == -1) )
         {
             return ScrOperatorResult.Ok(ScrValue.OfConstant(ScrConstant.OfInt(a.Integer % b.Integer)));
         }
@@ -317,12 +338,9 @@ public static class ScrOperators
     }
 
     /// <summary>
-    /// Numeric result typing, replacing <c>NumericResult</c>.
-    ///
-    /// The old one was asymmetric in a way that asserted types it did not know:
-    /// <c>Float + Unknown</c> came out <c>Float</c> while <c>Int + Unknown</c> came out
-    /// <c>Unknown</c>. Here an operand that could be anything makes the result a number at best,
-    /// never a specific one.
+    /// Numeric result typing. An operand that could be anything makes the result a number at best,
+    /// never a specific one — <c>Float + Unknown</c> is no more a <c>Float</c> than
+    /// <c>Int + Unknown</c> is an <c>Int</c>.
     /// </summary>
     private static ScrValue Arithmetic(ScrBinaryOp op, ScrValue left, ScrValue right)
     {
@@ -336,9 +354,24 @@ public static class ScrOperators
 
         if ( !leftNumeric || !rightNumeric )
         {
-            // Not enough is known to name a type. Number is the widest honest answer, since a
-            // division always produces one and anything else here is an operand we cannot see.
-            return ScrValue.Of(ScrTypeSet.Number, ScrImprecision.UnsupportedExpression);
+            // Not enough is known to name a type, and bare Number is not the honest answer it looks
+            // like: it is the one union ToScrType widens back to `float`, so `param + 1` on an
+            // untyped parameter (MayBe(Universe)) would hover `float` for a value that could as
+            // legally be a string concatenation. Widened with every other type the unmeasured
+            // operand might be, the union projects to Unknown instead.
+            ScrTypeSet fallback = ScrTypeSet.Number;
+
+            if ( op == ScrBinaryOp.Add && (left.MayBe(ScrTypeSet.AnyString) || right.MayBe(ScrTypeSet.AnyString)) )
+            {
+                fallback |= ScrTypeSet.String;
+            }
+
+            if ( left.MayBe(ScrTypeSet.Vector) || right.MayBe(ScrTypeSet.Vector) )
+            {
+                fallback |= ScrTypeSet.Vector;
+            }
+
+            return ScrValue.Of(fallback);
         }
 
         // Division always produces a float, even between two ints.
@@ -525,8 +558,22 @@ public static class ScrOperators
 
     private static ScrValue NumericOrUnknown(ScrValue operand)
     {
-        return operand.MayBe(ScrTypeSet.Number)
-            ? ScrValue.Of(ScrTypeSet.Number, ScrImprecision.UnsupportedExpression)
-            : ScrValue.Unknown;
+        if ( !operand.MayBe(ScrTypeSet.Number) )
+        {
+            return ScrValue.Unknown;
+        }
+
+        // Same widening as Arithmetic's fallback, and for the same reason: bare Number is the one
+        // union that projects back to `float`, so an operand that MAY be a vector (a union the
+        // MustBe(Vector) check above does not catch) must keep Vector in the result or `-x` on it
+        // would hover `float` for something that could legally negate to a vector.
+        ScrTypeSet fallback = ScrTypeSet.Number;
+
+        if ( operand.MayBe(ScrTypeSet.Vector) )
+        {
+            fallback |= ScrTypeSet.Vector;
+        }
+
+        return ScrValue.Of(fallback);
     }
 }

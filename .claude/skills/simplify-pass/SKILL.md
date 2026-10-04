@@ -24,13 +24,17 @@ four lines usually is not — see the layering rule below.
 
 Good areas, in the order they tend to pay:
 
-1. `GSCode.Server/Handlers` — 36 files, thin by design, and the place copies breed because each
-   handler is written against the protocol on its own.
-2. `GSCode.Workspace/Analysis` — 29 lint files that each answer a question about the same AST.
-3. Any file over ~700 lines (`FlowTyper`, `Preprocessor`, `CodeActionHandler`, `GscFormatter`,
+1. `GSCode.Server/Handlers` — the largest folder of thin-by-design files, and the place copies
+   breed because each handler is written against the protocol on its own.
+2. `GSCode.Workspace/Analysis` — the lint files, each answering a question about the same AST.
+3. `GSCode.Workspace/Database` — where the last 200 commits put most of their new code: nine
+   index types, all the same shape (see "The shapes this codebase already has"), and the queries
+   that read them. Its guardrails are the strictest here — the dialect seam and the measured
+   per-request budgets both run through it — so read `PERF.md`'s scale section first.
+4. Any file over ~700 lines (`FlowTyper`, `Preprocessor`, `CodeActionHandler`, `GscFormatter`,
    `DatabaseQueries`, `SymbolExtractor`, `CompletionEngine.Producers`). Size alone is not a defect;
    it is a place to look.
-4. The docs set: `ARCHITECTURE.md`, `FOLLOWUPS.md`, `FORMATTING.md`, `GAME_PROFILES.md`, `PERF.md`,
+5. The docs set: `ARCHITECTURE.md`, `FOLLOWUPS.md`, `FORMATTING.md`, `GAME_PROFILES.md`, `PERF.md`,
    and the seven `FOLDER.md` files.
 
 **Read the area's recent history before reading its code:**
@@ -42,7 +46,7 @@ git log --oneline -15 -- server/src/GSCode.Server/Handlers
 Cleanup passes leave the obvious wins taken. Proposing work a `[VC]` commit already did spends the
 review twice and makes the whole findings list look untrustworthy.
 
-## The four kinds of thing a pass collapses
+## The five kinds of thing a pass collapses
 
 ### 1. Duplicated logic
 
@@ -135,6 +139,61 @@ one entry point for lints and stayed the one entry point.
 The inverse trap: do not add a layer to remove a repetition. If the abstraction that unifies two
 call sites needs a strategy parameter to tell them apart, the two sites were not the same site.
 
+### 5. A seam that already exists, spelled again
+
+One concept, one canonical spelling, and a second site that re-derives it locally. This is the
+highest-yield finding class here and the easiest to walk past, because each copy is two or three
+lines that look like ordinary local work rather than a duplicate of anything.
+
+The seams to grep for by name, with what each one owns:
+
+| Seam | The question it answers |
+|---|---|
+| `GameProfile.KeyNamespace` | what namespace a function is KEYED under, which is not the one it is declared in |
+| `PathUtil.NormalizeAbsolute` / `NormalizeScriptPath` | the comparison form of an on-disk path, and of a script path |
+| `RelativePathIndex.Normalize` | the form `#using` and `#include` name a file in |
+| `DirectiveIndex.WrittenKey` | the form that folds everything a directive-path comparison ignores |
+| `DocumentStore` | whether a file is OPEN, i.e. whether the editor's buffer owns it |
+| `LspMapping` | a protocol `Location`, `Range` or `SymbolKind` built from a record |
+| `DiagnosticMessages` | the text of anything the user reads |
+
+A local re-derivation of one of these is not merely duplication: the two spellings can disagree,
+and when they do the failure is silent. `DependentDiagnosticsRefresher` rebuilt a function key from
+the declared namespace instead of through `KeyNamespace`, and on the merge dialects the key it
+produced matched nothing — so the closed files that call an edited file were never re-linted, on
+four games, with no error anywhere. `CodeLensHandler`, in the same folder, built the same key
+correctly.
+
+Two of the three found in the `Handlers` survey were legibility only; the third was that bug. That
+is the reason to grep the seams by name rather than wait for one to look wrong.
+
+## The shapes this codebase already has
+
+A pass invents nothing. Every collapse below already has an exemplar in the tree, and a review goes
+faster when the new code is a shape the reviewer has read four times already.
+
+- **A key → files index.** `PackedInvertedIndex<TKey>` for the storage, a static `KeysOf`/`Of` that
+  builds one file's contribution OUTSIDE the write gate, and an `Apply(path, old, new)` diff called
+  from `LanguageStore.Upsert` and `Remove`. Nine types exist — `ReferenceIndex`, `DeclarationIndex`,
+  `NamespaceIndex`, `ClassGraph`, `RelativePathIndex`, `DependentsIndex`, `DirectiveIndex`,
+  `PathTreeIndex`, `VocabularyIndex` — and the header store in `ScriptDatabase` keeps its own
+  instances of three, diffed the same way under one gate.
+  **When a query reads a list wider than its answer and then filters it, the answer is a key, not a
+  loop** — the rule itself lives in the `lsp-handler` skill's "Never walk the store on a request".
+- **A support type that owns resolution.** `NavigationSupport` (uri → parse, store, context,
+  namespaces), `FormattingSupport`, `DocumentLinter`. A handler that assembles three collaborators
+  before it can answer wants one of these, not a fourth constructor parameter.
+- **A sink interface plus a `Null` instance** for anything that talks to the connection:
+  `IDiagnosticsSink`, `ICodeLensRefreshSink`. It exists so a test can observe the call without
+  implementing `ILanguageServerFacade`. A SECOND copy of the send belongs behind the existing sink —
+  `IndexProgressNotifier` grew its own copy of the code-lens refresh request.
+- **One entry point per pipeline**, its steps private behind it: `WorkspaceLints.Analyze`, and
+  `WorkspaceLintSweep`'s two public entries over one per-file worker.
+- **Proof that a collapse changed nothing**: keep the old path as a reference implementation in the
+  test and compare (`BoundedLookupTests`), and for "every real input" ask both over the corpus
+  (`IndexedQueryCorpusTests`, `ReferenceScopeCorpusTests`). The `verify-before-fixing` skill holds
+  the full practice; a pass that merges two answer-producing paths owes one of those two proofs.
+
 ## What a pass must not touch
 
 - **`GameProfile` and anything dialect-shaped.** Two profiles agreeing today is not duplication —
@@ -162,10 +221,18 @@ A survey reads more carefully than anyone has in months, so it turns up real def
 makes such a commit unreviewable.
 
 Report them in their own section of the findings list, with the evidence and the reason they are out
-of scope, and leave the code alone. Example from the `Handlers` pass:
-`PrepareRenameHandler` returns its registration options with no `DocumentSelector` while every
-sibling sets one — likely registered against all documents rather than GSC files. Separate commit,
-separate verification.
+of scope, and leave the code alone. The `Handlers` survey found one: `ClosedDependentsOf` built a
+function key from the declared namespace rather than through `GameProfile.KeyNamespace`, so on the
+merge dialects an edit's closed callers were never re-linted (kind 5 above). It shipped as its own
+`[VC]` commit, with a cod4 test that failed first.
+
+**Verify a bug before writing it into the list.** This section used to cite `PrepareRenameHandler`
+returning registration options with no `DocumentSelector` as "likely registered against all
+documents rather than GSC files". It is not: VS Code fills a null selector with the client's own
+`documentSelector` (`client/src/server.ts`), which is built from the same script globs the server's
+selector is, so both cover the same files. Adding the selector is a consistency finding, not a fix.
+A plausible-sounding bug costs the user the time to disprove it, and this one sat here as the
+example of a real find.
 
 ## The loop
 
@@ -203,7 +270,8 @@ Abandon a finding rather than force it:
 
 ## The verification gate
 
-Per project, Release, never solution-wide — a running server holds the Debug DLLs open:
+Per project, never solution-wide — a running server holds its DLLs open. Release unless the
+running server loaded Release; the `build-and-test` skill shows how to check:
 
 ```bash
 cd server
@@ -230,7 +298,7 @@ which looks exactly like success and proves nothing. Two games is roughly two an
 anything under ten seconds did not happen.
 
 If the client changed: `npm run compile` and `npm run lint` in `client/`, where the bar is zero
-errors — the naming-convention warnings are pre-existing.
+errors and zero warnings.
 
 Report the gate as a table of what ran and what it said, including the durations. "Tests pass" is
 not a result anyone can check.
@@ -276,6 +344,10 @@ has to land. The `Handlers` pass went from 5 copies of the document guard, 2 dir
 three documented shared members cost more lines than the five-line blocks they replaced. A pass that
 optimises line count will refuse to write the doc comment that stops the next reader misusing the
 thing it just created.
+
+Say the same about seams: how many local re-derivations of a canonical spelling the pass folded
+back into it (kind 5). Those are sites where a future change could silently disagree, rather than
+merely be written twice.
 
 Then check:
 

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
@@ -13,6 +14,20 @@ public sealed class PathResolver
 {
     private readonly RootConfig _config;
     private readonly IFileSystem _fileSystem;
+
+    /// <summary>
+    /// Memoizes <see cref="Resolve"/> by (context, relative path) — including a MISS, since a
+    /// miss is the expensive case: it walks every configured root before returning null, and a
+    /// broken or not-yet-created import is asked about on every keystroke by two independent
+    /// callers (<see cref="Analysis.FileImports"/> and <see cref="Analysis.UsingNotFoundLint"/>
+    /// each resolve the same directive list), so an uncached miss is paid twice per analysis and
+    /// again on every later one. A confirmed 4x-by-root-count, 2x-by-caller multiplier on an
+    /// adversarial workspace — no wall-clock claim, since that depends on the filesystem, but the
+    /// probe count is real and unbounded by nothing else. Invalidated wholesale by
+    /// <see cref="InvalidateResolutionCache"/> on any watched create/delete, which is coarse but
+    /// correct and cheap next to a probe: those events are user-paced, never per-keystroke.
+    /// </summary>
+    private readonly ConcurrentDictionary<(ResolutionContext Context, string Relative), string?> _resolveCache = new();
 
     public PathResolver(RootConfig config, IFileSystem fileSystem)
     {
@@ -64,6 +79,9 @@ public sealed class PathResolver
     /// Resolves a game-relative script path (e.g. "scripts\shared\util_shared.gsc") from
     /// the given context. Returns the normalized absolute path of the first existing
     /// candidate, or null. Rooted paths and ".." traversal are rejected outright.
+    ///
+    /// Memoized, including the null answer — see <see cref="_resolveCache"/> for why a miss is
+    /// the case that matters most here.
     /// </summary>
     public string? Resolve(ResolutionContext context, string scriptPathWithExtension)
     {
@@ -74,6 +92,23 @@ public sealed class PathResolver
             return null;
         }
 
+        (ResolutionContext, string) key = (context, relative);
+        if ( _resolveCache.TryGetValue(key, out string? cached) )
+        {
+            return cached;
+        }
+
+        string? resolved = ResolveUncached(context, relative);
+
+        // A last-write-wins race between two threads resolving the same key concurrently is fine:
+        // both computed the same answer from the same (unmoving, for the duration of one probe)
+        // filesystem state, so whichever write lands is correct either way.
+        _resolveCache[key] = resolved;
+        return resolved;
+    }
+
+    private string? ResolveUncached(ResolutionContext context, string relative)
+    {
         foreach ( string root in RootsFor(context) )
         {
             string candidate = Path.Combine(root, relative.Replace('\\', Path.DirectorySeparatorChar));
@@ -89,17 +124,27 @@ public sealed class PathResolver
     }
 
     /// <summary>
+    /// Forgets every memoized resolution. Called on any watched file create or delete: a create
+    /// can turn a cached miss into a hit, and a delete can turn a cached hit into a miss, and
+    /// nothing here tracks which specific keys a given path could affect — a file might be named
+    /// by any relative path from any context. Coarse, but cheap next to what it protects against:
+    /// these events are user-paced (a save, a branch switch), never per-keystroke, so clearing the
+    /// whole cache costs a handful of re-probes on the next few analyses rather than one that
+    /// never resolves a rename or a newly created import.
+    /// </summary>
+    public void InvalidateResolutionCache()
+    {
+        _resolveCache.Clear();
+    }
+
+    /// <summary>
     /// The script-relative identity of a file under its context's root (the overlay
     /// shadowing key), or "" when it sits outside every root.
     ///
-    /// NORMALIZES ITS ARGUMENT, and the parameter name is kept as a statement of what the roots are
-    /// compared against rather than as a demand on the caller. It used to be a demand, and the
-    /// failure was silent in the worst way: an unnormalized path fails <see cref="PathUtil.IsUnder"/>
-    /// against a normalized root, "" comes back, that empty string becomes
-    /// <c>ScriptRecord.RelativePath</c>, and every import match downstream compares against it and
-    /// never fires. Nothing throws — the workspace simply behaves as though no file included
-    /// anything. <see cref="GetContext"/> has always normalized on entry; this is the same contract,
-    /// and the cost is one idempotent call on a path already in that form.
+    /// NORMALIZES ITS ARGUMENT, as <see cref="GetContext"/> does; the parameter name says what the
+    /// roots are compared against rather than demanding it of the caller. Unnormalized, a path fails
+    /// <see cref="PathUtil.IsUnder"/> against a normalized root, "" comes back as
+    /// <c>ScriptRecord.RelativePath</c>, and every import match downstream silently never fires.
     /// </summary>
     public string GetScriptRelativePath(string absolutePath, ResolutionContext context)
     {

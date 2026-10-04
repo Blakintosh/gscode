@@ -1,4 +1,4 @@
-using System.Net;
+using System.Globalization;
 using System.Text;
 using GSCode.Core.Diagnostics;
 
@@ -12,94 +12,117 @@ namespace GSCode.Server.Tests.Corpus;
 /// do that with a couple of thousand findings: no grouping you can collapse, no source context,
 /// and no way to filter. This is the same data with the file's own line beside each one.
 ///
-/// Everything is inlined so the file opens from disk with no server and no network. It is written
-/// outside the repository by default, since it is a snapshot of someone's local mod-tools install
-/// rather than a build artifact.
+/// Hints are most of every sweep, and the findings that decide whether a rule ships are the errors
+/// and warnings, so each severity can be switched off, and the filter says how many findings are
+/// left in view.
 /// </summary>
 internal static class SweepReport
 {
     internal readonly record struct Item(
         GscDiagnosticCode Code, DiagnosticSeverity Severity, string Message, string Path, int Line, int Character);
 
-    public static void Write(string outputPath, IReadOnlyList<Item> items, string corpusRoot)
+    private static readonly DiagnosticSeverity[] s_severities =
+    [
+        DiagnosticSeverity.Error,
+        DiagnosticSeverity.Warning,
+        DiagnosticSeverity.Information,
+        DiagnosticSeverity.Hint,
+    ];
+
+    /// <summary>
+    /// <paramref name="game"/> is the profile the sweep ran under, passed rather than inferred. The
+    /// page used to name no game at all, after an earlier version named BO3 on every report — and a
+    /// report that names the wrong game is how a BO3-measured conclusion got applied to four other
+    /// games once already.
+    /// </summary>
+    public static void Write(string outputPath, string game, IReadOnlyList<Item> items, string corpusRoot)
     {
+        string directory = Path.GetDirectoryName(Path.GetFullPath(outputPath))!;
         StringBuilder html = new();
 
-        html.Append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
-        html.Append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-        html.Append("<title>GSCode corpus diagnostic sweep</title>");
-        AppendStyle(html);
-        html.Append("</head><body>");
+        ReportPage.Head(html, $"GSCode diagnostics - {game}");
+        ReportPage.GameNav(html, directory, game, "diagnostics");
 
-        AppendHeader(html, items, corpusRoot);
+        AppendHeader(html, game, items, corpusRoot);
         AppendSummary(html, items);
+        AppendToolbar(html);
         AppendGroups(html, items, corpusRoot);
+
+        ReportPage.Foot(html);
         AppendScript(html);
 
-        html.Append("</body></html>");
-
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-
-        // UTF8Encoding(false), not Encoding.UTF8: the latter writes a BOM, which would sit in
-        // front of the doctype. The <meta charset> already declares the encoding.
-        File.WriteAllText(outputPath, html.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        ReportPage.Save(outputPath, html);
+        PerfReport.WriteAggregate(directory);
     }
 
-    private static void AppendHeader(StringBuilder html, IReadOnlyList<Item> items, string corpusRoot)
+    private static void AppendHeader(StringBuilder html, string game, IReadOnlyList<Item> items, string corpusRoot)
     {
-        int files = items.Select(i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-        int errors = items.Count(i => i.Severity == DiagnosticSeverity.Error);
-        int warnings = items.Count(i => i.Severity == DiagnosticSeverity.Warning);
+        int files = items.Select(static i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
-        html.Append("<h1>Corpus diagnostic sweep</h1>");
+        html.AppendLine($"<h1>Corpus diagnostic sweep - {ReportPage.Escape(game)}</h1>");
+        html.AppendLine("<div class=\"sub\">Every diagnostic the editor would raise over these shipped "
+            + "scripts. They shipped in a released game, so each finding here is either a real defect in "
+            + "them or — far more often — a false positive in GSCode. From "
+            + $"<code>{ReportPage.Escape(corpusRoot)}</code>, run at "
+            + $"{ReportPage.Escape(DateTime.Now.ToString("s", CultureInfo.InvariantCulture))}.</div>");
 
-        // The game is whichever GSCODE_CORPUS_* root this run was pointed at, so the lede says
-        // "these scripts" rather than naming one. It used to say BO3 on every report, including
-        // the CoD4 and WaW ones - and a report that names the wrong game is exactly how a
-        // BO3-measured conclusion got applied to four other games once already.
-        html.Append("<p class=\"lede\">Every diagnostic the editor would raise over these shipped scripts. ")
-            .Append("They shipped in a released game, so each finding here is either a real defect in ")
-            .Append("them or — far more often — a false positive in GSCode.</p>");
+        html.AppendLine("<div class=\"stats\">");
+        ReportPage.Stat(html, "diagnostics", items.Count.ToString("N0", CultureInfo.InvariantCulture));
+        ReportPage.Stat(html, "files", files.ToString("N0", CultureInfo.InvariantCulture));
 
-        html.Append("<div class=\"stats\">");
-        AppendStat(html, items.Count.ToString("N0"), "diagnostics");
-        AppendStat(html, files.ToString("N0"), "files");
-        AppendStat(html, errors.ToString("N0"), "errors", errors > 0 ? "error" : "");
-        AppendStat(html, warnings.ToString("N0"), "warnings", warnings > 0 ? "warning" : "");
-        html.Append("</div>");
+        foreach ( DiagnosticSeverity severity in s_severities )
+        {
+            int count = items.Count(i => i.Severity == severity);
+            bool loud = severity == DiagnosticSeverity.Error || severity == DiagnosticSeverity.Warning;
+            string cssClass = count > 0 && loud ? SeverityClass(severity) : "";
+            ReportPage.Stat(html, Plural(severity), count.ToString("N0", CultureInfo.InvariantCulture), cssClass);
+        }
 
-        html.Append("<p class=\"meta\">Corpus: <code>").Append(Escape(corpusRoot)).Append("</code><br>")
-            .Append("Generated ").Append(Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm"))).Append("</p>");
-    }
-
-    private static void AppendStat(StringBuilder html, string value, string label, string severityClass = "")
-    {
-        html.Append("<div class=\"stat ").Append(severityClass).Append("\"><b>")
-            .Append(Escape(value)).Append("</b><span>").Append(Escape(label)).Append("</span></div>");
+        html.AppendLine("</div>");
     }
 
     private static void AppendSummary(StringBuilder html, IReadOnlyList<Item> items)
     {
-        html.Append("<h2>By diagnostic</h2>");
-        html.Append("<table class=\"summary\"><thead><tr>")
-            .Append("<th>Code</th><th>Name</th><th>Severity</th><th class=\"num\">Count</th><th class=\"num\">Files</th>")
-            .Append("</tr></thead><tbody>");
+        html.AppendLine("<h2>By diagnostic</h2>");
+        ReportPage.TableStart(html, null,
+        [
+            new Column("code", "the gscode-NNNN number; click to jump to its findings"),
+            new Column("name", "the diagnostic's name in GscDiagnosticCode"),
+            new Column("severity", "how the editor shows it"),
+            new Column("count", "findings with this code across the whole corpus"),
+            new Column("files", "files with at least one of them"),
+        ]);
 
         foreach ( IGrouping<GscDiagnosticCode, Item> group in Ordered(items) )
         {
-            int files = group.Select(i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            DiagnosticSeverity severity = group.First().Severity;
+            int files = group.Select(static i => i.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            string severity = SeverityClass(group.First().Severity);
 
-            html.Append("<tr><td><a href=\"#code-").Append((int)group.Key).Append("\">")
-                .Append((int)group.Key).Append("</a></td>")
-                .Append("<td>").Append(Escape(group.Key.ToString())).Append("</td>")
-                .Append("<td><span class=\"sev ").Append(SeverityClass(severity)).Append("\">")
-                .Append(Escape(severity.ToString())).Append("</span></td>")
-                .Append("<td class=\"num\">").Append(group.Count().ToString("N0")).Append("</td>")
-                .Append("<td class=\"num\">").Append(files.ToString("N0")).Append("</td></tr>");
+            html.AppendLine($"<tr data-sev=\"{severity}\"><td><a href=\"#code-{(int)group.Key}\">{(int)group.Key}</a></td>"
+                + $"<td>{ReportPage.Escape(group.Key.ToString())}</td>"
+                + $"<td><span class=\"sev {severity}\">{severity}</span></td>"
+                + $"<td class=\"n\">{group.Count()}</td>"
+                + $"<td class=\"n\">{files}</td></tr>");
         }
 
-        html.Append("</tbody></table>");
+        ReportPage.TableEnd(html);
+    }
+
+    /// <summary>The filter box, one switch per severity, and the count of what is left in view.</summary>
+    private static void AppendToolbar(StringBuilder html)
+    {
+        html.AppendLine("<h2>Findings</h2>");
+        html.Append("<div class=\"toolbar\"><input id=\"filter\" class=\"q\" type=\"search\" "
+            + "placeholder=\"filter by message, file or source line...\">");
+
+        foreach ( DiagnosticSeverity severity in s_severities )
+        {
+            string name = SeverityClass(severity);
+            html.Append($"<label><input type=\"checkbox\" data-sev=\"{name}\" checked> "
+                + $"<span class=\"sev {name}\">{name}</span></label>");
+        }
+
+        html.AppendLine("<span id=\"shown\" class=\"count\"></span></div>");
     }
 
     private static void AppendGroups(StringBuilder html, IReadOnlyList<Item> items, string corpusRoot)
@@ -109,32 +132,31 @@ internal static class SweepReport
 
         foreach ( IGrouping<GscDiagnosticCode, Item> group in Ordered(items) )
         {
-            DiagnosticSeverity severity = group.First().Severity;
+            string severity = SeverityClass(group.First().Severity);
 
-            html.Append("<section id=\"code-").Append((int)group.Key).Append("\">");
-            html.Append("<h2>").Append((int)group.Key).Append(' ').Append(Escape(group.Key.ToString()))
-                .Append(" <span class=\"sev ").Append(SeverityClass(severity)).Append("\">")
-                .Append(Escape(severity.ToString())).Append("</span>")
-                .Append(" <span class=\"count\">").Append(group.Count().ToString("N0")).Append("</span></h2>");
+            html.Append($"<section id=\"code-{(int)group.Key}\" data-sev=\"{severity}\">");
+            html.Append($"<h3>{(int)group.Key} {ReportPage.Escape(group.Key.ToString())} "
+                + $"<span class=\"sev {severity}\">{severity}</span> "
+                + $"<span class=\"count\">{group.Count():N0}</span></h3>");
 
             // Identical messages collapse together: 39 copies of the same read-only field write
             // is one fact, not 39, and the per-message count is what says how bad it is.
             foreach ( IGrouping<string, Item> byMessage in group
-                .GroupBy(i => i.Message)
-                .OrderByDescending(g => g.Count()) )
+                .GroupBy(static i => i.Message)
+                .OrderByDescending(static g => g.Count()) )
             {
-                html.Append("<details><summary><span class=\"n\">").Append(byMessage.Count())
-                    .Append("&times;</span> ").Append(Escape(byMessage.Key)).Append("</summary><ol class=\"sites\">");
+                html.Append($"<details data-count=\"{byMessage.Count()}\"><summary><span class=\"times\">"
+                    + $"{byMessage.Count()}&times;</span> {ReportPage.Escape(byMessage.Key)}</summary><ol class=\"sites\">");
 
-                foreach ( Item item in byMessage.OrderBy(i => i.Path, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Line) )
+                foreach ( Item item in byMessage.OrderBy(static i => i.Path, StringComparer.OrdinalIgnoreCase).ThenBy(static i => i.Line) )
                 {
-                    html.Append("<li><code class=\"loc\">").Append(Escape(Relative(item.Path, corpusRoot)))
-                        .Append(':').Append(item.Line + 1).Append("</code>");
+                    html.Append($"<li><code class=\"loc\">{ReportPage.Escape(ReportPage.Relative(item.Path, corpusRoot))}"
+                        + $":{item.Line + 1}</code>");
 
                     string? source = SourceLine(lines, item);
                     if ( source is not null )
                     {
-                        html.Append("<pre>").Append(Escape(source)).Append("</pre>");
+                        html.Append($"<pre>{ReportPage.Escape(source)}</pre>");
                     }
 
                     html.Append("</li>");
@@ -143,7 +165,7 @@ internal static class SweepReport
                 html.Append("</ol></details>");
             }
 
-            html.Append("</section>");
+            html.AppendLine("</section>");
         }
     }
 
@@ -176,9 +198,9 @@ internal static class SweepReport
     {
         // Severity first, then volume: an Error on shipped code matters more than 2,000 hints.
         return items
-            .GroupBy(i => i.Code)
-            .OrderBy(g => SeverityRank(g.First().Severity))
-            .ThenByDescending(g => g.Count());
+            .GroupBy(static i => i.Code)
+            .OrderBy(static g => SeverityRank(g.First().Severity))
+            .ThenByDescending(static g => g.Count());
     }
 
     private static int SeverityRank(DiagnosticSeverity severity)
@@ -201,80 +223,61 @@ internal static class SweepReport
         return severity.ToString().ToLowerInvariant();
     }
 
-    private static string Relative(string path, string corpusRoot)
+    private static string Plural(DiagnosticSeverity severity)
     {
-        return path.StartsWith(corpusRoot, StringComparison.OrdinalIgnoreCase)
-            ? path[corpusRoot.Length..].TrimStart('\\', '/')
-            : path;
+        switch ( severity )
+        {
+            case DiagnosticSeverity.Error:
+                return "errors";
+            case DiagnosticSeverity.Warning:
+                return "warnings";
+            case DiagnosticSeverity.Information:
+                return "information";
+            default:
+                return "hints";
+        }
     }
 
-    private static string Escape(string text)
-    {
-        return WebUtility.HtmlEncode(text);
-    }
-
-    private static void AppendStyle(StringBuilder html)
-    {
-        html.Append("<style>");
-        html.Append(":root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--code:#f6f6f6;");
-        html.Append("--error:#c8102e;--warning:#b26a00;--hint:#4a6fa5;--information:#4a6fa5}");
-        html.Append("@media(prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e6e6e6;--muted:#9aa0a6;");
-        html.Append("--line:#2c2f36;--code:#1e2127;--error:#ff6b7f;--warning:#e0a458;--hint:#8fb3e0;--information:#8fb3e0}}");
-        html.Append("*{box-sizing:border-box}");
-        html.Append("body{margin:0 auto;padding:2rem 1.25rem 6rem;max-width:60rem;background:var(--bg);color:var(--fg);");
-        html.Append("font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}");
-        html.Append("h1{font-size:1.6rem;margin:0 0 .5rem}");
-        html.Append("h2{font-size:1.1rem;margin:2.5rem 0 .75rem;padding-bottom:.35rem;border-bottom:1px solid var(--line)}");
-        html.Append(".lede{color:var(--muted);max-width:46rem}");
-        html.Append(".meta{color:var(--muted);font-size:.85rem}");
-        html.Append(".stats{display:flex;flex-wrap:wrap;gap:.75rem;margin:1.25rem 0}");
-        html.Append(".stat{border:1px solid var(--line);border-radius:.5rem;padding:.6rem .9rem;min-width:7rem}");
-        html.Append(".stat b{display:block;font-size:1.35rem;line-height:1.1}");
-        html.Append(".stat span{color:var(--muted);font-size:.8rem}");
-        html.Append(".stat.error b{color:var(--error)}.stat.warning b{color:var(--warning)}");
-        html.Append("table{border-collapse:collapse;width:100%;font-size:.9rem}");
-        html.Append("th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line)}");
-        html.Append("th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}");
-        html.Append(".num{text-align:right;font-variant-numeric:tabular-nums}");
-        html.Append("a{color:inherit}");
-        html.Append(".sev{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;font-weight:700}");
-        html.Append(".sev.error{color:var(--error)}.sev.warning{color:var(--warning)}");
-        html.Append(".sev.hint,.sev.information{color:var(--hint)}");
-        html.Append(".count{color:var(--muted);font-weight:400;font-size:.85rem}");
-        html.Append("details{border:1px solid var(--line);border-radius:.4rem;margin:.4rem 0;background:var(--code)}");
-        html.Append("summary{cursor:pointer;padding:.5rem .7rem;font-size:.9rem}");
-        html.Append("summary .n{display:inline-block;min-width:3rem;color:var(--muted);font-variant-numeric:tabular-nums}");
-        html.Append(".sites{margin:0;padding:.25rem .7rem .7rem 2.5rem;max-height:32rem;overflow:auto}");
-        html.Append(".sites li{margin:.35rem 0}");
-        html.Append(".loc{font-size:.8rem;color:var(--muted)}");
-        html.Append("pre{margin:.15rem 0 0;padding:.35rem .5rem;background:var(--bg);border:1px solid var(--line);");
-        html.Append("border-radius:.3rem;overflow-x:auto;font-size:.82rem}");
-        html.Append("code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}");
-        html.Append("#filter{width:100%;padding:.5rem .7rem;margin:1rem 0;border:1px solid var(--line);");
-        html.Append("border-radius:.4rem;background:var(--code);color:var(--fg);font:inherit;font-size:.9rem}");
-        html.Append("</style>");
-    }
-
+    /// <summary>
+    /// The filter and the severity switches, applied together. Each message group's text is lowered
+    /// once up front rather than on every keystroke, since a sweep can hold well over a thousand.
+    /// </summary>
     private static void AppendScript(StringBuilder html)
     {
-        // A filter box, injected above the first section: with a couple of thousand findings the
-        // useful question is usually "show me everything mentioning damageTaken".
-        html.Append("<script>");
-        html.Append("(function(){");
-        html.Append("var box=document.createElement('input');");
-        html.Append("box.id='filter';box.type='search';box.placeholder='Filter by message, file or code…';");
-        html.Append("var first=document.querySelector('section');");
-        html.Append("if(!first)return;first.parentNode.insertBefore(box,first);");
-        html.Append("box.addEventListener('input',function(){");
-        html.Append("var q=box.value.toLowerCase();");
-        html.Append("document.querySelectorAll('section').forEach(function(s){");
-        html.Append("var any=false;");
-        html.Append("s.querySelectorAll('details').forEach(function(d){");
-        html.Append("var hit=!q||d.textContent.toLowerCase().indexOf(q)>=0;");
-        html.Append("d.style.display=hit?'':'none';if(hit)any=true;");
-        html.Append("if(q&&hit)d.open=true;else if(!q)d.open=false;});");
-        html.Append("s.style.display=any?'':'none';});");
-        html.Append("});})();");
-        html.Append("</script>");
+        html.AppendLine("""
+            <script>
+            (function(){
+              var box=document.getElementById('filter'),shown=document.getElementById('shown');
+              var switches=Array.prototype.slice.call(document.querySelectorAll('.toolbar input[data-sev]'));
+              var sections=Array.prototype.slice.call(document.querySelectorAll('section[data-sev]'));
+              var groups=sections.map(function(s){
+                return Array.prototype.map.call(s.querySelectorAll('details'),function(d){
+                  return {el:d,text:d.textContent.toLowerCase(),count:parseInt(d.getAttribute('data-count'),10)};
+                });
+              });
+              function apply(){
+                var q=box.value.toLowerCase(),on={},total=0;
+                switches.forEach(function(c){on[c.getAttribute('data-sev')]=c.checked;});
+                Array.prototype.forEach.call(document.querySelectorAll('tr[data-sev]'),function(r){
+                  r.style.display=on[r.getAttribute('data-sev')]?'':'none';
+                });
+                sections.forEach(function(s,i){
+                  var any=false,enabled=on[s.getAttribute('data-sev')];
+                  groups[i].forEach(function(g){
+                    var hit=enabled&&(!q||g.text.indexOf(q)>=0);
+                    g.el.style.display=hit?'':'none';
+                    if(hit){any=true;total+=g.count;}
+                    if(q&&hit)g.el.open=true;else if(!q)g.el.open=false;
+                  });
+                  s.style.display=any?'':'none';
+                });
+                shown.textContent=total.toLocaleString()+' findings shown';
+              }
+              box.addEventListener('input',apply);
+              switches.forEach(function(c){c.addEventListener('change',apply);});
+              apply();
+            })();
+            </script>
+            """);
     }
 }

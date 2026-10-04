@@ -4,6 +4,11 @@
     <IsPackable>false</IsPackable>
     <!-- Inherited transitively from GSCode.Workspace's SQLite dependency; see its csproj. -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
+
+    <!-- Set here for the same reason runtimeconfig.template.json is duplicated here: the suites run
+         under what the server ships, so a comparison that behaves differently without ICU fails in
+         a test rather than in an editor. See GSCode.Server.csproj. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +22,23 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GSCode.Server\GSCode.Server.csproj" />
+    <ProjectReference Include="..\GSCode.Testing\GSCode.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="GSCode.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The sample scripts are analysed from disk beside the test assembly, so they are copied rather
+      than located by walking up to the repo. LinkBase keeps the per-game folder shape, which the
+      resolver needs: each game's folder IS its raw root.
+    -->
+    <Content Include="..\..\samples\**\*.gsc;..\..\samples\**\*.csc;..\..\samples\**\*.gsh">
+      <LinkBase>Samples</LinkBase>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

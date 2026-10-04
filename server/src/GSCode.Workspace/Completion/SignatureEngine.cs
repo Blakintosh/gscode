@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
@@ -35,8 +36,14 @@ public sealed class SignatureEngine
     }
 
     /// <summary>Resolves signature help at a position, or null when not inside a call.</summary>
-    public SignatureResult? Resolve(ParseResult result, string contextId, Position position)
+    /// <param name="profile">
+    /// The dialect to resolve for; defaults to the active one. Explicit for the same reason
+    /// <c>CompletionEngine.Complete</c> takes it — a test naming its dialect does not have to
+    /// mutate process-global state.
+    /// </param>
+    public SignatureResult? Resolve(ParseResult result, string contextId, Position position, GameProfile? profile = null)
     {
+        GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
 
@@ -53,8 +60,31 @@ public sealed class SignatureEngine
 
         ArrowReceiver arrow = ClassifyArrow(tokens, result.Text, site.Value.CalleeIndex);
 
+        // A macro is asked BEFORE a function, because the preprocessor gets there first: where a
+        // #define and a function share a name, the invocation being typed is replaced before the
+        // parser ever sees it, so the function's parameters would describe code that never runs.
+        // They can only collide on exact case — a macro name is the language's one case-SENSITIVE
+        // kind. Neither an arrow call nor a qualified name can reach one: `[[o]]->NAME(` dispatches
+        // on an object and `util::NAME(` names a namespace member, and the preprocessor expands
+        // neither.
+        //
+        // Deliberately NOT gated on the dialect's HasMacros, unlike macro COMPLETION. Completion
+        // decides what to propose, and proposing an expansion a pre-BO3 engine will not perform is
+        // a wrong answer. This describes a name the user has already written, and the preprocessor
+        // expands a #define on every dialect by design — see Preprocessor.ReportIfNoPreprocessor,
+        // which reports the directive and then processes it anyway. Withholding help here would
+        // leave the expansion happening with nothing on screen to describe it.
+        if ( arrow == ArrowReceiver.None && namespaceName is null )
+        {
+            SignatureResult? macroSignature = TryMacro(result, calleeName, site.Value.ActiveParameter);
+            if ( macroSignature is not null )
+            {
+                return macroSignature;
+            }
+        }
+
         SignatureResult? scriptSignature = TryScriptFunction(
-            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow);
+            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow, game);
         if ( scriptSignature is not null )
         {
             return scriptSignature;
@@ -67,21 +97,121 @@ public sealed class SignatureEngine
         }
 
         // Namespace-less builtins (sys:: aliases them; a plain name reaches them too).
-        if ( namespaceName is null || namespaceName == "sys" )
+        if ( namespaceName is null || BuiltinQualifier.Matches(namespaceName, game) )
         {
             BuiltinFunction? builtin = _builtins.For(result.Language).Find(calleeName);
             if ( builtin is not null )
             {
                 return BuildBuiltinSignature(builtin, site.Value.ActiveParameter);
             }
+
+            // Call-shaped keywords (`waittill`, `isdefined`, ...) are absent from the API
+            // library — GSCode's gsc-dialect-facts skill names the whole family — so the builtin
+            // lookup above finds nothing for them and help fell silent on the one form its own
+            // class doc promises to cover.
+            SignatureResult? keywordSignature = TryKeywordCall(calleeName, site.Value.ActiveParameter);
+            if ( keywordSignature is not null )
+            {
+                return keywordSignature;
+            }
         }
 
         return null;
     }
 
+    /// <summary>
+    /// Parameter names for the call-shaped keywords, since none of them are in the API library to
+    /// ask. `waittill`'s and `notify`'s trailing arguments have no fixed name to show — they are
+    /// arbitrary variable names the author chooses, unlike a real parameter — so only the one
+    /// documented, always-present slot is offered; a caret past it still clamps to it.
+    /// </summary>
+    private static readonly ImmutableDictionary<string, ImmutableArray<string>> s_keywordCallParameters =
+        new Dictionary<string, ImmutableArray<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["isdefined"] = ["value"],
+            ["notify"] = ["event"],
+            ["endon"] = ["event"],
+            ["waittill"] = ["event"],
+            ["waittillmatch"] = ["event"],
+            ["wait"] = ["seconds"],
+            ["waitrealtime"] = ["seconds"],
+        }.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase);
+
+    private static SignatureResult? TryKeywordCall(string calleeName, int activeParameter)
+    {
+        if ( !s_keywordCallParameters.TryGetValue(calleeName, out ImmutableArray<string> parameterNames) )
+        {
+            return null;
+        }
+
+        ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
+        foreach ( string parameterName in parameterNames )
+        {
+            parameters.Add(new SignatureParameter(parameterName, ""));
+        }
+
+        return new SignatureResult(
+            BuildLabel(calleeName, parameters),
+            parameters.ToImmutable(),
+            ClampActive(activeParameter, parameters.Count),
+            KeywordDocs.Find(calleeName) ?? "");
+    }
+
+    private static bool IsCallShapedKeyword(TokenKind kind)
+    {
+        return kind is TokenKind.Wait or TokenKind.WaitRealTime or TokenKind.WaitTill
+            or TokenKind.WaitTillMatch or TokenKind.Notify or TokenKind.Endon or TokenKind.IsDefined;
+    }
+
+    /// <summary>
+    /// Signature help for a function-like macro, read from the PARSE IN HAND rather than the store.
+    /// The macro table is rebuilt on every parse from this file plus the headers it #inserts, so it
+    /// is current for a header inserted a keystroke ago — which the indexed record is not, and help
+    /// fires while the invocation is still being typed.
+    /// </summary>
+    private static SignatureResult? TryMacro(ParseResult result, string calleeName, int activeParameter)
+    {
+        // Ordinal, which is the lookup MacroTable is keyed by: `IS_TRUE(` and `is_true(` are two
+        // different questions, unlike every other name in the language.
+        if ( !result.Preprocessed.Macros.TryGet(calleeName, out GSCode.Parser.Preprocessing.MacroDefinition macro) )
+        {
+            return null;
+        }
+
+        // An OBJECT-like macro is not a call. `MAX_PLAYERS( x )` expands to its body followed by a
+        // parenthesised expression, so it has no parameters to describe, and answering null hands
+        // the position back to the by-name lookups rather than showing an empty signature.
+        if ( macro.Parameters is not ImmutableArray<string> macroParameters )
+        {
+            return null;
+        }
+
+        ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
+        foreach ( string parameterName in macroParameters )
+        {
+            // Nothing to document per parameter: a #define carries at most one trailing comment,
+            // and it describes the macro rather than any one of its arguments.
+            parameters.Add(new SignatureParameter(parameterName, ""));
+        }
+
+        // The EXPANSION alone below the label, without hover's `#define` line: the label above is
+        // the define form already, and the client draws it with the active argument highlighted.
+        //
+        // The body keeps its own parameter names, where hover substitutes the call site's arguments.
+        // Here the parameter names are the subject — they are what the label highlights as the caret
+        // moves between arguments — so showing where the highlighted one lands in the expansion is
+        // what this panel is for.
+        return new SignatureResult(
+            BuildLabel(macro.Name, parameters),
+            parameters.ToImmutable(),
+            ClampActive(activeParameter, parameters.Count),
+            MarkdownDocRenderer.RenderMacroExpansion(
+                MacroExpansionPreview.Render(macro.Body), macro.Documentation ?? ""));
+    }
+
     private SignatureResult? TryScriptFunction(
         ParseResult result, string contextId, string? namespaceName, string calleeName, int activeParameter,
-        Position position, ArrowReceiver arrow)
+        Position position, ArrowReceiver arrow, GameProfile game)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         string keyName = calleeName.ToLowerInvariant();
@@ -94,7 +224,7 @@ public sealed class SignatureEngine
         // happens to sit in, so resolving it through the enclosing class would answer with whichever
         // class the cursor is inside and show that one's parameter names. Only `[[self]]->` names
         // the enclosing class; every other receiver is untyped and takes the by-name candidates.
-        string? enclosingClass = EnclosingClassAt(result, position);
+        string? enclosingClass = CallResolution.EnclosingClassAt(result, position);
 
         if ( arrow != ArrowReceiver.None )
         {
@@ -123,16 +253,22 @@ public sealed class SignatureEngine
             return null;
         }
 
-        ImmutableArray<ResolvedFunction> functions = namespaceName is not null
-            ? DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: DatabaseQueries.DeclaredNamespaces(result))
-            : LookupUnqualified(result, store, contextId, keyName);
-
-        if ( functions.Length == 0 )
+        if ( namespaceName is not null )
         {
-            return null;
+            ImmutableArray<ResolvedFunction> qualified = DatabaseQueries.LookupFunctions(
+                store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: result.Extraction.DeclaredNamespaces);
+
+            return qualified.Length == 0 ? null : BuildSignature(qualified[0].Function, qualified[0].OwnerClass, activeParameter);
         }
 
-        return BuildSignature(functions[0].Function, functions[0].OwnerClass, activeParameter);
+        // Shared with the parameter-name inlay hints, which ask the same question about the same
+        // call. See CallResolution for the split and why it exists.
+        //
+        // A function found by namespace carries no owner class — only a method lookup sets one — so
+        // nothing is lost by taking the symbol rather than the ResolvedFunction here.
+        FunctionSymbol? script = CallResolution.UnqualifiedFunction(store, contextId, result, keyName, game);
+
+        return script is null ? null : BuildSignature(script, null, activeParameter);
     }
 
     /// <summary>Whether the call being helped is an arrow call, and whether its receiver is <c>self</c>.</summary>
@@ -154,16 +290,16 @@ public sealed class SignatureEngine
     /// </summary>
     private static ArrowReceiver ClassifyArrow(ImmutableArray<Token> tokens, SourceText text, int calleeIndex)
     {
-        int arrowIndex = PreviousSignificant(tokens, calleeIndex);
+        int arrowIndex = TokenFacts.PreviousSignificant(tokens, calleeIndex);
         if ( arrowIndex < 0 || tokens[arrowIndex].Kind != TokenKind.Arrow )
         {
             return ArrowReceiver.None;
         }
 
-        int receiver = PreviousSignificant(tokens, arrowIndex);
+        int receiver = TokenFacts.PreviousSignificant(tokens, arrowIndex);
         while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
         {
-            receiver = PreviousSignificant(tokens, receiver);
+            receiver = TokenFacts.PreviousSignificant(tokens, receiver);
         }
 
         bool isSelf = receiver >= 0
@@ -257,23 +393,6 @@ public sealed class SignatureEngine
         return MethodResolution.LookupMethods(store, contextId, canonical.OwnerClass, canonical.Name);
     }
 
-    /// <summary>
-    /// The class whose body contains this offset, by range containment over the file's own classes.
-    /// There are at most a handful per file, so this stays cheaper than any index would be.
-    /// </summary>
-    private static string? EnclosingClassAt(ParseResult result, Position position)
-    {
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            if ( classSymbol.FullRange.Contains(position) )
-            {
-                return classSymbol.KeyName;
-            }
-        }
-
-        return null;
-    }
-
     private SignatureResult BuildSignature(FunctionSymbol function, ClassSymbol? ownerClass, int activeParameter)
     {
         ImmutableArray<SignatureParameter>.Builder parameters = ImmutableArray.CreateBuilder<SignatureParameter>();
@@ -294,25 +413,6 @@ public sealed class SignatureEngine
             parameters.ToImmutable(),
             ClampActive(activeParameter, parameters.Count),
             signatureLabel);
-    }
-
-    private ImmutableArray<ResolvedFunction> LookupUnqualified(ParseResult result, LanguageStore store, string contextId, string keyName)
-    {
-        // Try each namespace the file participates in. Hoisted out of the loop: it was rebuilt on
-        // every iteration, and the spans it was read from included a phantom whose lookup scanned
-        // the whole store to return nothing.
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
-
-        foreach ( string declared in askingNamespaces )
-        {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(store, contextId, result.FilePath, declared, keyName, askingNamespaces: askingNamespaces);
-            if ( found.Length > 0 )
-            {
-                return found;
-            }
-        }
-
-        return [];
     }
 
     private static SignatureResult BuildBuiltinSignature(BuiltinFunction builtin, int activeParameter)
@@ -394,18 +494,23 @@ public sealed class SignatureEngine
             {
                 if ( depth == 0 )
                 {
-                    // Found the enclosing open paren; the callee is just before it.
-                    int calleeIndex = PreviousSignificant(tokens, index);
-                    if ( calleeIndex < 0 || tokens[calleeIndex].Kind != TokenKind.Identifier )
+                    // Found the enclosing open paren; the callee is just before it. A call-shaped
+                    // keyword (`waittill`, `isdefined`, ...) is a KEYWORD token, not an Identifier
+                    // — the class doc's own "call-shaped keyword" promise needs both accepted. Not
+                    // every keyword: `if (` must not be read as a call named "if".
+                    int calleeIndex = TokenFacts.PreviousSignificant(tokens, index);
+                    if ( calleeIndex < 0
+                        || tokens[calleeIndex].Kind != TokenKind.Identifier
+                            && !IsCallShapedKeyword(tokens[calleeIndex].Kind) )
                     {
                         return null;
                     }
 
                     int namespaceIndex = -1;
-                    int scope = PreviousSignificant(tokens, calleeIndex);
+                    int scope = TokenFacts.PreviousSignificant(tokens, calleeIndex);
                     if ( scope >= 0 && tokens[scope].Kind == TokenKind.ScopeResolution )
                     {
-                        namespaceIndex = PreviousSignificant(tokens, scope);
+                        namespaceIndex = TokenFacts.PreviousSignificant(tokens, scope);
                     }
 
                     return new CallSite(calleeIndex, namespaceIndex, commas);
@@ -425,16 +530,5 @@ public sealed class SignatureEngine
         }
 
         return null;
-    }
-
-    private static int PreviousSignificant(ImmutableArray<Token> tokens, int fromIndex)
-    {
-        int index = fromIndex - 1;
-        while ( index >= 0 && tokens[index].IsTrivia )
-        {
-            index--;
-        }
-
-        return index;
     }
 }

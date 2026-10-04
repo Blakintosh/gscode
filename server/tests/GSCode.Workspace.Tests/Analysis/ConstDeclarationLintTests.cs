@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -20,18 +16,29 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ConstDeclarationLintTests
 {
+    /// <summary>
+    /// Both halves the server runs for this rule: the per-node judgement over the shared walk, and
+    /// `InspectRest`, which `WorkspaceLints` calls once per file outside that walk.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunRule(ParseResult result)
+    {
+        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        diagnostics.AddRange(NodeLintHarness.Run(result, ConstDeclarationLint.InspectNode));
+        ConstDeclarationLint.InspectRest(result, diagnostics);
+        return diagnostics.ToImmutable();
+    }
+
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function f( a )\n{\n" + body + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         // A parse error would make every assertion below meaningless — an empty tree reports nothing
         // and every Assert.Empty passes. `const` is Black Ops III's, which is the test default.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
-        return ConstDeclarationLint.Analyze(result);
+        return RunRule(result);
     }
 
     // --- 5029 ---
@@ -87,11 +94,10 @@ public class ConstDeclarationLintTests
         // rather than at anything the author wrote — the same call CaseLabelLint makes.
         string source = "#define LIMIT 8\nfunction f()\n{\n    const MAX = LIMIT;\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.ExpectedConstantExpression);
     }
 
@@ -155,11 +161,10 @@ public class ConstDeclarationLintTests
             "function a()\n{\n    const duration = 60000;\n    use( duration );\n}\n"
             + "function b()\n{\n    duration = 60000;\n    use( duration );\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.CannotAssignToConstant);
     }
 
@@ -171,11 +176,10 @@ public class ConstDeclarationLintTests
             "function a()\n{\n    const duration = 60000;\n    duration = 1;\n}\n"
             + "function b()\n{\n    duration = 60000;\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Diagnostic reported = Assert.Single(
-            ConstDeclarationLint.Analyze(result),
+            RunRule(result),
             d => d.Code == GscDiagnosticCode.CannotAssignToConstant);
 
         // Line 3 (zero-based) is `duration = 1;` in function a, not the write in function b.

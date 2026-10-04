@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Globalization;
 
 namespace GSCode.Core.Diagnostics;
 
@@ -72,7 +73,6 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.WrongPrecacheArgumentCount] = "#precache type '{0}' expects {1} value(s) after the type but got {2}.",
         [GscDiagnosticCode.ConstructorHasParameters] = "Constructors cannot declare parameters.",
         [GscDiagnosticCode.DestructorHasParameters] = "Destructors cannot declare parameters.",
-        [GscDiagnosticCode.NonValueDefaultParameter] = "Default value for '{0}' must be a plain value (literals and vectors only).",
         [GscDiagnosticCode.DuplicateFunction] = "Function '{0}' is already defined in namespace '{1}'.",
         [GscDiagnosticCode.AmbiguousFunction] =
             "'{0}' is declared in {2} of the files this script imports, all in namespace '{1}' — which one this call reaches is undefined.",
@@ -98,13 +98,10 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.NamespaceNotImported] = "Namespace '{0}' is called but no '#using' imports a file that declares it.",
         [GscDiagnosticCode.UnusedUsing] = "'{0}' is imported but nothing from it is used.",
         [GscDiagnosticCode.UnusedInclude] = "'{0}' is included but nothing from it is used.",
-        // Each names WHERE it looked, which is the only thing separating the two codes. v1's wording
-        // for the script case ("The function '{0}' could not be resolved.", its FunctionDoesNotExist
-        // = 3035) was kept for a long time because it says the right thing in isolation — but beside
-        // the builtin message it was not distinguishable, and a reader who cannot tell which code
-        // fired cannot tell whether a typo or a gap in our engine data is the likelier explanation.
-        // The builtin case still avoids "could not be resolved", which reads as a tooling failure
-        // when the name may simply be an engine function we have no data for.
+        // Each names WHERE it looked, which is the only thing separating the two codes: a reader who
+        // cannot tell which fired cannot tell whether a typo or a gap in our engine data is likelier.
+        // The builtin case avoids "could not be resolved", which reads as a tooling failure when the
+        // name may simply be an engine function we have no data for.
         [GscDiagnosticCode.ScriptFunctionNotFound] = "The script function '{0}' could not be resolved; this call names a script location, so no engine function could have matched.",
         [GscDiagnosticCode.BuiltinFunctionNotFound] = "'{0}' matches no script function or known engine function.",
         // {0} is the noun -- "Parameter" or "Field" -- since the same rule covers a builtin's
@@ -113,7 +110,7 @@ public static class DiagnosticMessages
         [GscDiagnosticCode.PrivateFunctionNotVisible] = "'{0}' is private to namespace '{1}'; only files declaring that namespace can call it.",
         [GscDiagnosticCode.ReadOnlyFieldWrite] = "Engine field '{0}' is read-only; assigning to it has no effect.",
         [GscDiagnosticCode.SizeIsReadOnly] = "'.size' is read-only and cannot be assigned.",
-        [GscDiagnosticCode.DevOnlyFunctionCalledFromRelease] = "'{0}' is declared inside a '/# #/' dev block and will not exist in a release build.",
+        [GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock] = "'{0}' is dev-only. A '/# #/' dev block is skipped unless developer script is enabled on the server, so call it from inside one.",
         [GscDiagnosticCode.UnreachableCode] = "Unreachable: the preceding '{0}' always leaves this block.",
         [GscDiagnosticCode.VariableNeverAssigned] = "'{0}' is read but never assigned in this function.",
         [GscDiagnosticCode.VarargOutsideVarargFunction] = "'{0}' is only bound in a function declaring '...'; add it to the parameter list to use the pack here.",
@@ -148,16 +145,23 @@ public static class DiagnosticMessages
             "'{0}' is an engine global and cannot be assigned to; write to a field on it instead, as in '{0}.field = value'.",
     }.ToFrozenDictionary();
 
-    /// <summary>Formats the template for a code with its arguments.</summary>
+    /// <summary>
+    /// Formats the template for a code with its arguments.
+    ///
+    /// With no arguments the template's brace escapes ('{{'/'}}') are unescaped by hand. Returning
+    /// the template unchanged would show the escapes to the user, and passing it through
+    /// <see cref="string.Format(IFormatProvider?, string, object?[])"/> with zero arguments throws
+    /// FormatException for any template that does have a placeholder.
+    /// </summary>
     public static string Format(GscDiagnosticCode code, params object[] arguments)
     {
         string template = s_templates[code];
 
         if ( arguments.Length == 0 )
         {
-            return template;
+            return template.Replace("{{", "{").Replace("}}", "}");
         }
 
-        return string.Format(System.Globalization.CultureInfo.InvariantCulture, template, arguments);
+        return string.Format(CultureInfo.InvariantCulture, template, arguments);
     }
 }

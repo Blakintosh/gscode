@@ -3,9 +3,11 @@ using GSCode.Server.Logging;
 using MediatR;
 using Newtonsoft.Json.Linq;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Serilog;
 using Serilog.Core;
+using GSCode.Core;
 
 namespace GSCode.Server.Handlers;
 
@@ -15,15 +17,18 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
     private readonly ServerSettings _settings;
     private readonly LoggingLevelSwitch _levelSwitch;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly ILanguageServerFacade _server;
 
     public ConfigurationHandler(
         ServerSettings settings,
         LoggingLevelSwitch levelSwitch,
-        WorkspaceDiagnosticsPublisher workspaceDiagnostics)
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        ILanguageServerFacade server)
     {
         _settings = settings;
         _levelSwitch = levelSwitch;
         _workspaceDiagnostics = workspaceDiagnostics;
+        _server = server;
     }
 
     public override Task<Unit> Handle(DidChangeConfigurationParams request, CancellationToken cancellationToken)
@@ -35,14 +40,15 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
 
         string previousScope = _settings.DiagnosticsScope;
         string previousSummary = _settings.EffectiveSummary;
+        string previousInlay = _settings.InlayFamilies;
 
         _settings.Apply(settingsRoot);
         _levelSwitch.MinimumLevel = ServerLogLevel.FromSetting(_settings.ServerLogLevel);
 
         // The game drives the active profile (extensions, capabilities). It is also selected at
         // initialize, BEFORE the bundled data resolves; this call only handles a change mid-session.
-        string previousGame = GSCode.Core.GameProfile.Active.ShortName;
-        if ( !GSCode.Core.GameProfile.Select(_settings.Game) )
+        string previousGame = GameProfile.Active.ShortName;
+        if ( !GameProfile.Select(_settings.Game) )
         {
             // A typo cannot break the server, but it must not pass unremarked either — the setting
             // reads back as written while the server runs as BO3.
@@ -54,12 +60,12 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         // whatever game was active then, so changing the game mid-session leaves the profile and the
         // data disagreeing — the profile says CoD4 while the builtins are still BO3's, and every
         // engine call looks unknown. Say so plainly rather than let it read as the user's mistake.
-        if ( !string.Equals(previousGame, GSCode.Core.GameProfile.Active.ShortName, StringComparison.Ordinal) )
+        if ( !string.Equals(previousGame, GameProfile.Active.ShortName, StringComparison.Ordinal) )
         {
             Log.Warning(
                 "Game changed {Previous} -> {Current}, but the bundled data was loaded for {Previous} "
                 + "and is not reloaded. Restart the server so its builtins and engine fields match.",
-                previousGame, GSCode.Core.GameProfile.Active.ShortName);
+                previousGame, GameProfile.Active.ShortName);
         }
 
         // Only when something that matters actually moved. Clients push their whole configuration
@@ -76,6 +82,15 @@ public sealed class ConfigurationHandler : DidChangeConfigurationHandlerBase
         if ( !string.Equals(previousScope, _settings.DiagnosticsScope, StringComparison.Ordinal) )
         {
             _workspaceDiagnostics.Refresh();
+        }
+
+        // Same reasoning, for the inlay families: turning one on or off is invisible until the
+        // client re-requests, so without this the setting appears not to work until the next
+        // keystroke or scroll — and turning one OFF leaves stale hints on screen, which reads as
+        // the setting being ignored entirely.
+        if ( !string.Equals(previousInlay, _settings.InlayFamilies, StringComparison.Ordinal) )
+        {
+            ClientRefresh.Request(_server, "workspace/inlayHint/refresh");
         }
 
         return Unit.Task;

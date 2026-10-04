@@ -19,7 +19,7 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class FunctionLookupCache
 {
-    private readonly Dictionary<(string? Namespace, string Name, bool IncludePrivate), ImmutableArray<ResolvedFunction>> _memo = [];
+    private readonly Dictionary<(string? Namespace, string Name, bool IncludePrivate, int Limit), ImmutableArray<ResolvedFunction>> _memo = [];
 
     private readonly LanguageStore _store;
     private readonly string _askingContextId;
@@ -39,16 +39,21 @@ public sealed class FunctionLookupCache
     }
 
     /// <summary><see cref="DatabaseQueries.LookupFunctions"/>, answered once per distinct question.</summary>
-    public ImmutableArray<ResolvedFunction> Lookup(string? namespaceName, string keyName, bool includePrivate = false)
+    /// <param name="limit">
+    /// See <see cref="DatabaseQueries.LookupFunctions"/>. Part of the memo key: a capped answer must
+    /// never be served to a caller that asked for the whole one.
+    /// </param>
+    public ImmutableArray<ResolvedFunction> Lookup(
+        string? namespaceName, string keyName, bool includePrivate = false, int limit = int.MaxValue)
     {
-        (string? Namespace, string Name, bool IncludePrivate) key = (namespaceName, keyName, includePrivate);
+        (string? Namespace, string Name, bool IncludePrivate, int Limit) key = (namespaceName, keyName, includePrivate, limit);
         if ( _memo.TryGetValue(key, out ImmutableArray<ResolvedFunction> cached) )
         {
             return cached;
         }
 
         ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-            _store, _askingContextId, _askingPath, namespaceName, keyName, includePrivate, _askingNamespaces);
+            _store, _askingContextId, _askingPath, namespaceName, keyName, includePrivate, _askingNamespaces, limit);
 
         _memo[key] = found;
         return found;

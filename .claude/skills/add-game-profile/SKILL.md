@@ -11,8 +11,9 @@ description: Add support for another Call of Duty GSC dialect, or change how an 
 Nothing else may branch on a game. A new dialect is a new record in
 `src/GSCode.Core/Profiles/SupportedProfiles.cs`, not a change to engine logic.
 
-Data, not switches. `Keywords` is a set, and `HasClasses`, `HasFunctionKeyword`, `HasForeach` and
-`HasDoWhile` all derive from it, so a game gains a feature by gaining the keyword.
+Data, not switches. `Keywords` is a set, and `HasClasses`, `HasFunctionKeyword`, `HasForeach`,
+`HasDoWhile`, `HasVarargBinding` and `HasPrivateFunctions` all derive from it, so a game gains a
+feature by gaining the keyword.
 
 ## The two axes that matter most
 
@@ -23,6 +24,13 @@ bug in this area came from assuming the first.
 Under `Include`, every same-named function in the workspace shares one key — CoD4's animscripts
 hold 1,230 `main()`s — so anything keyed by name must scope by reachability. `GameProfile.KeyNamespace`
 and `DatabaseQueries.ScopeToIncludeGraph` exist for exactly this.
+
+It is also a COST, and the one that bites at scale. A namespaced lookup narrows through the
+`(namespace, name)` index; a bare-name lookup on a merge dialect cannot, so at 50,000 files it has
+thousands of candidates. Every rule and handler that resolves bare names paid for that until it
+stopped early (`LookupFunctions`' `limit`), skipped calls it could not report on, or read only the
+files that can reach a declaration (`FindReferencesReaching`). A rule that is flat on bo3 can climb
+on cod4 — run `Category=Scale` with `GSCODE_SCALE_GAMES=bo3,cod4`.
 
 **`HasInlinePathCalls`.** `maps\mp\_util::foo()` reaches a function with **no import at all**. Any
 reachability rule that only follows `#include` will be wrong on these — that mistake took a
@@ -96,3 +104,8 @@ Worth checking against any new work in this area:
   includes the game for this reason.
 - **ScriptDoc.** BO3 uses `/@ … @/`; every earlier game fences a block inside an ordinary `/* */`
   with `///ScriptDocBegin`. `ScriptDocStyle` records which, and the extractor reads it.
+- **A test indexed as one game and queried as another.** Production reads `GameProfile.Active` at
+  request time, so a fixture indexed under CoD4 and asked about under the default BO3 comes back
+  empty and every "is it absent?" assertion passes. Pass the game to `TestWorkspace` /
+  `HandlerWorkspace`, which scope Active to it; never `GameProfile.Select` in a test. A dialect
+  test names its game in the fact that is about it and nowhere else — the `standard-tests` skill.

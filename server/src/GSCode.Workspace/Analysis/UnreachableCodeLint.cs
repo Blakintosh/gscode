@@ -1,8 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -15,10 +13,9 @@ namespace GSCode.Workspace.Analysis;
 /// jump back in, since GSC has no labels or gotos. That makes this a syntactic question rather
 /// than a dataflow one, and it is why the answer can be trusted.
 ///
-/// Reported as Information, which is the quietest severity VS Code's Problems panel shows. It was
-/// a Hint, and a Hint never reaches that panel — and this rule has nothing to fade in the panel's
-/// place, since it carries no Unnecessary tag and a greyed run of statements is indistinguishable
-/// from a comment. The finding was therefore invisible unless the reader happened to hover it.
+/// Reported as Information, the quietest severity VS Code's Problems panel shows. A Hint never
+/// reaches that panel, and this rule has nothing to fade in its place: it carries no Unnecessary tag,
+/// and a greyed run of statements is indistinguishable from a comment.
 ///
 /// The corpora are what make the panel affordable: 48 findings in 42 files across all five shipped
 /// games (BO1 17, BO3 13, WAW 8, MW2 6, CoD4 4) out of roughly 8,300 scripts. That is the test a
@@ -32,71 +29,51 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class UnreachableCodeLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     /// <summary>
-    /// Finds every block in the file. Only <see cref="BlockNode"/> is interesting — the run of
-    /// statements after a terminator lives there and nowhere else — so everything else just
-    /// descends through <see cref="AstSearch.ChildrenOf"/> rather than being enumerated here.
-    ///
-    /// Statements NESTED inside a dev block are reached this way and their dead code is still
-    /// reported. What is not reported is the dev block's own run against a terminator before it,
-    /// which is <see cref="ReportAfterTerminator"/>'s business: <c>/# … #/</c> is compiled out of a
-    /// release build, so a debugging aid after a return is something the author put there knowingly
-    /// rather than a leftover.
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. Only ever called for a node that
+    /// is not an <c>ExprNode</c>.
     /// </summary>
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        // Nothing this rule looks for lives inside an expression: a block is a statement, and GSC
-        // has no construct that puts one inside an operand. Descending anyway walked every operand
-        // of every expression in the file for nothing, which was most of the rule's cost.
-        if ( node is ExprNode )
-        {
-            return;
-        }
-
         if ( node is BlockNode block )
         {
-            ReportAfterTerminator(block, diagnostics);
+            ReportAfterTerminator(block.Statements, diagnostics);
         }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
+        else if ( node is CaseGroupNode caseGroup )
         {
-            Walk(child, diagnostics);
+            // A case's own statement list, exactly like a block's. CaseGroupNode.Statements is a
+            // flat array rather than a nested BlockNode, since GSC's switch needs no braces per case,
+            // so the BlockNode branch never sees it.
+            ReportAfterTerminator(caseGroup.Statements, diagnostics);
         }
     }
 
     /// <summary>
-    /// Reports the run of statements after the first terminator in a block, if any.
+    /// Reports the run of statements after the first terminator in a block or case body, if any.
     ///
-    /// A DEV BLOCK is skipped: <c>/# … #/</c> is compiled out of a release build, so a statement
-    /// after a return inside one is a debugging aid the author put there knowingly, and greying it
-    /// out would be reporting the dev block itself rather than a mistake.
+    /// A DEV BLOCK is skipped: <c>/# … #/</c> only runs when developer script is enabled, so a
+    /// statement after a return inside one is a debugging aid the author put there knowingly, and
+    /// greying it out would be reporting the dev block itself rather than a mistake.
     /// </summary>
-    private static void ReportAfterTerminator(BlockNode block, ImmutableArray<Diagnostic>.Builder diagnostics)
+    private static void ReportAfterTerminator(
+        ImmutableArray<AstNode> statements, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        for ( int index = 0; index < block.Statements.Length - 1; index++ )
+        for ( int index = 0; index < statements.Length - 1; index++ )
         {
-            if ( !IsTerminator(block.Statements[index]) )
+            if ( !IsTerminator(statements[index]) )
             {
                 continue;
             }
 
-            AstNode first = block.Statements[index + 1];
-            AstNode last = block.Statements[^1];
+            AstNode first = statements[index + 1];
+            AstNode last = statements[^1];
 
             diagnostics.Add(Diagnostic.Create(
                 new TextRange(first.Range.Start, last.Range.End),
                 DiagnosticSeverity.Information,
                 GscDiagnosticCode.UnreachableCode,
-                DescribeTerminator(block.Statements[index])));
+                DescribeTerminator(statements[index])));
             return;
         }
     }

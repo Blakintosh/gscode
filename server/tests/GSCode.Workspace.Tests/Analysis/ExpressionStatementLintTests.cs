@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -20,19 +16,33 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ExpressionStatementLintTests
 {
+    /// <summary>
+    /// The rule as the server runs it: the shared walk, but only when `Applies` says the file's
+    /// premise holds. A file the parser could not read silences the rule, and two of the tests below
+    /// exist to prove that gate, so the harness has to carry it.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunRule(ParseResult result)
+    {
+        if ( !ExpressionStatementLint.Applies(result) )
+        {
+            return [];
+        }
+
+        return NodeLintHarness.Run(result, ExpressionStatementLint.InspectNode);
+    }
+
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function f( a, b )\n{\n" + body + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         // Several cases below are only interesting if they PARSED. `a + b;` yielding a parse error
         // would make Assert.Single fail loudly, but `foo();` yielding one would make Assert.Empty
         // pass for the wrong reason.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
-        return ExpressionStatementLint.Analyze(result);
+        return RunRule(result);
     }
 
     [Theory]
@@ -121,12 +131,11 @@ public class ExpressionStatementLintTests
         // what silences the file.
         string source = "function f( a, b )\n{\n    foo( ;\n    a + b;\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         // The premise: this file really did fail to parse.
         Assert.Contains(result.Tree.Diagnostics, d => (int)d.Code is >= 3000 and < 4000);
-        Assert.Empty(ExpressionStatementLint.Analyze(result));
+        Assert.Empty(RunRule(result));
     }
 
     [Fact]

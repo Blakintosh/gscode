@@ -2,33 +2,27 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class NamespaceUsageLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
         return (database, resolver);
     }
@@ -36,9 +30,8 @@ public class NamespaceUsageLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         return NamespaceUsageLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
     }
@@ -98,35 +91,14 @@ public class NamespaceUsageLintTests
         Assert.Empty(diagnostics);
     }
 
-    /// <summary>
-    /// The same rule asked about a merge dialect, which has no <c>#using</c> to satisfy it. Built
-    /// the way <see cref="IncludeUsageLintTests"/> is — committed directly rather than indexed,
-    /// since the default indexer runs as BO3 and would not parse a bare CoD4 declaration.
-    /// </summary>
+    /// <summary>The same rule asked about a merge dialect, which has no <c>#using</c> to satisfy it.</summary>
     private static ImmutableArray<Diagnostic> LintAsCod4(string askingSource)
     {
-        const string utilitySource = "func()\n{\n}\n";
-
-        FakeFileSystem files = new FakeFileSystem().AddFile(@$"{Raw}\myutils.gsc", utilitySource);
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-
-        ScriptDatabase database = new();
-        database.Commit(
-            ScriptAnalysis.Analyze(
-                @$"{Raw}\myutils.gsc", ScriptLanguage.Gsc, SourceText.From(utilitySource),
-                NullInsertProvider.Instance, new NameTable(), Cod4),
-            ResolutionContext.RawContext,
-            isDirty: false,
-            @"myutils.gsc");
-
-        string askingPath = @$"{Raw}\maps\mp\_menus.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+        using TestWorkspace workspace = TestWorkspace.Build([new TestFile(@"myutils.gsc", "func()\n{\n}\n")], s_cod4);
 
         return NamespaceUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, "raw", Cod4);
+            workspace.Analyze(@"maps\mp\_menus.gsc", askingSource), workspace.Database.Gsc, ScriptLanguage.Gsc,
+            workspace.Resolver, TestPaths.Raw(@"maps\mp\_menus.gsc"), "raw", s_cod4);
     }
 
     [Fact]
@@ -140,5 +112,54 @@ public class NamespaceUsageLintTests
         string source = "#include myutils;\ninit()\n{\n\tmyutils::func();\n}\n";
 
         Assert.Empty(LintAsCod4(source));
+    }
+
+    [Fact]
+    public void Reports_WhenTheUnimportedCallCameOutOfAMacroBody()
+    {
+        // The reported case: nothing in the file spells `util::` — a macro does — and the import is
+        // just as required, because the preprocessor runs first and what links is the expansion.
+        // Before ReferenceEntry.FromMacro existed the expansion overwrote the reference's kind, so
+        // this rule (which asks for Call) could not see the call at all.
+        string source =
+            "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        ImmutableArray<Diagnostic> diagnostics = Lint(source);
+
+        Assert.Single(diagnostics);
+        Assert.Equal(GscDiagnosticCode.NamespaceNotImported, diagnostics[0].Code);
+    }
+
+    [Fact]
+    public void TheMacroReport_LandsOnTheInvocation_NotInsideTheDefine()
+    {
+        // The macro's name is the only text on screen, so that is where the squiggle belongs — and
+        // it is where the add-#using fix is offered, which is derived from the same entry.
+        string source =
+            "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Diagnostic report = Lint(source)[0];
+
+        Assert.Equal(4, report.Range.Start.Line);
+    }
+
+    [Fact]
+    public void OneReportPerNamespace_WhenAMacroBodyCallsIntoItTwice()
+    {
+        // Every call in the body keys to the same invocation range, so without the (range,
+        // namespace) guard a two-call macro stacks two identical Errors on one word.
+        string source =
+            "#define HELP() util::helper(); util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public void NoDiagnostic_WhenTheMacroBodysNamespaceIsImported()
+    {
+        string source =
+            "#using scripts\\util;\n#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n";
+
+        Assert.Empty(Lint(source));
     }
 }

@@ -18,12 +18,12 @@ namespace GSCode.Server.Formatting;
 /// </code>
 ///
 /// It is the same engine for both: two lines share a group when their token SKELETON is identical
-/// — the same delimiters and the same fixed anchors (base name, callee, operator) — and only the
-/// values in the slots differ. Each slot is a cell; a cell followed by <c>]</c> or <c>,</c> is
-/// aligned (its column is padded to the widest), a cell followed by <c>[</c> or <c>(</c> is an
-/// anchor that must match, and a cell followed by <c>)</c>, <c>;</c> or an assignment operator is
-/// free — it varies but is not padded, which is why the last argument and the right-hand side are
-/// left alone.
+/// — the same delimiters, the same operator and the same callee — and only the values in the slots
+/// differ. Each slot is a cell; a cell followed by <c>]</c>, <c>,</c> or <c>[</c> is aligned (its
+/// column is padded to the widest, so a subscript's base name is padded too), a cell followed by
+/// <c>(</c> is the callee, an anchor that must match, and a cell followed by <c>)</c>, <c>;</c> or
+/// an assignment operator is free — it varies but is not padded, which is why the last argument and
+/// the right-hand side are left alone.
 ///
 /// Like the other aligners this is a whitespace-only post-pass over already-formatted text, run
 /// after the token gate. It REPLACES the gap between a cell and its delimiter rather than inserting
@@ -31,7 +31,11 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class ColumnAligner
 {
-    public static string Align(string formatted)
+    /// <param name="maxPadding">
+    /// The most spaces alignment may add to any one cell; 0 for no limit. A run that would need
+    /// more is left as written, since its columns are too far apart to read as one table.
+    /// </param>
+    public static string Align(string formatted, int maxPadding = 0)
     {
         string[] lines = formatted.Split('\n');
         ImmutableArray<Token> tokens = Lexer.Lex(SourceText.From(formatted)).Tokens;
@@ -54,29 +58,8 @@ public static class ColumnAligner
             }
 
             // Gather a run of the same shape at this indent; comments pass through.
-            string indent = rows[index].Indent;
-            string signature = rows[index].Signature;
-            List<int> group = [];
-            int scan = index;
-            while ( scan < lines.Length )
-            {
-                Row row = rows[scan];
-                if ( row.Role == RowRole.Alignable
-                    && string.Equals(row.Indent, indent, StringComparison.Ordinal)
-                    && string.Equals(row.Signature, signature, StringComparison.Ordinal) )
-                {
-                    group.Add(scan);
-                    scan++;
-                }
-                else if ( row.Role == RowRole.Comment )
-                {
-                    scan++;
-                }
-                else
-                {
-                    break;
-                }
-            }
+            Row first = rows[index];
+            List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(rows[line], first));
 
             int columns = rows[index].Cells.Count;
             if ( group.Count >= 2 && columns > 0 )
@@ -98,7 +81,18 @@ public static class ColumnAligner
                     }
                 }
 
+                bool tooWide = false;
                 foreach ( int line in group )
+                {
+                    IReadOnlyList<Cell> cells = rows[line].Cells;
+                    for ( int c = 0; c < columns && maxPadding > 0; c++ )
+                    {
+                        tooWide |= maxWidth[c] - cells[c].Width > maxPadding;
+                    }
+                }
+
+                List<int> rebuilding = tooWide ? [] : group;
+                foreach ( int line in rebuilding )
                 {
                     string rebuilt = Rebuild(lines[line], rows[line].Cells, maxWidth, baseGap);
                     if ( !string.Equals(rebuilt, lines[line], StringComparison.Ordinal) )
@@ -109,10 +103,22 @@ public static class ColumnAligner
                 }
             }
 
-            index = scan;
+            index = group[^1] + 1;
         }
 
         return changed ? string.Join('\n', lines) : formatted;
+    }
+
+    private static LineFacts.RunStep StepOf(Row row, Row first)
+    {
+        if ( row.Role == RowRole.Alignable
+            && string.Equals(row.Indent, first.Indent, StringComparison.Ordinal)
+            && string.Equals(row.Signature, first.Signature, StringComparison.Ordinal) )
+        {
+            return LineFacts.RunStep.Member;
+        }
+
+        return row.Role == RowRole.Comment ? LineFacts.RunStep.Transparent : LineFacts.RunStep.End;
     }
 
     /// <summary>
@@ -255,8 +261,6 @@ public static class ColumnAligner
     {
         return lineText.Substring(token.Range.Start.Character, token.Range.End.Character - token.Range.Start.Character);
     }
-
-
 
     private static bool IsStructural(TokenKind kind)
     {

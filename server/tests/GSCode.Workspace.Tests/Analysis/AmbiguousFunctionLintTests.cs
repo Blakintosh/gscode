@@ -1,14 +1,11 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -25,20 +22,14 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class AmbiguousFunctionLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-
     private static ImmutableArray<Diagnostic> Lint(FakeFileSystem files, string source)
     {
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(source, path);
 
         return AmbiguousFunctionLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, path);
     }
@@ -47,8 +38,8 @@ public class AmbiguousFunctionLintTests
     private static FakeFileSystem TwoProviders()
     {
         return new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\mp\_util.gsc", "#namespace util;\nfunction helper()\n{\n}\nfunction only_here()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\nfunction only_here()\n{\n}\n");
     }
 
     [Fact]
@@ -112,13 +103,79 @@ public class AmbiguousFunctionLintTests
     }
 
     [Fact]
-    public void AnUnresolvableImportSuppressesThePass()
+    public void AnUnreadableImportDoesNotSuppressThePass()
     {
-        // A definition from a file we could not read might be the one that makes a name
-        // ambiguous, or the one that makes it fine.
-        Assert.Empty(Lint(
+        // Ambiguity is MONOTONIC: both providers are records in hand, and a third the workspace
+        // cannot read could only add to them — it can never reduce two to one. The bail-out here
+        // was copied from a rule whose answer an unreadable file really can change, and this is
+        // the case that used to be told nothing because of it.
+        Diagnostic ambiguous = Assert.Single(Lint(
             TwoProviders(),
             "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n#using scripts\\nope;\n"
             + "function run()\n{\n    util::helper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
+    }
+
+    [Fact]
+    public void ACallAMacroExpandedInto_IsAmbiguousToo()
+    {
+        // Invoking the macro is what brings the call into THIS file, and this file is where the
+        // two definitions meet — so a header body naming util::helper is as undecided as writing
+        // it out. The warning lands on the invocation, the only text on screen.
+        ImmutableArray<Diagnostic> diagnostics = Lint(
+            TwoProviders(),
+            "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "#define HELP() util::helper()\nfunction run()\n{\n    HELP();\n}\n");
+
+        Diagnostic ambiguous = Assert.Single(diagnostics);
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
+        Assert.Equal(5, ambiguous.Range.Start.Line);
+    }
+
+    [Fact]
+    public void APrivateDeclarationTheAskingFileCannotSee_DoesNotCountAsAProvider()
+    {
+        // Collect never checked IsPrivate at all. A private declaration in an imported file is not
+        // a candidate the linker could ever pick for THIS file's call — GSC scopes privacy to the
+        // namespace, and this asking file declares a different one — so counting it made a call
+        // that unambiguously resolves to the one PUBLIC declaration look like it reached two.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
+
+        Assert.Empty(Lint(
+            files,
+            "#namespace game;\n#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "function run()\n{\n    util::helper();\n}\n"));
+    }
+
+    [Fact]
+    public void APrivateDeclarationTheAskingFileCanSee_StillCountsAsAProvider()
+    {
+        // The asking file declares INTO the same namespace as the private declaration, so it can
+        // see it — the ambiguity is real, and the fix must not swing the other way and hide it.
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction private helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\mp\_util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
+
+        Diagnostic ambiguous = Assert.Single(Lint(
+            files,
+            "#namespace util;\n#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "function run()\n{\n    util::helper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.AmbiguousFunction, ambiguous.Code);
+    }
+
+    [Fact]
+    public void AnAmbiguousCallAMacroMakesTwice_WarnsOnce()
+    {
+        ImmutableArray<Diagnostic> diagnostics = Lint(
+            TwoProviders(),
+            "#using scripts\\shared\\util_shared;\n#using scripts\\mp\\_util;\n"
+            + "#define HELP() util::helper(); util::helper()\nfunction run()\n{\n    HELP();\n}\n");
+
+        Assert.Single(diagnostics);
     }
 }

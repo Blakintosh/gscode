@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;

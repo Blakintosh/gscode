@@ -124,7 +124,16 @@ public sealed class SourceText
         return new Position(line, offset - _lineStarts[line]);
     }
 
-    /// <summary>Converts a position back into a UTF-16 offset, clamping to valid bounds.</summary>
+    /// <summary>
+    /// Converts a position back into a UTF-16 offset, clamping to valid bounds.
+    ///
+    /// A character past the end of its own line clamps to THAT LINE's end, per the LSP spec, never
+    /// past it: clamping only to the document's overall length let a character position beyond a
+    /// non-last line's content run into every line after it (a huge <c>Character</c> from a stale
+    /// or malformed edit range landed the offset at the document's end, not the line's), which
+    /// <c>DocumentStore</c>'s incremental edits then apply verbatim — silently corrupting the
+    /// server's copy of the document rather than only mis-locating a caret.
+    /// </summary>
     public int GetOffset(Position position)
     {
         if ( position.Line < 0 )
@@ -138,13 +147,29 @@ public sealed class SourceText
         }
 
         int offset = _lineStarts[position.Line] + Math.Max(0, position.Character);
-        return Math.Min(offset, Text.Length);
+        return Math.Min(offset, GetLineEnd(position.Line));
     }
 
-    /// <summary>Returns the offset where the given line begins.</summary>
-    public int GetLineStart(int line)
+    /// <summary>
+    /// The offset just past a line's CONTENT — before its line break, not after it. The last line
+    /// has no break to stop before, so its end is the document's end.
+    /// </summary>
+    private int GetLineEnd(int line)
     {
-        return _lineStarts[line];
+        if ( line + 1 >= _lineStarts.Length )
+        {
+            return Text.Length;
+        }
+
+        int nextLineStart = _lineStarts[line + 1];
+
+        // \r\n is a two-unit break; every other break (\n or a lone \r) is one unit.
+        if ( nextLineStart >= 2 && Text[nextLineStart - 2] == '\r' && Text[nextLineStart - 1] == '\n' )
+        {
+            return nextLineStart - 2;
+        }
+
+        return nextLineStart - 1;
     }
 
     /// <summary>A span view over part of the text, avoiding substring allocation.</summary>

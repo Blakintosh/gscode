@@ -1,16 +1,4 @@
-using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Lexing;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
@@ -30,11 +18,9 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class MacroRenameAcrossLanguagesTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string HeaderRawPath = @"scripts\shared\flags.gsh";
-    private static string HeaderPath => Path.Combine(Raw, HeaderRawPath);
-    private static string GscPath => Path.Combine(Raw, @"scripts\shared\flags_test.gsc");
-    private static string CscPath => Path.Combine(Raw, @"scripts\shared\flags_test.csc");
+    private const string HeaderRelativePath = @"scripts\shared\flags.gsh";
+    private const string GscRelativePath = @"scripts\shared\flags_test.gsc";
+    private const string CscRelativePath = @"scripts\shared\flags_test.csc";
 
     private const string HeaderSource = "#define MAX_FLAGS 8\n";
 
@@ -47,64 +33,27 @@ public class MacroRenameAcrossLanguagesTests
     /// <summary>The one f() call in <see cref="ScriptSource"/>: line 8, inside the name.</summary>
     private static LspPosition FunctionCall => new(8, 4);
 
-    private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
-
-    /// <summary>Serves the one header, so the scripts' MAX_FLAGS is a macro use and not a variable.</summary>
-    private sealed class HeaderInsertProvider : IInsertProvider
+    /// <summary>
+    /// The header and both scripts, indexed with the real insert provider, so the scripts'
+    /// MAX_FLAGS is a macro use and not a variable.
+    /// </summary>
+    private static async Task<WorkspaceEdit?> RenameAsync(string askingRelativePath, LspPosition position)
     {
-        private static readonly SourceText Text = SourceText.From(HeaderSource);
-        private static readonly ImmutableArray<Token> Tokens = Lexer.Lex(Text).Tokens;
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(HeaderRelativePath, HeaderSource),
+            new TestFile(GscRelativePath, ScriptSource),
+            new TestFile(CscRelativePath, ScriptSource),
+        ]);
+        workspace.Open(askingRelativePath);
 
-        public bool TryGetInsert(string rawInsertPath, out InsertedFile inserted)
-        {
-            inserted = new InsertedFile(GSCode.Core.Paths.PathUtil.NormalizeAbsolute(HeaderPath), Text, Tokens);
-            return string.Equals(rawInsertPath, HeaderRawPath, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public bool TryResolveInsertPath(string rawInsertPath, out string resolvedPath)
-        {
-            resolvedPath = GSCode.Core.Paths.PathUtil.NormalizeAbsolute(HeaderPath);
-            return string.Equals(rawInsertPath, HeaderRawPath, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    private static ParseResult AnalyzeAt(string source, string path, ScriptLanguage language)
-    {
-        return ScriptAnalysis.Analyze(
-            path, language, SourceText.From(source), new HeaderInsertProvider(), new NameTable());
-    }
-
-    private static RenameHandler BuildHandler(string askingPath, ScriptLanguage askingLanguage)
-    {
-        ScriptDatabase database = new();
-        database.Commit(AnalyzeAt(HeaderSource, HeaderPath, ScriptLanguage.Gsh), ResolutionContext.RawContext, false, HeaderRawPath);
-        database.Commit(
-            AnalyzeAt(ScriptSource, GscPath, ScriptLanguage.Gsc),
-            ResolutionContext.RawContext, false, @"scripts\shared\flags_test.gsc");
-        database.Commit(
-            AnalyzeAt(ScriptSource, CscPath, ScriptLanguage.Csc),
-            ResolutionContext.RawContext, false, @"scripts\shared\flags_test.csc");
-
-        DocumentStore documents = new(static _ => new HeaderInsertProvider(), new NameTable());
-        documents.AnalyzeIfStale(documents.Open(askingPath, ScriptSource, 1));
-
-        NavigationSupport support = new(documents, database, new ResolverHolder(new PhysicalFileSystem()));
-
-        return new RenameHandler(
-            support,
-            BuiltinApiSet.Load(ApiDirectory),
-            ObjectFields.Load(ApiDirectory),
-            TextDocumentSelector.ForLanguage(askingLanguage == ScriptLanguage.Csc ? "csc" : "gsc"));
-    }
-
-    private static async Task<WorkspaceEdit?> RenameAsync(string askingPath, ScriptLanguage language, LspPosition position)
-    {
-        RenameHandler handler = BuildHandler(askingPath, language);
+        RenameHandler handler = new(
+            workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
         return await handler.Handle(
             new RenameParams
             {
-                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(askingPath) },
+                TextDocument = HandlerWorkspace.Identify(askingRelativePath),
                 Position = position,
                 NewName = "FLAG_LIMIT",
             },
@@ -128,7 +77,7 @@ public class MacroRenameAcrossLanguagesTests
     [Fact]
     public async Task AMacroRenamedFromTheGsc_EditsTheGshAndTheCscToo()
     {
-        WorkspaceEdit? edit = await RenameAsync(GscPath, ScriptLanguage.Gsc, MacroUse);
+        WorkspaceEdit? edit = await RenameAsync(GscRelativePath, MacroUse);
 
         Assert.NotNull(edit);
         Assert.True(Touches(edit, ".gsc"), "the asking file itself");
@@ -140,7 +89,7 @@ public class MacroRenameAcrossLanguagesTests
     public async Task AMacroRenamedFromTheCsc_EditsTheGshAndTheGscToo()
     {
         // The mirror case, for the same reason: neither world owns the macro.
-        WorkspaceEdit? edit = await RenameAsync(CscPath, ScriptLanguage.Csc, MacroUse);
+        WorkspaceEdit? edit = await RenameAsync(CscRelativePath, MacroUse);
 
         Assert.NotNull(edit);
         Assert.True(Touches(edit, ".csc"));
@@ -153,7 +102,7 @@ public class MacroRenameAcrossLanguagesTests
     {
         // The isolation the macro rule must not widen: flags_test.gsc and flags_test.csc each
         // declare their own f(), and they are different functions.
-        WorkspaceEdit? edit = await RenameAsync(GscPath, ScriptLanguage.Gsc, FunctionCall);
+        WorkspaceEdit? edit = await RenameAsync(GscRelativePath, FunctionCall);
 
         Assert.NotNull(edit);
         Assert.True(Touches(edit, ".gsc"));

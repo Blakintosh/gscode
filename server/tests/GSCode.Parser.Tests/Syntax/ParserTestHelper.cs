@@ -22,9 +22,9 @@ internal static class ParserTestHelper
     }
 
     /// <summary>S-expression of the whole script node.</summary>
-    public static string PrintScript(string source)
+    public static string PrintScript(string source, GameProfile? profile = null)
     {
-        return AstPrinter.Print(Parse(source).Root);
+        return AstPrinter.Print(Parse(source, profile).Root);
     }
 
     /// <summary>S-expression of the body of "function test() { ... }" wrapping the snippet.</summary>

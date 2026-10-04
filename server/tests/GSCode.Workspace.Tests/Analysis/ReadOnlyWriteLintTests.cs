@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
@@ -50,13 +47,12 @@ public class ReadOnlyWriteLintTests
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function run()\n{\n    " + body + "\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         ObjectFields fields = ObjectFields.Create(s_fields, []);
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), fields);
 
-        return ReadOnlyWriteLint.Analyze(result, fields, typer);
+        return ReadOnlyWriteLint.Analyze(result, fields, typer.InferValues(result));
     }
 
     // --- The reported bug ---

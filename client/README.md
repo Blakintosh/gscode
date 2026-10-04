@@ -18,10 +18,11 @@ Open a folder containing your scripts in VS Code. GSCode activates automatically
 - `.csc` is a client-world script.
 - `.gsh` is a shared header inserted into either world.
 
-The extension defaults to the Black Ops III dialect (`gscode.game: "bo3"`). Select `cod4`, `waw`,
-`mw2`, `bo1`, or `bo3` in Settings when working on another game. The active game is shown in the
-status bar. Changing the game or raw/mod paths prompts you to reload the VS Code window; restarting
-only the language server does not re-read those startup settings.
+The extension defaults to the Black Ops III dialect (`gscode.game: "bo3"`). Run **GSCode: Select
+Game** to switch — it lists the games the server actually supports and ticks the one running now —
+or set `cod4`, `waw`, `mw2`, `bo1`, or `bo3` in Settings. The active game is shown in the status
+bar. Changing the game or raw/mod paths prompts you to reload the VS Code window; restarting only
+the language server does not re-read those startup settings.
 
 ### Game files, raw scripts, and mods
 
@@ -44,10 +45,19 @@ there to help avoid editing the wrong copy.
 ### Indexing and analysis
 
 The default `gscode.workspaceIndexingMode: "partial"` indexes signatures for workspace-wide
-navigation, references, and completion. Use `"full"` for diagnostics across the whole index, or
-`"off"` when only open files should be analyzed. `gscode.diagnostics.scope` controls which indexed
-files publish diagnostics: `open`, `workspace` (default, your workspace/mod files), or `all`
-(including stock raw files).
+navigation, references, and completion; cross-file diagnostics (unused imports, missing functions,
+and the like) still only apply to files you have open. Use `"full"` to run those same cross-file
+lints over every indexed file, so a script's Problems entry is complete even when it is closed —
+this costs a background pass after indexing finishes, on top of the index itself. Use `"off"` when
+only open files should be analyzed — note that some diagnostics need the index to answer at all
+(an unresolved function call, an unused import, most missing-import checks) and simply
+do not run with indexing off; a `#using` naming no file and a duplicate import are still reported,
+since they need only the file and the disk. In `"full"` mode a closed file's problems stay complete
+through everything that rewrites it: opening and closing it, a change on disk such as a branch
+switch, and a workspace folder added mid-session. `gscode.diagnostics.scope` controls which indexed files publish
+diagnostics at all: `open`, `workspace` (default, your workspace/mod files), or `all` (including
+stock raw files) — `full` decides how COMPLETE a published file's diagnostics are, `diagnostics.scope`
+decides WHICH files get any.
 
 `gscode.enableWorkspaceCache` is enabled by default and stores analyzed scripts per workspace so
 unchanged files can be restored quickly. If the cache becomes stale, run **GSCode: Clear Cache and
@@ -147,12 +157,50 @@ foo_that_exists_only_in_a_custom_engine_build();
 the line below the line it closes on. Prefer `#pragma disable` in new code — it names the
 code it suppresses and says where it stops.
 
+### Editor feature settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `gscode.codeLens.enabled` | `false` | "N references" above each function and class declaration. |
+| `gscode.inlayHints.parameterNames` | `false` | Parameter-name hints before arguments at call sites. An argument that already spells the parameter's name — a local, or a macro named after it — is left unlabelled. |
+| `gscode.inlayHints.inferredTypes` | `false` | Inferred-type hints on local variable assignments. |
+| `gscode.inlayHints.macroParameterNames` | `false` | Parameter-name hints inside a `#define` invocation. Off because macro parameters are named for the macro's body, not the caller. |
+| `gscode.completion.autoImport` | `true` | Offer functions from scripts this file has not imported, adding the `#using` / `#include` when one is accepted. Waits for three characters, so names already in scope come first. |
+| `gscode.completion.literals` | `true` | Offer the workspace's known strings, localized strings and hash strings while typing inside a literal — notify and waittill names especially. |
+| `gscode.completion.callPunctuation` | `parensAndSemicolon` | What completing a function call inserts with it: `off`, `parens`, or `parensAndSemicolon`. |
+| `gscode.completion.parameterHints` | `true` | Show a function's parameters beside its name in the suggestion list. |
+| `gscode.outline.showAssignments` | `true` | Show variable and field assignments under their function in the outline. |
+| `gscode.format.padParens` | `true` | `if ( x )` rather than `if (x)`. |
+| `gscode.format.padCallParens` | `true` | `foo( a, b )` rather than `foo(a, b)`. |
+| `gscode.format.padBrackets` | `true` | `a[ i ]` rather than `a[i]`. |
+| `gscode.format.spaceBeforeControlParen` | `true` | `if (` rather than `if(`; independent of `padParens`. |
+| `gscode.format.maxBlankLines` | `2` | The longest run of blank lines the formatter keeps. |
+| `gscode.format.sortDirectives` | `true` | Group and sort the directive block at the top of a file. |
+| `gscode.format.alignConsecutive` | `true` | Line up the `=` of consecutive assignments. |
+| `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch`. |
+| `gscode.format.indentCaseBlocks` | `false` | Indent a braced case body inside its label. Off puts its `{`, `}` and `break;` level with `case`. |
+| `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block. |
+| `gscode.format.alignMaxPadding` | `20` | The most spaces alignment may add to one line. A far longer or shorter left-hand side keeps a single space instead of pushing its run across the screen. `0` removes the limit. |
+| `gscode.format.fixCasing` | `true` | Lowercase keywords (`IsDefined` → `isdefined`), and give functions, namespaces and classes the spelling they are declared with. Macros match exactly, so they are never touched. |
+
 ### Commands and useful editor features
 
 - **GSCode: Show Server Output** opens the language-server log.
 - **GSCode: Restart Language Server** restarts a wedged server or picks up a rebuilt server binary.
+- **GSCode: Select Game** picks the Call of Duty dialect this workspace targets, then reloads the
+  window to apply it. The list comes from the server, so it only ever offers games with an
+  implemented dialect, and the tick marks the game the server actually selected rather than what
+  the setting says — the two differ when a setting names something unrecognised.
 - **GSCode: Clear Cache and Reindex** deletes this workspace's cache and reloads the window.
 - **GSCode: Open Documentation for Symbol** opens the matching API page on [gscode.net](https://www.gscode.net/), for the game the server has selected — a Call of Duty 4 workspace opens Call of Duty 4's library, not Black Ops III's. It is also bound to `Shift+F1` in GSC, CSC, and GSH files.
+- **GSCode: Organize Imports** removes every unused `#using`/`#include` in the file and sorts the
+  directive block, in the same order Format Document uses (also
+  `Shift+Alt+O` and **Source Action...**).
+- **GSCode: Generate ScriptDoc Block** writes the doc block for the function the cursor is in —
+  anywhere in it — with its parameters filled in, in the dialect's own ScriptDoc form.
+
+Every command above is also in the editor's right-click menu, under **GSCode**, in GSC, CSC and GSH
+files.
 
 GSCode provides diagnostics, hover, completion, signature help, go-to-definition, references,
 rename, document/workspace symbols, semantic tokens, folding, code lens, call/type hierarchy,
@@ -166,7 +214,7 @@ Server** output channel. `gscode.trace.server` can trace the LSP messages exchan
 
 | Symptom | What to check |
 | --- | --- |
-| `#using`, `#include`, or path calls cannot be resolved | Confirm `gscode.game`, `gscode.raw.enabled`, `gscode.rawPath`, and `gscode.modsPath`; reload the window after changing any of them. |
+| `#using`, `#include`, or path calls cannot be resolved | Confirm `gscode.game` (or run **GSCode: Select Game**, which shows the game in force), `gscode.raw.enabled`, `gscode.rawPath`, and `gscode.modsPath`; reload the window after changing any of them. |
 | Completions or references stop at the open file | Make sure `gscode.workspaceIndexingMode` is not `off`, then wait for the status bar to finish indexing. |
 | Diagnostics appear only in some files | Check `gscode.diagnostics.scope`; `open` intentionally excludes closed files, while `all` includes stock raw scripts. |
 | Results look stale after changing paths or game | Use **Developer: Reload Window**. If the index is still wrong, run **GSCode: Clear Cache and Reindex**. |
@@ -178,7 +226,61 @@ guideline](../server/FORMATTING.md).
 
 ## Release Notes
 
-### 2.0.2 (latest)
+### 2.2.0 (latest)
+
+**Before you upgrade.** The workspace cache rebuilds once on the first start, in a new binary format.
+Format Document re-indents existing files once, to the new formatter rules below.
+`gscode.completion.fieldScope` is removed, `gscode.serverLogLevel` now defaults to `warning`, and the
+inlay hints (parameter names, inferred types) now default to off, like the code lens.
+
+**Faster, at any size.**
+- A Black Ops III workspace indexes in about 0.6 s, and opening the root of a game install no longer
+  walks its tool-output folders.
+- At 50,000 files a warm start is about 4 seconds, and completion, a file's lint pass, CodeLens and
+  find-references cost what they cost at 1,000.
+- `gscode.workspaceIndexingMode: "full"` reports the cross-file problems of every indexed file, not
+  only open ones, and re-checks only the files an edit reaches.
+
+**Navigation.**
+- Go to Implementations (method overrides, a field's assignments) and Go to Type Definition (the
+  class a variable holds, the function a pointer names).
+- Go to Definition, references and rename on fields and class members.
+- Call hierarchy for class methods and for files that are not open.
+- Hover links to the declaration.
+
+**Macros.** Signature help and hover show what a macro expands to, `__FILE__` and `__FUNCTION__` hover
+with their value, macro arguments can carry inlay hints, and the lints report what a macro expands
+to at the place it is used.
+
+**Completion.**
+- Functions from scripts you have not imported, with the import written for you.
+- The full list outside any function.
+- `sys::` for the engine library.
+- Function pointers without parentheses.
+- Field and literal lists cut to what you have typed.
+
+**Formatting.**
+- New settings: `fixCasing` gives keywords and calls their declared spelling; `indentCaseLabels`,
+  `indentCaseBlocks` and `indentDevBlocks` set the indentations the stock scripts split on; `alignMaxPadding` caps
+  alignment.
+- Output now matches the stock scripts more closely: continuation lines, split conditions, blank
+  lines after blocks, spaced `?:` and base-class colons, one `case` label per line.
+- Formatting edits stay on the lines they change, so the caret stays where it was.
+
+**The right-click menu** has a **GSCode** submenu: Organize Imports (which now also sorts the import
+block), Generate ScriptDoc Block for the function under the cursor, Open Documentation for Symbol,
+Select Game, and the server commands. The extension also runs in Restricted Mode now.
+
+**Fixes.** Over fifty, among them: `full` indexing mode keeping every closed file's cross-file
+problems through edits, branch switches and folder changes, diagnostics that went stale or
+reappeared on closed files, `.gsh`
+edits not reaching the files that insert them, a cache that missed files changed between sessions,
+`#define` bodies the formatter could break, CRLF files formatted as one whole-file edit, and false
+positives on shipped scripts.
+
+The full list is in [CHANGELOG.md](CHANGELOG.md).
+
+### 2.0.2
 
 - `xanim` and `anim` are accepted as `#precache` asset types, and offered in completion.
 - `gscode.format.spaceBeforeControlParen`: turn off for `if(`, `for(`, `while(` instead of `if (`. Independent of `padParens`, so every combination of keyword space and interior padding is reachable.
@@ -196,10 +298,12 @@ A complete ground-up rewrite of the language server and extension for speed, low
 - Rebuilt the entire pipeline from scratch: a span-based lexer, a provenance-tracking preprocessor (`#define`/`#insert`/`#if`), a hand-written recursive-descent parser with error recovery, and symbol extraction — none of it ever throws, so a broken file still gets a full outline and diagnostics.
 - Added first-class mod-tools support: `share/raw` plus every mod under `mods/` is indexed in isolation, mod folders overlay raw without crossing each other, and a workspace-only mode works with no game install at all.
 - Centralised everything in one script database with structurally isolated GSC and CSC worlds and a shared GSH (header) store, backed by a persistent SQLite cache so cold starts restore unchanged files in seconds.
-- Full modern LSP suite: live diagnostics, hover, completion, signature help, go-to-definition, find-all-references (including string/hash/localized/anim literals), document highlight, semantic tokens, folding, selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy, inlay hints, document links, formatting, and code actions.
+- Full modern LSP suite: live diagnostics, hover, completion, signature help, go-to-definition, go-to-implementation, go-to-type-definition, find-all-references (including string/hash/localized/anim literals), document highlight, semantic tokens, folding, selection ranges, document/workspace symbols, code lens, rename, call and type hierarchy, inlay hints, document links, formatting, and code actions.
+- A hover names where its subject is declared and links to it, so a function or a macro reached through an `#insert` says which file it came from without a jump. **Go to Implementations** answers the question go-to-definition cannot — which subclasses override this method — and **Go to Type Definition** on a local opens the class it holds.
+- Completion offers functions from scripts the file has not imported yet, once three characters have been typed, and adds the `#using` (or `#include`) line when one is accepted — qualified on Black Ops III, bare on the merge dialects, which is what each game actually needs. Turn it off with `gscode.completion.autoImport`.
 - Type-flow inference powers inferred-type inlay hints and local-variable hovers, seeded with engine object-field types.
 - Formatting (whole document, selection, and on-type) is whitespace-only and corruption-proof: it refuses files with syntax errors and re-checks its own output so it can never alter your tokens.
-- Code actions cover remove-duplicate-`#using` and add-missing-`#using`, backed by a namespace-usage lint.
+- Code actions cover remove-duplicate-`#using`, add-missing-`#using` and Organize Imports. **Generate ScriptDoc Block** is a command — a doc block for the function under the cursor, with its parameters filled in and written in the dialect's own ScriptDoc form.
 - Macros defined in `.gsh` headers are first-class symbols with go-to-definition, references, and hover via token provenance.
 - Added support for four earlier games — Call of Duty 4, World at War, Modern Warfare 2 and Black Ops — with each dialect's keywords, import style, function-pointer and ScriptDoc syntax, and bundled engine data driven by one game profile rather than by branching.
 - Replaced `TA_TOOLS_PATH` with `gscode.rawPath` and `gscode.modsPath`, both derived from the game install where possible, so a mod or a loose folder of scripts resolves against the game's own scripts.

@@ -39,15 +39,26 @@ public sealed class StockScripts
         }
 
         HashSet<string> paths = new(StringComparer.Ordinal);
-        foreach ( string line in File.ReadLines(path) )
+        try
         {
-            string trimmed = line.Trim();
-            if ( trimmed.Length == 0 || trimmed.StartsWith('#') )
+            // File.ReadLines defers the actual open to the foreach's first iteration, so the file
+            // being locked by another process, an AV scan, or a permissions problem all surface
+            // HERE rather than at the File.Exists check above — despite this method's own doc
+            // comment promising "missing/unreadable, rather than throwing".
+            foreach ( string line in File.ReadLines(path) )
             {
-                continue;
-            }
+                string trimmed = line.Trim();
+                if ( trimmed.Length == 0 || trimmed.StartsWith('#') )
+                {
+                    continue;
+                }
 
-            paths.Add(Canonical(trimmed));
+                paths.Add(Canonical(trimmed));
+            }
+        }
+        catch ( Exception exception ) when ( exception is IOException or UnauthorizedAccessException )
+        {
+            return Empty;
         }
 
         return new StockScripts(paths.ToFrozenSet(StringComparer.Ordinal));

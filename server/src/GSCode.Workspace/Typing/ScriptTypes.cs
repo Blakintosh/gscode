@@ -1,7 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Typing;
@@ -9,9 +8,9 @@ namespace GSCode.Workspace.Typing;
 /// <summary>
 /// Every value the flow pass worked out for one file, keyed by the expression that produced it.
 ///
-/// The editor surfaces do not need this — a hover asks about one position and an inlay hint asks
-/// about assignment sites. A rewriter does: it walks the tree it is translating and has to ask
-/// "what is THIS node" at every step, including the nodes nothing was ever reported about.
+/// For a caller that asks "what is THIS node" about a node no assignment names: the type-mismatch
+/// lint asks about a <c>foreach</c> collection and each vector component, and the inlay hints ask
+/// about the pointer an <c>-&gt;</c> or <c>[[ ]]</c> call goes through.
 ///
 /// Keyed by REFERENCE, deliberately. Every AST node is a record, so structural equality would make
 /// the two <c>0</c> literals in <c>( 0, 0, 1 )</c> the same key, and the second write would silently
@@ -47,7 +46,7 @@ public sealed class ScriptTypes
     /// <summary>The same field-write list the two typing lints read.</summary>
     public ImmutableArray<FieldWrite> FieldWrites { get; }
 
-    /// <summary>How many expressions were typed. The denominator for a coverage measurement.</summary>
+    /// <summary>How many expressions were typed.</summary>
     public int Count
     {
         get { return _values.Count; }
@@ -67,29 +66,9 @@ public sealed class ScriptTypes
         return _values.TryGetValue(node, out value);
     }
 
-    /// <summary>Every typed expression, for a sweep that wants to count what is known.</summary>
+    /// <summary>Every typed expression, for a sweep over the whole map.</summary>
     public IEnumerable<KeyValuePair<ExprNode, ScrValue>> All
     {
         get { return _values; }
-    }
-
-    /// <summary>
-    /// How many expressions carry each imprecision reason.
-    ///
-    /// This is the number a transpiler is budgeted against: it says not merely how much is unknown
-    /// but which unknown to attack next, and it can be measured per game over the corpora rather
-    /// than guessed at.
-    /// </summary>
-    public Dictionary<ScrImprecision, int> ImprecisionHistogram()
-    {
-        Dictionary<ScrImprecision, int> histogram = [];
-
-        foreach ( KeyValuePair<ExprNode, ScrValue> entry in _values )
-        {
-            histogram.TryGetValue(entry.Value.Imprecision, out int count);
-            histogram[entry.Value.Imprecision] = count + 1;
-        }
-
-        return histogram;
     }
 }

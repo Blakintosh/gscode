@@ -1,4 +1,3 @@
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -14,8 +13,8 @@ namespace GSCode.Parser.Tests.Lexing;
 /// </summary>
 public class DialectLexingTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     private static TokenKind[] Kinds(string source, GameProfile profile)
     {
@@ -27,7 +26,7 @@ public class DialectLexingTests
     [Fact]
     public void BlackOps3LexesAHashString()
     {
-        TokenKind[] kinds = Kinds("#\"combat_robot\"", Bo3);
+        TokenKind[] kinds = Kinds("#\"combat_robot\"", s_bo3);
 
         Assert.Equal(TokenKind.HashString, kinds[0]);
     }
@@ -37,7 +36,7 @@ public class DialectLexingTests
     {
         // CoD4 has no hash strings, so #"..." is a bare '#' and a plain string, which the parser
         // then flags -- rather than silently accepting a foreign literal.
-        TokenKind[] kinds = Kinds("#\"combat_robot\"", Cod4);
+        TokenKind[] kinds = Kinds("#\"combat_robot\"", s_cod4);
 
         Assert.Equal(TokenKind.Hash, kinds[0]);
         Assert.Equal(TokenKind.String, kinds[1]);
@@ -47,6 +46,6 @@ public class DialectLexingTests
     public void ADialectWithoutHashStringsStillLexesDirectives()
     {
         // The gate is only on the string form -- #include and #using_animtree are unaffected.
-        Assert.Equal(TokenKind.IncludeDirective, Kinds("#include common_scripts\\utility;", Cod4)[0]);
+        Assert.Equal(TokenKind.IncludeDirective, Kinds("#include common_scripts\\utility;", s_cod4)[0]);
     }
 }

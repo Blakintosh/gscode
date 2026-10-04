@@ -2,8 +2,6 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Extraction;
 using GSCode.Parser.Preprocessing;
 using Xunit;
 
@@ -11,14 +9,15 @@ namespace GSCode.Parser.Tests.Extraction;
 
 public class ExtractionTests
 {
-    private static ParseResult Analyze(string source, string path = @"c:\work\scripts\test.gsc")
+    private static ParseResult Analyze(string source, string path = @"c:\work\scripts\test.gsc", GameProfile? profile = null)
     {
         return ScriptAnalysis.Analyze(
             path,
             ScriptAnalysis.LanguageFromPath(path),
             SourceText.From(source),
             NullInsertProvider.Instance,
-            new NameTable());
+            new NameTable(),
+            profile);
     }
 
     [Fact]
@@ -37,6 +36,40 @@ public class ExtractionTests
         Assert.True(function.Parameters[2].ByRef);
         Assert.Equal("5", function.Parameters[1].DefaultValueText);
         Assert.Equal("", function.SourceFile);
+    }
+
+    [Fact]
+    public void Function_ParameterDefault_IsShownAsWritten_NotAsAnSExpression()
+    {
+        // Signature help, hover and export signatures show DefaultValueText verbatim. It must read
+        // like the source the author wrote, not AstPrinter's debug format — `(vector 0 0 1)` and
+        // `(prefix- 1)` are meaningless to a reader looking at a function signature.
+        ParseResult result = Analyze(
+            "#define MAX_HEALTH 100\nfunction f( v = ( 0, 0, 1 ), n = -1, s = \"hi\", m = MAX_HEALTH )\n{\n}");
+
+        FunctionSymbol function = Assert.Single(result.Extraction.Functions);
+        Assert.Equal("( 0, 0, 1 )", function.Parameters[0].DefaultValueText);
+        Assert.Equal("-1", function.Parameters[1].DefaultValueText);
+        Assert.Equal("\"hi\"", function.Parameters[2].DefaultValueText);
+
+        // A macro-expanded default is shown as the INVOCATION the author wrote, not its expansion —
+        // the default's range covers "MAX_HEALTH" in the root file regardless of what it expands to.
+        Assert.Equal("MAX_HEALTH", function.Parameters[3].DefaultValueText);
+    }
+
+    [Fact]
+    public void FileScopeConstant_ExtractsReferencesFromItsValue()
+    {
+        // An Infinity Ward file-scope constant's value was invisible to WalkDeclarations entirely,
+        // so a call, a field read or an address-of inside it never reached the reference list —
+        // go-to-definition and find-all-references had nothing to say about names used only there.
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        ParseResult result = Analyze("MAX_HEALTH = get_default();\nrun()\n{\n}\n", profile: mw2);
+
+        // MW2 does not resolve calls by namespace, so an unqualified call keys with none.
+        SymbolKey calleeKey = new(null, "get_default", SymbolKind.Function);
+        Assert.Contains(
+            result.Extraction.References, entry => entry.Key == calleeKey && entry.Kind == ReferenceKind.Call);
     }
 
     [Fact]
@@ -236,9 +269,7 @@ public class ExtractionTests
         // A default is evaluated in the function BODY when the argument arrives undefined, so
         // anything the body could contain is legal there. The old "literals and vectors only"
         // rule reported 21 errors across 8 shipped scripts, every one of them wrong.
-        Assert.DoesNotContain(
-            Analyze($"function f( {parameters} )\n{{\n}}").AllDiagnostics,
-            diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
+        Assert.Empty(Analyze($"function f( {parameters} )\n{{\n}}").AllDiagnostics);
     }
 
     [Fact]
@@ -274,6 +305,24 @@ public class ExtractionTests
 
         Assert.Contains(references, entry =>
             entry.Key == new SymbolKey(null, "boo", SymbolKind.Class) && entry.Kind == ReferenceKind.ClassUse);
+    }
+
+    [Fact]
+    public void References_SysIsOnlyTheBuiltinQualifierWhereResolutionIsByNamespace()
+    {
+        // `sys::` belongs to the namespace dialects: no shipped CoD4 or BO1 script writes it, and on
+        // a merge dialect a key with no namespace is every unqualified call's key, so reading `sys`
+        // as the builtin form there would claim a meaning the engine never gave it. It keys like any
+        // other written qualifier instead, which is what `util::` does beside it.
+        GameProfile cod4 = GameProfile.ByName("cod4")!;
+        ParseResult result = Analyze("caller()\n{\n    sys::print( \"x\" );\n    util::assist();\n}\n", profile: cod4);
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        Assert.Contains(references, entry =>
+            entry.Key == new SymbolKey("sys", "print", SymbolKind.Function) && entry.Kind == ReferenceKind.Call);
+
+        Assert.Contains(references, entry =>
+            entry.Key == new SymbolKey("util", "assist", SymbolKind.Function) && entry.Kind == ReferenceKind.Call);
     }
 
     [Fact]
@@ -335,6 +384,33 @@ public class ExtractionTests
     }
 
     [Fact]
+    public void References_ConcatenationFlagDoesNotLeakIntoNestedExpressions()
+    {
+        // "a" + foo( "name" ) — the OUTER string is a genuine message fragment, but "name" is an
+        // ordinary argument sitting inside a call the concatenation merely passes through. Only the
+        // outer literal should be flagged; a call argument, an index expression and a nested `+`
+        // chain of their own must each be judged on their own terms.
+        ParseResult result = Analyze(
+            "function f()\n{\nx = \"a\" + foo( \"name\" );\ny = \"b\" + level.flags[ \"key\" ];\nz = \"c\" + (\"d\" + bar( \"e\" ));\n}");
+
+        List<ReferenceEntry> references = [.. result.Extraction.References];
+
+        SymbolKey Key(string text)
+        {
+            return new SymbolKey(null, text, SymbolKind.StringLiteral);
+        }
+
+        Assert.Contains(references, entry => entry.Key == Key("a") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("b") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("c") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+        Assert.Contains(references, entry => entry.Key == Key("d") && entry.Kind == ReferenceKind.ConcatenatedLiteral);
+
+        Assert.Contains(references, entry => entry.Key == Key("name") && entry.Kind == ReferenceKind.Literal);
+        Assert.Contains(references, entry => entry.Key == Key("key") && entry.Kind == ReferenceKind.Literal);
+        Assert.Contains(references, entry => entry.Key == Key("e") && entry.Kind == ReferenceKind.Literal);
+    }
+
+    [Fact]
     public void References_SpacedAnimReferenceKeysTheSameAsAJoinedOne()
     {
         // `%run` and `% run` name one animation, so find-all-references has to see one symbol with
@@ -372,6 +448,21 @@ public class ExtractionTests
 
         Assert.Contains(references, entry =>
             entry.Key == new SymbolKey(null, "MAX_HEALTH", SymbolKind.Macro) && entry.Kind == ReferenceKind.MacroUse);
+    }
+
+    [Fact]
+    public void References_AShadowedMacroDefinitionStillGetsADefinitionReference()
+    {
+        // MAX is defined twice; the table keeps only the second, but the reader looking AT the
+        // first #define line — the one DuplicateMacroDefinition already flags as the one being
+        // replaced — deserves go-to-definition and rename recognizing it as a definition too.
+        ParseResult result = Analyze("#define MAX 4\n#define MAX 8\nx = MAX;");
+        List<ReferenceEntry> definitions = [.. result.Extraction.References
+            .Where(entry => entry.Key == new SymbolKey(null, "MAX", SymbolKind.Macro) && entry.Kind == ReferenceKind.Definition)];
+
+        Assert.Equal(2, definitions.Count);
+        Assert.Equal(0, definitions[0].Range.Start.Line);
+        Assert.Equal(1, definitions[1].Range.Start.Line);
     }
 
     [Fact]

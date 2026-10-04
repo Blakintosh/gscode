@@ -7,13 +7,51 @@
     <OutputType>Exe</OutputType>
     <!-- Inherited transitively from GSCode.Workspace's SQLite dependency; see its csproj. -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
+
+    <!-- No ICU. The runtime otherwise loads the full globalization data on the way up, and PERF.md's
+         startup section says roughly 0.3 s of a 0.9 s start is runtime and host construction with
+         nothing attributed inside it.
+
+         This is safe to assert rather than hope, because nothing here asks a culture anything. Every
+         case-insensitive comparison in the tree is an Ordinal one (165 of them), there is no
+         InvariantCultureIgnoreCase or CurrentCultureIgnoreCase anywhere, no `new CultureInfo`, no
+         TimeZoneInfo and no Encoding.GetEncoding — and every CultureInfo reference already names
+         InvariantCulture, because GSC is parsed and rendered the same way whatever machine reads it.
+         Turning this on cannot change an answer it does not have an input to.
+
+         What it would change, if any of that stopped being true, is that a culture-sensitive
+         comparison would silently become an ordinal one rather than throwing. That is the reason the
+         test project sets it too: the suites then run under the same collation the server ships. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Ahead-of-time compilation, but only for a publish that names a runtime.
+
+       What it buys, measured by driving the published server over stdio against BO3's 1,105
+       scripts and reading its own "Ready" line, five alternating runs each, warm cache:
+       1.3 s every time without it against 0.9-1.0 s with it. The index inside that is 0.5-0.6 s
+       on both sides, so the whole difference is startup - the JIT compiling the lex, parse and
+       extract pipeline on the way to its first file - and none of it is analysis getting faster.
+       Same result whether the host is the apphost or `dotnet GSCode.Server.dll`, which is what the
+       extension actually runs.
+
+       It also makes the bundle SMALLER, which is the opposite of what precompiled code suggests:
+       48 MB to 29 MB. A RID-less publish carries runtimes/ for all 22 platforms the SQLite package
+       supports; naming one keeps that platform's native library and drops the rest.
+
+       Gated on RuntimeIdentifier rather than turned on, because that is the whole cost of it: a
+       RID-specific bundle runs on one platform, and `npm run bundle-server` currently produces one
+       cross-platform folder for one .vsix. Turning this on by default means shipping a .vsix per
+       target platform. Until that happens, `bundle-server-win` opts in and the default does not. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="OmniSharp.Extensions.LanguageProtocol" Version="0.19.9" />
     <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 

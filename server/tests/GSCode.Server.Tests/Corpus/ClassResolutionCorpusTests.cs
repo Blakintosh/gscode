@@ -1,7 +1,6 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Parser;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
@@ -134,7 +133,7 @@ public class ClassResolutionCorpusTests
         List<string> unexplained = [];
 
         foreach ( (LanguageStore store, ScriptLanguage language) in
-            (( LanguageStore, ScriptLanguage )[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
+            ((LanguageStore, ScriptLanguage)[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
         {
             foreach ( ScriptRecord record in store.AllRecords )
             {
@@ -225,7 +224,7 @@ public class ClassResolutionCorpusTests
         List<string> unexplained = [];
 
         foreach ( (LanguageStore store, ScriptLanguage language) in
-            (( LanguageStore, ScriptLanguage )[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
+            ((LanguageStore, ScriptLanguage)[])[(world.Value.Database.Gsc, ScriptLanguage.Gsc), (world.Value.Database.Csc, ScriptLanguage.Csc)] )
         {
             HashSet<string> classNames = [.. store.Classes.AllClassNames()];
 

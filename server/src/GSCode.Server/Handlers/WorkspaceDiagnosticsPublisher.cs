@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
 
 namespace GSCode.Server.Handlers;
@@ -25,9 +25,8 @@ public enum DiagnosticsScope
 /// Publishes diagnostics for files that are NOT open, so a syntax error in a script you have not
 /// looked at still reaches the Problems panel.
 ///
-/// Until now <see cref="ScriptRecord.Diagnostics"/> was written on every index and never read:
-/// problems existed only for open documents, which meant a broken file stayed invisible until
-/// someone happened to open it.
+/// <see cref="ScriptRecord.Diagnostics"/> is written on every index; without this it would never be
+/// read, and a broken file would stay invisible until someone opened it.
 ///
 /// Open documents are deliberately left alone. <see cref="TextSyncHandler"/> owns those, and its
 /// set is RICHER than what a record carries — it adds the cross-file lints (unused #using,
@@ -41,14 +40,25 @@ public sealed class WorkspaceDiagnosticsPublisher
     private readonly DiagnosticsPublisher _publisher;
     private readonly ServerSettings _settings;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
 
     /// <summary>
-    /// Every URI this publisher has pushed a non-empty set to, so it can take them back.
+    /// Every PATH this publisher has pushed a non-empty set to, so it can take them back.
     /// Diagnostics are sticky in the client: without this, narrowing the scope or fixing a file
     /// would leave the old problems on screen forever.
+    ///
+    /// Paths rather than URIs, so a take-back resolves through the same seam the publish went
+    /// through (<see cref="DiagnosticsPublisher.UriFor"/>) and cannot address a spelling the
+    /// client was never told.
+    ///
+    /// Keyed to the diagnostics array LAST SENT for each path, not just the path, so a refresh
+    /// sends only what changed — a refresh follows every re-lint of an edit's closed dependents,
+    /// and resending every in-scope file would send a notification for every file with a problem. A
+    /// record's diagnostics are replaced wholesale whenever they are recomputed, so a different
+    /// array is the change signal — compared by reference, which errs toward resending, never
+    /// toward staleness.
     /// </summary>
-    private readonly HashSet<DocumentUri> _published = [];
+    private readonly Dictionary<string, ImmutableArray<Diagnostic>> _published = new(StringComparer.Ordinal);
 
     public WorkspaceDiagnosticsPublisher(
         ScriptDatabase database,
@@ -96,8 +106,10 @@ public sealed class WorkspaceDiagnosticsPublisher
     }
 
     /// <summary>
-    /// Republishes the whole workspace. Called once indexing finishes and again whenever the
-    /// scope setting changes.
+    /// Brings the client up to date with the whole workspace: sends every in-scope file whose
+    /// diagnostics differ from what was last sent, and takes back every file no longer reported.
+    /// Called once indexing finishes, whenever the scope setting changes, and after closed
+    /// dependents are re-linted.
     /// </summary>
     public void Refresh()
     {
@@ -105,7 +117,7 @@ public sealed class WorkspaceDiagnosticsPublisher
 
         lock ( _gate )
         {
-            HashSet<DocumentUri> stillPublished = [];
+            HashSet<string> stillPublished = new(StringComparer.Ordinal);
 
             foreach ( ScriptRecord record in _database.AllRecords )
             {
@@ -115,27 +127,32 @@ public sealed class WorkspaceDiagnosticsPublisher
                 }
 
                 // The sync handler owns open documents, and publishes a richer set for them.
-                if ( _documents.TryGet(record.Path, out OpenDocument _) )
+                if ( _documents.IsOpen(record.Path) )
                 {
                     continue;
                 }
 
-                DocumentUri uri = DocumentUri.FromFileSystemPath(record.Path);
-                _publisher.Publish(uri, version: null, record.Diagnostics);
-                stillPublished.Add(uri);
+                stillPublished.Add(record.Path);
+
+                // Unchanged since it was last sent: the client already shows exactly this.
+                if ( _published.TryGetValue(record.Path, out ImmutableArray<Diagnostic> sent) && sent == record.Diagnostics )
+                {
+                    continue;
+                }
+
+                _publisher.Publish(record.Path, version: null, record.Diagnostics);
+                _published[record.Path] = record.Diagnostics;
             }
 
             // Anything published last time and not this time has to be taken back explicitly.
-            foreach ( DocumentUri uri in _published )
+            foreach ( string path in _published.Keys.ToList() )
             {
-                if ( !stillPublished.Contains(uri) )
+                if ( !stillPublished.Contains(path) )
                 {
-                    _publisher.Clear(uri);
+                    _publisher.Clear(path);
+                    _published.Remove(path);
                 }
             }
-
-            _published.Clear();
-            _published.UnionWith(stillPublished);
 
             Log.Information(
                 "Workspace diagnostics: {Count} file(s) with problems (scope: {Scope})", stillPublished.Count, scope);
@@ -161,13 +178,34 @@ public sealed class WorkspaceDiagnosticsPublisher
             return;
         }
 
-        DocumentUri uri = DocumentUri.FromFileSystemPath(record.Path);
-        _publisher.Publish(uri, version: null, record.Diagnostics);
+        _publisher.Publish(record.Path, version: null, record.Diagnostics);
 
         lock ( _gate )
         {
-            _published.Add(uri);
+            _published[record.Path] = record.Diagnostics;
         }
     }
 
+    /// <summary>
+    /// Takes back what this publisher pushed for a file that has just been opened.
+    ///
+    /// The mirror of <see cref="OnDocumentClosed"/>, and needed for the same reason it is: the
+    /// sync handler owns open documents and publishes a richer set for them, and the client does not
+    /// treat a newer publish as replacing an older one unless it names the same document, so the set
+    /// the index pushed would stand beside it and show every problem twice.
+    /// </summary>
+    public void OnDocumentOpened(string path)
+    {
+        string key = PathUtil.NormalizeAbsolute(path);
+
+        lock ( _gate )
+        {
+            if ( !_published.Remove(key) )
+            {
+                return;
+            }
+        }
+
+        _publisher.Clear(key);
+    }
 }

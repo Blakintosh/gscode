@@ -1,10 +1,8 @@
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 
@@ -100,34 +98,6 @@ public sealed partial class CompletionEngine
         }
     }
 
-    /// <summary>
-    /// A whole function declaration, not just the word that starts one.
-    ///
-    /// Writing one by hand is four pieces of punctuation that are the same every time — the
-    /// parentheses, the braces, and getting the brace onto its own line — so the snippet does them
-    /// and leaves the caret on the NAME, which is the only part that varies.
-    ///
-    /// Laid out the way the formatter would: Allman braces and a tab, measured at 51,048 Allman
-    /// against 37 same-line and 247,613 tab-led lines against 886 space-led across the stock
-    /// scripts. A snippet that had to be reformatted the moment it landed would be a strange thing
-    /// to ship.
-    ///
-    /// The dialect decides the opening: BO3 declares with the `function` keyword, while the merge
-    /// dialects open with the bare name. The label stays "function" either way — it is what the
-    /// user is looking for, not what gets inserted.
-    /// </summary>
-    private static CompletionEntry FunctionDeclarationSnippet(GameProfile game)
-    {
-        string opening = game.HasFunctionKeyword ? "function " : "";
-
-        return new CompletionEntry(
-            "function",
-            CompletionKind.Snippet,
-            "declaration",
-            opening + "${1:name}()\n{\n\t$0\n}",
-            "Declares a function, with the caret on the name.");
-    }
-
     /// <summary>How much parameter text a label may carry before it is cut short.</summary>
     /// <remarks>
     /// A row that runs past the popup's width is truncated by the editor anyway, at whatever
@@ -154,7 +124,7 @@ public sealed partial class CompletionEngine
             return hasVarargs ? "( ... )" : "()";
         }
 
-        System.Text.StringBuilder rendered = new();
+        StringBuilder rendered = new();
         foreach ( ParameterSymbol parameter in parameters )
         {
             if ( rendered.Length > 0 )
@@ -254,6 +224,38 @@ public sealed partial class CompletionEngine
             Namespace: ns,
             ResolveName: function.Name,
             LabelDetail: parameterHints ? ParameterHint(function.Parameters, function.HasVarargs) : "");
+    }
+
+    /// <summary>
+    /// A function this file cannot call yet, offered WITH the import it needs.
+    ///
+    /// The two dialect families differ in exactly the way they already do everywhere else, so the
+    /// shape is the one the in-scope producers use and only the import rides along: a namespace
+    /// dialect inserts the qualified call, because an unqualified one into another namespace does
+    /// not resolve even after the `#using` lands; a merge dialect inserts the bare name, because
+    /// `#include` folds the function into local scope.
+    ///
+    /// The detail says which file, since that is the decision the user is actually making — several
+    /// scripts may declare the name, and the one thing that distinguishes the rows is where each
+    /// would import from. `SortText` puts these last of the function tiers on their own kind, which
+    /// is right: a name already in scope should never be beaten by one that costs a directive.
+    /// </summary>
+    private static CompletionEntry UnimportedFunctionEntry(
+        UnimportedFunction candidate, GameProfile game, string callSuffix, bool parameterHints)
+    {
+        FunctionSymbol function = candidate.Function;
+        bool qualified = game.ResolvesByNamespace && function.Namespace.Length > 0;
+        string insertName = qualified ? function.Namespace + "::" + function.Name : function.Name;
+
+        return new CompletionEntry(
+            function.Name,
+            CompletionKind.Function,
+            (game.ImportStyle == ImportStyle.Namespace ? "#using " : "#include ") + candidate.ImportPath,
+            insertName + callSuffix,
+            Namespace: function.Namespace,
+            ResolveName: function.Name,
+            LabelDetail: parameterHints ? ParameterHint(function.Parameters, function.HasVarargs) : "",
+            ImportPath: candidate.ImportPath);
     }
 
     /// <summary>

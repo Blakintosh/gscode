@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
@@ -20,22 +17,17 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class MethodResolutionTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static LanguageStore Store(params (string Name, string Source)[] files)
     {
         FakeFileSystem system = new();
         foreach ( (string Name, string Source) file in files )
         {
-            system.AddFile(@$"{Raw}\scripts\{file.Name}.gsc", file.Source);
+            system.AddFile(TestPaths.Raw(@$"scripts\{file.Name}.gsc"), file.Source);
         }
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], system);
-        PathResolver resolver = new(config, system);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, system, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(system, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database.Gsc;
     }

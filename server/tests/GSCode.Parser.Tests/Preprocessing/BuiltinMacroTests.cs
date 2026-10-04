@@ -25,6 +25,49 @@ public class BuiltinMacroTests
     }
 
     [Fact]
+    public void File_InsideAnInsertedHeader_StillResolvesToTheRootScript()
+    {
+        // #insert splices a header's declarations as if written inline in the including file, so
+        // __FILE__ inside one has to name the compiled script (the root .gsc/.csc), not the .gsh
+        // that happens to hold the text. Before this was fixed it read frame.SourceFile — the
+        // header's OWN path — for any code physically written inside the header.
+        const string gshPath = @"scripts\shared\utils.gsh";
+        FakeInsertProvider provider = new FakeInsertProvider()
+            .AddInsert(gshPath, "function shared_fn()\n{\n    x = __FILE__;\n}\n");
+
+        PreprocessResult result = PreprocessTestHelper.Run($"#insert {gshPath};\n", provider);
+
+        PToken expanded = Assert.Single(result.Tokens, token => token.Kind == TokenKind.String);
+        Assert.Equal("\"" + PreprocessTestHelper.RootPath + "\"", expanded.Text);
+    }
+
+    [Fact]
+    public void Function_RecordsABuiltinExpansion_ForHoverToRead()
+    {
+        // By the time extraction runs, __FUNCTION__'s token is an ordinary String literal with
+        // nothing marking where it came from — hover needs this list to show what it resolved to.
+        PreprocessResult result = PreprocessTestHelper.Run(
+            "#namespace spawner;\nfunction spawn_think()\n{\n    x = __FUNCTION__;\n}\n");
+
+        BuiltinExpansion expansion = Assert.Single(result.BuiltinExpansions);
+        Assert.Equal("__FUNCTION__", expansion.Name);
+        Assert.Equal("spawner::spawn_think", expansion.ExpandedText);
+
+        // The range points at "__FUNCTION__" as WRITTEN, not at the string it expanded to.
+        Assert.Equal(3, expansion.Range.Start.Line);
+    }
+
+    [Fact]
+    public void File_RecordsABuiltinExpansion_WithTheRootPath()
+    {
+        PreprocessResult result = PreprocessTestHelper.Run("x = __FILE__;");
+
+        BuiltinExpansion expansion = Assert.Single(result.BuiltinExpansions);
+        Assert.Equal("__FILE__", expansion.Name);
+        Assert.Equal(PreprocessTestHelper.RootPath, expansion.ExpandedText);
+    }
+
+    [Fact]
     public void FastFile_ExpandsToPlaceholderIdentifier()
     {
         // The fastfile name only exists at link time; a placeholder keeps parsing sane.

@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -23,10 +20,9 @@ public class UnassignedVariableLintTests
     private static ImmutableArray<Diagnostic> Lint(string source, string game = "bo3")
     {
         GameProfile profile = GameProfile.ByName(game)!;
-        string path = game == "bo3" ? @"c:\ws\scripts\t.gsc" : @"c:\ws\maps\t.gsc";
+        string path = game == "bo3" ? TestPaths.Raw(@"scripts\t.gsc") : TestPaths.Raw(@"maps\t.gsc");
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), profile);
+        ParseResult result = TestParse.Analyze(source, path, profile);
 
         return UnassignedVariableLint.Analyze(result, profile);
     }
@@ -58,6 +54,19 @@ public class UnassignedVariableLintTests
     public void ThingsThatAreNotMistakes(string source)
     {
         Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void AWaittillMatchArgument_IsAReadNotAnOutput()
+    {
+        // waittillmatch's trailing argument is the value to MATCH against the notify's own
+        // parameters — a read, unlike waittill, which BINDS its trailing arguments as outputs. The
+        // shared helper treated both the same, so a name never assigned anywhere and passed as the
+        // match value was silently treated as its own assignment.
+        string source = "function f()\n{\n\tself waittillmatch( \"single anim\", matchname );\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+        Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);
     }
 
     [Fact]

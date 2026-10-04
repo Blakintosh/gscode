@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -72,8 +71,8 @@ public class ApiLoaderTests
     [Fact]
     public void RenderBuiltin_WarnsOnDevOnlyBuiltins()
     {
-        // Calling one of these outside /# #/ compiles fine and then does nothing in a release
-        // mod, so the warning belongs above the description rather than buried under it.
+        // Calling one of these outside /# #/ compiles fine and then fails on a server without
+        // developer script, so the warning belongs above the description rather than buried under it.
         BuiltinApi api = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
         BuiltinFunction printLn = api.Find("PrintLn")!;
 
@@ -92,6 +91,37 @@ public class ApiLoaderTests
             "");
 
         Assert.DoesNotContain("Returns:", MarkdownDocRenderer.RenderBuiltin(voidBuiltin), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderBuiltin_TheOverloadsListDoesNotRepeatThePrimaryPrototype()
+    {
+        // The comment above the loop says "additional overloads listed... under the primary
+        // prototype" — but the loop iterated every overload, the primary included, so a
+        // two-overload builtin showed its first signature twice: once in the fenced code block
+        // at the top and again as the first bullet of its own "Overloads:" list.
+        BuiltinOverload first = new("player", [new BuiltinParameter("origin", "", true, "vector")], "", false);
+        BuiltinOverload second = new(
+            "player", [new BuiltinParameter("origin", "", true, "vector"), new BuiltinParameter("angles", "", true, "vector")], "", false);
+        BuiltinFunction builtin = new("SpawnSpectator", "", [first, second], "");
+
+        string markdown = MarkdownDocRenderer.RenderBuiltin(builtin);
+        int overloadsIndex = markdown.IndexOf("Overloads:", StringComparison.Ordinal);
+        string overloadsSection = markdown[overloadsIndex..];
+
+        Assert.DoesNotContain("* `<player> SpawnSpectator(origin)`", overloadsSection, StringComparison.Ordinal);
+        Assert.Contains("* `<player> SpawnSpectator(origin, angles)`", overloadsSection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderBuiltin_WithNoOverloadData_ShowsUnknownRatherThanZeroParameters()
+    {
+        // 270 of BO1's 1,377 GSC builtins carry no overload data at all (222 for WAW, 55 for
+        // MW2, 43 for CoD4). The signature line rendered them as `Name()`, which claims the
+        // function takes nothing — a fact the data never stated.
+        BuiltinFunction noData = new("AddTestClient", "", [], "");
+
+        Assert.Contains("AddTestClient(...)", MarkdownDocRenderer.RenderBuiltin(noData), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,6 +147,33 @@ public class ApiLoaderTests
         Assert.Contains("util::give_weapon(weapon, ammo = 0)", markdown, StringComparison.Ordinal);
         Assert.Contains("Gives a weapon.", markdown, StringComparison.Ordinal);
         Assert.Contains("weapon", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LoadFile_ALockedFile_ReportsFailureRatherThanThrowing()
+    {
+        // Only JsonException was caught, so a file that EXISTS but cannot be READ — locked by
+        // another process, an AV scan, a permissions problem — crashed whatever called Load
+        // instead of being treated as one more "could not parse this bundled data" case.
+        string path = Path.Combine(Path.GetTempPath(), $"gscode_api_locked_{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{}");
+
+        try
+        {
+            using FileStream exclusiveLock = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            List<(string Path, Exception Exception)> failures = [];
+            BuiltinApi api = ApiLoader.LoadFile(path, (failedPath, exception) => failures.Add((failedPath, exception)));
+
+            Assert.Equal(0, api.Count);
+            Assert.Single(failures);
+            Assert.Equal(path, failures[0].Path);
+            Assert.IsType<IOException>(failures[0].Exception);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

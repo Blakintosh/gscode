@@ -10,16 +10,64 @@ namespace GSCode.Server.Transport;
 /// </summary>
 public static class TransportResolver
 {
+    /// <summary>
+    /// How long to wait for the other end before giving up.
+    ///
+    /// The client creates its pipe or socket and then spawns us, so a connection that is going to
+    /// happen happens immediately; a wait that reaches this bound means the other end is gone.
+    /// Without it, <see cref="NamedPipeClientStream.ConnectAsync(CancellationToken)"/> waits
+    /// forever and a client that died between spawn and listen leaves an orphaned server process
+    /// with nothing to end it.
+    /// </summary>
+    private static readonly TimeSpan s_connectTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>Result of transport resolution; the owner (if any) must be disposed on shutdown.</summary>
-    public sealed record ResolvedTransport(Stream Input, Stream Output, IDisposable? Owner);
+    /// <param name="Description">
+    /// What was connected, for the startup log. Which transport is in use is the first thing a
+    /// "the extension says the server never started" report needs, and nothing said it.
+    /// </param>
+    public sealed record ResolvedTransport(Stream Input, Stream Output, IDisposable? Owner, string Description);
 
     /// <summary>
     /// Connects the transport described by <paramref name="options"/> and returns its streams.
     /// </summary>
+    /// <exception cref="ArgumentException">More than one transport was named, or one was named emptily.</exception>
+    /// <exception cref="TimeoutException">The other end did not accept the connection.</exception>
     public static async Task<ResolvedTransport> ResolveAsync(TransportOptions options, CancellationToken cancellationToken)
     {
+        // Counted rather than tested in precedence order: taking the first option recognised and
+        // ignoring the rest would make `--stdio --pipe foo` use the pipe — a server listening
+        // somewhere the caller did not ask for, which presents as a client waiting forever.
+        int named = 0;
         if ( options.PipeName is not null )
         {
+            named++;
+        }
+
+        if ( options.SocketPort is not null )
+        {
+            named++;
+        }
+
+        if ( options.Stdio )
+        {
+            named++;
+        }
+
+        if ( named > 1 )
+        {
+            throw new ArgumentException("Name one transport: --pipe, --socket or --stdio.", nameof(options));
+        }
+
+        if ( options.PipeName is not null )
+        {
+            // Whitespace-aware: `--pipe ""` would reach NamedPipeClientStream and come back out as an
+            // ArgumentException from inside the BCL.
+            if ( string.IsNullOrWhiteSpace(options.PipeName) )
+            {
+                throw new ArgumentException("--pipe was given without a pipe name.", nameof(options));
+            }
+
             return await ConnectPipeAsync(options.PipeName, cancellationToken);
         }
 
@@ -28,30 +76,76 @@ public static class TransportResolver
             return await ConnectSocketAsync(options.SocketPort.Value, cancellationToken);
         }
 
-        return new ResolvedTransport(Console.OpenStandardInput(), Console.OpenStandardOutput(), Owner: null);
+        // Both the explicit --stdio and the no-options default.
+        return new ResolvedTransport(
+            Console.OpenStandardInput(), Console.OpenStandardOutput(), Owner: null, Description: "stdio");
+    }
+
+    /// <summary>
+    /// The name <see cref="NamedPipeClientStream"/> wants, from the name VSCode passes.
+    ///
+    /// VSCode on Windows passes the fully-qualified path (<c>\\.\pipe\vscode-jsonrpc-…</c>) and the
+    /// pipe client wants the bare name; handed the qualified one it looks for a pipe whose name
+    /// contains the prefix twice, which nothing is ever listening on. Split out and made internal
+    /// because there was no test on it: the strip is one string literal whose own backslashes are
+    /// the thing most likely to go wrong, and getting it wrong costs a server that starts, waits,
+    /// and never connects.
+    /// </summary>
+    internal static string BarePipeName(string pipeName)
+    {
+        const string windowsPipePrefix = @"\\.\pipe\";
+
+        string trimmed = pipeName.Trim();
+        if ( trimmed.StartsWith(windowsPipePrefix, StringComparison.Ordinal) )
+        {
+            return trimmed[windowsPipePrefix.Length..];
+        }
+
+        return trimmed;
     }
 
     private static async Task<ResolvedTransport> ConnectPipeAsync(string pipeName, CancellationToken cancellationToken)
     {
-        // VSCode on Windows passes the fully-qualified pipe path; NamedPipeClientStream wants the bare name.
-        const string windowsPipePrefix = @"\\.\pipe\";
-        if ( pipeName.StartsWith(windowsPipePrefix, StringComparison.Ordinal) )
+        string bareName = BarePipeName(pipeName);
+
+        NamedPipeClientStream pipe = new(".", bareName, PipeDirection.InOut, PipeOptions.Asynchronous);
+
+        using CancellationTokenSource attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attempt.CancelAfter(s_connectTimeout);
+
+        try
         {
-            pipeName = pipeName[windowsPipePrefix.Length..];
+            await pipe.ConnectAsync(attempt.Token);
+        }
+        catch ( OperationCanceledException ) when ( !cancellationToken.IsCancellationRequested )
+        {
+            await pipe.DisposeAsync();
+            throw new TimeoutException(
+                $"Timed out after {s_connectTimeout.TotalSeconds:F0}s connecting to named pipe '{bareName}'.");
         }
 
-        NamedPipeClientStream pipe = new(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-        await pipe.ConnectAsync(cancellationToken);
-
-        return new ResolvedTransport(pipe, pipe, pipe);
+        return new ResolvedTransport(pipe, pipe, pipe, $"pipe {bareName}");
     }
 
     private static async Task<ResolvedTransport> ConnectSocketAsync(int port, CancellationToken cancellationToken)
     {
         TcpClient client = new();
-        await client.ConnectAsync(IPAddress.Loopback, port, cancellationToken);
+
+        using CancellationTokenSource attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        attempt.CancelAfter(s_connectTimeout);
+
+        try
+        {
+            await client.ConnectAsync(IPAddress.Loopback, port, attempt.Token);
+        }
+        catch ( OperationCanceledException ) when ( !cancellationToken.IsCancellationRequested )
+        {
+            client.Dispose();
+            throw new TimeoutException(
+                $"Timed out after {s_connectTimeout.TotalSeconds:F0}s connecting to 127.0.0.1:{port}.");
+        }
 
         NetworkStream stream = client.GetStream();
-        return new ResolvedTransport(stream, stream, client);
+        return new ResolvedTransport(stream, stream, client, $"socket 127.0.0.1:{port}");
     }
 }

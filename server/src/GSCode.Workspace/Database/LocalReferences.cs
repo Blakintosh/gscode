@@ -65,7 +65,7 @@ public static class LocalReferences
         }
 
         string name = token.Text;
-        ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
+        List<LocalUse> uses = [];
 
         // The parameter list is part of the function, but not part of its body, so it is walked
         // separately. A parameter is where the name is introduced — the caller supplied the value —
@@ -74,11 +74,17 @@ public static class LocalReferences
         {
             if ( Matches(parameter.NameToken, name) )
             {
-                Add(parameter.NameToken, isWrite: true, uses);
+                uses.Add(new LocalUse(parameter.NameToken, LocalUseKind.Assign));
             }
         }
 
-        Collect(function.Body, name, uses);
+        foreach ( LocalUse use in LocalUses.Of(function.Body) )
+        {
+            if ( Matches(use.Token, name) )
+            {
+                uses.Add(use);
+            }
+        }
 
         ImmutableArray<LocalOccurrence>.Builder occurrences =
             ImmutableArray.CreateBuilder<LocalOccurrence>(uses.Count);
@@ -125,12 +131,9 @@ public static class LocalReferences
             }
         }
 
-        ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
-        Collect(function.Body, name, uses);
-
-        foreach ( LocalUse use in uses )
+        foreach ( LocalUse use in LocalUses.Of(function.Body) )
         {
-            if ( use.IsWrite )
+            if ( use.IsWrite && Matches(use.Token, name) )
             {
                 return true;
             }
@@ -159,16 +162,16 @@ public static class LocalReferences
 
         foreach ( FunctionNode function in Functions(result.Tree.Root) )
         {
-            ImmutableArray<LocalUse>.Builder uses = ImmutableArray.CreateBuilder<LocalUse>();
+            List<LocalUse> uses = [];
             HashSet<string> parameters = new(StringComparer.OrdinalIgnoreCase);
 
             foreach ( ParameterNode parameter in function.Parameters )
             {
                 parameters.Add(parameter.NameToken.Text);
-                Add(parameter.NameToken, isWrite: true, uses);
+                uses.Add(new LocalUse(parameter.NameToken, LocalUseKind.Assign));
             }
 
-            Collect(function.Body, name: null, uses);
+            uses.AddRange(LocalUses.Of(function.Body));
 
             HashSet<string> written = new(StringComparer.OrdinalIgnoreCase);
             foreach ( LocalUse use in uses )
@@ -465,156 +468,6 @@ public static class LocalReferences
     }
 
     /// <summary>
-    /// Walks a function body, recording every occurrence of one name and whether it is written
-    /// there.
-    ///
-    /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
-    /// kind, the same way <see cref="Analysis.UnassignedVariableLint"/> and
-    /// <see cref="Analysis.UnusedLocalLint"/> do. The interesting nodes are few — assignments, the
-    /// binding forms, and the places an identifier is not a variable at all — and enumerating
-    /// children generically means a node type added later is traversed without this file having to
-    /// learn about it.
-    /// </summary>
-    private static void Collect(
-        AstNode node, string? name, ImmutableArray<LocalUse>.Builder occurrences)
-    {
-        switch ( node )
-        {
-            case AssignmentNode assignment:
-                // The whole target is a WRITE, down to the name it is rooted at. `a[ 0 ] = x`
-                // CREATES `a` when it does not exist — that is how a GSC array is built, and
-                // `quotes[ quotes.size ] = "…"` appears all through the stock scripts. The
-                // subscript itself is still read: `a[ i ] = x` genuinely reads `i`.
-                CollectAssignmentTarget(assignment.Target, name, occurrences);
-                Collect(assignment.Value, name, occurrences);
-                return;
-
-            case ForeachNode foreachNode:
-                // `foreach ( key, value in … )` BINDS both — the loop writes them each pass.
-                if ( foreachNode.KeyToken is not null && Matches(foreachNode.KeyToken.Value, name) )
-                {
-                    Add(foreachNode.KeyToken.Value, isWrite: true, occurrences);
-                }
-
-                if ( Matches(foreachNode.ValueToken, name) )
-                {
-                    Add(foreachNode.ValueToken, isWrite: true, occurrences);
-                }
-
-                Collect(foreachNode.Collection, name, occurrences);
-                Collect(foreachNode.Body, name, occurrences);
-                return;
-
-            case ConstDeclNode constDecl:
-                if ( Matches(constDecl.NameToken, name) )
-                {
-                    Add(constDecl.NameToken, isWrite: true, occurrences);
-                }
-
-                Collect(constDecl.Value, name, occurrences);
-                return;
-
-            case IdentifierNode identifier:
-                if ( Matches(identifier.Token, name) )
-                {
-                    Add(identifier.Token, isWrite: false, occurrences);
-                }
-
-                return;
-
-            case MemberNode member:
-                // `a.b` reads `a`; `b` is a field name rather than a variable, and a field of that
-                // spelling has a life of its own that another script may read.
-                Collect(member.Object, name, occurrences);
-                return;
-
-            case CallNode call:
-            {
-                // The Callee of `foo()` names a FUNCTION, so it is not a use of a local spelled
-                // foo. `[[ handler ]]()` is different: that really does read the local.
-                if ( call.Callee is not (IdentifierNode or QualifiedNode or PathQualifiedNode) )
-                {
-                    Collect(call.Callee, name, occurrences);
-                }
-
-                // Target is what the call is made ON — `self` in `self foo()` — which is a value.
-                if ( call.Target is not null )
-                {
-                    Collect(call.Target, name, occurrences);
-                }
-
-                // `self waittill( "damage", attacker, amount );` BINDS attacker and amount: they
-                // are outputs the engine fills in, not values being read. The first argument is the
-                // event NAME and is a genuine read.
-                bool bindsOutputs = AstSearch.IsWaittill(call.Callee);
-
-                for ( int index = 0; index < call.Arguments.Length; index++ )
-                {
-                    if ( bindsOutputs && index > 0 && call.Arguments[index] is IdentifierNode bound )
-                    {
-                        if ( Matches(bound.Token, name) )
-                        {
-                            Add(bound.Token, isWrite: true, occurrences);
-                        }
-
-                        continue;
-                    }
-
-                    Collect(call.Arguments[index], name, occurrences);
-                }
-
-                return;
-            }
-
-            case PrefixNode prefix when prefix.Operator == TokenKind.Ampersand:
-                // `&foo` is a pointer to a FUNCTION, not a use of a variable.
-                return;
-
-            default:
-                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-                {
-                    Collect(child, name, occurrences);
-                }
-
-                return;
-        }
-    }
-
-    /// <summary>
-    /// Records an assignment target: the name it is rooted at is WRITTEN, while any subscript
-    /// expression along the way is read.
-    /// </summary>
-    private static void CollectAssignmentTarget(
-        ExprNode target, string? name, ImmutableArray<LocalUse>.Builder occurrences)
-    {
-        switch ( target )
-        {
-            case IdentifierNode identifier:
-                if ( Matches(identifier.Token, name) )
-                {
-                    Add(identifier.Token, isWrite: true, occurrences);
-                }
-
-                return;
-
-            case IndexNode index:
-                CollectAssignmentTarget(index.Object, name, occurrences);
-                Collect(index.Index, name, occurrences);
-                return;
-
-            case MemberNode member:
-                CollectAssignmentTarget(member.Object, name, occurrences);
-                return;
-
-            default:
-                // Anything else — a call result, a deref — introduces no name, so the ordinary read
-                // rules apply.
-                Collect(target, name, occurrences);
-                return;
-        }
-    }
-
-    /// <summary>
     /// Marks the occurrence that INTRODUCES the name: the parameter when there is one, else the
     /// first write in source order.
     ///
@@ -640,22 +493,8 @@ public static class LocalReferences
         return occurrences.ToImmutable();
     }
 
-    /// <summary>A null name matches every token: the all-names walk semantic tokens make.</summary>
-    private static bool Matches(PToken token, string? name)
+    private static bool Matches(PToken token, string name)
     {
-        return name is null || string.Equals(token.Text, name, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(token.Text, name, StringComparison.OrdinalIgnoreCase);
     }
-
-    private static void Add(
-        PToken token, bool isWrite, ImmutableArray<LocalUse>.Builder uses)
-    {
-        uses.Add(new LocalUse(token, isWrite));
-    }
-
-    /// <summary>
-    /// One use the body walk found: the token itself and whether it is written there. The token is
-    /// kept (rather than only its range) because the all-names walk needs the spelling back to
-    /// decide which names the function actually binds.
-    /// </summary>
-    private readonly record struct LocalUse(PToken Token, bool IsWrite);
 }

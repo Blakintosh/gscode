@@ -2,7 +2,6 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using Xunit;
@@ -31,7 +30,7 @@ namespace GSCode.Parser.Tests.Syntax;
 /// </summary>
 public class ParserDepthTests
 {
-    private static readonly TimeSpan Budget = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_budget = TimeSpan.FromSeconds(10);
 
     /// <summary>Analyses under a timeout, on a thread with the default stack.</summary>
     private static ParseResult AnalyzeWithinBudget(string source)
@@ -44,8 +43,8 @@ public class ParserDepthTests
             new NameTable()));
 
         Assert.True(
-            parse.Wait(Budget),
-            $"analysis did not finish within {Budget.TotalSeconds}s on this input");
+            parse.Wait(s_budget),
+            $"analysis did not finish within {s_budget.TotalSeconds}s on this input");
 
         return parse.Result;
     }

@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
@@ -25,8 +22,7 @@ public class PreferBooleanLiteralLintTests
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
         string source = "function run()\n{\n    " + body + "\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         BuiltinApi api = builtins.For(ScriptLanguage.Gsc);
@@ -45,7 +41,14 @@ public class PreferBooleanLiteralLintTests
             ],
             []);
 
-        return PreferBooleanLiteralLint.Analyze(result, api, fields, new FlowTyper(api, fields));
+        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        diagnostics.AddRange(NodeLintHarness.Run(
+            result,
+            (node, into) => PreferBooleanLiteralLint.InspectNode(node, api, into)));
+
+        // The second half, which the server calls once per file outside the shared walk.
+        PreferBooleanLiteralLint.InspectRest(result, fields, new FlowTyper(api, fields).InferValues(result), diagnostics);
+        return diagnostics.ToImmutable();
     }
 
     [Theory]

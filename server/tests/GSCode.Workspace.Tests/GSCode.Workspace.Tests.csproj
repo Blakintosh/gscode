@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GSCode.Workspace\GSCode.Workspace.csproj" />
+    <ProjectReference Include="..\GSCode.Testing\GSCode.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="GSCode.Testing" />
   </ItemGroup>
 
 </Project>

@@ -1,19 +1,6 @@
 namespace GSCode.Workspace.Completion;
 
 /// <summary>
-/// How widely assignment-derived field names are offered after a `.` (the
-/// gscode.completion.fieldScope setting).
-/// </summary>
-public enum FieldScope
-{
-    /// <summary>Only fields seen assigned on THIS owner — `level.` offers level's fields.</summary>
-    Owner,
-
-    /// <summary>Every field name assigned on any owner: broader, and noisier.</summary>
-    All,
-}
-
-/// <summary>
 /// How much punctuation a completed call brings with it (the gscode.completion.callPunctuation
 /// setting).
 /// </summary>
@@ -86,6 +73,20 @@ public enum CompletionKind
 /// undo that with FilterText. Delivered as <c>CompletionItem.labelDetails</c> where the client
 /// supports it, and appended to the label only as a fallback where it does not.
 /// </param>
+/// <param name="ImportPath">
+/// The script this entry's symbol lives in, when accepting it has to add an import first — and ""
+/// for every entry that is already in scope, which is all of them but one producer's.
+///
+/// A PATH rather than an edit: this layer is LSP-free, and where a directive goes in the file is a
+/// question about the document the handler is answering for, not about the suggestion. The handler
+/// turns it into the `additionalTextEdits` the protocol carries.
+/// </param>
+/// <param name="Narrowed">
+/// Whether this row came from a list cut down to what had been typed — literal and field completion,
+/// which would otherwise send the workspace's whole vocabulary. Such a list is only true for the text
+/// typed SO FAR, so the handler marks it incomplete and the editor asks again as the text changes,
+/// rather than filtering a page that a wider or narrower question would have filled differently.
+/// </param>
 public sealed record CompletionEntry(
     string Label,
     CompletionKind Kind,
@@ -104,4 +105,6 @@ public sealed record CompletionEntry(
     // a second request that has only the row's Data to go on, so a row that does not say which of
     // the two it is gets whichever the NAME resolves to: the builtin row rendered
     // globallogic_spawn::spawnSpectator under a header reading "builtin".
-    bool IsBuiltin = false);
+    bool IsBuiltin = false,
+    string ImportPath = "",
+    bool Narrowed = false);

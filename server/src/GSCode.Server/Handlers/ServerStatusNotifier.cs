@@ -6,10 +6,8 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Keeps the status-bar tooltip's memory figure current.
 ///
-/// It was previously set once, from the <c>gscode/indexingComplete</c> payload, and then never
-/// again — so it showed whatever the server happened to be holding the instant indexing finished,
-/// which is both the least interesting moment to sample and the one guaranteed to be stale a
-/// minute later.
+/// Sampled continuously rather than once from the <c>gscode/indexingComplete</c> payload, which is
+/// the least interesting moment to sample and the one guaranteed to be stale a minute later.
 ///
 /// Sampling is cheap; SENDING is what costs, so a notification only goes out when the number has
 /// actually moved. An idle server settles and then produces no traffic at all, while a server
@@ -24,13 +22,21 @@ namespace GSCode.Server.Handlers;
 public sealed class ServerStatusNotifier
 {
     /// <summary>How often to sample. Slow enough to be free, fast enough to feel live.</summary>
-    private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan s_sampleInterval = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// Movement worth telling the client about. Below this the number would not change the
     /// rounded megabytes the tooltip prints, so the notification would say nothing.
     /// </summary>
-    private const long ReportThresholdBytes = 1024 * 1024;
+    private const long ReportThresholdBytes = BytesPerMegabyte;
+
+    /// <summary>
+    /// The unit the tooltip prints in. Separate from the threshold above even though the two are
+    /// equal today: the threshold answers "is this worth sending" and is a tuning knob, while this
+    /// is a unit conversion and is not. They were one constant, so raising the reporting threshold
+    /// would silently have changed what the number MEANT.
+    /// </summary>
+    private const long BytesPerMegabyte = 1024 * 1024;
 
     private readonly ILanguageServerFacade _server;
 
@@ -52,12 +58,17 @@ public sealed class ServerStatusNotifier
                 if ( Math.Abs(workingSetBytes - lastSentBytes) >= ReportThresholdBytes )
                 {
                     lastSentBytes = workingSetBytes;
-                    double megabytes = workingSetBytes / ReportThresholdBytes;
+
+                    // Cast BEFORE dividing: long / long truncates to whole megabytes before the
+                    // result ever reaches the double it is assigned to, so this disagreed with
+                    // gscode/indexingComplete's WorkingSetMegabytes (Environment.WorkingSet /
+                    // (1024.0 * 1024.0)) by up to a megabyte on the same tooltip.
+                    double megabytes = workingSetBytes / (double)BytesPerMegabyte;
 
                     _server.SendNotification("gscode/serverStatus", new ServerStatusParams(megabytes));
                 }
 
-                await Task.Delay(SampleInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(s_sampleInterval, cancellationToken).ConfigureAwait(false);
             }
         }
         catch ( OperationCanceledException )

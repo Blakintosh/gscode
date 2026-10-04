@@ -3,14 +3,8 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -19,14 +13,12 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// The #include counterpart to <see cref="NamespaceUsageLintTests"/>: a call that resolves to a
 /// function in a file this one never included.
 ///
-/// Built the way <see cref="UnusedIncludeLintTests"/> is — the workspace is committed directly
-/// rather than indexed, because the default indexer runs as BO3 and would not parse a bare CoD4
-/// function declaration.
+/// The workspace is indexed as CoD4, as <see cref="UnusedIncludeLintTests"/>' is: under the default
+/// BO3 a bare function declaration is not a declaration at all.
 /// </summary>
 public class IncludeUsageLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string UtilitySource = "scriptPrintln( channel, msg )\n{\n}\n";
 
@@ -40,47 +32,33 @@ public class IncludeUsageLintTests
     /// One engine name, which is all the gate needs: the lint stands down entirely when the set is
     /// empty, so an empty one would make every test pass for the wrong reason.
     /// </summary>
-    private static readonly FrozenSet<string> EngineNames =
+    private static readonly FrozenSet<string> s_engineNames =
         new[] { "println" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
-    {
-        FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\common_scripts\utility.gsc", UtilitySource)
-            .AddFile(@$"{Raw}\maps\mp\_load.gsc", LoadSource)
-            .AddFile(@$"{Raw}\maps\_chain.gsc", ChainSource);
-
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-
-        Commit(database, @$"{Raw}\common_scripts\utility.gsc", @"common_scripts\utility.gsc", UtilitySource);
-        Commit(database, @$"{Raw}\maps\mp\_load.gsc", @"maps\mp\_load.gsc", LoadSource);
-        Commit(database, @$"{Raw}\maps\_chain.gsc", @"maps\_chain.gsc", ChainSource);
-
-        return (database, resolver);
-    }
-
-    private static void Commit(ScriptDatabase database, string path, string relativePath, string source)
-    {
-        ParseResult parsed = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Cod4);
-
-        database.Commit(parsed, ResolutionContext.RawContext, isDirty: false, relativePath);
-    }
-
+    /// <summary>
+    /// Lints <paramref name="askingSource"/> as <c>maps\mp\gametypes\_menus.gsc</c> against a CoD4
+    /// workspace of utility, _load and _chain. The asking file is analysed as
+    /// <paramref name="profile"/>, and Active follows it for the lint, so a test can ask what
+    /// happens when the file is not a merge-dialect file at all.
+    /// </summary>
     private static ImmutableArray<Diagnostic> Lint(string askingSource, GameProfile? profile = null)
     {
-        (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        GameProfile game = profile ?? Cod4;
-        string askingPath = @$"{Raw}\maps\mp\gametypes\_menus.gsc";
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"common_scripts\utility.gsc", UtilitySource),
+                new TestFile(@"maps\mp\_load.gsc", LoadSource),
+                new TestFile(@"maps\_chain.gsc", ChainSource),
+            ],
+            s_cod4);
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource),
-            NullInsertProvider.Instance, new NameTable(), game);
+        GameProfile game = profile ?? s_cod4;
+        using ProfileScope asking = ProfileScope.Use(game);
+
+        string askingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
+        ParseResult result = TestParse.Analyze(askingSource, askingPath, game);
 
         return IncludeUsageLint.Analyze(
-            result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath, EngineNames, "raw", game);
+            result, workspace.Database.Gsc, ScriptLanguage.Gsc, workspace.Resolver, askingPath, s_engineNames, "raw", game);
     }
 
     [Fact]
@@ -165,5 +143,27 @@ public class IncludeUsageLintTests
         // 5000's to report. Running both would double-report it.
         Assert.Empty(Lint(
             "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n", GameProfile.BlackOps3));
+    }
+
+    [Fact]
+    public void ReportsACallAMacroExpandedInto()
+    {
+        // Nothing in the file spells scriptPrintln — a macro does — and the engine still links the
+        // expansion, so the include is just as required. Theoretical-looking on a dialect with no
+        // preprocessor, but a #define in a CoD4 file is reported as 2016 and then expanded anyway,
+        // which is deliberate: suppression has to leave a working file behind.
+        Diagnostic reported = Assert.Single(Lint(
+            "#include maps\\mp\\_load;\n#define HELP() scriptPrintln()\ninit()\n{\n\tHELP();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.FunctionNotIncluded, reported.Code);
+    }
+
+    [Fact]
+    public void ReportsOnceWhenAMacroBodyCallsTheSameFunctionTwice()
+    {
+        // Both calls key to the invocation range, so without the (range, name) guard this is the
+        // same Error twice on one word.
+        Assert.Single(Lint(
+            "#include maps\\mp\\_load;\n#define HELP() scriptPrintln(); scriptPrintln()\ninit()\n{\n\tHELP();\n}\n"));
     }
 }

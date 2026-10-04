@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -24,12 +20,7 @@ public class UnusedLocalLintTests
 {
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f( p )\n{\n" + body + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f( p )\n{\n" + body + "\n}\n");
 
         return UnusedLocalLint.Analyze(result);
     }
@@ -126,15 +117,32 @@ public class UnusedLocalLintTests
     }
 
     [Fact]
+    public void AClassMethodWritingAMemberIsNotReported()
+    {
+        // The reported false positive, reduced from BO3's scripts\shared\doors_shared.gsc: a class
+        // method setting one of its own `var` members looks exactly like a dead store to a rule
+        // that scopes names per body with no model of the class — the same reasoning that already
+        // exempts a constructor exempts every method, since a bare name inside either may be a
+        // member rather than a local.
+        string source =
+            "class cDoor\n{\n"
+            + "    var m_n_door_connect_paths;\n\n"
+            + "    function set_door_paths( n_door_connect_paths )\n"
+            + "    {\n"
+            + "        m_n_door_connect_paths = n_door_connect_paths;\n"
+            + "    }\n"
+            + "}\n";
+
+        ParseResult result = TestParse.Analyze(source);
+
+        Assert.Empty(UnusedLocalLint.Analyze(result));
+    }
+
+    [Fact]
     public void EachFunctionIsSeparate()
     {
         // A name read in another function does not keep this one alive.
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function a()\n{\n    bar = 1;\n}\nfunction b()\n{\n    bar = 2;\n    use( bar );\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function a()\n{\n    bar = 1;\n}\nfunction b()\n{\n    bar = 2;\n    use( bar );\n}\n");
 
         Assert.Single(UnusedLocalLint.Analyze(result));
     }

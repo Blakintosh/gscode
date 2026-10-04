@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using GSCode.Parser;
 using GSCode.Server.Mapping;
 using GSCode.Server.Configuration;
+using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
@@ -16,7 +17,7 @@ namespace GSCode.Server.Formatting;
 /// Carried because the on-type handler needs the document's TEXT to find the alignment group around
 /// the cursor, which is a question about the buffer rather than about the edits.
 /// </param>
-internal readonly record struct FormatRequest(
+public readonly record struct FormatRequest(
     OpenDocument Document, ImmutableArray<GscFormatter.FormatEdit> Edits);
 
 /// <summary>
@@ -26,9 +27,44 @@ internal readonly record struct FormatRequest(
 /// diverge only in which of its edits they keep — everything up to that point was written out three
 /// times, including the stale-analysis reasoning below, which is the one comment in the group that
 /// must not be allowed to drift.
+///
+/// An injected instance, like <c>NavigationSupport</c>, so it also owns the four collaborators those
+/// steps need. Each handler had taken all four only to pass them straight through to here.
 /// </summary>
-internal static class FormattingSupport
+public sealed class FormattingSupport
 {
+    private readonly DocumentStore _documents;
+    private readonly ResolverHolder _resolver;
+    private readonly StockScripts _stockScripts;
+    private readonly ServerSettings _settings;
+    private readonly NavigationSupport _navigation;
+    private readonly BuiltinApiSet _builtins;
+
+    public FormattingSupport(
+        DocumentStore documents,
+        ResolverHolder resolver,
+        StockScripts stockScripts,
+        ServerSettings settings,
+        NavigationSupport navigation,
+        BuiltinApiSet builtins)
+    {
+        _documents = documents;
+        _resolver = resolver;
+        _stockScripts = stockScripts;
+        _settings = settings;
+        _navigation = navigation;
+        _builtins = builtins;
+    }
+
+    /// <summary>
+    /// The formatter's options for a request: the editor's indentation, and every other flag from
+    /// the settings. The fragment formatters adjust this with <c>with</c> at their own call sites.
+    /// </summary>
+    public FormatOptions OptionsFor(FormattingOptions requestOptions)
+    {
+        return FormatOptions.From((int)requestOptions.TabSize, requestOptions.InsertSpaces, _settings);
+    }
+
     /// <summary>
     /// The formatter's edits for an open document, or null when it is unknown or has never parsed.
     /// </summary>
@@ -39,8 +75,12 @@ internal static class FormattingSupport
     /// characters and corrupts the file. Every other stale read in this server shows something
     /// wrong; this one writes something wrong.
     /// </remarks>
-    public static FormatRequest? Prepare(
-        DocumentStore documents, ResolverHolder resolver, StockScripts stockScripts, DocumentUri uri, FormatOptions options)
+    /// <param name="cancellationToken">
+    /// Reaches the fresh analysis below, which is a full lex, preprocess, parse and extract on the
+    /// request thread. On-type formatting runs this on every <c>;</c> and <c>}</c>, so an abandoned
+    /// request is one the user has already typed past.
+    /// </param>
+    public FormatRequest? Prepare(DocumentUri uri, FormatOptions options, CancellationToken cancellationToken)
     {
         string path = uri.GetFileSystemPath();
 
@@ -49,7 +89,7 @@ internal static class FormattingSupport
         // on save -- leaves the install differing from every other player's. The check is by
         // identity (is this one of the game's own files) rather than by folder, so a modder's own
         // new script placed under raw still formats.
-        if ( IsStockScript(resolver, stockScripts, path) )
+        if ( IsStockScript(path) )
         {
             Log.Information("Formatting refused for stock script {Path}", path);
             return null;
@@ -58,21 +98,46 @@ internal static class FormattingSupport
         // Only that an analysis EXISTS is asked here — a document nothing has parsed yet has
         // nothing to format. The one actually formatted is taken fresh on the next line, for the
         // reason the remarks above give, so the result this hands back is deliberately discarded.
-        if ( !documents.TryGetAnalyzed(path, out OpenDocument document, out ParseResult _) )
+        if ( !_documents.TryGetAnalyzed(path, out OpenDocument document, out ParseResult _) )
         {
             return null;
         }
 
-        ParseResult analysis = documents.AnalyzeIfStale(document);
+        ParseResult analysis = _documents.AnalyzeIfStale(document, cancellationToken);
 
-        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options));
+        // Fixing a name's casing asks the workspace what it resolves to, which the formatter
+        // itself cannot see. Without a target the keywords are still fixed; the names are not.
+        ICasingLookup? casing = null;
+        if ( options.FixCasing && _navigation.ResolveFresh(uri, cancellationToken) is NavigationTarget target )
+        {
+            casing = new CallCasing(target, _builtins);
+        }
+
+        return new FormatRequest(document, GscFormatter.FormatMinimalEdits(analysis, options, casing));
     }
 
-    private static bool IsStockScript(ResolverHolder resolver, StockScripts stockScripts, string path)
+    private bool IsStockScript(string path)
     {
-        PathResolver current = resolver.Current;
+        PathResolver current = _resolver.Current;
         ResolutionContext context = current.GetContext(path);
-        return stockScripts.Contains(current.GetScriptRelativePath(path, context));
+        return _stockScripts.Contains(current.GetScriptRelativePath(path, context));
+    }
+
+    /// <summary>
+    /// Whether an edit lies wholly within lines <paramref name="top"/> to <paramref name="bottom"/>:
+    /// it starts on one of them and ends on one of them, or at the start of the line after.
+    /// </summary>
+    /// <remarks>
+    /// The fragment formatters keep only these. Keeping any edit that merely OVERLAPPED the scope
+    /// let one large edit through whole: on a 7,000-line file, typing a ';' rewrote everything from
+    /// the first change to the last and sent the caret to the end of it.
+    /// </remarks>
+    public static bool WithinLines(GscFormatter.FormatEdit edit, int top, int bottom)
+    {
+        bool startsInside = edit.Range.Start.Line >= top && edit.Range.Start.Line <= bottom;
+        bool endsInside = edit.Range.End.Line <= bottom
+            || (edit.Range.End.Line == bottom + 1 && edit.Range.End.Character == 0);
+        return startsInside && endsInside;
     }
 
     /// <summary>

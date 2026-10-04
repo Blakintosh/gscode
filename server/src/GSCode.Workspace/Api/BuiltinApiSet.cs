@@ -21,18 +21,23 @@ public sealed class BuiltinApiSet
         _engineNamesCsc = engineNamesCsc ?? NamesOf(csc);
     }
 
-    /// <summary>Loads both libraries from the given Api directory, named by the profile.</summary>
-    public static BuiltinApiSet Load(string apiDirectory, GameProfile? profile = null)
+    /// <summary>
+    /// Loads both libraries from the given Api directory, named by the profile.
+    /// <paramref name="onParseFailure"/> is passed straight through to <see cref="ApiLoader"/> —
+    /// see its remarks for why this layer cannot log the failure itself.
+    /// </summary>
+    public static BuiltinApiSet Load(
+        string apiDirectory, GameProfile? profile = null, Action<string, Exception>? onParseFailure = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        BuiltinApi gsc = ApiLoader.Load(apiDirectory, ScriptLanguage.Gsc, game);
-        BuiltinApi csc = ApiLoader.Load(apiDirectory, ScriptLanguage.Csc, game);
+        BuiltinApi gsc = ApiLoader.Load(apiDirectory, ScriptLanguage.Gsc, game, onParseFailure);
+        BuiltinApi csc = ApiLoader.Load(apiDirectory, ScriptLanguage.Csc, game, onParseFailure);
 
         return new BuiltinApiSet(
             gsc,
             csc,
-            EngineNames(apiDirectory, game, ScriptLanguage.Gsc, gsc),
-            EngineNames(apiDirectory, game, ScriptLanguage.Csc, csc));
+            EngineNames(apiDirectory, game, ScriptLanguage.Gsc, gsc, onParseFailure),
+            EngineNames(apiDirectory, game, ScriptLanguage.Csc, csc, onParseFailure));
     }
 
     /// <summary>The library for a language (GSH consults the GSC library, its usual host).</summary>
@@ -59,14 +64,15 @@ public sealed class BuiltinApiSet
     }
 
     private static FrozenSet<string> EngineNames(
-        string apiDirectory, GameProfile game, ScriptLanguage language, BuiltinApi own)
+        string apiDirectory, GameProfile game, ScriptLanguage language, BuiltinApi own,
+        Action<string, Exception>? onParseFailure)
     {
         if ( own.Count > 0 || game.EngineNameFallbackFileName(language) is not string fileName )
         {
             return NamesOf(own);
         }
 
-        return NamesOf(ApiLoader.LoadFile(Path.Combine(apiDirectory, fileName)));
+        return NamesOf(ApiLoader.LoadFile(Path.Combine(apiDirectory, fileName), onParseFailure));
     }
 
     private static FrozenSet<string> NamesOf(BuiltinApi api)

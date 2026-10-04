@@ -13,14 +13,18 @@ namespace GSCode.Workspace.Documents;
 /// A completed analysis and the document version whose text produced it, published as one
 /// immutable pair.
 ///
-/// The two were separate fields, written one after the other. Two analyses can run on one document
-/// at once — the debounced one on a thread-pool continuation while a request thread enters
-/// <see cref="DocumentStore.AnalyzeIfStale"/> — so the writes could interleave into a NEW version
-/// stamped on an OLD parse: a document that reports itself fresh while holding text the user has
-/// already replaced, which is exactly what the staleness check exists to prevent. One reference
-/// write of a pair cannot come apart that way.
+/// One reference, because two analyses can run on one document at once — the debounced one on a
+/// thread-pool continuation while a request thread enters <see cref="DocumentStore.AnalyzeIfStale"/>
+/// — and two separate writes could interleave into a NEW version stamped on an OLD parse: a document
+/// reporting itself fresh while holding text the user has already replaced.
 /// </summary>
-public sealed record AnalysisSnapshot(ParseResult Result, int Version);
+/// <param name="HeaderGeneration">
+/// The <see cref="IHeaderMacroCache.Generation"/> the headers in this parse were read at, taken
+/// BEFORE the analysis rather than after. A header edit landing mid-parse must leave the result
+/// looking old, not be stamped as already seen — the conservative direction costs one extra parse
+/// and the other loses the edit until the next keystroke.
+/// </param>
+public sealed record AnalysisSnapshot(ParseResult Result, int Version, long HeaderGeneration);
 
 /// <summary>One open editor document: its live text and latest analysis.</summary>
 public sealed class OpenDocument
@@ -52,12 +56,6 @@ public sealed class OpenDocument
         get { return Analysis?.Result; }
     }
 
-    /// <summary>The <see cref="Version"/> <see cref="LatestResult"/> was produced from, or -1 before the first run.</summary>
-    public int AnalyzedVersion
-    {
-        get { return Analysis?.Version ?? -1; }
-    }
-
     /// <summary>True when the text has moved on since the last completed analysis.</summary>
     public bool IsStale
     {
@@ -78,14 +76,20 @@ public sealed class OpenDocument
     /// The caller is handed the winner because it publishes diagnostics from what it gets back,
     /// and a superseded parse must not be what those describe.
     /// </summary>
-    public AnalysisSnapshot Publish(ParseResult result, int version)
+    public AnalysisSnapshot Publish(ParseResult result, int version, long headerGeneration = 0)
     {
-        AnalysisSnapshot published = new(result, version);
+        AnalysisSnapshot published = new(result, version, headerGeneration);
 
         while ( true )
         {
             AnalysisSnapshot? current = Volatile.Read(ref _analysis);
-            if ( current is not null && current.Version >= version )
+
+            // Newer text wins outright; at the same text, the one that read the newer headers does.
+            // Without the second half a re-analysis forced by a header edit would be discarded as
+            // "same version", which is the whole reason it was run.
+            if ( current is not null
+                && (current.Version > version
+                    || (current.Version == version && current.HeaderGeneration >= headerGeneration)) )
             {
                 return current;
             }
@@ -134,6 +138,16 @@ public sealed class DocumentStore
             Version = version,
         };
 
+        // A second didOpen for a path already open — a client re-sending one on tab focus, or a race
+        // during a restored session — replaces the entry while the FIRST open's immediate analysis
+        // may still be running against the OLD document, which nothing else can reach any more.
+        // Left to finish, it would publish and commit from that orphan, overwriting this call's
+        // fresher publish with a stale one. Cancelling it is the defence Close already gives.
+        if ( _documents.TryGetValue(normalized, out OpenDocument? previous) )
+        {
+            previous.PendingAnalysis?.Cancel();
+        }
+
         _documents[normalized] = document;
         return document;
     }
@@ -144,18 +158,62 @@ public sealed class DocumentStore
     }
 
     /// <summary>
+    /// Whether the editor has this file OPEN, which is the question "who owns this file's text".
+    /// An open buffer is the source of truth: it may hold unsaved edits, so anything that would
+    /// read the file from disk — a lint sweep, a watched-file re-index, the workspace diagnostics
+    /// publisher — has to leave it to the live-analysis path instead.
+    ///
+    /// Six callers each asked it as a <see cref="TryGet"/> with a discarded out parameter, which
+    /// reads as a lookup rather than as the ownership rule it is.
+    /// </summary>
+    public bool IsOpen(string path)
+    {
+        return _documents.ContainsKey(PathUtil.NormalizeAbsolute(path));
+    }
+
+    /// <summary>
+    /// An open document and a parse of the text it holds RIGHT NOW, re-analysing first when the
+    /// last one has been overtaken. False when the path is not open.
+    ///
+    /// The freshening is the point, and it is why this is not <see cref="TryGetAnalyzed"/>. A file
+    /// opened while the startup index is still running has its didOpen analysis queued behind the
+    /// indexer's own thread-pool work (see <c>TextSyncHandler.ScheduleImmediateAnalysis</c>), so a
+    /// request routinely arrives before ANY analysis has published. The cached snapshot is null
+    /// then, and for document symbols, folding and selection ranges the client has no "ask again":
+    /// the outline would stay empty until the next edit. Analysis is also debounced 250 ms behind the
+    /// keystrokes, so a cached parse describes text the user has already replaced — which for
+    /// semantic tokens lands the colouring on the wrong characters.
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// Reaches <see cref="AnalyzeIfStale"/>: this runs a full lex, preprocess, parse and extract on
+    /// the REQUEST thread, and every caller is a read path with no debounce in front of it.
+    /// </param>
+    public bool TryAnalyzeFresh(
+        string path, CancellationToken cancellationToken, out OpenDocument document, out ParseResult result)
+    {
+        if ( !TryGet(path, out document) )
+        {
+            result = null!;
+            return false;
+        }
+
+        result = AnalyzeIfStale(document, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// An open document together with its latest completed analysis, or false when the path is not
     /// open or nothing has finished analysing it yet.
     ///
-    /// The pair rather than two steps, because no caller wants one without the other: five handlers
-    /// each wrote the lookup and the null check out by hand, which is five spellings of one
-    /// question. Reads <see cref="OpenDocument.Analysis"/> once, for the reason that property
-    /// exists — a separate <see cref="OpenDocument.LatestResult"/> read can straddle a publish and
-    /// hand back a parse from a different version than the one just found.
+    /// The pair rather than two steps, because no caller wants one without the other. Reads
+    /// <see cref="OpenDocument.Analysis"/> once, for the reason that property exists — a separate
+    /// <see cref="OpenDocument.LatestResult"/> read can straddle a publish and hand back a parse
+    /// from a different version than the one just found.
     ///
-    /// This is the CHEAP resolve, deliberately. It answers only what the store knows; anything
-    /// needing the database, the resolution context or a fresh parse goes through the server's
-    /// navigation support instead.
+    /// This is the CHEAP resolve, deliberately: it answers only what the store already has. A
+    /// caller that needs a parse of the CURRENT text wants <see cref="TryAnalyzeFresh"/>, and one
+    /// needing the database or the resolution context goes through the server's navigation
+    /// support. Formatting is its one caller.
     /// </summary>
     public bool TryGetAnalyzed(string path, out OpenDocument document, out ParseResult result)
     {
@@ -210,7 +268,27 @@ public sealed class DocumentStore
     }
 
     /// <summary>Runs the full per-file pipeline on the document's current text.</summary>
-    public ParseResult Analyze(OpenDocument document)
+    public ParseResult Analyze(OpenDocument document, CancellationToken cancellationToken = default)
+    {
+        return AnalyzeSnapshot(document, cancellationToken).Result;
+    }
+
+    /// <summary>
+    /// Same work as <see cref="Analyze"/>, but returns the WINNING snapshot (parse and version
+    /// together) rather than projecting out just the parse.
+    ///
+    /// <see cref="Analyze"/> is the answer for every caller that reads <c>document.Version</c>
+    /// itself right after — the overwhelming majority — but a caller that PUBLISHES something
+    /// stamped with a version (diagnostics, most notably) must stamp it with the version this
+    /// analysis actually describes, not whatever <c>document.Version</c> has become by the time
+    /// the publish happens. Those can differ: two analyses of one document can run concurrently
+    /// (the debounced one and a request thread's <see cref="AnalyzeIfStale"/>), the version CAS in
+    /// <see cref="OpenDocument.Publish"/> decides which one's result actually wins, and a caller
+    /// reading the live version afterwards would stamp even the LOSING analysis's diagnostics with
+    /// the newest text's version — which is exactly the version a client uses to discard
+    /// diagnostics that describe text it has already moved past.
+    /// </summary>
+    public AnalysisSnapshot AnalyzeSnapshot(OpenDocument document, CancellationToken cancellationToken = default)
     {
         // Read the version and the text TOGETHER, before anything slow, and analyse those: an edit
         // arriving mid-analysis must leave the document marked stale, not stamped with a version
@@ -220,6 +298,10 @@ public sealed class DocumentStore
         int version = document.Version;
         SourceText text = document.Text;
 
+        // Read with them, and for the same reason: a header edit landing mid-analysis must leave
+        // the result looking old rather than be stamped as already seen.
+        long headerGeneration = HeaderGeneration;
+
         ParseResult result = ScriptAnalysis.Analyze(
             document.Path,
             document.Language,
@@ -227,30 +309,66 @@ public sealed class DocumentStore
             _insertProviderFactory(document.Path),
             _names,
             profile: null,
-            headerCache: _headerCache);
+            headerCache: _headerCache,
+            cancellationToken);
 
-        return document.Publish(result, version).Result;
+        return document.Publish(result, version, headerGeneration);
     }
 
     /// <summary>
-    /// The document's analysis, re-running it first when the text has moved on.
+    /// Where the headers stand right now, or 0 when nothing caches them (tests, and any store built
+    /// without one — a document with no cache has no header that can move behind it).
+    /// </summary>
+    private long HeaderGeneration
+    {
+        get { return _headerCache?.Generation ?? 0; }
+    }
+
+    /// <summary>
+    /// The document's analysis, re-running it first when the text — or a header it inserts — has
+    /// moved on.
     ///
     /// For interactive, position-sensitive features — completion, signature help — where the
     /// request carries a live cursor position that only means anything against matching text.
     /// The debounce exists to keep diagnostics off the keystroke path; it must not make the
     /// editor answer questions about text the user has already replaced.
+    ///
+    /// The header half is the same argument about a different input. A parse expands whatever the
+    /// <c>#insert</c>ed headers said at the time, so editing a GSH invalidates every dependent's
+    /// parse without touching a character of it. Checking the document's own version alone let
+    /// those parses report themselves current forever, which is why a macro's value in a GSC
+    /// updated only once something was typed into the GSC.
     /// </summary>
-    public ParseResult AnalyzeIfStale(OpenDocument document)
+    public ParseResult AnalyzeIfStale(OpenDocument document, CancellationToken cancellationToken = default)
+    {
+        return AnalyzeSnapshotIfStale(document, cancellationToken).Result;
+    }
+
+    /// <summary>
+    /// Same work as <see cref="AnalyzeIfStale"/>, returning the parse and the version it describes
+    /// together — the <see cref="AnalyzeSnapshot"/> to <see cref="Analyze"/> relationship, applied
+    /// to the freshening path.
+    ///
+    /// For the same reason: a caller that PUBLISHES something version-stamped must stamp it with
+    /// the version this parse describes. Reading <c>document.Version</c> afterwards stamps a parse
+    /// of older text with the newest version, which is the one stamp a client uses to decide a set
+    /// is still current.
+    /// </summary>
+    public AnalysisSnapshot AnalyzeSnapshotIfStale(
+        OpenDocument document, CancellationToken cancellationToken = default)
     {
         // One read of the published pair, not a staleness check followed by a separate fetch: the
         // two reads could straddle a concurrent publish and return a result from a version other
         // than the one just found to be current.
         AnalysisSnapshot? analysis = document.Analysis;
-        if ( analysis is not null && analysis.Version == document.Version )
+        if ( analysis is not null && analysis.Version == document.Version && analysis.HeaderGeneration == HeaderGeneration )
         {
-            return analysis.Result;
+            // The published snapshot itself, so the cached path keeps handing back the SAME parse
+            // instance — callers assert on that to prove an untouched document cost no second
+            // analysis.
+            return analysis;
         }
 
-        return Analyze(document);
+        return AnalyzeSnapshot(document, cancellationToken);
     }
 }

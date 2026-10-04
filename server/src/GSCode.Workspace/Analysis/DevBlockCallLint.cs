@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -12,9 +12,9 @@ namespace GSCode.Workspace.Analysis;
 
 /// <summary>
 /// Reports a call to a function declared inside a <c>/# #/</c> dev block from code that is not
-/// itself in one. Dev blocks are stripped from a release build, so the call compiles and runs
-/// fine while developing and then fails only once the mod ships — exactly the kind of bug worth
-/// catching early.
+/// itself in one. A dev block is not a compile-time conditional: the game skips it at runtime
+/// unless developer script is enabled on the server, so the call works while developing and then
+/// fails only on a server without it — exactly the kind of bug worth catching early.
 ///
 /// The two halves come from different places on purpose. The CALLEE's dev-ness is a stored
 /// fact (<see cref="FunctionSymbol.IsDevOnly"/>), so the check works across files. The CALLER's
@@ -22,8 +22,13 @@ namespace GSCode.Workspace.Analysis;
 /// correct for unsaved edits.
 ///
 /// Engine builtins get the same treatment through <see cref="BuiltinFunction.IsDevOnly"/>,
-/// since some exist only in a development build. There is no declaration to point at for
+/// since some must be called from inside a dev block. There is no declaration to point at for
 /// those, so they are reported without related information.
+///
+/// Resolution goes through <see cref="MethodResolution.ResolveCall"/> rather than straight to
+/// <see cref="DatabaseQueries.LookupFunctions"/>, because a bare call inside a class body means a
+/// METHOD first and that query cannot see one. A dev-only method is worth catching for exactly the
+/// same reason a dev-only function is, and routing is what makes it visible here.
 /// </summary>
 public static class DevBlockCallLint
 {
@@ -36,30 +41,79 @@ public static class DevBlockCallLint
         BuiltinApi builtins)
     {
         ImmutableArray<TextRange> devRegions = DevRegions(result);
-        FunctionLookupCache lookups = new(store, askingContextId, askingPath, askingNamespaces);
+
+        // Where a bare call inside a class falls back TO when no class in the chain declares the
+        // name: the file's own namespace function, which is what the call then really means. Same
+        // source as FunctionResolutionLint uses for the same purpose.
+        string fileNamespace = askingNamespaces.IsDefaultOrEmpty ? "" : askingNamespaces[0];
+
+        // Keyed on the WRITTEN key, so a name called repeatedly in one file is routed once. A
+        // FunctionLookupCache cannot do this: it can only ask LookupFunctions, which this rule must
+        // not use alone.
+        Dictionary<SymbolKey, ImmutableArray<ResolvedFunction>> resolutions = [];
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Keyed on the symbol: one dev-only function named twice by a macro body is one failure,
+        // not two. See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped: a dev-only function called from a macro body breaks without
+            // developer script exactly as it would called directly, and the file invoking the macro
+            // is the one that fails — found only on a server without developer script, the one
+            // class of bug this lint exists for.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
 
-            // A call that is itself dev-only disappears alongside its target, so it is fine.
+            // A call that is itself in a dev block runs only with developer script, like its target.
+            // The range is the INVOCATION for an expanded call, which is the right question to ask:
+            // what decides whether the call runs is where the macro was invoked, not where its
+            // body was written.
             if ( IsInsideDevRegion(entry.Range, devRegions) )
             {
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> resolved = lookups.Lookup(entry.Key.Namespace, entry.Key.Name);
+            // Only a name that COULD be dev-only is worth resolving: one some file declares inside a
+            // dev block, or a dev-only builtin. For every other name no resolution can end in a
+            // report — the script half needs every candidate dev-only, the builtin half needs a
+            // dev-only builtin — and resolving a merge-dialect call by bare name at 50,000 files
+            // means reading every one of the thousands of files declaring `main` (PERF.md, the
+            // scale section).
+            if ( !store.MayBeDevOnly(entry.Key.Name) && builtins.Find(entry.Key.Name) is not { IsDevOnly: true } )
+            {
+                continue;
+            }
+
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
+            {
+                continue;
+            }
+
+            // ROUTED, not looked up. SymbolExtractor keys an unqualified call written inside a class
+            // body to that class, and LookupFunctions cannot answer for one: it scans a record's
+            // top-level functions, where no method ever lands, and reads a null namespace as "any
+            // namespace". So `error( ... )` inside cSceneObject — the inherited
+            // cScriptBundleObjectBase method, which returns a bool and is not dev-only — matched the
+            // unrelated `util::error` declared in a dev block in mp/_util.gsc, and every one of
+            // scene_shared.gsc's thirteen calls to it was reported as a dev-only call.
+            if ( !resolutions.TryGetValue(entry.Key, out ImmutableArray<ResolvedFunction> resolved) )
+            {
+                resolved = MethodResolution.ResolveCall(
+                    store, askingContextId, askingPath, entry.Key, entry.Kind, askingNamespaces, fileNamespace);
+
+                resolutions[entry.Key] = resolved;
+            }
 
             if ( resolved.Length == 0 )
             {
                 // No script function by that name, so it may be an engine builtin. Some of those
-                // exist only in a development build and are just as broken to call from release
-                // code, but the engine owns them, so there is no declaration to point at. The
+                // must be called from inside a dev block and are just as broken to call from
+                // outside one, but the engine owns them, so there is no declaration to point at. The
                 // flag is read off the function itself, so whether it came from the curated list
                 // or one day from the API data makes no difference here.
                 BuiltinFunction? builtin = builtins.Find(entry.Key.Name);
@@ -70,15 +124,15 @@ public static class DevBlockCallLint
                     diagnostics.Add(Diagnostic.Create(
                         entry.Range,
                         DiagnosticSeverity.Error,
-                        GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
+                        GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock,
                         builtin.Name));
                 }
 
                 continue;
             }
 
-            // Only report when every candidate is dev-only: if any visible overload survives a
-            // release build, the call is fine.
+            // Only report when every candidate is dev-only: if any visible overload is declared
+            // outside a dev block, the call is fine.
             if ( !AllDevOnly(resolved) )
             {
                 continue;
@@ -87,11 +141,14 @@ public static class DevBlockCallLint
             Diagnostic diagnostic = Diagnostic.Create(
                 entry.Range,
                 DiagnosticSeverity.Error,
-                GscDiagnosticCode.DevOnlyFunctionCalledFromRelease,
+                GscDiagnosticCode.DevOnlyFunctionCalledOutsideDevBlock,
                 resolved[0].Function.Name);
 
+            // DeclaringPath, not Record.Path: a dev-only function reached through #insert has a
+            // NameRange that is a true position in the HEADER, not in the record that merely
+            // spliced it in.
             DiagnosticRelation declaredAt = new(
-                resolved[0].Record.Path, resolved[0].Function.NameRange, "Declared inside a dev block here.");
+                resolved[0].DeclaringPath, resolved[0].Function.NameRange, "Declared inside a dev block here.");
 
             diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
         }

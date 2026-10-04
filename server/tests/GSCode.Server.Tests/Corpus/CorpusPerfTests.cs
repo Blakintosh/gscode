@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Instrumentation;
 using GSCode.Core.Text;
@@ -10,10 +10,12 @@ using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
+using GSCode.Workspace.Cache;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
+using GSCode.Server.Handlers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -35,6 +37,13 @@ namespace GSCode.Server.Tests.Corpus;
 [Collection(GameProfileCollection.Name)]
 public class CorpusPerfTests
 {
+    /// <summary>
+    /// Stands in for <c>ServerBuildIdentity.Compute</c>, which keys the real cache on the bundled
+    /// data files. Any constant works here as long as both opens agree: a mismatch makes
+    /// <c>SqliteCache.Open</c> discard the database, and the "warm" run would silently be a cold one.
+    /// </summary>
+    private const string WarmCacheIdentity = "warm-perf-identity";
+
     private readonly ITestOutputHelper _output;
 
     public CorpusPerfTests(ITestOutputHelper output)
@@ -61,7 +70,7 @@ public class CorpusPerfTests
             timings.Add(Time(path, GameProfile.BlackOps3, inserts, names, CorpusFixture.Inserts, () => CorpusFixture.Analyze(path, resolver, names)));
         }
 
-        Report("bo3", timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
+        Report("bo3", PerfSweep.Analysis, timings, CorpusFixture.RawRoot!, CorpusFixture.Inserts.Count);
     }
 
     [Fact]
@@ -86,7 +95,7 @@ public class CorpusPerfTests
                 timings.Add(Time(path, corpus.Profile, inserts, names, GameCorpusFixture.Inserts, () => GameCorpusFixture.Analyze(corpus, path, resolver, names)));
             }
 
-            Report(corpus.Profile.ShortName, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
+            Report(corpus.Profile.ShortName, PerfSweep.Analysis, timings, corpus.RawRoot, GameCorpusFixture.Inserts.Count);
         }
     }
 
@@ -222,6 +231,317 @@ public class CorpusPerfTests
     }
 
     /// <summary>
+    /// Where a WARM start spends its time — the path a user takes on every start after their
+    /// first, and the one nothing in this class has ever timed.
+    ///
+    /// <see cref="ColdIndex_WhereTheTimeGoes"/> attaches no cache on purpose, and its comment says
+    /// why: "a warm run measures the restore path instead, which is a different question with a
+    /// different answer". That question was then never asked. Everything measured since has landed
+    /// on the cold arm — the server GC, the pruned enumeration, the one-pass reader — which took a
+    /// BO3 cold index from 2.6 s to under one. The arm that got none of it is now the one worth
+    /// looking at, and the last warm figure on record (2.6 s) predates all three.
+    ///
+    /// The cache read is timed SEPARATELY from the index, because they are not the same shape and
+    /// one number cannot say which to attack. It is what found the problem: <c>LoadAll</c> was a
+    /// single thread gzip-inflating and JSON-parsing every record to completion before
+    /// <c>IndexAsync</c> was called at all, and in the server it was not merely unsplit but
+    /// entirely OUTSIDE the stopwatch, being an argument to the <c>UseCache</c> call that precedes
+    /// the timed block. Measured here for the first time it was 91% of a warm start.
+    ///
+    /// It now reads blobs only, so this stage is the SQLite read and the deserialize shows up under
+    /// <c>index.restore</c> on the indexing threads. Keep both numbers: the point of the split is
+    /// that either half can regress on its own.
+    ///
+    /// Two indexes per game. The first exists only to leave a populated database behind, and its
+    /// drain is not optional: the writer persists on its own thread after
+    /// <c>IndexAsync</c> returns, so without <c>WaitForIdleAsync</c> the measured run restores
+    /// whatever happened to have been flushed and reports a warm start that is half cold.
+    /// </summary>
+    [Fact]
+    public async Task WarmIndex_WhereTheTimeGoes()
+    {
+        bool measured = false;
+
+        if ( CorpusFixture.Available )
+        {
+            await MeasureWarmIndexAsync(GameProfile.BlackOps3, CorpusFixture.Resolver);
+            measured = true;
+        }
+
+        // The same two as the cold sweep, and for the same reasons: CoD4 is the #include dialect,
+        // and BO1 is the only corpus large enough for a per-record cost to be visible.
+        foreach ( GameProfile profile in new[] { GameProfile.Cod4, GameProfile.BlackOps } )
+        {
+            GameCorpus? corpus = GameCorpusFixture.For(profile);
+            if ( corpus is null )
+            {
+                continue;
+            }
+
+            GameCorpus captured = corpus;
+            await MeasureWarmIndexAsync(captured.Profile, () => GameCorpusFixture.Resolver(captured));
+            measured = true;
+        }
+
+        if ( !measured )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_BO3%, %GSCODE_CORPUS_COD4% or %GSCODE_CORPUS_BO1% found.");
+        }
+    }
+
+
+    /// <summary>
+    /// What the cache costs BEFORE indexing starts, which is the part of a warm start that runs on
+    /// the thread the server is starting on.
+    ///
+    /// `Program.cs` does four things between `OnStarted` firing and the indexing task being queued:
+    /// sweeps the legacy cache directory, hashes the bundled data files into a build identity,
+    /// opens the database, and reads the blobs. All four are ahead of the `Task.Run`, so they are
+    /// startup latency rather than indexing, and the server's log rolls them into one `cache 0.1s`
+    /// figure that cannot say which of the four to attack.
+    /// </summary>
+    [Fact]
+    public async Task CacheOpen_WhereTheStartupTimeGoes()
+    {
+        if ( !CorpusFixture.Available && !GameCorpusFixture.Available().Any() )
+        {
+            _output.WriteLine("SKIPPED: no %GSCODE_CORPUS_<GAME>% found.");
+            return;
+        }
+
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-startup-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            // Warm the file cache and the JIT the way a second start would find them; the first
+            // read of a 2.8 MB data file off cold disk is a different question.
+            _ = ServerBuildIdentity.Compute(BundledDataFilePaths(), GameProfile.Active.ShortName);
+
+            Stopwatch watch = Stopwatch.StartNew();
+            SqliteCache.CleanUpLegacyCache();
+            double sweep = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            string identity = ServerBuildIdentity.Compute(BundledDataFilePaths(), GameProfile.Active.ShortName);
+            double fingerprint = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            SqliteCache cache = SqliteCache.Open(databasePath, identity);
+            double open = watch.Elapsed.TotalMilliseconds;
+
+            watch.Restart();
+            int rows = cache.LoadAll().Count;
+            double read = watch.Elapsed.TotalMilliseconds;
+
+            await cache.DisposeAsync();
+
+            // A SECOND open, which is what splits the number above. Microsoft.Data.Sqlite loads its
+            // native provider on first use, so the first Open in a process pays an assembly load, a
+            // native library load and the JIT behind them; every one after it pays the file.
+            string secondPath = Path.Combine(Path.GetTempPath(), $"gscode-startup2-{Guid.NewGuid():N}.db");
+            watch.Restart();
+            SqliteCache second = SqliteCache.Open(secondPath, identity);
+            double reopen = watch.Elapsed.TotalMilliseconds;
+            await second.DisposeAsync();
+            try
+            {
+                File.Delete(secondPath);
+            }
+            catch ( IOException )
+            {
+            }
+
+            _output.WriteLine("");
+            _output.WriteLine($"########## {GameProfile.Active.ShortName} cache open, empty database, {rows} rows");
+            _output.WriteLine($"     legacy sweep   {sweep,8:F1} ms");
+            _output.WriteLine($"     build identity {fingerprint,8:F1} ms   {DataFileBytes() / 1048576.0:F1} MB hashed");
+            _output.WriteLine($"     open           {open,8:F1} ms");
+            _output.WriteLine($"     LoadAll        {read,8:F1} ms");
+            _output.WriteLine($"     open (2nd)     {reopen,8:F1} ms");
+            _output.WriteLine($"     total          {sweep + fingerprint + open + read,8:F1} ms");
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(databasePath);
+            }
+            catch ( IOException )
+            {
+            }
+        }
+    }
+
+    private static IEnumerable<string> BundledDataFilePaths()
+    {
+        string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
+        foreach ( string fileName in GameProfile.Active.BundledDataFileNames )
+        {
+            yield return Path.Combine(apiDirectory, fileName);
+        }
+    }
+
+    private static long DataFileBytes()
+    {
+        long total = 0;
+        foreach ( string path in BundledDataFilePaths() )
+        {
+            if ( File.Exists(path) )
+            {
+                total += new FileInfo(path).Length;
+            }
+        }
+
+        return total;
+    }
+
+    private async Task MeasureWarmIndexAsync(GameProfile profile, Func<PathResolver> resolverFactory)
+    {
+        GameProfile previous = GameProfile.Active;
+        string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-warm-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            GameProfile.Select(profile.ShortName);
+
+            int dropped = await PopulateCacheAsync(databasePath, resolverFactory);
+
+            // Fresh everything, so nothing the populating run interned, resolved or committed is
+            // available to the measured one. Only the database file crosses between them.
+            PathResolver resolver = resolverFactory();
+            NameTable names = new();
+            ScriptDatabase database = new();
+            WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+            await using SqliteCache cache = SqliteCache.Open(databasePath, WarmCacheIdentity);
+
+            PerfTracker.Reset();
+
+            Stopwatch restoreWatch = Stopwatch.StartNew();
+            IReadOnlyDictionary<string, CachedEntry> restored = cache.LoadAll();
+            restoreWatch.Stop();
+
+            indexer.UseCache(cache, restored);
+
+            Stopwatch indexWatch = Stopwatch.StartNew();
+            IndexOutcome outcome = await indexer.IndexAsync(
+                IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+            indexWatch.Stop();
+
+            double restoreMs = restoreWatch.Elapsed.TotalMilliseconds;
+            double indexMs = indexWatch.Elapsed.TotalMilliseconds;
+            double startMs = restoreMs + indexMs;
+            long databaseBytes = DatabaseBytes(databasePath);
+
+            _output.WriteLine("");
+            _output.WriteLine(
+                $"########## {profile.ShortName} warm start: {outcome.Total} files in {startMs:F0} ms "
+                + $"({outcome.Restored} restored, {outcome.Total - outcome.Restored} re-analysed)");
+
+            // Two stages, and the split moved once the deserialize did. This first one is now the
+            // SQLite read alone — blobs off the connection, nothing inflated — so a large figure
+            // here means the database itself is slow, not that the records are expensive. The
+            // records became expensive inside the index instead, under `index.restore`.
+            _output.WriteLine(
+                $"     cache read (serial) {restoreMs,8:F0} ms  {restored.Count,7:N0} records  "
+                + $"{restoreMs / startMs * 100,5:F1}% of warm start");
+            _output.WriteLine(
+                $"     index               {indexMs,8:F0} ms  {outcome.Total,7:N0} files    "
+                + $"{indexMs / startMs * 100,5:F1}% of warm start");
+            _output.WriteLine(
+                $"     per record          {(restored.Count == 0 ? 0 : restoreMs / restored.Count * 1000),8:F0} us  "
+                + $"cache file {databaseBytes / 1048576.0:F1} MB");
+
+            // Not fatal, but it makes every number above a mixture: a dropped write is a file the
+            // populating run never persisted, so the measured run re-analysed it and charged the
+            // time to the index rather than to the restore.
+            if ( dropped > 0 || outcome.Restored != outcome.Total )
+            {
+                _output.WriteLine(
+                    $"     WARNING: not fully warm - {dropped:N0} write(s) dropped while populating, "
+                    + $"{outcome.Total - outcome.Restored:N0} file(s) re-analysed. Read the split with that in mind.");
+            }
+
+            Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+            PerfTracker.Snapshot(scopes);
+
+            if ( scopes.Count == 0 )
+            {
+                _output.WriteLine("     scopes: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
+            }
+            else
+            {
+                // Same two denominators as the cold sweep, and the same reason. index.restore is
+                // the per-file hash-and-commit inside IndexAsync, which is NOT the LoadAll above:
+                // one is the deserialize, the other is the freshness check that decides whether the
+                // deserialized record may be used at all.
+                string[] topLevel = ["index.read", "index.analyse", "index.commit", "index.enqueue", "index.restore"];
+                double threadTime = scopes.Where(s => topLevel.Contains(s.Key)).Sum(s => s.Value.Milliseconds);
+
+                foreach ( KeyValuePair<string, (double Milliseconds, long Count)> scope in scopes
+                    .Where(s => s.Key != "index.total")
+                    .OrderByDescending(s => s.Value.Milliseconds) )
+                {
+                    bool nested = !topLevel.Contains(scope.Key) && scope.Key != "index.enumerate";
+                    string share = scope.Key == "index.enumerate"
+                        ? $"{scope.Value.Milliseconds / indexMs * 100,5:F1}% of INDEX WALL (serial)"
+                        : $"{scope.Value.Milliseconds / threadTime * 100,5:F1}% of thread-time{(nested ? " (nested)" : "")}";
+
+                    _output.WriteLine(
+                        $"     {scope.Key,-20} {scope.Value.Milliseconds,8:F0} ms  {scope.Value.Count,7:N0} calls  {share}");
+                }
+            }
+
+            PerfReport.Memory memory = PerfReport.Sample();
+            _output.WriteLine(
+                $"     memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
+                + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
+        }
+        finally
+        {
+            GameProfile.Select(previous.ShortName);
+            SqliteCache.DeleteDatabase(databasePath);
+        }
+    }
+
+    /// <summary>
+    /// Indexes once into a fresh cache and waits for the writer to drain, so the database is
+    /// complete before anything reads it. Returns the writes the channel refused, which is the
+    /// difference between a warm start and a warm start that quietly re-analyses part of the tree.
+    /// </summary>
+    private static async Task<int> PopulateCacheAsync(string databasePath, Func<PathResolver> resolverFactory)
+    {
+        PathResolver resolver = resolverFactory();
+        NameTable names = new();
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names);
+
+        await using SqliteCache cache = SqliteCache.Open(databasePath, WarmCacheIdentity);
+        indexer.UseCache(cache, cache.LoadAll());
+
+        await indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+        await cache.WaitForIdleAsync(CancellationToken.None);
+
+        return cache.DroppedWrites;
+    }
+
+    /// <summary>The cache and its two SQLite side files, which is what a user's disk actually holds.</summary>
+    private static long DatabaseBytes(string databasePath)
+    {
+        long total = 0;
+        foreach ( string suffix in new[] { "", "-wal", "-shm" } )
+        {
+            FileInfo file = new(databasePath + suffix);
+            if ( file.Exists )
+            {
+                total += file.Length;
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>
     /// Where the CROSS-FILE LINT time goes — the layer the two sweeps above do not touch at all.
     ///
     /// They time <c>ScriptAnalysis.Analyze</c>, whose four phases are lex, preprocess, parse and
@@ -307,6 +627,7 @@ public class CorpusPerfTests
             ObjectFields objectFields = ObjectFields.Load(apiDirectory);
 
             List<PerfReport.Item> timings = [];
+            LintTimings ruleTimings = new();
 
             foreach ( string path in scriptsFactory() )
             {
@@ -324,12 +645,26 @@ public class CorpusPerfTests
                     // turns the global aggregate into a per-file profile, and is only sound because
                     // this sweep is sequential. Empty unless built with GSCODE_INSTRUMENTATION.
                     PerfTracker.Reset();
+                    ruleTimings.Clear();
 
                     Stopwatch watch = Stopwatch.StartNew();
-                    WorkspaceLints.LintsOnly(parsed, language, path, database, resolver, builtins, objectFields);
+                    WorkspaceLints.LintsOnly(
+                        parsed, language, path, database, resolver, builtins, objectFields,
+                        cancellationToken: CancellationToken.None, timings: ruleTimings);
                     watch.Stop();
 
+                    // The per-rule sink first, then the tracker over the top of it. LintTimings is
+                    // not [Conditional], so the rule breakdown is in the report from an ORDINARY
+                    // build — which is what the sweep's "not instrumented" notice used to mean was
+                    // missing. An instrumented run overwrites those entries with the tracker's own
+                    // and adds the scopes only it has, so the flag still buys something and the two
+                    // never double-count one rule.
                     Dictionary<string, (double Milliseconds, long Count)> scopes = [];
+                    foreach ( KeyValuePair<string, double> rule in ruleTimings.Milliseconds )
+                    {
+                        scopes[rule.Key] = (rule.Value, 1);
+                    }
+
                     PerfTracker.Snapshot(scopes);
 
                     timings.Add(new PerfReport.Item(
@@ -342,7 +677,7 @@ public class CorpusPerfTests
                 }
             }
 
-            Report(profile.ShortName + "-lints", timings, rawRoot, cachedHeaders: 0);
+            Report(profile.ShortName, PerfSweep.Lints, timings, rawRoot, cachedHeaders: 0);
         }
         finally
         {
@@ -351,7 +686,8 @@ public class CorpusPerfTests
     }
 
     /// <summary>
-    /// How many completion requests to time per file. Ten rather than every call site, because this
+    /// How many CALL-SITE completion requests to time per file — one file-scope request is timed
+    /// besides, so a file contributes up to eleven. Ten rather than every call site, because this
     /// sweep pays a full index per game before it starts and a completion is far more expensive than
     /// a lint: BO3's 980 files at every call site would be tens of thousands of requests.
     ///
@@ -506,8 +842,7 @@ public class CorpusPerfTests
                 }
             }
 
-            Report(profile.ShortName + "-completion", timings, rawRoot, cachedHeaders: 0);
-            ReportEntryCounts(entryCounts);
+            Report(profile.ShortName, PerfSweep.Completion, timings, rawRoot, cachedHeaders: 0, entryCounts);
         }
         finally
         {
@@ -530,7 +865,6 @@ public class CorpusPerfTests
             contextId,
             position,
             includeLiterals: true,
-            fieldScope: FieldScope.Owner,
             callPunctuation: CallPunctuation.Parens,
             profile: profile,
             parameterHints: true).Length;
@@ -538,7 +872,7 @@ public class CorpusPerfTests
 
     /// <summary>
     /// How big the returned lists were — which is how to tell whether the timings above mean
-    /// anything.
+    /// anything. The same figures go into the report page and its sidecar.
     ///
     /// <c>Complete</c> has around ten arms and most of them are cheap and return almost nothing: a
     /// path segment list, an asset type list, an empty result where the position turned out not to be
@@ -550,21 +884,18 @@ public class CorpusPerfTests
     /// nothing — which is the same failure mode PERF.md records for the lint sweep against a partial
     /// index, arriving by a different route.
     /// </summary>
-    private void ReportEntryCounts(List<int> counts)
+    private void ReportEntryCounts(EntryCounts? entries)
     {
-        if ( counts.Count == 0 )
+        if ( entries is null )
         {
             return;
         }
 
-        List<int> sorted = [.. counts.Order()];
-        int large = counts.Count(static c => c > 500);
-
         _output.WriteLine(
-            $"    entries returned: median {Percentile([.. sorted.Select(static c => (double)c)], 0.50):F0} | "
-            + $"p90 {Percentile([.. sorted.Select(static c => (double)c)], 0.90):F0} | max {sorted[^1]:N0}");
+            $"    entries returned: median {entries.Median:F0} | p90 {entries.P90:F0} | max {entries.Max:N0}");
         _output.WriteLine(
-            $"    {large:N0} of {counts.Count:N0} requests ({large * 100.0 / counts.Count:F1}%) returned over 500 entries "
+            $"    {entries.OverFiveHundred:N0} of {entries.Requests:N0} requests "
+            + $"({entries.OverFiveHundred * 100.0 / entries.Requests:F1}%) returned over 500 entries "
             + "- those are the statement-scope arm, the one that queries the store");
     }
 
@@ -579,6 +910,12 @@ public class CorpusPerfTests
     /// </summary>
     private static List<Position> CompletionSamplePositions(ParseResult parsed)
     {
+        // The first sample is FILE SCOPE — the top of the file, outside every declaration. A call
+        // reference can only ever be inside a function body, so a sweep built from them alone timed
+        // one of the two arms: file scope used to return a static word list before any store query
+        // ran, and now runs the same queries a body does.
+        List<Position> sampled = [new Position(0, 0)];
+
         List<Position> calls = [];
         foreach ( ReferenceEntry entry in parsed.Extraction.References )
         {
@@ -590,11 +927,11 @@ public class CorpusPerfTests
 
         if ( calls.Count <= CompletionSamplesPerFile )
         {
-            return calls;
+            sampled.AddRange(calls);
+            return sampled;
         }
 
         // Evenly spaced, so the sample spans the file rather than clustering in its first function.
-        List<Position> sampled = new(CompletionSamplesPerFile);
         for ( int i = 0; i < CompletionSamplesPerFile; i++ )
         {
             sampled.Add(calls[i * calls.Count / CompletionSamplesPerFile]);
@@ -663,7 +1000,9 @@ public class CorpusPerfTests
             path, lex + preprocess + parse + extract, bytes, lex, preprocess, parse, extract, scopes);
     }
 
-    private void Report(string game, List<PerfReport.Item> timings, string root, int cachedHeaders)
+    private void Report(
+        string game, PerfSweep sweep, List<PerfReport.Item> timings, string root, int cachedHeaders,
+        IReadOnlyList<int>? entryCounts = null)
     {
         if ( timings.Count == 0 )
         {
@@ -672,8 +1011,10 @@ public class CorpusPerfTests
 
         List<double> sorted = [.. timings.Select(static t => t.Milliseconds).Order()];
         double total = sorted.Sum();
+        string name = PerfReport.SidecarName(game, sweep);
+        string unit = sweep == PerfSweep.Completion ? "requests" : "files";
 
-        _output.WriteLine($"=== {game}: {timings.Count} files, {total:F0} ms total ===");
+        _output.WriteLine($"=== {name}: {timings.Count} {unit}, {total:F0} ms total ===");
         _output.WriteLine(
             $"    median {Percentile(sorted, 0.50):F2} ms | p90 {Percentile(sorted, 0.90):F2} ms | "
             + $"p99 {Percentile(sorted, 0.99):F2} ms | max {sorted[^1]:F2} ms");
@@ -707,12 +1048,14 @@ public class CorpusPerfTests
 
         // Per world: a .gsc and a .csc are separate universes to the database, and one total
         // hides which of the two the time went to. Headers are counted separately again - they are
-        // inserted rather than indexed, so they belong to neither.
+        // inserted rather than indexed, so they belong to neither. Counted over distinct FILES, since
+        // a completion sweep has several timings per file.
+        List<string> files = [.. timings.Select(static t => t.Path).Distinct(StringComparer.OrdinalIgnoreCase)];
         Dictionary<string, int> worlds = new(StringComparer.Ordinal)
         {
-            ["gsc (server)"] = timings.Count(static t => t.Path.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase)),
-            ["csc (client)"] = timings.Count(static t => t.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase)),
-            ["gsh (headers)"] = timings.Count(static t => t.Path.EndsWith(".gsh", StringComparison.OrdinalIgnoreCase)),
+            ["gsc (server)"] = files.Count(static f => f.EndsWith(".gsc", StringComparison.OrdinalIgnoreCase)),
+            ["csc (client)"] = files.Count(static f => f.EndsWith(".csc", StringComparison.OrdinalIgnoreCase)),
+            ["gsh (headers)"] = files.Count(static f => f.EndsWith(".gsh", StringComparison.OrdinalIgnoreCase)),
         };
 
         foreach ( KeyValuePair<string, int> world in worlds )
@@ -732,17 +1075,22 @@ public class CorpusPerfTests
                 + $"parse {par / phases * 100:F0}% | extract {ext / phases * 100:F0}%");
         }
 
-        IReadOnlyList<(string Name, double Milliseconds, long Count)> subPhases = PerfReport.SubPhaseTotals(timings);
+        IReadOnlyList<SubPhaseRow> subPhases = PerfReport.SubPhaseStats(timings);
         if ( subPhases.Count == 0 )
         {
             _output.WriteLine("    sub-phases: not instrumented (rebuild with -p:GscodeInstrumentation=true)");
         }
         else
         {
-            foreach ( (string name, double milliseconds, long count) in subPhases )
+            // The per-file columns are the ones a debounce is read against; the total is the one a
+            // phase share is read against. Both, because either alone has misled here before.
+            foreach ( SubPhaseRow scope in subPhases )
             {
-                double mean = count == 0 ? 0 : milliseconds / count;
-                _output.WriteLine($"    {name,-24} {milliseconds,8:F0} ms  {count,8:N0} calls  {mean:F4} ms mean");
+                double mean = scope.Count == 0 ? 0 : scope.Milliseconds / scope.Count;
+                _output.WriteLine(
+                    $"    {scope.Name,-40} {scope.Milliseconds,8:F0} ms  {scope.Count,8:N0} calls  {mean:F4} ms mean  "
+                    + $"| per file: median {scope.Median:F3} | p99 {scope.P99:F2} | max {scope.Max:F2} ms "
+                    + $"({scope.Max / AnalysisTiming.DebounceMilliseconds * 100:F1}% of debounce)");
             }
         }
 
@@ -751,7 +1099,10 @@ public class CorpusPerfTests
             $"    memory: live {memory.ManagedLive / 1048576.0:F0} MB | heap {memory.HeapSize / 1048576.0:F0} MB | "
             + $"fragmented {memory.Fragmented / 1048576.0:F0} MB | working set {memory.WorkingSet / 1048576.0:F0} MB");
 
-        WriteReport(game, timings, root, worlds, memory, cachedHeaders);
+        EntryCounts? entries = PerfReport.SummarizeEntries(entryCounts);
+        ReportEntryCounts(entries);
+
+        WriteReport(game, sweep, timings, root, worlds, memory, cachedHeaders, entryCounts);
     }
 
     private static double Percentile(List<double> sorted, double fraction)
@@ -766,39 +1117,15 @@ public class CorpusPerfTests
     /// the directory, matching GSCODE_SWEEP_REPORT.
     /// </summary>
     private void WriteReport(
-        string game, IReadOnlyList<PerfReport.Item> timings, string root,
-        IReadOnlyDictionary<string, int> worlds, PerfReport.Memory memory, int cachedHeaders)
+        string game, PerfSweep sweep, IReadOnlyList<PerfReport.Item> timings, string root,
+        IReadOnlyDictionary<string, int> worlds, PerfReport.Memory memory, int cachedHeaders,
+        IReadOnlyList<int>? entryCounts)
     {
-        string directory = Environment.GetEnvironmentVariable("GSCODE_PERF_REPORT") is string configured
-            && configured.Length > 0
-                ? configured
-                : ScratchDirectory();
-
-        string path = Path.Combine(directory, $"gscode-perf-{game}.html");
-        PerfReport.Write(path, game, timings, root, worlds, memory, cachedHeaders);
-        _output.WriteLine($"Report [{game}]: {path}");
-    }
-
-    /// <summary>
-    /// The repository's <c>temp/</c> folder, found by walking up to the <c>.git</c> entry — which is
-    /// a directory in a clone and a FILE in a worktree, so both are checked. Falls back to the system
-    /// temp folder when there is no repository above, as in a packaged run.
-    /// </summary>
-    private static string ScratchDirectory()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-
-        while ( current is not null )
-        {
-            string git = Path.Combine(current.FullName, ".git");
-            if ( Directory.Exists(git) || File.Exists(git) )
-            {
-                return Path.Combine(current.FullName, "temp");
-            }
-
-            current = current.Parent;
-        }
-
-        return Path.GetTempPath();
+        string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
+        string name = PerfReport.SidecarName(game, sweep);
+        string path = Path.Combine(directory, ReportPage.PerfPage(name));
+        PerfReport.Write(path, game, sweep, timings, root, worlds, memory, cachedHeaders, entryCounts);
+        _output.WriteLine($"Report [{name}]: {path}");
+        _output.WriteLine($"Every row [{name}]: {Path.Combine(directory, ReportPage.DetailFile(name))}");
     }
 }

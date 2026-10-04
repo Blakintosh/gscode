@@ -1,12 +1,7 @@
-﻿using System.Collections.Generic;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
-using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
 using GSCode.Core.Diagnostics;
 using GSCode.Server.Handlers;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -18,25 +13,34 @@ namespace GSCode.Server.Tests.Handlers;
 
 public class CodeActionHandlerTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return AnalyzeAt(source, @"c:\ws\scripts\t.gsc");
-    }
-
-    private static ParseResult AnalyzeAt(string source, string path)
-    {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     private static TextRange WholeFile => TextRange.FromCoordinates(0, 0, 1000, 0);
 
+    /// <summary>
+    /// The import paths the add-#using fix would offer over the whole file. The sites carry the
+    /// call each answers; these tests only ask which files would be imported.
+    /// </summary>
+    private static List<string> MissingUsingPaths(ParseResult asking, LanguageStore store, string askingPath)
+    {
+        List<string> paths = [];
+        foreach ( CodeActionHandler.MissingUsing site in CodeActionHandler.FindMissingUsingSites(
+            asking, store, "raw", askingPath, WholeFile) )
+        {
+            paths.Add(site.Path);
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// A store holding scripts\util.gsc, which declares util::helper. The asking file is analysed on
+    /// its own and never indexed. Disposed before it returns: the default game, so the queries
+    /// that follow see the same Active either way.
+    /// </summary>
     private static ScriptDatabase DatabaseWithUtil()
     {
-        ScriptDatabase database = new();
-        ParseResult util = AnalyzeAt("#namespace util;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\scripts\util.gsc");
-        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\util.gsc");
-        return database;
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [new TestFile(@"scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n")]);
+        return workspace.Database;
     }
 
     [Fact]
@@ -44,7 +48,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
         // The SECOND occurrence (line 1) is the redundant one.
@@ -56,7 +60,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\Util;\n#using scripts\\shared\\util;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Single(duplicates);
     }
@@ -66,7 +70,7 @@ public class CodeActionHandlerTests
     {
         string source = "#using scripts\\shared\\util;\n#using scripts\\shared\\array;\nfunction f(){}\n";
 
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), WholeFile);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), WholeFile);
 
         Assert.Empty(duplicates);
     }
@@ -78,7 +82,7 @@ public class CodeActionHandlerTests
 
         // A selection covering only line 0 (the first, non-redundant occurrence).
         TextRange lineZero = TextRange.FromCoordinates(0, 0, 0, 5);
-        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(Analyze(source), lineZero);
+        List<CodeActionHandler.RedundantImport> duplicates = CodeActionHandler.FindRemovableDuplicates(TestParse.Analyze(source), lineZero);
 
         Assert.Empty(duplicates);
     }
@@ -93,13 +97,7 @@ public class CodeActionHandlerTests
         // directive and no IncludeNode is produced at all. There is no dialect in which both forms
         // exist, which is why the two are tracked separately rather than compared with each other.
         string source = "#include maps\\_utility;\n#include maps\\_utility;\nmain(){}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\maps\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable(),
-            GameProfile.Cod4);
+        ParseResult result = TestParse.Analyze(source, TestPaths.Raw(@"maps\t.gsc"), GameProfile.Cod4);
 
         CodeActionHandler.RedundantImport duplicate =
             Assert.Single(CodeActionHandler.FindRemovableDuplicates(result, WholeFile));
@@ -113,10 +111,10 @@ public class CodeActionHandlerTests
     public void FindsMissingUsing_ForUnimportedQualifiedCall()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\main.gsc";
-        ParseResult asking = AnalyzeAt("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult asking = TestParse.Analyze("#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Equal(new[] { "scripts\\util" }, missing);
     }
@@ -125,11 +123,11 @@ public class CodeActionHandlerTests
     public void NoMissingUsing_WhenAlreadyImported()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\main.gsc";
-        ParseResult asking = AnalyzeAt(
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult asking = TestParse.Analyze(
             "#using scripts\\util;\n#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Empty(missing);
     }
@@ -138,10 +136,10 @@ public class CodeActionHandlerTests
     public void NoMissingUsing_ForOwnNamespaceCall()
     {
         ScriptDatabase database = DatabaseWithUtil();
-        string askingPath = @"C:\bo3\share\raw\scripts\util_more.gsc";
-        ParseResult asking = AnalyzeAt("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
+        string askingPath = TestPaths.Raw(@"scripts\util_more.gsc");
+        ParseResult asking = TestParse.Analyze("#namespace util;\nfunction run()\n{\n    util::helper();\n}\n", askingPath);
 
-        List<string> missing = CodeActionHandler.FindMissingUsings(asking, database.Gsc, "raw", askingPath, WholeFile);
+        List<string> missing = MissingUsingPaths(asking, database.Gsc, askingPath);
 
         Assert.Empty(missing);
     }
@@ -160,12 +158,12 @@ public class CodeActionHandlerTests
 
     private static List<CodeAction> FixesFor(string source, params LspDiagnostic[] reported)
     {
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
         List<CommandOrCodeAction> actions = [];
 
         CodeActionParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(@"c:\ws\scripts\t.gsc") },
+            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\t.gsc")) },
             Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(0, 0, 1000, 0),
             Context = new CodeActionContext
             {
@@ -175,10 +173,14 @@ public class CodeActionHandlerTests
 
         CodeActionHandler.AddDiagnosticFixes(request, result, actions);
 
+        // QuickFix only — every assertion below is about the diagnostic-driven fixes this method
+        // returns. Organize Imports is NOT one of them any more (see AddOrganizeImportsAction's
+        // own doc comment): it is built separately in Handle(), from a file-wide scan rather than
+        // this method's request-scoped diagnostics, and is tested on its own below.
         List<CodeAction> fixes = [];
         foreach ( CommandOrCodeAction action in actions )
         {
-            if ( action.IsCodeAction && action.CodeAction is not null )
+            if ( action.IsCodeAction && action.CodeAction is not null && action.CodeAction.Kind == CodeActionKind.QuickFix )
             {
                 fixes.Add(action.CodeAction);
             }
@@ -284,6 +286,128 @@ public class CodeActionHandlerTests
         Assert.DoesNotContain(fixes, f => f.Title.StartsWith("Remove all", StringComparison.Ordinal));
     }
 
+    // --- Organize Imports (source.organizeImports) ---
+    //
+    // VS Code's "Source Action..." and "Organize Imports" commands ask for this kind specifically;
+    // CodeActionHandler.CreateRegistrationOptions has to list it or neither menu ever reaches the
+    // server at all. The action itself is built by AddOrganizeImportsAction in Handle(), from
+    // AllUnusedImportDiagnostics' file-wide scan rather than the request's own scoped diagnostics
+    // — the reported bug was Organize Imports on a multi-import file offering to remove only the
+    // ONE unused import that happened to be on the line the menu was opened from. These tests pin
+    // AddOrganizeImportsAction's own half directly: given a set of unused-import diagnostics —
+    // wherever they came from — it combines every one of them into a single edit with no scoping
+    // of its own. (AllUnusedImportDiagnostics' half — that the scan really is file-wide — needs a
+    // real resolvable #using, which needs a workspace with a filesystem behind it; that is proven
+    // by inspection instead: it takes no range/line parameter at all, unlike DiagnosticsForFixes.)
+
+    private static DocumentUri TestUri => DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\t.gsc"));
+
+    /// <summary>The document after applying the single Organize Imports edit.</summary>
+    private static string Organized(string source, params LspDiagnostic[] unused)
+    {
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), unused, actions);
+
+        CodeAction organize = Assert.Single(actions, a => a.IsCodeAction).CodeAction!;
+        Assert.Equal(CodeActionKind.SourceOrganizeImports, organize.Kind);
+
+        TextEdit edit = SingleEditOf(organize);
+        SourceText text = SourceText.From(source);
+        int start = text.GetOffset(new GSCode.Core.Text.Position(edit.Range.Start.Line, edit.Range.Start.Character));
+        int end = text.GetOffset(new GSCode.Core.Text.Position(edit.Range.End.Line, edit.Range.End.Character));
+        return source[..start] + edit.NewText + source[end..];
+    }
+
+    [Fact]
+    public void UnusedImport_OffersAnOrganizeImportsAction_EvenJustOne()
+    {
+        // Unlike the QuickFix bulk action (OneUnusedUsing_DoesNotOfferABulkFix, above), Organize
+        // Imports has no per-line neighbour to be redundant with — it is offered from one unused
+        // import already.
+        string source = "#using scripts\\a;\n#using scripts\\b;\n\nfunction f(){}\n";
+
+        Assert.Equal(
+            "#using scripts\\a;\n\nfunction f(){}\n",
+            Organized(source, Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 17)));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_RemovesEveryUnusedImportInOneEdit()
+    {
+        // Two diagnostics on lines that are not adjacent — the action combines whatever set it is
+        // given, which is what a file-wide scan hands it in practice.
+        string source = "#using scripts\\a;\n#using scripts\\b;\n#using scripts\\c;\n\nfunction f(){}\n";
+
+        Assert.Equal(
+            "#using scripts\\b;\n\nfunction f(){}\n",
+            Organized(
+                source,
+                Reported(GscDiagnosticCode.UnusedUsing, 0, 0, 17),
+                Reported(GscDiagnosticCode.UnusedUsing, 2, 0, 17)));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_SortsTheBlock_WithNothingUnused()
+    {
+        // The reported gap: Organize Imports only removed. It now sorts too, through the
+        // formatter's own DirectiveSorter, so the two cannot disagree about the order.
+        string source = "#using scripts\\zeta;\n#using scripts\\alpha;\n\nfunction f(){}\n";
+
+        Assert.Equal(
+            "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n",
+            Organized(source));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_RemovesThenSorts()
+    {
+        string source = "#using scripts\\zeta;\n#using scripts\\unused;\n#using scripts\\alpha;\n\nfunction f(){}\n";
+
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(
+            TestUri, SourceText.From(source), [Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 22)], actions);
+        Assert.Equal("Organize imports (remove 1 unused, sort)", Assert.Single(actions).CodeAction!.Title);
+
+        Assert.Equal(
+            "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n",
+            Organized(source, Reported(GscDiagnosticCode.UnusedUsing, 1, 0, 22)));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_KeepsACrlfDocumentCrlf()
+    {
+        string source = "#using scripts\\zeta;\r\n#using scripts\\alpha;\r\n\r\nfunction f(){}\r\n";
+
+        Assert.Equal(
+            "#using scripts\\alpha;\r\n#using scripts\\zeta;\r\n\r\nfunction f(){}\r\n",
+            Organized(source));
+    }
+
+    [Fact]
+    public void OrganizeImportsAction_EditsOnlyTheLinesThatChange()
+    {
+        // A whole-document replacement would move every caret in the file to its end.
+        string source = "#using scripts\\zeta;\n#using scripts\\alpha;\n\nfunction f()\n{\n}\n";
+
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), [], actions);
+        TextEdit edit = SingleEditOf(Assert.Single(actions).CodeAction!);
+
+        Assert.Equal(0, edit.Range.Start.Line);
+        Assert.Equal(2, edit.Range.End.Line);
+    }
+
+    [Fact]
+    public void NothingUnusedAndAlreadySorted_OffersNoOrganizeImportsAction()
+    {
+        string source = "#using scripts\\alpha;\n#using scripts\\zeta;\n\nfunction f(){}\n";
+
+        List<CommandOrCodeAction> actions = [];
+        CodeActionHandler.AddOrganizeImportsAction(TestUri, SourceText.From(source), [], actions);
+
+        Assert.Empty(actions);
+    }
+
     [Theory]
     [InlineData("1", "true")]
     [InlineData("0", "false")]
@@ -341,16 +465,16 @@ public class CodeActionHandlerTests
     // lets qualifying be an insert at the range start and re-qualifying a replace of the scanned-back
     // qualifier.
 
-    private const string AskingPath = @"C:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_askingPath = TestPaths.Raw(@"scripts\main.gsc");
 
     private static List<CodeAction> CallFixes(string source, int line, int start, int end, ScriptDatabase? database = null)
     {
-        ParseResult result = AnalyzeAt(source, AskingPath);
+        ParseResult result = TestParse.Analyze(source, s_askingPath);
 
-        CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", AskingPath);
+        CodeActionHandler.CallFixContext context = new(result, database?.Gsc, "raw", s_askingPath);
 
         return CodeActionHandler.UnresolvedCallFixes(
-            DocumentUri.FromFileSystemPath(AskingPath),
+            DocumentUri.FromFileSystemPath(s_askingPath),
             context,
             Reported(GscDiagnosticCode.BuiltinFunctionNotFound, line, start, end));
     }
@@ -441,10 +565,9 @@ public class CodeActionHandlerTests
     public void AnOwnNamespaceMatch_IsNotOffered()
     {
         // Already reachable unqualified, so an import would be noise and a qualifier a no-op.
-        ScriptDatabase database = new();
-        ParseResult util = AnalyzeAt(
-            "#namespace game;\nfunction helper()\n{\n}\n", @"C:\bo3\share\raw\scripts\other.gsc");
-        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\other.gsc");
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [new TestFile(@"scripts\other.gsc", "#namespace game;\nfunction helper()\n{\n}\n")]);
+        ScriptDatabase database = workspace.Database;
 
         string source = "#namespace game;\nfunction run()\n{\n    helper();\n}\n";
 
@@ -488,20 +611,15 @@ public class CodeActionHandlerTests
     // The merge dialects' counterpart. The function EXISTS here, so the only honest offer is the
     // import; a "create it here" fix would talk the user into a second copy of it.
 
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
-    private const string Cod4AskingPath = @"C:\cod4\raw\maps\mp\gametypes\_menus.gsc";
+    private static readonly string s_cod4AskingPath = TestPaths.Raw(@"maps\mp\gametypes\_menus.gsc");
 
-    private static ScriptDatabase DatabaseWithCod4Utility()
+    /// <summary>A CoD4 workspace whose one file, common_scripts\utility.gsc, declares scriptPrintln.</summary>
+    private static TestWorkspace WorkspaceWithCod4Utility()
     {
-        ScriptDatabase database = new();
-        ParseResult utility = ScriptAnalysis.Analyze(
-            @"C:\cod4\raw\common_scripts\utility.gsc", ScriptLanguage.Gsc,
-            SourceText.From("scriptPrintln( channel, msg )\n{\n}\n"),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
-
-        database.Commit(utility, ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
-        return database;
+        return TestWorkspace.Build(
+            [new TestFile(@"common_scripts\utility.gsc", "scriptPrintln( channel, msg )\n{\n}\n")], s_cod4);
     }
 
     /// <summary>
@@ -510,11 +628,9 @@ public class CodeActionHandlerTests
     /// call, so hand-written coordinates would be three sets of magic numbers coupled to the sources
     /// they index into.
     /// </summary>
-    private static List<CodeAction> IncludeFixes(string source, ScriptDatabase? database = null)
+    private static List<CodeAction> IncludeFixes(string source, TestWorkspace? workspace = null)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            Cod4AskingPath, ScriptLanguage.Gsc, SourceText.From(source),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
+        ParseResult result = TestParse.Analyze(source, s_cod4AskingPath, s_cod4);
 
         const string called = "scriptPrintln";
         string[] lines = source.Split('\n');
@@ -522,10 +638,10 @@ public class CodeActionHandlerTests
         int start = lines[line].IndexOf(called, StringComparison.Ordinal);
 
         CodeActionHandler.CallFixContext context = new(
-            result, database?.Gsc, "raw", Cod4AskingPath, Cod4);
+            result, workspace?.Database.Gsc, "raw", s_cod4AskingPath, s_cod4);
 
         return CodeActionHandler.MissingIncludeFixes(
-            DocumentUri.FromFileSystemPath(Cod4AskingPath),
+            DocumentUri.FromFileSystemPath(s_cod4AskingPath),
             context,
             Reported(GscDiagnosticCode.FunctionNotIncluded, line, start, start + called.Length));
     }
@@ -535,7 +651,8 @@ public class CodeActionHandlerTests
     {
         string source = "#include maps\\mp\\_load;\ninit()\n{\n\tscriptPrintln();\n}\n";
 
-        CodeAction fix = Assert.Single(IncludeFixes(source, DatabaseWithCod4Utility()));
+        using TestWorkspace workspace = WorkspaceWithCod4Utility();
+        CodeAction fix = Assert.Single(IncludeFixes(source, workspace));
 
         Assert.Equal(@"Add #include common_scripts\utility", fix.Title);
 
@@ -559,7 +676,8 @@ public class CodeActionHandlerTests
         // would insert a duplicate and leave the error standing.
         string source = "#include common_scripts\\utility;\ninit()\n{\n\tscriptPrintln();\n}\n";
 
-        Assert.Empty(IncludeFixes(source, DatabaseWithCod4Utility()));
+        using TestWorkspace workspace = WorkspaceWithCod4Utility();
+        Assert.Empty(IncludeFixes(source, workspace));
     }
 
     [Fact]

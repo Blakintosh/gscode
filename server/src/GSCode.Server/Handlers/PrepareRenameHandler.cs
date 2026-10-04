@@ -1,11 +1,11 @@
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
-using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -20,28 +20,37 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
     private readonly NavigationSupport _support;
     private readonly BuiltinApiSet _builtins;
     private readonly ObjectFields _objectFields;
+    private readonly TextDocumentSelector _selector;
 
-    public PrepareRenameHandler(NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields)
+    public PrepareRenameHandler(
+        NavigationSupport support, BuiltinApiSet builtins, ObjectFields objectFields, TextDocumentSelector selector)
     {
         _support = support;
         _builtins = builtins;
         _objectFields = objectFields;
+        _selector = selector;
     }
 
+    /// <summary>
+    /// The same options its sibling registers, selector included. Leaving the selector out is not
+    /// the bug it looks like - VS Code fills a null one with the client's own document selector,
+    /// built from the same script globs - but one of the two rename handlers naming its scope and
+    /// the other not is a difference the next reader has to go and disprove.
+    /// </summary>
     public RenameRegistrationOptions GetRegistrationOptions(RenameCapability capability, ClientCapabilities clientCapabilities)
     {
-        return new RenameRegistrationOptions { PrepareProvider = true };
+        return new RenameRegistrationOptions { DocumentSelector = _selector, PrepareProvider = true };
     }
 
     public Task<RangeOrPlaceholderRange?> Handle(PrepareRenameParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<RangeOrPlaceholderRange?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( !RenameHandler.IsRenameable(hit, _builtins.For(target.Language), _objectFields) )
         {
             // A local is renameable but invisible to IsRenameable, which reads the reference index
@@ -50,7 +59,13 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
             return Task.FromResult(LocalRangeAt(target, request.Position.ToCore()));
         }
 
-        return Task.FromResult<RangeOrPlaceholderRange?>(new RangeOrPlaceholderRange(hit.Range.ToLsp()));
+        // A literal offers its content, not its quotes: the rename writes only inside them.
+        if ( RenameHandler.RenamedSpan(hit.Key, hit.Range) is not TextRange span )
+        {
+            return Task.FromResult<RangeOrPlaceholderRange?>(null);
+        }
+
+        return Task.FromResult<RangeOrPlaceholderRange?>(new RangeOrPlaceholderRange(span.ToLsp()));
     }
 
     /// <summary>

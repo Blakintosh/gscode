@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -25,8 +21,7 @@ public class GuidelineExampleTests
 
     private static string? Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, s_tabs);
     }
@@ -88,6 +83,7 @@ public class GuidelineExampleTests
             + "\t{\n"
             + "\t\tfar = 1;\n"
             + "\t}\n"
+            + "\n"
             + "\tfunction faz( value = 0 )\n"
             + "\t{\n"
             + "\t\tfar = value;\n"
@@ -108,6 +104,7 @@ public class GuidelineExampleTests
             + "\t{\n"
             + "\t\tprintln( \"key is \" + key );\n"
             + "\t}\n"
+            + "\n"
             + "\tswitch ( v )\n"
             + "\t{\n"
             + "\t\tcase 0:\n"
@@ -116,6 +113,7 @@ public class GuidelineExampleTests
             + "\t\tdefault:\n"
             + "\t\t\tbreak;\n"
             + "\t}\n"
+            + "\n"
             + "\t/#\n"
             + "\tdebug_only_call();\n"
             + "\t#/\n"

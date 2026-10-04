@@ -4,19 +4,32 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			// The default build task, so F5's ${defaultBuildTask} compiles both
-			// halves of the extension: the TypeScript client and the .NET server
-			// it spawns. Parallel — the watch task never "finishes", it just
-			// reports its first clean compile through $tsc-watch.
-			"label": "build",
+			// F5's Debug config. Compiles both halves of the extension: the
+			// TypeScript client and the .NET server it spawns, the latter with a
+			// full Clean;Build. Parallel — the watch task never "finishes", it
+			// just reports its first clean compile through $tsc-watch.
+			"label": "build: debug",
+			"detail": "Rebuild the client (watch) and the server in Debug",
 			"dependsOn": [
 				"watch",
-				"dotnet: build server"
+				"dotnet: rebuild server (Debug)"
 			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
+			"problemMatcher": []
+		},
+		{
+			// F5's Release config. Same shape, Release server output — which is
+			// what SERVER_LOCATION in client/.env points at.
+			"label": "build: release",
+			"detail": "Rebuild the client (watch) and the server in Release",
+			"dependsOn": [
+				"watch",
+				"dotnet: rebuild server (Release)"
+			],
+			"group": "build",
 			"problemMatcher": []
 		},
 		{
@@ -27,22 +40,36 @@
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
-				"reveal": "never"
+				"reveal": "silent",
+				"revealProblems": "onProblem",
+				"panel": "dedicated",
+				"group": "gscode-build"
 			}
 		},
 		{
-			// Debug config, to match DEBUG_SERVER_LOCATION in client/.env. If you
-			// flip SHOULD_TEST_IN_RELEASE=true, add "-c", "Release" here too.
+			// Debug server build, to match DEBUG_SERVER_LOCATION in client/.env.
 			//
-			// Per project rather than the solution: a running language server
-			// holds the Debug DLLs open, and a solution-wide build fails with
-			// MSB3027 partway through. Incremental, so a no-op when nothing changed.
-			"label": "dotnet: build server",
+			// -t:Rebuild is MSBuild's Clean;Build — the equivalent of Rebuild in
+			// Visual Studio — so a stale DLL can never survive into a debug
+			// session. Per project rather than the solution: a running language
+			// server holds the Debug DLLs open, and a solution-wide build fails
+			// with MSB3027 partway through. If a rebuild still hits MSB3027,
+			// something is holding the DLLs — close the Extension Development
+			// Host window (or any editor with the extension active) and retry.
+			//
+			// -v:m so the panel shows a line per project as it finishes instead of
+			// only a summary; presentation reveals the terminal and keeps it.
+			"label": "dotnet: rebuild server (Debug)",
+			"detail": "dotnet build -t:Rebuild -c Debug (clean + build)",
 			"type": "shell",
 			"command": "dotnet",
 			"args": [
 				"build",
 				"src/GSCode.Server/GSCode.Server.csproj",
+				"-t:Rebuild",
+				"-c",
+				"Debug",
+				"-v:m",
 				"--nologo"
 			],
 			"options": {
@@ -50,8 +77,43 @@
 			},
 			"problemMatcher": "$msCompile",
 			"presentation": {
-				"reveal": "silent",
-				"clear": true
+				"reveal": "always",
+				"focus": false,
+				"echo": true,
+				"clear": true,
+				"showReuseMessage": false,
+				"panel": "dedicated",
+				"group": "gscode-build"
+			}
+		},
+		{
+			// Release server build, to match SERVER_LOCATION in client/.env. Same
+			// Clean;Build and terminal notes as the Debug task above.
+			"label": "dotnet: rebuild server (Release)",
+			"detail": "dotnet build -t:Rebuild -c Release (clean + build)",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"src/GSCode.Server/GSCode.Server.csproj",
+				"-t:Rebuild",
+				"-c",
+				"Release",
+				"-v:m",
+				"--nologo"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/server"
+			},
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"focus": false,
+				"echo": true,
+				"clear": true,
+				"showReuseMessage": false,
+				"panel": "dedicated",
+				"group": "gscode-build"
 			}
 		}
 	]

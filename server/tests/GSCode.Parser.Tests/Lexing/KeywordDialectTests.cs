@@ -1,4 +1,3 @@
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Text;
 using GSCode.Parser.Lexing;
@@ -14,9 +13,9 @@ namespace GSCode.Parser.Tests.Lexing;
 /// </summary>
 public class KeywordDialectTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     private static TokenKind FirstKind(string word, GameProfile profile)
     {
@@ -32,7 +31,7 @@ public class KeywordDialectTests
     [InlineData("do", TokenKind.Do)]
     public void BlackOps3_KeepsEveryKeyword(string word, TokenKind expected)
     {
-        Assert.Equal(expected, FirstKind(word, Bo3));
+        Assert.Equal(expected, FirstKind(word, s_bo3));
     }
 
     [Theory]
@@ -44,33 +43,33 @@ public class KeywordDialectTests
     [InlineData("do")]
     public void Cod4_HasNoneOfThoseKeywords_TheyAreIdentifiers(string word)
     {
-        Assert.Equal(TokenKind.Identifier, FirstKind(word, Cod4));
+        Assert.Equal(TokenKind.Identifier, FirstKind(word, s_cod4));
     }
 
     [Fact]
     public void ForeachArrivesInMw2_ButDoWhileAndClassesDoNot()
     {
         // MW2 has foreach (2009) but not do-while or classes.
-        Assert.Equal(TokenKind.Foreach, FirstKind("foreach", Mw2));
-        Assert.Equal(TokenKind.Identifier, FirstKind("do", Mw2));
-        Assert.Equal(TokenKind.Identifier, FirstKind("class", Mw2));
+        Assert.Equal(TokenKind.Foreach, FirstKind("foreach", s_mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("do", s_mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("class", s_mw2));
     }
 
     [Fact]
     public void ChildThreadAndCall_AreMw2KeywordsButBo3AndCod4Identifiers()
     {
         // childthread and call are the Infinity Ward line's MW2 additions (their own token kinds).
-        Assert.Equal(TokenKind.ChildThread, FirstKind("childthread", Mw2));
-        Assert.Equal(TokenKind.Call, FirstKind("call", Mw2));
+        Assert.Equal(TokenKind.ChildThread, FirstKind("childthread", s_mw2));
+        Assert.Equal(TokenKind.Call, FirstKind("call", s_mw2));
 
         // BO3 uses neither (its corpus uses `call` as an ordinary identifier ~69x), so there they
         // stay identifiers — which is exactly what keeps BO3 lexing byte-identical.
-        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", Bo3));
-        Assert.Equal(TokenKind.Identifier, FirstKind("call", Bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", s_bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("call", s_bo3));
 
         // And the base dialect (CoD4) has neither.
-        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", Cod4));
-        Assert.Equal(TokenKind.Identifier, FirstKind("call", Cod4));
+        Assert.Equal(TokenKind.Identifier, FirstKind("childthread", s_cod4));
+        Assert.Equal(TokenKind.Identifier, FirstKind("call", s_cod4));
     }
 
     [Fact]
@@ -78,9 +77,9 @@ public class KeywordDialectTests
     {
         // MW2's running-thread value. Grepping the games puts it in MW2 alone (5 uses there, 0 in
         // CoD4/WaW/BO1/BO3), so everywhere else the word stays an ordinary name.
-        Assert.Equal(TokenKind.ThisThread, FirstKind("thisthread", Mw2));
-        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", Bo3));
-        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", Cod4));
+        Assert.Equal(TokenKind.ThisThread, FirstKind("thisthread", s_mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", s_bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("thisthread", s_cod4));
     }
 
     [Fact]
@@ -88,7 +87,7 @@ public class KeywordDialectTests
     {
         // `thread` is a prefix of nothing here, but the reverse matters: `thisthread` must not lex as
         // an identifier followed by the `thread` keyword. One token, or the parser sees a call.
-        Token[] tokens = [.. Lexer.Lex(SourceText.From("thisthread"), Mw2).Tokens
+        Token[] tokens = [.. Lexer.Lex(SourceText.From("thisthread"), s_mw2).Tokens
             .Where(static token => !token.IsTrivia && token.Kind != TokenKind.EndOfFile)];
 
         Token only = Assert.Single(tokens);
@@ -101,9 +100,9 @@ public class KeywordDialectTests
     {
         // const is a BO3 addition; the earlier games have no file-scope const keyword, so the word is
         // an ordinary identifier there.
-        Assert.Equal(TokenKind.Const, FirstKind("const", Bo3));
-        Assert.Equal(TokenKind.Identifier, FirstKind("const", Mw2));
-        Assert.Equal(TokenKind.Identifier, FirstKind("const", Cod4));
+        Assert.Equal(TokenKind.Const, FirstKind("const", s_bo3));
+        Assert.Equal(TokenKind.Identifier, FirstKind("const", s_mw2));
+        Assert.Equal(TokenKind.Identifier, FirstKind("const", s_cod4));
     }
 
     [Theory]
@@ -120,15 +119,15 @@ public class KeywordDialectTests
     public void SharedKeywordsExistInEveryGame(string word, TokenKind expected)
     {
         // The control-flow and event baseline is present everywhere, so it is never gated.
-        Assert.Equal(expected, FirstKind(word, Cod4));
-        Assert.Equal(expected, FirstKind(word, Bo3));
+        Assert.Equal(expected, FirstKind(word, s_cod4));
+        Assert.Equal(expected, FirstKind(word, s_bo3));
     }
 
     [Fact]
     public void AKeywordlessDialectCanUseTheWordAsAName()
     {
         // `foreach = 1;` is a valid statement in CoD4 -- foreach is just a variable there.
-        TokenKind[] tokens = [.. Lexer.Lex(SourceText.From("foreach = 1;"), Cod4).Tokens
+        TokenKind[] tokens = [.. Lexer.Lex(SourceText.From("foreach = 1;"), s_cod4).Tokens
             .Where(static token => !token.IsTrivia)
             .Select(static token => token.Kind)];
 

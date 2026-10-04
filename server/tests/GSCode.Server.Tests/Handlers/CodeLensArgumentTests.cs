@@ -17,7 +17,7 @@ public class CodeLensArgumentTests
 {
     private static JArray Arguments()
     {
-        DocumentUri uri = DocumentUri.FromFileSystemPath(@"C:\bo3\share\raw\scripts\util.gsc");
+        DocumentUri uri = DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\util.gsc"));
         return CodeLensHandler.ShowReferencesArguments(uri, new Position(12, 4));
     }
 

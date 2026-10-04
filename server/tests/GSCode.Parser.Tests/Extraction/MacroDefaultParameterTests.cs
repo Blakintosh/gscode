@@ -3,7 +3,6 @@ using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using Xunit;
 
@@ -30,7 +29,7 @@ public class MacroDefaultParameterTests
 
     private static bool HasDefaultValueError(ImmutableArray<Diagnostic> diagnostics)
     {
-        return diagnostics.Any(diagnostic => diagnostic.Code == GscDiagnosticCode.NonValueDefaultParameter);
+        return diagnostics.Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Theory]

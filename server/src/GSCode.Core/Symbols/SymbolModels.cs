@@ -12,7 +12,7 @@ namespace GSCode.Core.Symbols;
 /// <param name="Name">Display-case name.</param>
 /// <param name="ByRef">Declared with &amp; (array pass-by-reference).</param>
 /// <param name="DefaultValueText">The default value as written, or "" when none.</param>
-public sealed record ParameterSymbol(string Name, bool ByRef, string DefaultValueText);
+public readonly record struct ParameterSymbol(string Name, bool ByRef, string DefaultValueText);
 
 /// <summary>One tracked assignment: a local (foo = x) or a field write (self.foo = x).</summary>
 /// <param name="OwnerName">Lowercase owner: "" for locals, else self/level/game/world/anim or the variable's name.</param>
@@ -25,8 +25,40 @@ public sealed record ParameterSymbol(string Name, bool ByRef, string DefaultValu
 /// worth a line in the outline, where `i`, `key` and `value` from every loop in the file drown
 /// the names that mean something.
 /// </param>
-public sealed record AssignmentSymbol(
+public readonly record struct AssignmentSymbol(
     string OwnerName, string Name, string KeyName, TextRange Range, bool IsLoopVariable = false);
+
+/// <summary>
+/// One <c>owner.field = &lt;something with an identity&gt;</c> write — what the scripts put IN a
+/// field, as opposed to <see cref="ReferenceKind.FieldWrite"/>, which is only where they put it.
+///
+/// GSC declares no types, so a field's meaning is whatever its writes give it. Two right-hand
+/// sides name one thing outright and nothing else does: <c>new Foo()</c>, which can only be that
+/// class, and a function reference — <c>&amp;foo</c>, <c>&amp;ns::foo</c> or a bare
+/// <c>ns::foo</c> — which can only be that function. They are the same two forms
+/// <c>FlowTyper</c> records as <c>ScrValue.InstanceClass</c> and <c>ScrValue.FunctionTarget</c>,
+/// recognised here SYNTACTICALLY so the answer survives in the index: a callback is assigned in one
+/// script and invoked in another, and re-typing the assigning file on every request would mean
+/// parsing files that are not open, on a request path, which the scale budget does not allow.
+///
+/// A callback field is the case this exists for. <c>level.callback = &amp;on_damage;</c> makes
+/// <c>on_damage</c> the implementation of <c>level.callback</c>, and a reader at the call site
+/// <c>level thread [[ level.callback ]]();</c> otherwise has nothing to follow.
+/// </summary>
+/// <param name="Field">
+/// The field being written, keyed exactly as its <see cref="ReferenceKind.FieldWrite"/> reference
+/// is, so the two are matched by key rather than by position.
+/// </param>
+/// <param name="Target">
+/// What it was bound to: a <see cref="SymbolKind.Class"/> for <c>new Foo()</c>, a
+/// <see cref="SymbolKind.Function"/> for a function reference. Keyed the same way the callee of an
+/// ordinary call is, so the same lookups resolve it.
+/// </param>
+/// <param name="Range">
+/// The FIELD name's range, not the target's — the binding is reported at the write, which is
+/// where a reader asking "what is in here" has their cursor.
+/// </param>
+public readonly record struct FieldBinding(SymbolKey Field, SymbolKey Target, TextRange Range);
 
 /// <summary>One declared function (top-level or class method).</summary>
 public sealed record FunctionSymbol
@@ -42,9 +74,8 @@ public sealed record FunctionSymbol
     /// <summary>
     /// Lowercase name of the class declaring this as a method, or null for a top-level function.
     ///
-    /// The explicit answer to "is this a method", which consumers previously had to infer from
-    /// <see cref="Namespace"/> being empty — a test that is true for a method but says nothing about
-    /// WHICH class, and which quietly also matches anything else that ends up namespace-less.
+    /// The explicit answer to "is this a method". An empty <see cref="Namespace"/> is not one: it says
+    /// nothing about WHICH class, and anything else namespace-less matches it too.
     /// </summary>
     public string? OwnerClassKeyName { get; init; }
 
@@ -52,8 +83,8 @@ public sealed record FunctionSymbol
     public bool IsAutoexec { get; init; }
 
     /// <summary>
-    /// Declared inside a <c>/# #/</c> dev block, so it does not exist in a release build.
-    /// Callers outside a dev block are reported.
+    /// Declared inside a <c>/# #/</c> dev block, which the game skips at runtime unless developer
+    /// script is enabled on the server. Callers outside a dev block are reported.
     /// </summary>
     public bool IsDevOnly { get; init; }
     public ImmutableArray<ParameterSymbol> Parameters { get; init; } = [];
@@ -75,7 +106,7 @@ public sealed record FunctionSymbol
 }
 
 /// <summary>One class 'var' member.</summary>
-public sealed record MemberSymbol(string Name, string KeyName, TextRange Range);
+public readonly record struct MemberSymbol(string Name, string KeyName, TextRange Range);
 
 /// <summary>One declared class.</summary>
 public sealed record ClassSymbol
@@ -125,7 +156,7 @@ public sealed record ClassSymbol
 /// phantom hard to filter: a file with NO <c>#namespace</c> at all has only the implicit span, and
 /// its functions genuinely do live in the namespace named after it.
 /// </summary>
-public sealed record NamespaceSpan(string Name, string KeyName, TextRange NameRange, TextRange GovernedRange);
+public readonly record struct NamespaceSpan(string Name, string KeyName, TextRange NameRange, TextRange GovernedRange);
 
 /// <summary>
 /// The one definition of "which namespaces does this file declare into", shared by the extraction
@@ -170,6 +201,61 @@ public static class DeclaredNamespaceSet
     }
 }
 
+/// <summary>
+/// The one definition of "which function body contains this position": a top-level function, a
+/// class method, or a constructor or destructor body. Shared by the extraction result's consumers
+/// and the indexed record's, which carry the same two lists.
+///
+/// Methods live on their class, not in the top-level list, so a walk of that list alone answers
+/// "no function" for every position inside a method. Completion made that mistake and completed
+/// every method body as though it were file scope; the call hierarchy made it again and named the
+/// FILE as the caller of anything called from a method.
+/// </summary>
+public static class EnclosingFunction
+{
+    public static FunctionSymbol? At(
+        ImmutableArray<FunctionSymbol> functions, ImmutableArray<ClassSymbol> classes, Position position)
+    {
+        foreach ( FunctionSymbol function in functions )
+        {
+            if ( function.FullRange.Contains(position) )
+            {
+                return function;
+            }
+        }
+
+        foreach ( ClassSymbol classSymbol in classes )
+        {
+            if ( !classSymbol.FullRange.Contains(position) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol method in classSymbol.Methods )
+            {
+                if ( method.FullRange.Contains(position) )
+                {
+                    return method;
+                }
+            }
+
+            // A constructor or destructor body is a function body too, for every purpose this
+            // answers — which is why they are carried on the class at all.
+            if ( classSymbol.Constructor is not null && classSymbol.Constructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Constructor;
+            }
+
+            if ( classSymbol.Destructor is not null && classSymbol.Destructor.FullRange.Contains(position) )
+            {
+                return classSymbol.Destructor;
+            }
+        }
+
+        return null;
+    }
+}
+
 /// <summary>How a reference site uses its symbol.</summary>
 public enum ReferenceKind
 {
@@ -195,6 +281,46 @@ public enum ReferenceKind
     AddressOf,
     ClassUse,
     FieldAccess,
+
+    /// <summary>
+    /// The field on the LEFT of an assignment — <c>level.x = 1</c>, <c>self.owner += 2</c>.
+    ///
+    /// A field has no declaration, so nothing ever emits a <see cref="Definition"/> for one, and
+    /// go-to-definition on <c>level.craftable_shield_grab</c> answered with an empty list: the
+    /// handler keeps only Definition entries and a field only ever produced
+    /// <see cref="FieldAccess"/>. A write is the closest thing a field HAS to a declaration — it is
+    /// where the name comes into existence and where its value is decided — so separating it from a
+    /// read is what lets that question be answered at all.
+    ///
+    /// Deliberately NOT <see cref="Definition"/>. Every write is one, there is usually more than
+    /// one, and the surfaces that treat a Definition as THE declaration — the CodeLens anchor, the
+    /// hierarchies' anchoring step, <c>DatabaseQueries.DeclaresKey</c> — would each have had to
+    /// learn that a field's is plural. A separate kind leaves all of them reading false as before
+    /// and lets the two handlers that want writes ask for them.
+    ///
+    /// A plain <c>=</c> only. A compound assignment is <see cref="FieldUpdate"/>.
+    /// </summary>
+    FieldWrite,
+
+    /// <summary>
+    /// A compound assignment to a field — <c>level.count += 1</c>, <c>self.flags |= x</c>, and the
+    /// rest of the read-modify-write family.
+    ///
+    /// Still a write, and every surface that asks "where is this field set" wants it:
+    /// go-to-definition lists it and document highlight colours it as a write, both alongside
+    /// <see cref="FieldWrite"/>.
+    ///
+    /// Separate because go-to-IMPLEMENTATION does not want it. An implementation is what the field
+    /// IS, and a compound assignment never establishes that — it adjusts a value some plain
+    /// assignment already decided, so a reader asking what is in the field is being shown a step
+    /// rather than an answer. The typing layer draws the same line for the same reason: its own
+    /// <c>FieldWrite.Value</c> is null for this form, because there is no single assigned value.
+    ///
+    /// A kind rather than a flag on <see cref="FieldWrite"/>, matching <see cref="MethodCall"/>:
+    /// the consumers switch on kind, and a flag is a thing each of them can forget to read.
+    /// </summary>
+    FieldUpdate,
+
     MacroUse,
     Literal,
 
@@ -221,23 +347,53 @@ public enum ReferenceKind
     /// it was chasing is largely gone.
     /// </summary>
     ConcatenatedLiteral,
-
-    /// <summary>
-    /// A use that came from inside a MACRO BODY, recorded against the invocation site in this
-    /// file rather than the macro's own text.
-    ///
-    /// These used to be dropped outright, which was right about ranges and wrong about facts.
-    /// `REGISTER_SYSTEM(...)` expands to `system::register(...)`, so a file using that macro
-    /// really does call into the `system` namespace — but with nothing recorded, the unused-import
-    /// lint saw no use and told 471 stock files their `#using scripts\shared\system_shared` was
-    /// pointless. Code-lens counts and find-all-references were short by the same amount.
-    ///
-    /// Kept as a distinct kind rather than folded in, because the two consumers want opposite
-    /// things: counting a use is right, but resolving the CURSOR to one is not — the text under
-    /// it reads `REGISTER_SYSTEM`, and go-to-definition there must still reach the macro.
-    /// </summary>
-    ExpandedFromMacro,
 }
 
-/// <summary>One classified reference site: key + where + how. No text is stored beyond the interned key.</summary>
-public readonly record struct ReferenceEntry(SymbolKey Key, TextRange Range, ReferenceKind Kind);
+/// <summary>
+/// One classified reference site: key + where + how + whether the text came from a macro body.
+/// No text is stored beyond the interned key.
+/// </summary>
+/// <param name="FromMacro">
+/// True when the token that produced this reference came out of a MACRO BODY, in which case
+/// <see cref="Range"/> is the INVOCATION site in this file rather than the macro's own text.
+///
+/// A separate field rather than a <see cref="ReferenceKind"/> value because the two facts are
+/// orthogonal — WHAT the reference is and WHERE its text was written. One enum holding both hides a
+/// call a macro expanded into from every `Kind == Call` rule: `#define HELP() flag::exists("x")`
+/// needs `#using scripts\shared\flag_shared` exactly as much as the call written out does.
+///
+/// Both facts have consumers wanting opposite things. Counting the use is right — without it, 471
+/// stock files were told their `#using scripts\shared\system_shared` was pointless, and code lens
+/// and find-all-references came up short by as much. Resolving the CURSOR to one is not: the
+/// characters on screen spell `REGISTER_SYSTEM`, so hover and go-to-definition belong to the macro.
+/// </param>
+public readonly record struct ReferenceEntry(
+    SymbolKey Key, TextRange Range, ReferenceKind Kind, bool FromMacro = false)
+{
+    /// <summary>
+    /// A call to a SCRIPT function by name — the shape five cross-file lints each open on.
+    ///
+    /// It is not every call: <see cref="ReferenceKind.MethodCall"/> is excluded, because the arrow
+    /// form guarantees a class method and the rules that ask this question are about namespaces,
+    /// imports and privacy, none of which a method has. <c>FunctionResolutionLint</c> is the one
+    /// rule that wants both and writes its own test for that reason.
+    /// </summary>
+    public bool IsFunctionCall
+    {
+        get { return Kind == ReferenceKind.Call && Key.Kind == SymbolKind.Function; }
+    }
+
+    /// <summary>
+    /// Either way a field or class member is assigned to — the shape every surface asking "where
+    /// is this SET" opens on, which is go-to-definition and document highlight.
+    ///
+    /// Both kinds, deliberately. The split between <see cref="ReferenceKind.FieldWrite"/> and
+    /// <see cref="ReferenceKind.FieldUpdate"/> exists for go-to-IMPLEMENTATION alone, which asks
+    /// what the field IS and so wants the plain assignments only; it tests that kind directly
+    /// rather than through this.
+    /// </summary>
+    public bool IsFieldWrite
+    {
+        get { return Kind == ReferenceKind.FieldWrite || Kind == ReferenceKind.FieldUpdate; }
+    }
+}

@@ -30,8 +30,8 @@ public sealed class FoldingRangeHandler : FoldingRangeHandlerBase
 
     public override Task<Container<FoldingRange>?> Handle(FoldingRangeRequestParam request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryAnalyzeFresh(
+            request.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<Container<FoldingRange>?>(null);
         }

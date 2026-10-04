@@ -67,7 +67,6 @@ extensible beyond stock data. Field entry shape: `{ "name", "type", "readonly"? 
   `hudelem_fields.json`, `pathnode_fields.json`, `player_fields.json`,
   `sentient_fields.json`, `vehicle_fields.json`, `vn_fields.json` — per-entity field lists.
 - `weapon_fields_simple.json` — weapon fields; every entry carries `"readonly": true`.
-- `clientfield_enums.txt` — clientfield enum reference material.
 - `cod4_ai_builtins.json` — reconstructed entries for CoD4 functions no documentation
   covers. Every one carries the `aiGenerated` flag and a `remarks` line naming its
   provenance: thirteen carried over from the Black Ops III library, where the same function

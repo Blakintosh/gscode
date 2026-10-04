@@ -1,23 +1,15 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class ClassCycleLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-
     /// <summary>
     /// Lints <paramref name="askingSource"/> as scripts\main.gsc, with <paramref name="otherSource"/>
     /// indexed as scripts\other.gsc so a chain can cross a file boundary — which is the shape 4 of
@@ -31,19 +23,14 @@ public class ClassCycleLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource, string otherSource = "")
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\main.gsc", askingSource)
-            .AddFile(@$"{Raw}\scripts\other.gsc", otherSource);
+            .AddFile(TestPaths.Raw(@"scripts\main.gsc"), askingSource)
+            .AddFile(TestPaths.Raw(@"scripts\other.gsc"), otherSource);
 
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
-        string askingPath = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         return ClassCycleLint.Analyze(result, database.Gsc, "raw");
     }
@@ -66,6 +53,25 @@ public class ClassCycleLintTests
         ImmutableArray<Diagnostic> diagnostics = Lint("class A : B\n{\n}\nclass B : A\n{\n}\n");
 
         Assert.Equal(2, diagnostics.Length);
+    }
+
+    [Fact]
+    public void TheMessage_NamesTheFullChainInTheAuthorsOwnCasing()
+    {
+        // The chain used to be built from KeyName (lowercase-canonical) and dropped both endpoints,
+        // so "class Foo inherits from itself" reported only "through bar" — neither the case the
+        // author wrote nor either class the reader actually needs to see the loop close.
+        ImmutableArray<Diagnostic> diagnostics = Lint("class Foo : Bar\n{\n}\nclass Bar : Foo\n{\n}\n");
+
+        Assert.Contains("Foo -> Bar -> Foo", diagnostics[0].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheDirectSelfInheritanceMessage_NamesTheClassOnBothEnds()
+    {
+        Diagnostic diagnostic = Assert.Single(Lint("class Foo : Foo\n{\n}\n"));
+
+        Assert.Contains("Foo -> Foo", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -16,8 +12,7 @@ public class UnbracedBodyFormattingTests
 {
     private static string Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result) ?? throw new InvalidOperationException("formatter refused the input");
     }
@@ -93,6 +88,44 @@ public class UnbracedBodyFormattingTests
 
         Assert.Equal(IndentOf(LineWith(formatted, "if (")), IndentOf(LineWith(formatted, "after")));
         Assert.True(IndentOf(LineWith(formatted, "doThing")) > IndentOf(LineWith(formatted, "if (")));
+    }
+
+    [Theory]
+    [InlineData("if ( a ) // note")]
+    [InlineData("while ( a ) // note")]
+    [InlineData("for ( ; a; ) // note")]
+    [InlineData("foreach ( k in things ) // note")]
+    [InlineData("if ( a ) /* note */")]
+    public void ACommentAfterTheHeader_LeavesABracedBodyAtBraceDepth(string header)
+    {
+        // Reported: the comment was taken for an unbraced body, so the `{` and everything inside
+        // it went one level right and the `}` no longer lined up with them.
+        string formatted = Format($"function f()\n{{\n{header}\n{{\ndoThing();\n}}\nafter();\n}}\n");
+        string[] lines = formatted.Split('\n');
+        int open = Array.FindIndex(lines, line => line.Trim() == "{" && IndentOf(line) > 0);
+
+        Assert.Contains(header, formatted, StringComparison.Ordinal);
+        Assert.Equal(IndentOf(LineWith(formatted, header)), IndentOf(lines[open]));
+        Assert.Equal(IndentOf(lines[open]) + 4, IndentOf(LineWith(formatted, "doThing")));
+        Assert.Equal(IndentOf(lines[open]), IndentOf(lines[open + 2]));
+        Assert.Equal(IndentOf(lines[open]), IndentOf(LineWith(formatted, "after")));
+    }
+
+    [Fact]
+    public void ACommentAfterElse_LeavesABracedBodyAtBraceDepth()
+    {
+        string formatted = Format("function f()\n{\nif ( a )\n{\n}\nelse // note\n{\ndoThing();\n}\n}\n");
+
+        Assert.Equal(IndentOf(LineWith(formatted, "else")) + 4, IndentOf(LineWith(formatted, "doThing")));
+    }
+
+    [Fact]
+    public void ACommentAfterTheHeader_StillIndentsAnUnbracedBody()
+    {
+        string formatted = Format("function f()\n{\nif ( a ) // note\ndoThing();\nafter();\n}\n");
+
+        Assert.True(IndentOf(LineWith(formatted, "doThing")) > IndentOf(LineWith(formatted, "if (")), formatted);
+        Assert.Equal(IndentOf(LineWith(formatted, "if (")), IndentOf(LineWith(formatted, "after")));
     }
 
     [Fact]

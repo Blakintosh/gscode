@@ -1,17 +1,21 @@
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Resolution;
 using GSCode.Workspace.Typing;
 using GSCode.Server.Mapping;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 using TextRange = GSCode.Core.Text.TextRange;
+using GSCode.Parser.Preprocessing;
 
 namespace GSCode.Server.Handlers;
 
@@ -38,13 +42,13 @@ public sealed class HoverHandler : HoverHandlerBase
 
     public override Task<Hover?> Handle(HoverParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<Hover?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
         if ( hit.Kind == HitKind.Reference )
         {
             string? markdown = RenderHover(target, hit.Key, hit.Range, hit.ReferenceKind);
@@ -85,6 +89,40 @@ public sealed class HoverHandler : HoverHandlerBase
         return Task.FromResult<Hover?>(null);
     }
 
+    /// <summary>
+    /// A markdown link to a declaration, for the line under a hover's signature. Functions, classes
+    /// and macros all get one; builtins, keywords and fields never reach it — the first two because
+    /// the engine declares them and there is nothing to open, a field because its "definition" is
+    /// every write that agrees rather than one place.
+    ///
+    /// <paramref name="path"/> is the file <paramref name="range"/> is truly a position in, which
+    /// for a symbol that arrived through an <c>#insert</c> is the HEADER and not the including
+    /// file — <see cref="ResolvedFunction.DeclaringPath"/> and
+    /// <see cref="ResolvedClass.DeclaringPath"/> answer that for a symbol, and a macro definition's
+    /// <c>SourceFile</c> does for a macro. Pairing a header-true range with the including file's
+    /// path points at whatever text happens to sit at that line and column over there.
+    ///
+    /// The target is spelled as a <c>#L&lt;line&gt;,&lt;column&gt;</c> fragment on the file URI,
+    /// which is how an editor is told to put the caret somewhere rather than merely open the file;
+    /// both halves are 1-based there while ours are 0-based. The label is script-relative so it
+    /// reads the way the scripts themselves name files, and is fenced as code so a path's
+    /// backslashes and underscores are not eaten as markdown escapes and emphasis.
+    /// </summary>
+    private string DefinitionLink(string path, TextRange range)
+    {
+        Position start = range.Start;
+
+        ResolutionContext context = _support.Resolver.GetContext(path);
+        string relative = _support.Resolver.GetScriptRelativePath(path, context);
+
+        // "" means the file is under no known root — an untitled or out-of-tree script. Its own
+        // name is still more use to the reader than an absolute path the widget would wrap.
+        string label = relative.Length > 0 ? relative : System.IO.Path.GetFileName(path);
+
+        string uri = DocumentUri.FromFileSystemPath(path).ToString();
+        return $"[`{label}:{start.Line + 1}`]({uri}#L{start.Line + 1},{start.Character + 1})";
+    }
+
     private string? RenderHover(
         NavigationTarget target, SymbolKey key, TextRange hitRange, ReferenceKind referenceKind)
     {
@@ -100,7 +138,10 @@ public sealed class HoverHandler : HoverHandlerBase
 
                 if ( functions.Length > 0 )
                 {
-                    return MarkdownDocRenderer.RenderFunction(functions[0].Function, functions[0].OwnerClass);
+                    return MarkdownDocRenderer.RenderFunction(
+                        functions[0].Function,
+                        functions[0].OwnerClass,
+                        DefinitionLink(functions[0].DeclaringPath, functions[0].Function.NameRange));
                 }
 
                 // Fall back to the namespace-less builtin library.
@@ -111,18 +152,46 @@ public sealed class HoverHandler : HoverHandlerBase
             {
                 ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
                     target.Store, target.ContextId, key.Namespace, key.Name);
-                return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
+                if ( classes.Length == 0 )
+                {
+                    return null;
+                }
+
+                return MarkdownDocRenderer.RenderClass(
+                    classes[0].Class, DefinitionLink(classes[0].DeclaringPath, classes[0].Class.NameRange));
             }
             case SymbolKind.Macro:
             {
-                MacroRecord? macro = FindMacro(target, key.Name);
-                return macro is not null
-                    ? MarkdownDocRenderer.RenderMacro(macro, FindMacroExpansion(target, key.Name, hitRange))
-                    : null;
+                MacroDefinition? macro = FindMacro(target, key.Name);
+                if ( macro is null )
+                {
+                    return null;
+                }
+
+                // SourceFile is null for a macro this file defines itself; non-null names the .gsh
+                // an #insert brought it in from, which is the answer the reader does not otherwise
+                // have.
+                string macroPath = macro.SourceFile ?? target.Path;
+                return MarkdownDocRenderer.RenderMacro(
+                    new MacroRecord(
+                        macro.Name,
+                        macro.IsFunctionLike,
+                        macro.Parameters ?? [],
+                        macro.NameRange,
+                        macro.Documentation ?? ""),
+                    FindMacroExpansion(target, key.Name, hitRange),
+                    DefinitionLink(macroPath, macro.NameRange));
             }
             case SymbolKind.Field:
                 return RenderField(key.Name, target.Language, target);
+            case SymbolKind.Member:
+                return RenderMember(target, key);
             case SymbolKind.StringLiteral:
+                // The one shape a plain string literal reference is not: __FUNCTION__/__FILE__
+                // already expanded to a string before parsing, so the reader looking at the literal
+                // text on screen needs to be told what it resolved to — an ordinary string has
+                // nothing to add beyond what is already on screen, so this is the only case here.
+                return FindBuiltinExpansion(target, hitRange);
             case SymbolKind.HashString:
             case SymbolKind.LocalizedString:
             case SymbolKind.AnimReference:
@@ -130,6 +199,25 @@ public sealed class HoverHandler : HoverHandlerBase
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// What a <c>__FUNCTION__</c>/<c>__FILE__</c>/<c>__LINE__</c> use at <paramref name="hitRange"/>
+    /// expanded to, or null when the hover is on an ordinary string. <c>BuiltinExpansions</c> is
+    /// scoped to this same file's own preprocessing run, so a range match cannot land on another
+    /// document's entry.
+    /// </summary>
+    private static string? FindBuiltinExpansion(NavigationTarget target, TextRange hitRange)
+    {
+        foreach ( BuiltinExpansion expansion in target.Result.Preprocessed.BuiltinExpansions )
+        {
+            if ( expansion.Range.Contains(hitRange.Start) )
+            {
+                return $"```gsc\n{expansion.Name}\n```\nExpands to: `{expansion.ExpandedText}`";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -142,7 +230,7 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private static string FindMacroExpansion(NavigationTarget target, string name, TextRange hitRange)
     {
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
+        foreach ( MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
             if ( !string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {
@@ -152,7 +240,8 @@ public sealed class HoverHandler : HoverHandlerBase
             return MacroExpansionPreview.Render(
                 definition.Body,
                 definition.Parameters ?? [],
-                ArgumentsAt(target, hitRange));
+                ArgumentsAt(target, hitRange),
+                target.Result.Preprocessed.Macros);
         }
 
         return "";
@@ -165,7 +254,7 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private static ImmutableArray<string> ArgumentsAt(NavigationTarget target, TextRange hitRange)
     {
-        foreach ( GSCode.Parser.Preprocessing.MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
+        foreach ( MacroInvocation invocation in target.Result.Preprocessed.MacroInvocations )
         {
             // Only invocations written in THIS file: one reached through an #insert has its text
             // in another file that is not loaded here.
@@ -188,19 +277,19 @@ public sealed class HoverHandler : HoverHandlerBase
         return [];
     }
 
-    private MacroRecord? FindMacro(NavigationTarget target, string name)
+    /// <summary>
+    /// The definition in effect for <paramref name="name"/> — the document's own macros, then any
+    /// GSH it consults. The DEFINITION rather than a <see cref="MacroRecord"/> built from it,
+    /// because the record drops <c>SourceFile</c>, and which file the <c>#define</c> is in is half
+    /// of what the hover now reports.
+    /// </summary>
+    private static MacroDefinition? FindMacro(NavigationTarget target, string name)
     {
-        // The document's own macros, then any GSH it consults.
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition definition in target.Result.Preprocessed.Macros.All )
+        foreach ( MacroDefinition definition in target.Result.Preprocessed.Macros.All )
         {
             if ( string.Equals(definition.Name, name, StringComparison.Ordinal) )
             {
-                return new MacroRecord(
-                    definition.Name,
-                    definition.IsFunctionLike,
-                    definition.Parameters ?? [],
-                    definition.NameRange,
-                    definition.Documentation ?? "");
+                return definition;
             }
         }
 
@@ -268,9 +357,8 @@ public sealed class HoverHandler : HoverHandlerBase
     ///
     /// <c>prof_begin</c>/<c>prof_end</c> are the Infinity Ward-line spelling of
     /// <c>profilestart</c>/<c>profilestop</c> and lex to the same token kinds, but the lookup is by
-    /// TEXT — so on CoD4, WaW, MW2 and BO1, where those are the spellings people actually write, the
-    /// profiler pair hovered blank while BO3's spelling worked. Resolving through the kind is what
-    /// keeps one doc serving both spellings.
+    /// TEXT; resolving through the kind is what keeps one doc serving both spellings, including on
+    /// CoD4, WaW, MW2 and BO1, where the Infinity Ward spelling is the one people write.
     /// </summary>
     private static string CanonicalKeywordName(Token token, ParseResult result)
     {
@@ -291,6 +379,47 @@ public sealed class HoverHandler : HoverHandlerBase
     }
 
     /// <summary>
+    /// This document's inferred assignments, walked once per document VERSION, not per hover.
+    ///
+    /// <see cref="InferredFieldType"/> reads every assignment in the file, and hovering is a
+    /// mouse-move away, so a walk per request re-typed the whole file for every hover over a field.
+    /// Read through <see cref="FlowTyper.InferValuesShared"/>, the same answer the lint pass and the
+    /// inlay hints use, so a hover after an edit usually finds the lint pass already paid for it.
+    /// </summary>
+    internal ImmutableArray<InferredAssignment> AssignmentsOf(NavigationTarget target)
+    {
+        return FlowTyper.InferValuesShared(target.Result, _builtins.For(target.Language), _objectFields).Assignments;
+    }
+
+    /// <summary>
+    /// A class <c>var</c>, named with the class that actually declares it — which for an inherited
+    /// member is not the class the cursor is in, and is the fact a reader most needs here. The
+    /// name on screen looks exactly like a local, so saying nothing at all is what it did before.
+    /// </summary>
+    private string RenderMember(NavigationTarget target, SymbolKey key)
+    {
+        string declaring = key.OwnerClass is null
+            ? ""
+            : MethodResolution.FindDeclaringClassForMember(
+                target.Store, target.ContextId, key.OwnerClass, key.Name) ?? key.OwnerClass;
+
+        StringBuilder markdown = new();
+        markdown.Append("```gsc\n(member) ").Append(key.Name).Append("\n```\n");
+
+        if ( declaring.Length > 0 )
+        {
+            foreach ( ResolvedClass resolved in DatabaseQueries.LookupClasses(
+                target.Store, target.ContextId, namespaceName: null, declaring) )
+            {
+                markdown.Append("\n---\n\nmember of `").Append(resolved.Class.Name).Append('`');
+                return markdown.ToString();
+            }
+        }
+
+        return markdown.ToString();
+    }
+
+    /// <summary>
     /// The type this file's own writes give a field, or Unknown when they disagree or there are
     /// none. Every write has to agree: <c>self.state = "idle"</c> in one function and
     /// <c>self.state = 3</c> in another means the field genuinely holds both, and picking whichever
@@ -298,12 +427,11 @@ public sealed class HoverHandler : HoverHandlerBase
     /// </summary>
     private ScrType InferredFieldType(NavigationTarget target, string name, out string display)
     {
-        FlowTyper typer = new(_builtins.For(target.Language), _objectFields);
         ScrType agreed = ScrType.Unknown;
         display = "";
         bool seen = false;
 
-        foreach ( InferredAssignment assignment in typer.InferAssignments(target.Result) )
+        foreach ( InferredAssignment assignment in AssignmentsOf(target) )
         {
             if ( !assignment.IsField
                 || !string.Equals(assignment.Name, name, StringComparison.OrdinalIgnoreCase) )
@@ -364,7 +492,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 : $"```gsc\n(field) {name}\n```";
         }
 
-        System.Text.StringBuilder markdown = new();
+        StringBuilder markdown = new();
         markdown.Append("```gsc\n(field) ").Append(name).Append("\n```\n");
 
         // The owner's entity kind isn't inferred here, so list every kind declaring the name.
@@ -397,5 +525,4 @@ public sealed class HoverHandler : HoverHandlerBase
 
         return markdown.ToString();
     }
-
 }

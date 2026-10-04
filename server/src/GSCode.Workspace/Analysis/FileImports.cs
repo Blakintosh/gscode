@@ -16,17 +16,20 @@ public sealed record ImportedFile(string RawPath, TextRange DirectiveRange, Scri
 /// <summary>
 /// A file's import directives, each resolved to a record, done ONCE.
 ///
-/// Four lints wanted exactly this and each wrote it out: walk the directives, resolve every path
-/// through the <see cref="PathResolver"/>, normalize, <c>store.TryGet</c>, and abandon the whole pass
-/// the moment either step fails. On a BO3 file that meant the same <c>#using</c> list resolved three
-/// times per analysis — <see cref="NamespaceUsageLint"/>, <see cref="UnusedUsingLint"/> and
-/// <see cref="AmbiguousFunctionLint"/> — and each resolve is a filesystem probe per configured root.
-/// This runs on every keystroke.
+/// Several lints need this on every keystroke and each resolve is a filesystem probe per configured
+/// root, so it is done once per analysis rather than once per lint.
 ///
-/// <see cref="Complete"/> carries the shared bail-out. It is false when any directive did not resolve
-/// or was not indexed, and every one of those lints stands down on it for the same reason: a file
-/// they cannot read might supply the namespace they were about to complain about, or the second
-/// declaration that makes a name ambiguous, or the function that makes an import used after all.
+/// <see cref="Complete"/> is false when any directive did not resolve or was not indexed. Only
+/// <see cref="NamespaceUsageLint"/> and <see cref="IncludeUsageLint"/> read it — the same claim in
+/// the two import models, and the one claim an unknown file really can falsify: that NOTHING this
+/// script imports declares the name. Both are Errors, so both keep the bail-out. An unreadable
+/// import cannot reduce two providers to one, and whether an import is used depends on this file's
+/// references and that import's own declarations, so neither the ambiguity rule nor the unused-import
+/// rules need it.
+///
+/// The directives that failed are absent from <see cref="Usings"/> and <see cref="Includes"/>
+/// either way, which is what lets the other three judge the rest of the list and still never report
+/// on a directive they could not read.
 ///
 /// Both directive kinds are gathered in one pass and kept apart, because no dialect has both and a
 /// single list would let a <c>#using</c> be judged by the rule for <c>#include</c>. That distinction

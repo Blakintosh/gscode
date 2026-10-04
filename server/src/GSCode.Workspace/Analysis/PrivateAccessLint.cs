@@ -1,6 +1,8 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -29,10 +31,22 @@ public static class PrivateAccessLint
         LanguageStore store,
         string askingContextId,
         string askingPath,
-        BuiltinApi builtins)
+        BuiltinApi builtins,
+        GameProfile? profile = null)
     {
+        // Nothing to find on a dialect with no `private`: no declaration there can carry the flag,
+        // so this rule cannot report — yet it would still resolve every call in the file to find
+        // that out, twice. On a merge dialect a call resolves by bare name, and at 50,000 files
+        // `main` alone has thousands of declarations, which made this the most expensive rule in a
+        // cod4 lint pass while reporting nothing (PERF.md, the scale section).
+        GameProfile game = profile ?? GameProfile.Active;
+        if ( !game.HasPrivateFunctions )
+        {
+            return [];
+        }
+
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Two caches, because the two questions below differ in more than includePrivate: the second
         // deliberately passes NO asking namespaces, so that it sees private functions this file
@@ -41,9 +55,17 @@ public static class PrivateAccessLint
         FunctionLookupCache visibleLookups = new(store, askingContextId, askingPath, askingNamespaces);
         FunctionLookupCache anyLookups = new(store, askingContextId, askingPath);
 
+        // Keyed on the symbol: one private function named twice by a macro body is one broken
+        // call. See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped. Privacy is the engine's rule about which namespace may
+            // reach a declaration, and it applies to the expansion the compiler sees — a macro is
+            // not a way around `private`, so a header whose body calls another namespace's private
+            // function produces a call that does not link, in every file that invokes it.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -92,10 +114,17 @@ public static class PrivateAccessLint
                     candidate.Function.Name,
                     candidate.Function.Namespace);
 
+                // DeclaringPath, not Record.Path: a candidate reached through #insert has a
+                // NameRange that is a true position in the HEADER, not in the record that merely
+                // spliced it in.
                 DiagnosticRelation declaredAt = new(
-                    candidate.Record.Path, candidate.Function.NameRange, "Declared private here.");
+                    candidate.DeclaringPath, candidate.Function.NameRange, "Declared private here.");
 
-                diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
+                if ( MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
+                {
+                    diagnostics.Add(diagnostic with { RelatedInformation = [declaredAt] });
+                }
+
                 break;
             }
         }

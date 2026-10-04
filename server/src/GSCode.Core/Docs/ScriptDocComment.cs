@@ -49,10 +49,9 @@ public sealed record ScriptDocComment
     ///     "Summary: Empty function, used as a default function pointer."
     ///     @/
     ///
-    /// The key regex starts at <c>\w</c>, so a leading quote stopped every stock block from
-    /// matching a single line — 15,226 of the 15,231 functions in the shipped scripts parsed to an
-    /// empty doc, and hovers showed no documentation at all. Unquoted lines are left as they are,
-    /// since both forms appear in the wild.
+    /// The key regex starts at <c>\w</c>, so without this no quoted line matches — 15,226 of the
+    /// 15,231 functions in the shipped scripts would parse to an empty doc. Unquoted lines are left
+    /// as they are, since both forms appear in the wild.
     /// </summary>
     private static string Unwrap(string line)
     {

@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -22,14 +19,11 @@ public class GlobalObjectWriteLintTests
 {
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\n" + body + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f()\n{\n" + body + "\n}\n");
 
-        return GlobalObjectWriteLint.Analyze(result);
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => GlobalObjectWriteLint.InspectNode(node, GlobalObjectWriteLint.GlobalNames(), diagnostics));
     }
 
     [Fact]
@@ -96,17 +90,11 @@ public class GlobalObjectWriteLintTests
     {
         // The one portability trap here. Call of Duty 4 has no `world`, so a local called `world`
         // is a name like any other and reporting it would be a false Error on working code.
-        Assert.True(GameProfile.Select("cod4"));
-        try
-        {
-            Assert.Empty(Lint("    world = 1;"));
+        using ProfileScope scope = ProfileScope.Use(GameProfile.Cod4);
 
-            // The globals every dialect does have are still reported under it.
-            Assert.Single(Lint("    level = 1;"));
-        }
-        finally
-        {
-            GameProfile.Select("bo3");
-        }
+        Assert.Empty(Lint("    world = 1;"));
+
+        // The globals every dialect does have are still reported under it.
+        Assert.Single(Lint("    level = 1;"));
     }
 }

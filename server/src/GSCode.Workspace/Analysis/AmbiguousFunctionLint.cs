@@ -1,11 +1,9 @@
-﻿using System.Collections.Immutable;
-using GSCode.Core;
+using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -24,9 +22,14 @@ namespace GSCode.Workspace.Analysis;
 /// file knows which definitions actually meet, which is why the question is asked here rather
 /// than of the database as a whole.
 ///
-/// As with the other <c>#using</c> lints, one import that cannot be resolved suppresses the pass:
-/// a definition from a file we could not read might be the one that makes a name ambiguous, or
-/// the one that makes it fine.
+/// An unreadable <c>#using</c> does not suppress the pass. Ambiguity here is MONOTONIC: the claim is
+/// that two files this script imports both declare the name, both of them are records in hand, and a
+/// third provider nobody can read cannot reduce two to one.
+///
+/// What an unreadable import DOES cost is the count in the message, which can only be understated —
+/// it says how many of the files this script imports declare the name, and one it could not read is
+/// not among them. A Warning that says two where the truth is three still points at the right
+/// call.
 ///
 /// The nine it reports on the stock scripts are real rather than tolerated noise:
 /// <c>scripts\mp\_util.gsc:395</c> and <c>scripts\shared\util_shared.gsc:1663</c> both declare
@@ -46,14 +49,11 @@ public static class AmbiguousFunctionLint
         FileImports? imports = null)
     {
         string askingNormalized = PathUtil.NormalizeAbsolute(askingPath);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Resolved once per file by WorkspaceLints and shared with the other import lints; falling
         // back to resolving here keeps this callable on its own, which the tests rely on.
         FileImports resolvedImports = imports ?? FileImports.Resolve(result, store, language, resolver, askingPath);
-        if ( !resolvedImports.Complete )
-        {
-            return [];
-        }
 
         // namespace::name -> the files reachable from here that declare it.
         Dictionary<string, List<ScriptRecord>> providers = new(StringComparer.Ordinal);
@@ -68,16 +68,24 @@ public static class AmbiguousFunctionLint
                 continue;
             }
 
-            Collect(imported.Record, providers);
+            Collect(imported.Record, providers, askingNormalized, askingNamespaces);
         }
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+
+        // Keyed on the symbol: one undecided call named twice by a macro body is one warning.
+        // See MacroReports.
+        HashSet<(TextRange Range, SymbolKey Key)>? reportedFromMacros = null;
 
         // Report at the CALL, not at the definitions: the definitions are each fine on their own,
         // and this file is where the ambiguity exists.
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped. The ambiguity is a property of what THIS file imports, and
+            // invoking the macro is what brings the call into this file — a header body naming
+            // `util::wait_endon` is as undecided here as writing it out, and for the same reason:
+            // two of the files this one links against declare it.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -89,6 +97,14 @@ public static class AmbiguousFunctionLint
 
             string key = entry.Key.Namespace + "::" + entry.Key.Name;
             if ( !providers.TryGetValue(key, out List<ScriptRecord>? declaring) || declaring.Count < 2 )
+            {
+                continue;
+            }
+
+            // Asked BEFORE the related-information array and the Diagnostic are built. Checking
+            // afterwards did the work of reporting and then threw it away, which is the wrong order
+            // for the one entry shape that can arrive twice.
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key), ref reportedFromMacros) )
             {
                 continue;
             }
@@ -113,12 +129,28 @@ public static class AmbiguousFunctionLint
         return diagnostics.ToImmutable();
     }
 
-    private static void Collect(ScriptRecord record, Dictionary<string, List<ScriptRecord>> providers)
+    private static void Collect(
+        ScriptRecord record,
+        Dictionary<string, List<ScriptRecord>> providers,
+        string askingNormalized,
+        ImmutableArray<string> askingNamespaces)
     {
         foreach ( FunctionSymbol function in record.Functions )
         {
             // Inserted declarations belong to the header that holds them, not to this record.
             if ( function.SourceFile.Length > 0 || function.Namespace.Length == 0 )
+            {
+                continue;
+            }
+
+            // A PRIVATE declaration the asking file cannot see is not a candidate the linker could
+            // ever pick for the call: two files declaring a name is not ambiguous when one of the
+            // two declarations is invisible from here, whatever the count would otherwise say. GSC
+            // scopes privacy to the namespace, not the file — see DatabaseQueries.CanSeePrivate,
+            // which this mirrors since that method is private to its own file.
+            if ( function.IsPrivate
+                && record.Path != askingNormalized
+                && !askingNamespaces.Contains(function.Namespace, StringComparer.Ordinal) )
             {
                 continue;
             }

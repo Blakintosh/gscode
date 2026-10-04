@@ -14,8 +14,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class CompletionResolveDataTests
 {
-    private static readonly DocumentUri Uri =
-        DocumentUri.FromFileSystemPath(@"C:\bo3\share\raw\scripts\util.gsc");
+    private static readonly DocumentUri s_uri =
+        DocumentUri.FromFileSystemPath(TestPaths.Raw(@"scripts\util.gsc"));
 
     [Fact]
     public void CarriesEverythingResolveNeedsToFindTheSymbol()
@@ -23,7 +23,7 @@ public class CompletionResolveDataTests
         CompletionEntry entry = new(
             "give_weapon", CompletionKind.Function, "util::give_weapon", "give_weapon($0)", Namespace: "util");
 
-        JObject data = CompletionHandler.ResolveData(entry, Uri);
+        JObject data = CompletionHandler.ResolveData(entry, s_uri);
 
         Assert.Equal("Function", data.Value<string>("kind"));
         Assert.Equal("give_weapon", data.Value<string>("name"));
@@ -42,7 +42,7 @@ public class CompletionResolveDataTests
         CompletionEntry entry = new(
             "SpawnSpectator", CompletionKind.Function, "builtin", "SpawnSpectator($0)", IsBuiltin: true);
 
-        Assert.Equal("true", CompletionHandler.ResolveData(entry, Uri).Value<string>("builtin"));
+        Assert.Equal("true", CompletionHandler.ResolveData(entry, s_uri).Value<string>("builtin"));
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class CompletionResolveDataTests
         // Plain strings only: Data crosses the client untouched, so anything with a serializer
         // opinion about casing or shape is a bug waiting to happen.
         JObject data = CompletionHandler.ResolveData(
-            new CompletionEntry("cVehicle", CompletionKind.Class), Uri);
+            new CompletionEntry("cVehicle", CompletionKind.Class), s_uri);
 
         Assert.All(data.Properties(), p => Assert.Equal(JTokenType.String, p.Value.Type));
     }
@@ -76,7 +76,7 @@ public class CompletionResolveDataTests
         // Builtins and macros have no namespace; resolve reads this as "search without one"
         // rather than as missing data.
         JObject data = CompletionHandler.ResolveData(
-            new CompletionEntry("IPrintLn", CompletionKind.Function, "builtin"), Uri);
+            new CompletionEntry("IPrintLn", CompletionKind.Function, "builtin"), s_uri);
 
         Assert.Equal("", data.Value<string>("ns"));
     }

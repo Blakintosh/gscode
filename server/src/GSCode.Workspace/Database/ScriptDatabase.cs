@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.IO.Hashing;
@@ -9,6 +9,7 @@ using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Resolution;
+using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Database;
 
@@ -20,7 +21,6 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class ScriptDatabase
 {
-    /// <summary>The GSC world.</summary>
     /// <summary>
     /// Whether a workspace index has finished at least once.
     ///
@@ -29,13 +29,42 @@ public sealed class ScriptDatabase
     /// the index is populated every script function in the workspace looks nonexistent. So that one
     /// lint has to know, and there is no cheaper signal — unlike a missing FILE, which the resolver
     /// can answer from the filesystem, a missing FUNCTION can only be answered by the index.
+    ///
+    /// Written on the indexing thread, read on every LSP handler thread that lints — volatile
+    /// rules out a stale read surviving past the write, at no cost for a value this size.
     /// </summary>
-    public bool HasCompletedIndex { get; private set; }
+    public bool HasCompletedIndex
+    {
+        get { return _hasCompletedIndex; }
+    }
+
+    private volatile bool _hasCompletedIndex;
 
     /// <summary>Marks the index complete; called by the indexer when a full pass finishes.</summary>
     public void MarkIndexComplete()
     {
-        HasCompletedIndex = true;
+        _hasCompletedIndex = true;
+    }
+
+    /// <summary>
+    /// Whether the <c>workspaceIndexingMode: full</c> lint sweep has completed at least once —
+    /// separate from <see cref="HasCompletedIndex"/> because it answers a narrower question. A
+    /// closed file's stored diagnostics are parse-level only until this has run once; after that
+    /// they carry the cross-file lints too. Read by the server's dependent-diagnostics refresher
+    /// to decide whether re-linting a CLOSED dependent is upgrading it to a baseline that exists,
+    /// or inventing one that never ran.
+    /// </summary>
+    public bool HasCompletedLintSweep
+    {
+        get { return _hasCompletedLintSweep; }
+    }
+
+    private volatile bool _hasCompletedLintSweep;
+
+    /// <summary>Marks the lint sweep complete; called once by <c>WorkspaceLintSweep</c> per pass.</summary>
+    public void MarkLintSweepComplete()
+    {
+        _hasCompletedLintSweep = true;
     }
 
     public LanguageStore Gsc { get; } = new();
@@ -46,6 +75,19 @@ public sealed class ScriptDatabase
     /// <summary>GSH records (macros/dependencies), shared by both languages.</summary>
     private readonly ConcurrentDictionary<string, ScriptRecord> _gshRecords = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The header store's own indexes, as <see cref="LanguageStore"/> keeps them for scripts. One
+    /// gate for every header write: headers are a few hundred files against tens of thousands of
+    /// scripts, so the striping the script stores need buys nothing here.
+    /// </summary>
+    private readonly DirectiveIndex _gshDirectives = new();
+
+    private readonly PathTreeIndex _gshPathTree = new(keepExtension: true);
+
+    private readonly ReferenceIndex _gshReferences = new();
+
+    private readonly Lock _gshGate = new();
+
     /// <summary>The store for a language; GSH callers use the dedicated methods below.</summary>
     public LanguageStore StoreFor(ScriptLanguage language)
     {
@@ -55,6 +97,17 @@ public sealed class ScriptDatabase
         }
 
         return Gsc;
+    }
+
+    /// <summary>
+    /// Swaps a record's diagnostics in place, for the language its own path already lives in —
+    /// see <see cref="LanguageStore.SetDiagnostics"/> for the content-hash gate and why it exists.
+    /// </summary>
+    public bool SetDiagnostics(
+        string normalizedPath, ScriptLanguage language, ulong expectedContentHash,
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics)
+    {
+        return StoreFor(language).SetDiagnostics(normalizedPath, expectedContentHash, diagnostics);
     }
 
     /// <summary>
@@ -96,7 +149,35 @@ public sealed class ScriptDatabase
 
     public void UpsertGsh(ScriptRecord record)
     {
-        _gshRecords[record.Path] = record;
+        // Built before the gate, for the reason <see cref="LanguageStore.Upsert"/> builds its own
+        // contribution there.
+        DirectiveIndex.Contribution newDirectives = DirectiveIndex.Of(record);
+        HashSet<SymbolKey> newReferenceKeys = ReferenceIndex.KeysOf(record.References);
+
+        lock ( _gshGate )
+        {
+            _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
+            _gshRecords[record.Path] = record;
+            ApplyGshIndexes(record.Path, previous, record, newDirectives, newReferenceKeys);
+        }
+    }
+
+    /// <summary>
+    /// Replaces one header's contribution to the header store's three indexes, under
+    /// <see cref="_gshGate"/> — <see cref="LanguageStore.ApplyIndexes"/> for the script stores.
+    /// The one place this list is written out, so a fourth header index is one edit rather than
+    /// two, and cannot be added to the upsert half alone.
+    /// </summary>
+    private void ApplyGshIndexes(
+        string path,
+        ScriptRecord? previous,
+        ScriptRecord? next,
+        DirectiveIndex.Contribution directives,
+        HashSet<SymbolKey> referenceKeys)
+    {
+        _gshDirectives.Apply(path, DirectiveIndex.Of(previous), directives);
+        _gshPathTree.Apply(previous, next);
+        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), referenceKeys);
     }
 
     /// <summary>
@@ -120,7 +201,41 @@ public sealed class ScriptDatabase
 
     public void RemoveGsh(string normalizedPath)
     {
-        _gshRecords.TryRemove(normalizedPath, out _);
+        lock ( _gshGate )
+        {
+            if ( _gshRecords.TryRemove(normalizedPath, out ScriptRecord? previous) )
+            {
+                ApplyGshIndexes(
+                    normalizedPath, previous, next: null, DirectiveIndex.Contribution.None, []);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The segments directly under a folder of the header tree, extensions kept, that a file in
+    /// <paramref name="askingContextId"/> can see — <see cref="LanguageStore.PathChildren"/> for headers.
+    /// </summary>
+    public List<(string Segment, bool IsFolder)> GshPathChildren(string directory, string askingContextId)
+    {
+        return _gshPathTree.Children(directory, askingContextId);
+    }
+
+    /// <summary>Headers mentioning a key — <see cref="LanguageStore.FilesReferencing"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesReferencing(SymbolKey key)
+    {
+        return _gshReferences.FilesFor(key);
+    }
+
+    /// <summary>Headers writing a directive path — <see cref="LanguageStore.FilesWriting"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesWriting(string writtenKey)
+    {
+        return _gshDirectives.FilesWriting(writtenKey);
+    }
+
+    /// <summary>Headers inserting the header resolved to this path — <see cref="LanguageStore.FilesInserting"/> for the header store.</summary>
+    public ImmutableArray<string> GshFilesInserting(string resolvedHeaderPath)
+    {
+        return _gshDirectives.FilesInserting(resolvedHeaderPath);
     }
 
     public IEnumerable<ScriptRecord> AllGshRecords
@@ -170,22 +285,6 @@ public sealed class ScriptDatabase
         }
     }
 
-    /// <summary>Normalized paths of every non-GSH file that #inserts the given GSH.</summary>
-    public IEnumerable<string> FilesInserting(string normalizedGshPath)
-    {
-        foreach ( ScriptRecord record in Gsc.AllRecords.Concat(Csc.AllRecords) )
-        {
-            foreach ( DependencyEdge edge in record.Dependencies )
-            {
-                if ( edge.IsInsert && string.Equals(edge.ResolvedPath, normalizedGshPath, StringComparison.Ordinal) )
-                {
-                    yield return record.Path;
-                    break;
-                }
-            }
-        }
-    }
-
     /// <summary>Stores a completed analysis as the file's current record.</summary>
     public ScriptRecord Commit(ParseResult result, ResolutionContext context, bool isDirty, string relativePath = "")
     {
@@ -196,21 +295,17 @@ public sealed class ScriptDatabase
         PerfTracker.End();
 
         PerfTracker.Begin("commit.upsert");
-        if ( record.Language == ScriptLanguage.Gsh )
-        {
-            UpsertGsh(record);
-        }
-        else
-        {
-            StoreFor(record.Language).Upsert(record);
-        }
-
+        CommitRecord(record);
         PerfTracker.End();
 
         return record;
     }
 
-    /// <summary>Stores a pre-built record (from the cache) without re-analysing.</summary>
+    /// <summary>
+    /// Stores a pre-built record (from the cache) without re-analysing — and the one place a
+    /// record is routed to the store that owns it, which <see cref="Commit"/> reaches through.
+    /// A header goes to the shared GSH store, everything else to its language world.
+    /// </summary>
     public void CommitRecord(ScriptRecord record)
     {
         if ( record.Language == ScriptLanguage.Gsh )
@@ -221,21 +316,6 @@ public sealed class ScriptDatabase
         {
             StoreFor(record.Language).Upsert(record);
         }
-    }
-
-    /// <summary>
-    /// The distinct files a script reaches by path call. Records do not keep the ParseResult, so
-    /// these are lifted out here or they are lost — and reference scoping on the merge dialects
-    /// needs them: a path call reaches another file's function without importing it.
-    /// </summary>
-    private static ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargetsOf(ParseResult result)
-    {
-        if ( result.Extraction.PathCalls.Length == 0 )
-        {
-            return [];
-        }
-
-        return result.Extraction.PathCalls;
     }
 
     /// <summary>Builds the immutable record from a pipeline result.</summary>
@@ -265,9 +345,9 @@ public sealed class ScriptDatabase
             }
         }
 
-        foreach ( GSCode.Parser.Syntax.Ast.AstNode element in result.Tree.Root.Elements )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            if ( element is GSCode.Parser.Syntax.Ast.UsingNode usingNode )
+            if ( element is UsingNode usingNode )
             {
                 dependencies.Add(new DependencyEdge(usingNode.Path, "", IsInsert: false, usingNode.PathRange));
             }
@@ -275,7 +355,7 @@ public sealed class ScriptDatabase
             // #include is the Infinity Ward import; an edge like #using's (resolved lazily per
             // context), so the include graph exists for navigation, rename and merge scoping. A
             // file is one dialect, so #using and #include never mix in the same record.
-            if ( element is GSCode.Parser.Syntax.Ast.IncludeNode includeNode )
+            if ( element is IncludeNode includeNode )
             {
                 dependencies.Add(new DependencyEdge(includeNode.Path, "", IsInsert: false, includeNode.PathRange));
             }
@@ -296,8 +376,12 @@ public sealed class ScriptDatabase
             Classes = result.Extraction.Classes,
             Macros = macros.ToImmutable(),
             Dependencies = dependencies.ToImmutable(),
-            PathCallTargets = PathCallTargetsOf(result),
+            // Records do not keep the ParseResult, so these are lifted out here or they are
+            // lost — reference scoping on the merge dialects needs them: a path call reaches
+            // another file's function without importing it.
+            PathCallTargets = result.Extraction.PathCalls,
             References = result.Extraction.References,
+            FieldBindings = result.Extraction.FieldBindings,
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,
         };
@@ -309,10 +393,9 @@ public sealed class ScriptDatabase
         PerfTracker.Begin("commit.hash");
 
         // Hashed in CHUNKS through a pooled buffer rather than by materialising the whole file as
-        // UTF-8 first. The old form allocated a byte array the size of the file for every file
-        // indexed, and anything over ~85 KB goes straight to the large-object heap — which is not
-        // compacted by default, so each one leaves a hole. On BO1 that is thousands of them, and the
-        // fragmented figure after an index dwarfs the live one.
+        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over
+        // ~85 KB lands on the large-object heap, which is not compacted by default — on BO1,
+        // thousands of holes, and a fragmented figure after an index that dwarfs the live one.
         //
         // An Encoder, not repeated GetBytes calls: a chunk boundary can fall between the two halves
         // of a surrogate pair, and only the stateful encoder carries the leading half across. The

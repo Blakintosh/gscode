@@ -57,13 +57,20 @@ public static class ClassCycleLint
     /// <summary>
     /// Walks the parent chain looking for the starting class. Reports the chain that got back to it,
     /// because "A inherits from itself" is not actionable without knowing which link to cut.
+    ///
+    /// The chain is built from each class's <see cref="ClassSymbol.Name"/>, not its
+    /// <see cref="ClassSymbol.KeyName"/> — the latter is lowercase-canonical, so a message built
+    /// from it read "through b" instead of "through B", regardless of how the author actually
+    /// spelled it. It also always starts AND ends on <paramref name="start"/>'s own name: a chain
+    /// that omitted both endpoints and showed only the classes in between named none of the classes
+    /// the reader actually has to look at to see the loop close.
     /// </summary>
     private static bool TryFindCycle(
         ClassSymbol start, LanguageStore store, string contextId, out string through)
     {
         through = "";
 
-        List<string> chain = [];
+        List<string> chain = [start.Name];
         HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
         string? parent = start.ParentKeyName;
 
@@ -76,7 +83,8 @@ public static class ClassCycleLint
 
             if ( string.Equals(parent, start.KeyName, StringComparison.OrdinalIgnoreCase) )
             {
-                through = chain.Count == 0 ? start.Name : string.Join(" -> ", chain);
+                chain.Add(start.Name);
+                through = string.Join(" -> ", chain);
                 return true;
             }
 
@@ -88,8 +96,6 @@ public static class ClassCycleLint
                 return false;
             }
 
-            chain.Add(parent);
-
             ImmutableArray<ResolvedClass> parents = DatabaseQueries.LookupClasses(
                 store, contextId, namespaceName: null, parent);
 
@@ -98,7 +104,9 @@ public static class ClassCycleLint
                 return false;
             }
 
-            parent = parents[0].Class.ParentKeyName;
+            ClassSymbol parentClass = parents[0].Class;
+            chain.Add(parentClass.Name);
+            parent = parentClass.ParentKeyName;
         }
 
         return false;

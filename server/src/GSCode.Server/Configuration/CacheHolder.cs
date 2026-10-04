@@ -12,7 +12,7 @@ namespace GSCode.Server.Configuration;
 /// </summary>
 public sealed class CacheHolder
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private SqliteCache? _cache;
     private string? _databasePath;
 

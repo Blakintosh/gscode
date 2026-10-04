@@ -1,8 +1,5 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -19,12 +16,7 @@ public class LocalDefinitionTests
 {
     private static ParseResult Analyze(string source)
     {
-        return ScriptAnalysis.Analyze(
-            @"C:\bo3\share\raw\scripts\main.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
+        return TestParse.Analyze(source, TestPaths.Raw(@"scripts\main.gsc"));
     }
 
     [Fact]
@@ -105,5 +97,33 @@ public class LocalDefinitionTests
         string source = "function f()\n{\n\tcount = 1;\n}\n";
 
         Assert.Null(LocalDefinition.Find(Analyze(source), new Position(1, 0)));
+    }
+
+    [Fact]
+    public void ASubscriptWriteDefinesTheBase()
+    {
+        // `a[ 0 ] = x` CREATES `a` when it does not exist — the array idiom every stock script
+        // uses. The old implementation read only the parser's plain AssignmentSymbols, which never
+        // recorded this shape as introducing anything, so go-to-definition found nothing here while
+        // find-references (LocalReferences) already did.
+        string source = "function f()\n{\n\tquotes[ 0 ] = \"line\";\n\tuse( quotes );\n}\n";
+
+        TextRange? definition = LocalDefinition.Find(Analyze(source), new Position(3, 6));
+
+        Assert.NotNull(definition);
+        Assert.Equal(2, definition.Value.Start.Line);
+    }
+
+    [Fact]
+    public void ALocalInAClassMethodResolvesToItsAssignment()
+    {
+        // result.Extraction.Functions holds only TOP-LEVEL functions, so a class method's body was
+        // never even reached — go-to-definition on any local inside one answered nothing at all.
+        string source = "class cFoo\n{\n\tfunction bar()\n\t{\n\t\tcount = 1;\n\t\tuse( count );\n\t}\n}\n";
+
+        TextRange? definition = LocalDefinition.Find(Analyze(source), new Position(5, 7));
+
+        Assert.NotNull(definition);
+        Assert.Equal(4, definition.Value.Start.Line);
     }
 }

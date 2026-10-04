@@ -1,3 +1,4 @@
+using System.Globalization;
 using GSCode.Parser.Lexing;
 
 namespace GSCode.Parser.Preprocessing;
@@ -187,7 +188,8 @@ public static class ConditionalEvaluator
             return inner;
         }
 
-        if ( current.Kind == TokenKind.Integer && int.TryParse(current.Text, out int value) )
+        if ( current.Kind == TokenKind.Integer
+            && int.TryParse(current.Text, NumberStyles.None, CultureInfo.InvariantCulture, out int value) )
         {
             position++;
             return value;

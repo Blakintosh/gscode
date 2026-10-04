@@ -47,19 +47,37 @@ public sealed partial class Parser
     /// </summary>
     private const int MaxNestingDepth = 512;
 
-    private Parser(ImmutableArray<PToken> tokens, GameProfile profile)
+    /// <summary>
+    /// Stops a parse whose result nobody wants any more. Read inside the two loops that are
+    /// unbounded in the size of the file — the top-level declaration loop and the statement loop —
+    /// which is where all the time goes; the expression parsers are bounded by
+    /// <see cref="MaxNestingDepth"/> and need no check of their own.
+    /// </summary>
+    private readonly CancellationToken _cancellation;
+
+    private Parser(ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellation)
     {
         _tokens = tokens;
         _profile = profile;
+        _cancellation = cancellation;
     }
 
     /// <summary>Parses a preprocessed token stream into a syntax tree for the given game's dialect.</summary>
-    public static ParseTree Parse(ImmutableArray<PToken> tokens, GameProfile profile)
+    public static ParseTree Parse(
+        ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellationToken = default)
     {
-        Parser parser = new(tokens, profile);
+        Parser parser = new(tokens, profile, cancellationToken);
         ScriptNode root = parser.ParseScript();
         return new ParseTree(root, parser._diagnostics.ToImmutable());
     }
+
+#if GSCODE_INSTRUMENTATION
+    /// <summary>
+    /// How deep the expression parser currently is, so only the outermost entry is timed. Present in
+    /// instrumented builds only — see the note in <c>ParseExpression</c>.
+    /// </summary>
+    private int _expressionDepth;
+#endif
 
     // --- Cursor ---
 
@@ -162,8 +180,8 @@ public sealed partial class Parser
         // on one line and omits the separator — but a stray token. CoD4's
         // animscripts\traverse\stairs_up.gsc line 29 is the case: `endPos = self endnode.origin +
         // (0,0,1);` has a leftover `self` (its sibling stairs_down.gsc writes the same statement
-        // without it). The fix is to delete a token, not to add one, so the old report is the right
-        // one: point AT the offender and name it, because the reader can see it.
+        // without it). The fix is to delete a token, not to add one, so the ordinary report is right:
+        // point AT the offender and name it, because the reader can see it.
         //
         // On a LATER LINE the statement really was left unterminated, and then naming the offender is
         // worse than useless — it sends the reader to a line that is correct.

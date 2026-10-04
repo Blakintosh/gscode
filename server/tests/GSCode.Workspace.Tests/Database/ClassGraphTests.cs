@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -12,18 +11,10 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class ClassGraphTests
 {
-    private static readonly TextRange Anywhere = new(new Position(1, 1), new Position(1, 5));
 
     private static FunctionSymbol Method(string name)
     {
-        return new FunctionSymbol
-        {
-            Name = name,
-            KeyName = name.ToLowerInvariant(),
-            Namespace = "",
-            NameRange = Anywhere,
-            FullRange = Anywhere,
-        };
+        return TestRecords.Function(name.ToLowerInvariant()) with { Name = name };
     }
 
     /// <summary>
@@ -38,15 +29,10 @@ public class ClassGraphTests
 
     private static ClassSymbol Class(string name, string? parent = null, params string[] methods)
     {
-        return new ClassSymbol
+        return TestRecords.Class(name) with
         {
-            Name = name,
-            KeyName = name.ToLowerInvariant(),
-            Namespace = "",
             ParentKeyName = parent?.ToLowerInvariant(),
             Methods = [.. methods.Select(Method)],
-            NameRange = Anywhere,
-            FullRange = Anywhere,
         };
     }
 
@@ -80,12 +66,13 @@ public class ClassGraphTests
     }
 
     [Fact]
-    public void Remove_DropsEveryClassTheFileContributed()
+    public void ApplyingNoClasses_DropsEveryClassTheFileContributed()
     {
+        // An empty contribution IS the removal — see ClassGraph.Apply.
         ClassGraph graph = new();
         graph.Apply(@"C:\raw\a.gsc", [Class("cScene", parent: "cBase", methods: "play")]);
 
-        graph.Remove(@"C:\raw\a.gsc");
+        graph.Apply(@"C:\raw\a.gsc", []);
 
         Assert.Empty(graph.PathsDeclaring("cscene"));
         Assert.Empty(graph.DirectChildren("cbase"));
@@ -103,7 +90,7 @@ public class ClassGraphTests
         graph.Apply(@"C:\raw\a.gsc", [Class("cScene", parent: "cBase", methods: "play")]);
         graph.Apply(@"C:\mods\m\a.gsc", [Class("cScene", parent: "cBase", methods: "play")]);
 
-        graph.Remove(@"C:\raw\a.gsc");
+        graph.Apply(@"C:\raw\a.gsc", []);
 
         AssertNames(graph.PathsDeclaring("cscene"), @"C:\mods\m\a.gsc");
         AssertNames(graph.DirectChildren("cbase"), "cscene");
@@ -186,7 +173,7 @@ public class ClassGraphTests
         Parallel.For(0, 200, index =>
         {
             graph.Apply($@"C:\raw\{index}.gsc", [Class("cShared", parent: "cBase", methods: "play")]);
-            graph.Remove($@"C:\raw\{index}.gsc");
+            graph.Apply($@"C:\raw\{index}.gsc", []);
         });
 
         Assert.Empty(graph.PathsDeclaring("cshared"));

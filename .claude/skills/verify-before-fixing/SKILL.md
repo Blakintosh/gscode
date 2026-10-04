@@ -10,6 +10,10 @@ description: How to confirm a bug in this repo before changing code, and how to 
 Not after. A test written once the fix is in proves the code passes its own test, which is a
 weaker claim than it looks.
 
+Build the reproduction on the standard setup (`HandlerWorkspace` for a handler, `TestWorkspace`
+below that, both in-memory under `TestPaths.RawRoot`; see the `standard-tests` skill). A report that
+only reproduces on one game is a dialect finding: pass that game to the harness, never `Select` it.
+
 The procedure, when a fix is already drafted:
 
 ```bash
@@ -71,6 +75,31 @@ five games. Read the TOP REPORTED NAMES, not just the count: a shared shape amon
 language fact the rule has not learned, not a defect rate in code that ships and works.
 
 Assert a RATE rather than a count, so the test stays meaningful as corpora change.
+
+## A performance claim needs a baseline, and a second reading
+
+Record the numbers BEFORE changing anything, in the same harness, so the "after" has something to be
+compared with — the scale pass committed its baseline table first. Then distrust single cells: one
+run put a 50K cold index at 37 s against a steady 11–13 s, on code that had not changed, and the same
+run's cache populate (also a full index) read normally beside it. When one row jumps and the rows
+that share its work do not, re-run before believing it. `PERF.md` records how wide each harness's
+run-to-run spread is; read that before calling a difference real.
+
+A number that improves can also hide a broken answer. The scale sweep prints how many locations
+references returned for exactly this reason: 0.3 ms looked like a bug until the count showed the
+answers were there.
+
+## Prove an optimisation changes nothing
+
+A faster path that returns a different answer is a regression that happens to be fast. Two shapes
+of proof work here, and both beat reasoning about equivalence:
+
+- **Keep the old path as a reference implementation in a test** and compare, across every case the
+  old rule distinguished — `BoundedLookupTests` holds the two-pass shadowing rule it replaced.
+- **Compare over the corpus** when the question is "every real input": `ReferenceScopeCorpusTests`
+  asks the old and new reference queries about all 28,808 stock declarations,
+  `RecordFormatCorpusTests` round-trips every indexed record. Stock corpora lack some shapes — no mod
+  overlays at all — so pair the corpus test with a unit test for what it cannot reach.
 
 ## Check the run actually ran
 

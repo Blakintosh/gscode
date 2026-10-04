@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text;
 using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
@@ -69,6 +70,14 @@ public static class AstPrinter
                 return;
             case UsingNode usingNode:
                 builder.Append("(using \"").Append(usingNode.Path).Append("\")");
+                return;
+            case IncludeNode includeNode:
+                builder.Append("(include \"").Append(includeNode.Path).Append("\")");
+                return;
+            case FileScopeConstantNode constant:
+                builder.Append("(const ").Append(constant.NameToken.Text).Append(' ');
+                Write(constant.Value, builder, depth + 1);
+                builder.Append(')');
                 return;
             case NamespaceNode namespaceNode:
                 builder.Append("(namespace ").Append(namespaceNode.NameToken.Text).Append(')');
@@ -451,7 +460,7 @@ public static class AstPrinter
         Write(node, builder, depth);
     }
 
-    private static void WriteList(StringBuilder builder, string label, System.Collections.Immutable.ImmutableArray<AstNode> children, int depth)
+    private static void WriteList(StringBuilder builder, string label, ImmutableArray<AstNode> children, int depth)
     {
         builder.Append('(').Append(label);
         foreach ( AstNode child in children )

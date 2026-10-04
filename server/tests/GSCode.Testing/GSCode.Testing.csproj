@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- What every test suite sets up the same way: the in-memory file system, the one fake root, and
+       the one default game. A library, not a test project, so it holds no tests of its own. See
+       tests/FOLDER.md and .claude/skills/standard-tests. -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <!-- Inherited transitively from GSCode.Workspace's SQLite dependency; see its csproj. -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GSCode.Workspace\GSCode.Workspace.csproj" />
+  </ItemGroup>
+
+</Project>

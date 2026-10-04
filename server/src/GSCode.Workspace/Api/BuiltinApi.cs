@@ -6,11 +6,11 @@ namespace GSCode.Workspace.Api;
 
 /// <summary>How far the bundled data can be trusted about one entry.</summary>
 /// <remarks>
-/// Present in every bundled library and discarded by the loader until now: Black Ops III's GSC file
-/// alone carries 1,291 <c>high</c>, 684 <c>medium</c> and 80 <c>low</c>. It is the honest source for
-/// <see cref="ScrImprecision.BuiltinUnverified"/> — a low-confidence declared type is not the same
-/// fact as a verified one, and v1.5 shipped an entire second diagnostic code
-/// (<c>ArgumentTypeMismatchUnverified</c>) because it had nowhere else to put the distinction.
+/// Present in every bundled library: Black Ops III's GSC file alone carries 1,291 <c>high</c>, 684
+/// <c>medium</c> and 80 <c>low</c>. A low-confidence declared type is not the same fact as a
+/// verified one, and this is where a restored <c>ArgumentTypeMismatch</c> takes its severity from
+/// rather than a second diagnostic code, which is how v1.5 carried the distinction
+/// (<c>ArgumentTypeMismatchUnverified</c>).
 /// </remarks>
 public enum BuiltinConfidence
 {
@@ -67,19 +67,14 @@ public sealed record BuiltinFunction(
     string Example)
 {
     /// <summary>
-    /// Exists only in a development build, so calling it outside a `/# #/` block breaks a
-    /// shipped mod. Populated by the loader — see DevOnlyBuiltins for where the truth lives.
+    /// Must be called from inside a `/# #/` dev block, which only runs when developer script is
+    /// enabled on the server. Populated by the loader — see DevOnlyBuiltins for where the truth
+    /// lives.
     /// </summary>
     public bool IsDevOnly { get; init; }
 
     /// <summary>How far this entry's declared types can be trusted. See <see cref="BuiltinConfidence"/>.</summary>
     public BuiltinConfidence Confidence { get; init; }
-
-    /// <summary>True when any overload is called on an object (method-notation builtin).</summary>
-    public bool IsMethod
-    {
-        get { return Overloads.Any(static overload => overload.CalledOn is not null); }
-    }
 
     /// <summary>
     /// The return type across EVERY overload, as a union.

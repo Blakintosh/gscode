@@ -52,8 +52,22 @@ public sealed class WatchedFileUpdater
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
         bool ownsChangedFile = ownedByEditor is not null && ownedByEditor(normalized);
 
+        // A file appearing or vanishing can falsify any cached "does this exist" answer the
+        // resolver has given out — for a .gsc/.csc target as much as for a .gsh one, since
+        // #using/#include resolve through the same PathResolver.Resolve the GSH-only
+        // NoteHeaderSetChanged below cannot speak for. A plain content change cannot: nothing
+        // about whether a target EXISTS moved. See PathResolver.InvalidateResolutionCache.
+        if ( change != WatchedFileChange.Changed )
+        {
+            _indexer.InvalidateResolutionCache();
+        }
+
         if ( change == WatchedFileChange.Deleted )
         {
+            // Read while the record is still there: it is how a file that inserts this header by
+            // its WRITTEN path is recognised, and the removal below takes the answer away.
+            string relativePath = HeaderRelativePath(normalized, language);
+
             // A deleted file that is still open keeps its record: the buffer outlives the file on
             // disk, and dropping it would break every lookup into a document the user can still see
             // and save back. Closing it is what retires the record.
@@ -64,7 +78,19 @@ public sealed class WatchedFileUpdater
 
             if ( language == ScriptLanguage.Gsh )
             {
-                return ReindexInserters(normalized, ownedByEditor);
+                // Unconditionally, unlike the record: RemoveFile drops the cache only for a closed file,
+                // and a header deleted while open would leave every inserting file expanding a header
+                // that is no longer there. Dropping a lexed copy of a missing file is a fact about the
+                // header, not about who has it open — the same reason the changed branch drops it
+                // before anyone is told.
+                _indexer.InvalidateGsh(normalized);
+
+                // A header vanishing changes what an insert path resolves to for anyone it used to
+                // shadow, exactly as a header appearing does, and the drop above announces nothing
+                // when nothing was held.
+                _indexer.NoteHeaderSetChanged();
+
+                return ReindexInserters(normalized, relativePath, ownedByEditor);
             }
 
             return [];
@@ -80,7 +106,18 @@ public sealed class WatchedFileUpdater
                 _indexer.IndexFile(normalized);
             }
 
-            return ReindexInserters(normalized, ownedByEditor);
+            // A header that did not exist a moment ago holds nothing to invalidate, so the drop
+            // above announces nothing — yet what an insert path RESOLVES to has just changed for
+            // every file that could not resolve it before, and for every file a new mod copy now
+            // shadows a raw header for. Their parses expanded the old answer and have to be redone.
+            if ( change == WatchedFileChange.Created )
+            {
+                _indexer.NoteHeaderSetChanged();
+            }
+
+            // AFTER the index above, which is what gives a newly created header a record to read
+            // its relative path from.
+            return ReindexInserters(normalized, HeaderRelativePath(normalized, language), ownedByEditor);
         }
 
         if ( ownsChangedFile )
@@ -92,23 +129,43 @@ public sealed class WatchedFileUpdater
         return [normalized];
     }
 
-    private IReadOnlyList<string> ReindexInserters(string normalizedGshPath, Func<string, bool>? ownedByEditor)
+    /// <summary>The header's path as a <c>#insert</c> would write it, or "" when it has no record.</summary>
+    private string HeaderRelativePath(string normalizedPath, ScriptLanguage language)
+    {
+        if ( language != ScriptLanguage.Gsh || !_database.TryGetGsh(normalizedPath, out ScriptRecord record) )
+        {
+            return "";
+        }
+
+        return PathUtil.NormalizeScriptPath(record.RelativePath);
+    }
+
+    /// <summary>
+    /// Re-indexes every closed file whose analysis this header decides — see
+    /// <see cref="DatabaseQueries.ScriptsInserting"/> for what "decides" covers — and reports them
+    /// for a diagnostics republish.
+    /// </summary>
+    /// <param name="headerRelativePath">
+    /// The header as a directive would write it, or "" to match on resolved paths alone.
+    /// </param>
+    private IReadOnlyList<string> ReindexInserters(
+        string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
     {
         List<string> touched = [];
-        foreach ( string dependent in _database.FilesInserting(normalizedGshPath).ToList() )
+        foreach ( ScriptRecord record in DatabaseQueries.ScriptsInserting(_database, normalizedGshPath, headerRelativePath) )
         {
             // The same test the changed file's own record gets, for the same reason: this reads
             // DISK, and a dependent that is open may hold unsaved edits the disk does not have.
             // Its record was committed from the buffer moments ago and replacing it here is the
             // clobber the gate exists to prevent. Dropping the header's lex above is what makes
             // skipping safe — the next analysis of that buffer reads the new header.
-            if ( ownedByEditor is not null && ownedByEditor(dependent) )
+            if ( ownedByEditor is not null && ownedByEditor(record.Path) )
             {
                 continue;
             }
 
-            _indexer.IndexFile(dependent);
-            touched.Add(dependent);
+            _indexer.IndexFile(record.Path);
+            touched.Add(record.Path);
         }
 
         return touched;

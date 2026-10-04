@@ -1,9 +1,8 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
@@ -107,11 +106,11 @@ public class CorpusDiagnosticSweepTests
     /// was about three minutes of a thirteen-minute run. Safe in a static: every corpus class shares
     /// one collection, so nothing runs concurrently with it, and a sweep never mutates what it reads.
     /// </summary>
-    private static readonly Dictionary<string, List<Finding>> SweepCache = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, List<Finding>> s_sweepCache = new(StringComparer.Ordinal);
 
     private static async Task<List<Finding>> SweepAsync(Target target)
     {
-        if ( SweepCache.TryGetValue(target.Profile.ShortName, out List<Finding>? cached) )
+        if ( s_sweepCache.TryGetValue(target.Profile.ShortName, out List<Finding>? cached) )
         {
             return cached;
         }
@@ -174,7 +173,7 @@ public class CorpusDiagnosticSweepTests
                 // functions -- which is most of what a user actually sees underlined.
                 List<Finding> forFile = [];
                 foreach ( Diagnostic diagnostic in WorkspaceLints.Analyze(
-                    result, language, path, database, resolver, builtins, objectFields) )
+                    result, language, path, database, resolver, builtins, objectFields, cancellationToken: token) )
                 {
                     forFile.Add(new Finding(
                         diagnostic.Code,
@@ -235,7 +234,7 @@ public class CorpusDiagnosticSweepTests
                 .ThenBy(f => (int)f.Code),
         ];
 
-        SweepCache[target.Profile.ShortName] = findings;
+        s_sweepCache[target.Profile.ShortName] = findings;
         return findings;
     }
 
@@ -531,56 +530,20 @@ public class CorpusDiagnosticSweepTests
     /// builtin library to judge against. A single page invites reading across columns that do not
     /// mean the same thing.
     ///
-    /// Written to the repository's gitignored <c>temp/</c> folder, so five reports are one click away
-    /// in the editor rather than buried in the system temp path. The whole folder is ignored rather
-    /// than the filenames: the contents are a snapshot of whichever game installs are on this
-    /// machine, so committing one would be committing somebody's local state, and a filename pattern
-    /// only protects the names somebody thought of.
-    ///
-    /// Falls back to the system temp folder when the repository root cannot be found — a packaged or
-    /// relocated test run should still produce its reports somewhere. GSCODE_SWEEP_REPORT overrides
-    /// the directory outright.
+    /// Written to the repository's gitignored <c>temp/</c> folder beside the perf pages, so five
+    /// reports are one click away in the editor; GSCODE_SWEEP_REPORT overrides the directory.
     /// </summary>
     private void WriteReport(Target target, List<Finding> findings)
     {
-        string directory = Environment.GetEnvironmentVariable("GSCODE_SWEEP_REPORT") is string configured
-            && configured.Length > 0
-                ? configured
-                : ScratchDirectory();
-
-        Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, $"gscode-sweep-{target.Profile.ShortName}.html");
+        string directory = ReportPage.OutputDirectory("GSCODE_SWEEP_REPORT");
+        string path = Path.Combine(directory, ReportPage.SweepPage(target.Profile.ShortName));
 
         SweepReport.Write(
             path,
+            target.Profile.ShortName,
             [.. findings.Select(f => new SweepReport.Item(f.Code, f.Severity, f.Message, f.Path, f.Line, f.Character))],
             target.RawRoot);
 
         _output.WriteLine($"Report [{target.Profile.ShortName}]: {path}");
-    }
-
-    /// <summary>
-    /// The repository's <c>temp/</c> folder, located by walking up from the test binaries looking for
-    /// the <c>.git</c> directory. Falls back to the system temp folder if there is no repository
-    /// above us, which is the case for a packaged run.
-    /// </summary>
-    private static string ScratchDirectory()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-
-        while ( current is not null )
-        {
-            // A directory in a normal clone, a FILE in a worktree — which this repository is, so
-            // checking only for the directory found nothing and silently fell back to system temp.
-            string git = Path.Combine(current.FullName, ".git");
-            if ( Directory.Exists(git) || File.Exists(git) )
-            {
-                return Path.Combine(current.FullName, "temp");
-            }
-
-            current = current.Parent;
-        }
-
-        return Path.GetTempPath();
     }
 }

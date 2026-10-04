@@ -1,4 +1,4 @@
-﻿using System.Collections.Frozen;
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
@@ -96,7 +96,7 @@ public static class IncludeUsageLint
 
         // #using is not asked about: no include dialect has one, and an unresolvable #include is
         // already caught by the closure walk below reporting an incomplete set.
-        if ( ImportGate.AnyUnresolved(result, GscDiagnosticCode.InsertNotFound) )
+        if ( ImportGate.AnyMacrosLost(result) )
         {
             return [];
         }
@@ -168,9 +168,18 @@ public static class IncludeUsageLint
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
+        // Keyed on the NAME: a macro body calling two uninclude-able functions is two imports to
+        // think about. See MacroReports.
+        HashSet<(TextRange Range, string Name)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is not skipped, matching NamespaceUsageLint: a call is a call whoever wrote
+            // the text, and the engine links the expansion. It is close to theoretical here — this
+            // rule only runs on the include dialects, and none of them HAS a preprocessor
+            // (GameProfile.HasMacros) — but a #define in one of those files is still expanded after
+            // being reported as 2016, and the call it produces needs its include like any other.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -217,6 +226,11 @@ public static class IncludeUsageLint
                 continue;
             }
 
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, entry.Key.Name), ref reportedFromMacros) )
+            {
+                continue;
+            }
+
             diagnostics.Add(Report(entry, declaring));
         }
 
@@ -247,10 +261,12 @@ public static class IncludeUsageLint
 
         // Capped: a name shared by hundreds of files would otherwise attach hundreds of links to a
         // single squiggle, and a list that long tells the reader nothing the first few do not.
+        // DeclaringPath, not Record.Path: a candidate reached through #insert has a NameRange
+        // that is a true position in the HEADER, not in the record that merely spliced it in.
         ImmutableArray<DiagnosticRelation> related =
         [
             .. declaring.Take(8).Select(resolved => new DiagnosticRelation(
-                resolved.Record.Path, resolved.Function.NameRange, "Also declared here.")),
+                resolved.DeclaringPath, resolved.Function.NameRange, "Also declared here.")),
         ];
 
         return missing with { RelatedInformation = related };

@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -17,20 +14,14 @@ namespace GSCode.Workspace.Analysis;
 /// not a defect: the script runs, and half-finished work in progress is the normal reason to have
 /// one. Anything louder would be nagging someone mid-edit.
 ///
-/// It was Information, which put every one in the editor's problem list — 1,716 of them over MW2's
-/// scripts alone, and 4,711 across the five games, all in code that ships and works. A list that
-/// long is one nobody reads. The tag is what carries the finding: the editor greys the name either
-/// way, so the signal survives and only the list entry goes. Every other rule of this kind here
-/// (5020, 5012, 5001, 5002) was already a Hint.
+/// Information would put every one in the editor's problem list — 4,711 across the five games, 1,716
+/// on MW2 alone, all in code that ships and works. The tag is what carries the finding: the editor
+/// greys the name either way. Every other rule of this kind here (5020, 5012, 5001, 5002) is a Hint
+/// too.
 ///
 /// 5015 is the exception that shows what the number decides rather than the category: unreachable
 /// code is the same kind of finding, and it is Information, because it fires 48 times across all
 /// five corpora rather than 4,711.
-///
-/// Reads and writes are told apart structurally rather than by counting occurrences. A name is
-/// READ wherever it appears except as the direct target of a plain <c>=</c>; a compound assignment
-/// (<c>+=</c>) reads its target, and so does <c>x++</c>, which is why those do not count as
-/// dead stores.
 ///
 /// Only plain locals are considered. <c>self.foo</c> and <c>level.bar</c> are fields with lives of
 /// their own — another script may read them — so an unread write to one says nothing.
@@ -41,7 +32,7 @@ public static class UnusedLocalLint
     {
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        CollectFromDeclaration(result.Tree.Root, diagnostics);
+        CollectFromDeclaration(result.Tree.Root, diagnostics, insideClass: false);
 
         return diagnostics.ToImmutable();
     }
@@ -52,34 +43,45 @@ public static class UnusedLocalLint
     /// rather than naming each container, so a container added later is searched without this rule
     /// having to learn about it.
     ///
-    /// A CONSTRUCTOR and a DESTRUCTOR are deliberately not inspected, and this is not an oversight.
-    /// This rule scopes names per body, with no model of a class's <c>var</c> members, and inside a
-    /// class method a bare name may be a member rather than a local. A constructor exists to
-    /// initialise members it never itself reads, so every such write looks exactly like a dead
-    /// store. Inspecting them added 103 findings over BO3's scripts, and the first one sampled —
-    /// <c>id = undefined;</c> in <c>_driving_fx.csc</c>'s <c>GroundFx</c> constructor — is a member
-    /// declared <c>var id;</c> and read by that class's <c>play()</c>. Reaching them needs member
-    /// resolution first, not a wider walk.
+    /// Nothing inside a CLASS is inspected — every method, not only a constructor or destructor —
+    /// and this is not an oversight. This rule scopes names per body, with no model of a class's
+    /// <c>var</c> members, and inside a class method a bare name may be a member rather than a
+    /// local; a member write that no method IN THIS BODY reads back looks exactly like a dead
+    /// store. Real BO3 code hits this on an ordinary setter —
+    /// <c>function set_door_paths( p ) { m_n_door_connect_paths = p; }</c> in
+    /// <c>scripts\shared\doors_shared.gsc</c> — where the member is read by another method
+    /// entirely. Reaching a member needs member resolution first, not a wider walk.
     ///
-    /// <see cref="UnusedBindingLint"/> does inspect all three, which is not a contradiction: it asks
-    /// about PARAMETERS, and a parameter is scoped to its own body whatever the class holds.
+    /// <see cref="UnassignedVariableLint"/> already takes this same all-or-nothing view of a class,
+    /// via its own <c>insideClass</c>. <see cref="UnusedBindingLint"/> does inspect every method,
+    /// which is not a contradiction: it asks about PARAMETERS, and a parameter is scoped to its own
+    /// body whatever the class holds.
     /// </summary>
-    private static void CollectFromDeclaration(AstNode element, ImmutableArray<Diagnostic>.Builder diagnostics)
+    private static void CollectFromDeclaration(AstNode element, ImmutableArray<Diagnostic>.Builder diagnostics, bool insideClass)
     {
         switch ( element )
         {
-            case FunctionNode function:
+            case FunctionNode function when !insideClass:
                 InspectBody(function.Parameters, function.Body, diagnostics);
                 return;
 
+            case FunctionNode:
             case ConstructorNode:
             case DestructorNode:
+                return;
+
+            case ClassNode classNode:
+                foreach ( AstNode member in classNode.Members )
+                {
+                    CollectFromDeclaration(member, diagnostics, insideClass: true);
+                }
+
                 return;
 
             default:
                 foreach ( AstNode child in AstSearch.ChildrenOf(element) )
                 {
-                    CollectFromDeclaration(child, diagnostics);
+                    CollectFromDeclaration(child, diagnostics, insideClass);
                 }
 
                 return;
@@ -102,7 +104,21 @@ public static class UnusedLocalLint
             read.Add(parameter.NameToken.Text);
         }
 
-        Collect(body, firstWrite, read);
+        // Only a plain `x = v` (or a const) is a store that can be dead. A compound assignment
+        // reads the old value; `a[ i ] = v` and `a.f = v` use what `a` already held; a foreach
+        // variable and a waittill output are bound by the loop and the engine, and an unused one
+        // there is idiomatic rather than dead. So all of those count as uses of the name.
+        foreach ( LocalUse use in LocalUses.Of(body) )
+        {
+            if ( use.Kind == LocalUseKind.Assign )
+            {
+                RecordWrite(use.Token, firstWrite);
+            }
+            else
+            {
+                read.Add(use.Token.Text);
+            }
+        }
 
         foreach ( KeyValuePair<string, PToken> write in firstWrite )
         {
@@ -125,95 +141,6 @@ public static class UnusedLocalLint
                 write.Value.Text);
 
             diagnostics.Add(unused with { Tags = [DiagnosticTag.Unnecessary] });
-        }
-    }
-
-    /// <summary>
-    /// Walks a function body, recording the first WRITE of each name and every name READ.
-    ///
-    /// Descends through <see cref="AstSearch.ChildrenOf"/> rather than a switch over every node
-    /// kind, the same way <see cref="UnassignedVariableLint"/> does. The interesting nodes are few
-    /// — assignments, the two binding forms, and the one place an identifier is a function name
-    /// rather than a value — and enumerating children generically means a node type added later is
-    /// traversed without this rule having to learn about it.
-    /// </summary>
-    private static void Collect(AstNode node, Dictionary<string, PToken> firstWrite, HashSet<string> read)
-    {
-        switch ( node )
-        {
-            case AssignmentNode assignment:
-                // `x = value` writes x. `x += value` READS x as well, so it can never be a dead
-                // store on its own.
-                if ( assignment.Target is IdentifierNode target )
-                {
-                    if ( assignment.Operator == TokenKind.Assign )
-                    {
-                        RecordWrite(target.Token, firstWrite);
-                    }
-                    else
-                    {
-                        read.Add(target.Token.Text);
-                    }
-                }
-                else
-                {
-                    // self.foo = … — a field, whose reader may be another script entirely.
-                    Collect(assignment.Target, firstWrite, read);
-                }
-
-                Collect(assignment.Value, firstWrite, read);
-                return;
-
-            case ForeachNode foreachNode:
-                // A loop variable is bound by the loop, not assigned by the author, and an unused
-                // `key` in `foreach ( key, value in … )` is idiomatic rather than dead.
-                if ( foreachNode.KeyToken is not null )
-                {
-                    read.Add(foreachNode.KeyToken.Value.Text);
-                }
-
-                read.Add(foreachNode.ValueToken.Text);
-                Collect(foreachNode.Collection, firstWrite, read);
-                Collect(foreachNode.Body, firstWrite, read);
-                return;
-
-            case ConstDeclNode constDecl:
-                RecordWrite(constDecl.NameToken, firstWrite);
-                Collect(constDecl.Value, firstWrite, read);
-                return;
-
-            case IdentifierNode identifier:
-                read.Add(identifier.Token.Text);
-                return;
-
-            case CallNode call:
-                // Target is the object a method is called ON — `self` in `self foo()`.
-                if ( call.Target is not null )
-                {
-                    Collect(call.Target, firstWrite, read);
-                }
-
-                // The callee of `foo()` names a FUNCTION, so it is not a read of a local called
-                // foo. `[[ handler ]]()` is different: that really does read the local.
-                if ( call.Callee is not (IdentifierNode or QualifiedNode or PathQualifiedNode) )
-                {
-                    Collect(call.Callee, firstWrite, read);
-                }
-
-                foreach ( ExprNode argument in call.Arguments )
-                {
-                    Collect(argument, firstWrite, read);
-                }
-
-                return;
-
-            default:
-                foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-                {
-                    Collect(child, firstWrite, read);
-                }
-
-                return;
         }
     }
 

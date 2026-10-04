@@ -523,6 +523,12 @@
 						"description": "Indent 'case' and 'default' labels one level inside their 'switch', with the statements under a label one level further. Off puts the labels in the switch's own column. Stock scripts indent them about 4 to 1.",
 						"scope": "window"
 					},
+					"gscode.format.indentCaseBlocks": {
+						"type": "boolean",
+						"default": false,
+						"description": "Indent a case body written as one braced block inside its label, so the '{' sits one level in from 'case' and the statements two. Off puts the '{', the '}' and the 'break;' after them in the label's column. A case body without braces is indented one level either way. Stock scripts are split, about 6 level to 5 indented.",
+						"scope": "window"
+					},
 					"gscode.format.indentDevBlocks": {
 						"type": "boolean",
 						"default": false,

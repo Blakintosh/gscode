@@ -732,7 +732,9 @@ public static partial class GscFormatter
             // A label whose body is a braced block takes no case indent: the braces supply the
             // level, so `{`, `}` and the `break;` after them sit in the label's column. Stock
             // writes it that way 59 times against 47, and every time with the break beside them.
-            bool bracedCaseBody = roles.LabelColon[index] && NextIsOpenBrace(significant, index);
+            // `IndentCaseBlocks` is the other 47: the block indents like any other case body.
+            bool bracedCaseBody = !options.IndentCaseBlocks
+                && roles.LabelColon[index] && NextIsOpenBrace(significant, index);
             if ( bracedCaseBody && blocks.Count > 0 && blocks[^1].IsSwitch )
             {
                 blocks[^1].CaseOpen = false;
@@ -1191,7 +1193,10 @@ public static partial class GscFormatter
         /// <summary>Called before the token is written, so its own line uses the right indent.</summary>
         public void BeforeToken(TokenKind kind)
         {
-            if ( !_awaitingBody )
+            // A comment after the header is not the body. Taking it for one owed a level that the
+            // `{` on the next line never released, so `if ( a ) // note` pushed its whole braced
+            // block one level right and left the `}` out of step with it.
+            if ( !_awaitingBody || LineFacts.IsComment(kind) )
             {
                 return;
             }

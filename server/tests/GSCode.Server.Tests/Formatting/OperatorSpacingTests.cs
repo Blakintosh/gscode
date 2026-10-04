@@ -88,6 +88,30 @@ public class OperatorSpacingTests
     }
 
     [Theory]
+    [InlineData("a = b ? 1 : 2;", "a = b ? 1 : 2;")]
+    [InlineData("a = b?1:2;", "a = b ? 1 : 2;")]
+    [InlineData("a = (b ? &foo : &bar);", "a = ( b ? &foo : &bar );")]
+    [InlineData("a = b ? c ? 1 : 2 : 3;", "a = b ? c ? 1 : 2 : 3;")]
+    [InlineData("foo( b ? -1 : 1, a );", "foo( b ? -1 : 1, a );")]
+    public void ATernaryColonIsSpacedLikeAnOperator(string input, string expected)
+    {
+        // Reported alongside the function-pointer spacing: `b ? &foo : &bar` came out
+        // `b ? &foo: &bar`, because every ':' was treated as a label's.
+        Assert.Contains(expected, Body(input), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALabelColonStillHugsItsLabel()
+    {
+        string formatted = Body("switch ( a ) { case 1: b = a ? 1 : 2; break; case (a ? 1 : 2): break; default: break; }");
+
+        Assert.Contains("case 1:", formatted, StringComparison.Ordinal);
+        Assert.Contains("b = a ? 1 : 2;", formatted, StringComparison.Ordinal);
+        Assert.Contains("case ( a ? 1 : 2 ):", formatted, StringComparison.Ordinal);
+        Assert.Contains("default:", formatted, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("a += b;", "a += b;")]
     [InlineData("a -= b;", "a -= b;")]
     [InlineData("a *= b;", "a *= b;")]

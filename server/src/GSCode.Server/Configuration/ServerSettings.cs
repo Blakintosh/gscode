@@ -45,6 +45,7 @@ public sealed class ServerSettings
         public bool FormatSortDirectives { get; init; } = true;
         public bool FormatAlignConsecutive { get; init; } = true;
         public bool FormatIndentCaseLabels { get; init; } = true;
+        public bool FormatIndentCaseBlocks { get; init; }
         public bool FormatIndentDevBlocks { get; init; }
         public bool FormatFixCasing { get; init; } = true;
         public int FormatAlignMaxPadding { get; init; } = 20;
@@ -265,6 +266,13 @@ public sealed class ServerSettings
         set { _current = _current with { FormatIndentCaseLabels = value }; }
     }
 
+    /// <summary>Whether a case body written as one braced block is indented inside its label.</summary>
+    public bool FormatIndentCaseBlocks
+    {
+        get { return _current.FormatIndentCaseBlocks; }
+        set { _current = _current with { FormatIndentCaseBlocks = value }; }
+    }
+
     /// <summary>Whether the body of a `/# … #/` dev block is indented one level.</summary>
     public bool FormatIndentDevBlocks
     {
@@ -400,6 +408,7 @@ public sealed class ServerSettings
             FormatAlignConsecutive = Flag(section, "format", "alignConsecutive") ?? current.FormatAlignConsecutive,
             FormatSortDirectives = Flag(section, "format", "sortDirectives") ?? current.FormatSortDirectives,
             FormatIndentCaseLabels = Flag(section, "format", "indentCaseLabels") ?? current.FormatIndentCaseLabels,
+            FormatIndentCaseBlocks = Flag(section, "format", "indentCaseBlocks") ?? current.FormatIndentCaseBlocks,
             FormatIndentDevBlocks = Flag(section, "format", "indentDevBlocks") ?? current.FormatIndentDevBlocks,
             FormatFixCasing = Flag(section, "format", "fixCasing") ?? current.FormatFixCasing,
             FormatAlignMaxPadding = Math.Max(0, Number(section, "format", "alignMaxPadding") ?? current.FormatAlignMaxPadding),

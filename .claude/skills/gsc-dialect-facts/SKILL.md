@@ -14,8 +14,8 @@ from other languages that GSC does not honour.
 self waittill( "damage", attacker, amount );
 ```
 
-`attacker` and `amount` are **outputs** the engine fills in, not values being read. Same for
-`waittillmatch`. The first argument is the event name and is a genuine read.
+`attacker` and `amount` are **outputs** the engine fills in, not values being read. The first
+argument is the event name and is a genuine read.
 
 A rule that treats these as reads reports `other`, `attacker`, `damage` and `notetrack` across
 half the codebase — that alone was 2,117 of the first 2,742 false positives the unassigned-variable
@@ -23,6 +23,15 @@ lint produced.
 
 Parsed as a `CallNode` whose `Callee` is an `IdentifierNode` wrapping the **keyword token**, so the
 token kind is what identifies it.
+
+**`waittillmatch` does NOT bind, despite the name.** This skill said "same for waittillmatch" for a
+while, and that sentence was itself the source of a bug: `AstSearch.IsWaittill` treated both
+keywords identically, so `self waittillmatch( "single anim", matchname )` bound `matchname` as a
+fake output instead of reading it. `waittillmatch`'s trailing argument is the value to MATCH
+against the notify's own parameters — confirmed against the shipped scripts, where it is
+overwhelmingly a string literal (`self waittillmatch( "stepanim", "gravity on" )` — hundreds of
+call sites across cod4/waw/mw2), and a bind target can never be one. Its own doc string already
+said "whose parameters match the given values" before the binding code disagreed with it.
 
 ## Subscripting an undefined variable CREATES it
 
@@ -47,9 +56,9 @@ The trap is assuming the `ArraysPassedByReference` flag means references arrived
 not: structs and entities have always aliased, and `spawnstruct` appears in all five corpora (cod4
 117 files, waw 173, mw2 190, bo1 363, bo3 177), so both kinds are everywhere in the same code.
 
-What that means for a rule or a rewriter: a struct or entity parameter behaves the same in every
-dialect and needs no thought, while an array parameter a callee MUTATES behaves differently after
-translation in either direction. So the only question worth answering precisely is "is this an
+What that means for a rule: a struct or entity parameter behaves the same in every dialect and
+needs no thought, while an array parameter a callee MUTATES behaves differently between BO3 and the
+earlier games. So the only question worth answering precisely is "is this an
 array", and it has three answers rather than two — certainly, certainly not, and cannot tell. The
 third is the one to escalate rather than guess, which is why `ScrValue` distinguishes `MustBe` from
 `MayBe` instead of carrying a single confidence flag.
@@ -97,6 +106,24 @@ corpora `#animtree` appears in 415 files and **not once at the start of a line**
 belongs in `GscKeywords.BodyDirectives` and not `TopLevelKeywords`. It was in the latter, and a
 line-anchored grep is what made it look unused everywhere — measure this one without `^`.
 
+## BO3 file scope is an EXPRESSION position, not declarations-only
+
+A macro invocation is a call, and BO3 invokes macros at column 0 — `REGISTER_SYSTEM( "aat",
+&__init__, undefined )` appears 477 times in the shipped scripts, expanding (via
+`scripts/shared/shared.gsh`) to `function autoexec __init__sytem__() { … }`. So the argument list of
+that call is an expression sitting outside every function body: **510 function pointers and 467
+`undefined`s** are written at file scope across the corpus.
+
+Any rule that assumes "outside a body, only a declaration or a directive is legal" is wrong on those
+977 sites. It is what made completion's file-scope list keywords-only, and what a legality filter
+there would have kept hiding. Two consequences worth carrying: `undefined`, `true`, `false` and the
+other expression atoms belong at file scope as much as `function` does, and a name completed there
+takes no semicolon, since none of the 447 `REGISTER_SYSTEM` lines carries one.
+
+The macro's own expansion is the only thing that decides whether it may stand alone there. Of BO3's
+3,844 header macros exactly two are shaped like a top-level construct, so a shape test is not a
+useful filter — the language does not stop anyone expanding any of them anywhere.
+
 ## Under `#include`, every same-named function shares one key
 
 The merge dialects key a function as `(null, name)` — no namespace. CoD4's animscripts hold 1,230
@@ -105,6 +132,48 @@ The merge dialects key a function as `(null, name)` — no namespace. CoD4's ani
 
 Scope per REFERENCE, never per file: a path call names its file outright, and a bare name resolves
 locally first. Filtering whole files was wrong twice.
+
+## A function pointer is always SPELLED as one, and the spelling forks by dialect
+
+```gsc
+level.callback = &on_damage;          // BO3
+level.callback = ::on_damage;         // the IW merge dialects
+level.callback = maps\mp\_util::on_damage;
+level.callback = handler;             // NOT a function pointer — reads a local
+```
+
+There is no form in which a bare identifier names a function. The sigil is the whole difference,
+and a rule that treats `level.foo = bar` as binding `bar` the function jumps to whatever function
+happens to share the local's name.
+
+Measured over every `owner.field = …` write in two corpora, with the FLOW TYPER rather than the
+syntax — so this covers `bar = &on_damage; level.cb = bar;`, the case that makes the naive rule
+sound reasonable:
+
+| | bo3 (980 files) | cod4 (894 files) |
+|---|---|---|
+| field writes with a value | 17,755 | 16,315 |
+| `&foo` | 865 | 0 |
+| `::foo` / `path\file::foo` | 0 | 185 |
+| `new Foo()` | 9 | 0 |
+| bare identifier | 2,301 | 1,426 |
+| …of those, holding a function | **0** | **0** |
+| every other shape | 14,580 | 14,704 |
+| …of those, holding a function | **0** | **0** |
+
+Not one of 3,727 bare-identifier writes holds a function. The top names written bare say why —
+`weapon`, `self`, `player`, `angles`, `attacker`, `team`, `origin`, `node`, `value`, `textscale`.
+Entity and struct data, which is what a field mostly is.
+
+Note the two zeroes on the diagonal: bo3 has every `&` and no `::`, cod4 every `::` and no `&`.
+Recognising only the BO3 spelling leaves every Infinity Ward game with no callback navigation at
+all, while the suite stays green — `GameProfile` is the seam, and a corpus sweep over both families
+is what catches it.
+
+What this supports, and its limit: `FieldBinding` records the three sigil forms so
+go-to-type-definition, go-to-implementation and both hierarchies can answer on a callback field.
+It is deliberately syntactic, since the flow typer recovers nothing extra here (the two zero rows)
+and typing an unopened file per request is not affordable.
 
 ## An undefined variable is not an error
 
@@ -118,18 +187,20 @@ It is absent from the API library, so a rule consulting the library about it fin
 other call-shaped keywords are the same: `notify`, `endon`, `waittill`, `assert`, `vectorscale`,
 `prof_begin`/`prof_end`.
 
-## A script function shadows a builtin only when SPELLED the same
+## A bare call resolves to a builtin first; a qualified or threaded one means the script
 
-Builtins are the fallback after the current namespace — `sys::` exists as an explicit alias
-precisely because a script function otherwise wins. But whether a declaration shadows an engine
-function of the same name is decided by the SPELLING, not case-insensitively, and two shipped BO3
-files settle it in opposite directions:
+Builtins are the fallback after the current namespace only for a QUALIFIED call — `sys::` exists as
+the explicit builtin form. A bare call whose name is both an engine function and a script function
+resolves to the builtin first, whatever its case. Two shipped BO3 files show where the script one
+is reached instead:
 
 ```gsc
-// scripts\shared\exploder_shared.gsc
+// scripts\shared\exploder_shared.gsc   (#namespace exploder)
 function earthquake()                                       // declared here, takes nothing
 ...
-Earthquake( eq["magnitude"], eq["duration"], self.v["origin"], eq["radius"] );   // the ENGINE one
+self thread exploder::earthquake();                         // its OWN: qualified
+...
+Earthquake( eq["magnitude"], eq["duration"], self.v["origin"], eq["radius"] );   // the ENGINE one: bare
 ```
 
 ```gsc
@@ -140,12 +211,19 @@ self thread spawnSpectator();                               // its OWN, though B
                                                             // SpawnSpectator( origin, angles )
 ```
 
-Both files ship and work, and no case-insensitive rule explains both — it either breaks the first
-(four arguments to a nought-parameter function) or the second (nought arguments where two are
-mandatory). The authors clearly wrote the distinction on purpose.
+The first is disambiguated by the namespace qualifier, not by the capital E. The second is a bare
+name, but THREADED, and a builtin cannot be threaded — with builtin-first it would pass nothing
+to a builtin that needs two arguments, and the file ships and works. So:
 
-Scope it to THIS tie-break. General script-to-script resolution stays case-insensitive, as the rest
-of the codebase has it (`FunctionSymbol.KeyName` is lowercase-canonical and matched ordinally).
+- bare call → the builtin, if one exists;
+- qualified call (`ns::name`) → the script function; `sys::name` → the builtin;
+- threaded call or function reference (`&name`) → the script function.
+
+An earlier version of this entry read both files as "spelling decides", and a lint and a formatter
+feature were built on it. Spelling is not the mechanism; check the call's shape.
+
+General script-to-script resolution stays case-insensitive, as the rest of the codebase has it
+(`FunctionSymbol.KeyName` is lowercase-canonical and matched ordinally).
 
 A case-insensitive first attempt at the arity rule reported that `Earthquake` call as passing four
 arguments to a nought-parameter function — an Error on a file that ships. The corpus caught it; a

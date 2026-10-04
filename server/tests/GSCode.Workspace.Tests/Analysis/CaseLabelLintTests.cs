@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -25,10 +21,9 @@ public class CaseLabelLintTests
         string source = preamble
             + "function f( v )\n{\n    switch ( v )\n    {\n" + cases + "\n    }\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
-        return CaseLabelLint.Analyze(result);
+        return NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode);
     }
 
     [Fact]
@@ -90,10 +85,9 @@ public class CaseLabelLintTests
             + "            switch ( w )\n            {\n                case undefined:\n                    break;\n            }\n"
             + "            break;\n    }\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
-        Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(CaseLabelLint.Analyze(result)).Code);
+        Assert.Equal(GscDiagnosticCode.CaseUndefined, Assert.Single(NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode)).Code);
     }
 
     // --- 5017: a label the switch already has ---
@@ -196,11 +190,10 @@ public class CaseLabelLintTests
             + "    switch ( v )\n    {\n        default:\n            break;\n    }\n"
             + "    switch ( w )\n    {\n        default:\n            break;\n    }\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(
-            CaseLabelLint.Analyze(result),
+            NodeLintHarness.RunOnStatements(result, CaseLabelLint.InspectNode),
             diagnostic => diagnostic.Code == GscDiagnosticCode.MultipleDefaultLabels);
     }
 

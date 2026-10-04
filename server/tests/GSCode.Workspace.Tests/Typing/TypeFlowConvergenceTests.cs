@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
 using Xunit;
@@ -33,8 +30,7 @@ public class TypeFlowConvergenceTests
     private static ScrType TypeOfProbe(string body)
     {
         string source = "function f()\n{\n" + body + "\n    sink = probe_target;\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         ImmutableArray<InferredAssignment> inferred = NewTyper().InferAssignments(result);
         foreach ( InferredAssignment assignment in inferred )

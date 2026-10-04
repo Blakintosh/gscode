@@ -43,6 +43,30 @@ public class ConditionalTests
     }
 
     [Fact]
+    public void ASecondElseInOneChainIsReported()
+    {
+        // #else is meant to be the last branch. Before this was checked, the chain simply read a
+        // second #else as one more (permanently inactive) branch and reported nothing at all.
+        PreprocessResult result = PreprocessTestHelper.Run(
+            "#if 0\na = 1;\n#else\nb = 2;\n#else\nc = 3;\n#endif");
+
+        Assert.Contains(result.Diagnostics, d => d.Code == GscDiagnosticCode.UnexpectedConditionalDirective);
+
+        // The mistake is reported, not "corrected": the first #else still takes the branch, exactly
+        // as it would without the second one there.
+        Assert.Equal(["b", "=", "2", ";"], PreprocessTestHelper.Texts(result));
+    }
+
+    [Fact]
+    public void AnElifAfterAnElseIsReported()
+    {
+        PreprocessResult result = PreprocessTestHelper.Run(
+            "#if 0\na = 1;\n#else\nb = 2;\n#elif 1\nc = 3;\n#endif");
+
+        Assert.Contains(result.Diagnostics, d => d.Code == GscDiagnosticCode.UnexpectedConditionalDirective);
+    }
+
+    [Fact]
     public void If_MacroInCondition_ExpandsBeforeEvaluation()
     {
         PreprocessResult result = PreprocessTestHelper.Run("#define XFILE_VERSION 593\n#if XFILE_VERSION >= 553\nmodern = 1;\n#endif");

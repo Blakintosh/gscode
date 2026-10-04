@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
+using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
@@ -18,6 +19,9 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Go-to-definition for functions, classes, and macros (via their Definition references),
 /// plus #using/#insert paths jumping to the target file. Builtins have no definition.
+///
+/// A FIELD is the one kind whose answer is not a Definition reference, because a field is declared
+/// nowhere: it is answered from its WRITES instead. See the comment at <c>declaring</c> below.
 /// </summary>
 public sealed class DefinitionHandler : DefinitionHandlerBase
 {
@@ -37,13 +41,13 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
 
     public override Task<LocationOrLocationLinks?> Handle(DefinitionParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<LocationOrLocationLinks?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
 
         if ( hit.Kind == HitKind.DependencyPath )
         {
@@ -70,9 +74,38 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             return Task.FromResult(LocalDefinitionAt(target, request.Position.ToCore()));
         }
 
+        // A macro answered from THIS file's own preprocessor result, not the workspace-wide query
+        // a few lines below. FindAllReferences widens a macro key to BOTH language stores (see its
+        // own comment) so RENAME reaches every world a shared #insert'ed header touches — correct
+        // for a macro that really is shared. Definition wants the opposite question: which #define
+        // is in effect HERE, which preprocessing already answered once while building this file's
+        // MacroTable, local shadowing a header's or the header's own. Asking the wide query instead
+        // meant two INDEPENDENT same-named macros — one per language file, no header involved, e.g.
+        // CF_CRACKS_ALL declared separately in animation_shared.gsc and animation_shared.csc — both
+        // came back: PreferIncludeScope compares paths with the extension stripped, so the two
+        // files counted as "the same file". Falls through to the wide query only when this file's
+        // own table has nothing for the name, which should not happen for a real MacroUse.
+        if ( hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Macro )
+        {
+            LocationOrLocationLinks? macroDefinition = MacroDefinitionAt(target, hit.Key.Name);
+            if ( macroDefinition is not null )
+            {
+                return Task.FromResult<LocationOrLocationLinks?>(macroDefinition);
+            }
+        }
+
+        // A FIELD has no declaration, so it has no Definition entry. Its writes are what the question
+        // means: the places the name comes into existence and its value is decided. Usually several,
+        // which the protocol already allows for.
+        //
+        // BOTH write kinds. This question is "where is this field set", and `level.count += 1`
+        // sets it. Only go-to-IMPLEMENTATION draws the narrower line, because it asks what the
+        // field IS rather than where it is touched.
+        bool field = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field;
+
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
             [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
-                .Where(static source => source.Entry.Kind == ReferenceKind.Definition)];
+                .Where(source => field ? source.Entry.IsFieldWrite : source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
 
@@ -99,6 +132,26 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         }
 
         return new LocationOrLocationLinks(LspMapping.LocationAt(target.Path, range.Value));
+    }
+
+    /// <summary>
+    /// A macro definition, answered from this file's own preprocessor result. See the call site's
+    /// comment for why this exists instead of routing through <see cref="DefinitionSources"/> like
+    /// every other kind. Null when this file's own <see cref="MacroTable"/> has nothing for the
+    /// name — not expected for a real <see cref="ReferenceKind.MacroUse"/>, kept as a fallback
+    /// rather than a silent "no definition" so an edge case still reaches the wide query below.
+    /// </summary>
+    private static LocationOrLocationLinks? MacroDefinitionAt(NavigationTarget target, string macroName)
+    {
+        if ( !target.Result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition) )
+        {
+            return null;
+        }
+
+        // SourceFile is null for a macro this file itself defines (root file); non-null names the
+        // .gsh an #insert brought it in from.
+        string path = definition.SourceFile ?? target.Path;
+        return new LocationOrLocationLinks(LspMapping.LocationAt(path, definition.NameRange));
     }
 
     /// <summary>

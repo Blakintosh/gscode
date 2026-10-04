@@ -7,7 +7,7 @@
 		"color": "#07080C",
 		"theme": "dark"
 	},
-	"version": "2.0.2",
+	"version": "2.2.0",
 	"publisher": "blakintosh",
 	"license": "GPL-3.0-or-later",
 	"homepage": "https://www.gscode.net",
@@ -39,6 +39,20 @@
 		"workspaceContains:**/*.gsh"
 	],
 	"main": "./out/extension.js",
+	"capabilities": {
+		"untrustedWorkspaces": {
+			"supported": "limited",
+			"description": "In Restricted Mode, gscode.rawPath and gscode.modsPath are read from your user settings only, so an untrusted workspace cannot point the language server at other folders on disk.",
+			"restrictedConfigurations": [
+				"gscode.rawPath",
+				"gscode.modsPath"
+			]
+		},
+		"virtualWorkspaces": {
+			"supported": false,
+			"description": "The language server reads scripts from disk, so it needs a workspace on the local file system."
+		}
+	},
 	"contributes": {
 		"semanticTokenScopes": [
 			{
@@ -49,6 +63,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			},
@@ -60,6 +77,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			},
@@ -71,6 +91,9 @@
 					],
 					"variable.defaultLibrary": [
 						"variable.language"
+					],
+					"macro": [
+						"entity.name.function.preprocessor"
 					]
 				}
 			}
@@ -153,21 +176,117 @@
 		"commands": [
 			{
 				"command": "gscode.showOutput",
-				"title": "GSCode: Show Server Output"
+				"category": "GSCode",
+				"title": "Show Server Output"
 			},
 			{
 				"command": "gscode.restartServer",
-				"title": "GSCode: Restart Language Server"
+				"category": "GSCode",
+				"title": "Restart Language Server"
+			},
+			{
+				"command": "gscode.selectGame",
+				"category": "GSCode",
+				"title": "Select Game"
 			},
 			{
 				"command": "gscode.clearCacheAndReindex",
-				"title": "GSCode: Clear Cache and Reindex"
+				"category": "GSCode",
+				"title": "Clear Cache and Reindex"
 			},
 			{
 				"command": "gscode.openApiLibrary",
-				"title": "GSCode: Open Documentation for Symbol"
+				"category": "GSCode",
+				"title": "Open Documentation for Symbol"
+			},
+			{
+				"command": "gscode.organizeImports",
+				"category": "GSCode",
+				"title": "Organize Imports"
+			},
+			{
+				"command": "gscode.generateScriptDoc",
+				"category": "GSCode",
+				"title": "Generate ScriptDoc Block"
 			}
 		],
+		"submenus": [
+			{
+				"id": "gscode.editorContext",
+				"label": "GSCode"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "gscode.openApiLibrary",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/"
+				},
+				{
+					"command": "gscode.organizeImports",
+					"when": "editorLangId =~ /^(gsc|csc)$/ && !editorReadonly"
+				},
+				{
+					"command": "gscode.generateScriptDoc",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/ && !editorReadonly"
+				},
+				{
+					"command": "gscode.showOutput",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.restartServer",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.selectGame",
+					"when": "gscode.active"
+				},
+				{
+					"command": "gscode.clearCacheAndReindex",
+					"when": "gscode.active"
+				}
+			],
+			"editor/context": [
+				{
+					"submenu": "gscode.editorContext",
+					"when": "editorLangId =~ /^(gsc|csc|gsh)$/",
+					"group": "1_modification@60"
+				}
+			],
+			"gscode.editorContext": [
+				{
+					"command": "gscode.organizeImports",
+					"when": "editorLangId =~ /^(gsc|csc)$/ && !editorReadonly",
+					"group": "1_edit@1"
+				},
+				{
+					"command": "gscode.generateScriptDoc",
+					"when": "!editorReadonly",
+					"group": "1_edit@2"
+				},
+				{
+					"command": "gscode.openApiLibrary",
+					"group": "2_docs@1"
+				},
+				{
+					"command": "gscode.selectGame",
+					"group": "3_game@1"
+				},
+				{
+					"command": "gscode.showOutput",
+					"group": "4_server@1"
+				},
+				{
+					"command": "gscode.restartServer",
+					"group": "4_server@2"
+				},
+				{
+					"command": "gscode.clearCacheAndReindex",
+					"group": "4_server@3"
+				}
+			]
+		},
 		"keybindings": [
 			{
 				"command": "gscode.openApiLibrary",
@@ -249,9 +368,9 @@
 							"full"
 						],
 						"enumDescriptions": [
-							"No background indexing; only open files are analyzed.",
-							"Fast signature pass: symbols, navigation, and references work across the workspace.",
-							"Partial plus full semantic analysis and diagnostics across the whole index."
+							"No background indexing; only open files are analyzed. Diagnostics that need the index to answer (unresolved calls, unused imports, most missing-import checks) do not run; checks that read the file or the disk alone (a #using naming no file, a duplicate import) still do.",
+							"Symbols, navigation, and references work across the workspace; cross-file diagnostics only for open files.",
+							"Partial, plus cross-file diagnostics for every indexed file, not just open ones."
 						],
 						"description": "How much of the workspace (and game raw/mods folders) to index at startup.",
 						"scope": "window"
@@ -292,40 +411,38 @@
 					},
 					"gscode.codeLens.enabled": {
 						"type": "boolean",
-						"default": true,
+						"default": false,
 						"description": "Show a 'N references' code lens above each function and class declaration.",
 						"scope": "window"
 					},
 					"gscode.inlayHints.parameterNames": {
 						"type": "boolean",
-						"default": true,
-						"description": "Show parameter-name hints before arguments at call sites.",
+						"default": false,
+						"description": "Show parameter-name hints before arguments at call sites. Off by default, like every inlay hint and the code lens: each one adds text between the characters of a line.",
 						"scope": "window"
 					},
 					"gscode.inlayHints.inferredTypes": {
 						"type": "boolean",
+						"default": false,
+						"description": "Show inferred-type hints on local variable assignments. Off by default, like every inlay hint and the code lens.",
+						"scope": "window"
+					},
+					"gscode.inlayHints.macroParameterNames": {
+						"type": "boolean",
+						"default": false,
+						"description": "Show macro parameter-name hints before the arguments of a #define invocation (e.g. IS_TRUE( __a: level.ready )). Off by default: macro parameters are named for the macro's body rather than for the caller.",
+						"scope": "window"
+					},
+					"gscode.completion.autoImport": {
+						"type": "boolean",
 						"default": true,
-						"description": "Show inferred-type hints on local variable assignments.",
+						"description": "Offer functions from scripts this file has not imported yet, adding the #using (or #include) line when one is accepted. Only after three characters have been typed, so the names already in scope come first.",
 						"scope": "window"
 					},
 					"gscode.completion.literals": {
 						"type": "boolean",
 						"default": true,
 						"description": "Offer known strings, localized strings, and hash strings while typing inside a \"...\" / &\"...\" / #\"...\" literal (great for notify/waittill names).",
-						"scope": "window"
-					},
-					"gscode.completion.fieldScope": {
-						"type": "string",
-						"default": "owner",
-						"enum": [
-							"owner",
-							"all"
-						],
-						"enumDescriptions": [
-							"After 'level.', offer only fields seen assigned on level.",
-							"Offer every field name assigned on any owner, everywhere. Broader, and noisier."
-						],
-						"description": "How widely field names gathered from assignments are offered after a '.'.",
 						"scope": "window"
 					},
 					"gscode.completion.callPunctuation": {
@@ -397,7 +514,32 @@
 					"gscode.format.alignConsecutive": {
 						"type": "boolean",
 						"default": true,
-						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' (and compound operator like '+=') starts one space past the longest left-hand side. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to Format Document, and to format-on-type within the block you are editing.",
+						"description": "Align the operators of consecutive assignments so they line up in a column: a run of `a = 1;` statements at the same indentation is padded so every '=' sits in one column, one space past the longest left-hand side; a compound operator like '+=' puts its '=' in that column too. A blank line or a statement of a different kind ends a run; a comment on its own line does not. The same setting also aligns subscript and call-argument columns for same-shaped lines. Applies to all three formatting requests: format-on-type is limited to the run you are editing, Format Selection to the selection.",
+						"scope": "window"
+					},
+					"gscode.format.indentCaseLabels": {
+						"type": "boolean",
+						"default": true,
+						"description": "Indent 'case' and 'default' labels one level inside their 'switch', with the statements under a label one level further. Off puts the labels in the switch's own column. Stock scripts indent them about 4 to 1.",
+						"scope": "window"
+					},
+					"gscode.format.indentDevBlocks": {
+						"type": "boolean",
+						"default": false,
+						"description": "Indent the body of a '/# ... #/' dev block one level. Off keeps it at the level of the '/#', because a dev block is a runtime switch rather than a scope. Stock scripts are split, about 3 flush to 2 indented.",
+						"scope": "window"
+					},
+					"gscode.format.alignMaxPadding": {
+						"type": "integer",
+						"default": 20,
+						"minimum": 0,
+						"description": "The most spaces consecutive alignment may add to one line. A line whose left-hand side is further than this from the rest of its run keeps a single space, and the rest still align; subscript and argument columns that would need more are left as written. 0 removes the limit.",
+						"scope": "window"
+					},
+					"gscode.format.fixCasing": {
+						"type": "boolean",
+						"default": true,
+						"description": "Fix casing while formatting: keywords are lowercased ('isDefined' becomes 'isdefined'); a call takes the spelling of the function it resolves to ('getplayers()' becomes 'GetPlayers()', 'FOo()' becomes 'foo()' when the script declares 'function foo()'); namespaces take their #namespace spelling and classes their declaration's. A bare call resolves to a builtin before a script function of the same name; a qualified or threaded call means the script one. Macro names match exactly, so macros are never recased.",
 						"scope": "window"
 					}
 				}
@@ -408,7 +550,7 @@
 				"properties": {
 					"gscode.serverLogLevel": {
 						"type": "string",
-						"default": "off",
+						"default": "warning",
 						"enum": [
 							"off",
 							"error",
@@ -474,17 +616,22 @@
 		}
 	},
 	"scripts": {
-		"vscode:prepublish": "npm run compile",
+		"vscode:prepublish": "npm run bundle",
 		"compile": "tsc -p ./",
+		"bundle": "tsc -p ./ --noEmit && node esbuild.mjs",
 		"watch": "tsc -watch -p ./",
 		"lint": "eslint src",
 		"bundle-server": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -o ./service",
-		"package": "npm run compile && npm run bundle-server && npx --yes @vscode/vsce package"
+		"bundle-server-win": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r win-x64 -o ./service",
+		"bundle-server-linux": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r linux-x64 -o ./service",
+		"bundle-server-osx": "dotnet publish ../server/src/GSCode.Server/GSCode.Server.csproj -c Release -r osx-arm64 -o ./service",
+		"package": "npm run bundle-server && npx --yes @vscode/vsce package --no-dependencies"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.15.0",
 		"@types/node": "^20.17.0",
 		"@types/vscode": "^1.85.0",
+		"esbuild": "^0.25.12",
 		"eslint": "^9.15.0",
 		"typescript": "^5.6.3",
 		"typescript-eslint": "^8.15.0"

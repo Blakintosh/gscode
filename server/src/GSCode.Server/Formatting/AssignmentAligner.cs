@@ -7,12 +7,12 @@ namespace GSCode.Server.Formatting;
 
 /// <summary>
 /// Consecutive alignment for assignments: a run of assignment statements at the same indentation
-/// has its operators lined up, one space past the longest left-hand side.
+/// has its '=' lined up, one space past the longest left-hand side.
 ///
 /// <code>
 ///   level.wasp_enabled          = true;
 ///   level.wasp_round_count_blah = 1;      // longest LHS sets the column
-///   level.wasp_round_count      += 1;     // compound operators extend rightward from it
+///   level.wasp_round_count     += 1;      // a compound operator's '=' shares it too
 /// </code>
 ///
 /// This is a deliberate override of the stock scripts, which align almost nothing (2 assignments in
@@ -30,7 +30,11 @@ namespace GSCode.Server.Formatting;
 /// </summary>
 public static class AssignmentAligner
 {
-    public static string Align(string formatted)
+    /// <param name="maxPadding">
+    /// The most spaces alignment may add to any one line; 0 for no limit. A run whose left-hand
+    /// sides differ by more sheds its outliers, which keep a single space, and the rest align.
+    /// </param>
+    public static string Align(string formatted, int maxPadding = 0)
     {
         string[] lines = formatted.Split('\n');
         ImmutableArray<Token> tokens = Lexer.Lex(SourceText.From(formatted)).Tokens;
@@ -56,36 +60,19 @@ public static class AssignmentAligner
 
             // Gather a run of assignments at this indent, letting comment lines pass through.
             string indent = kinds[index].Indent;
-            List<int> group = [];
-            int scan = index;
-            int lastAssignment = index;
-            while ( scan < lines.Length )
-            {
-                LineKind kind = kinds[scan];
-                if ( kind.Kind == LineRole.Assignment && string.Equals(kind.Indent, indent, StringComparison.Ordinal) )
-                {
-                    group.Add(scan);
-                    lastAssignment = scan;
-                    scan++;
-                }
-                else if ( kind.Kind == LineRole.Comment )
-                {
-                    // Transparent: it neither aligns nor breaks the run.
-                    scan++;
-                }
-                else
-                {
-                    break;
-                }
-            }
+            List<int> group = LineFacts.GatherRun(index, lines.Length, line => StepOf(kinds[line], indent));
+            int lastAssignment = group[^1];
 
-            int target = 0;
-            foreach ( int line in group )
-            {
-                target = Math.Max(target, kinds[line].LeftLength);
-            }
+            // The lines that take part: all of them, unless aligning would pad one past the cap.
+            HashSet<int> aligned = WithinPadding(group, kinds, maxPadding);
 
-            target += 1;
+            // Every '=' lands in one column: one space past the longest left-hand side, or further
+            // when a compound operator's leading characters would not otherwise fit before it.
+            int equalsColumn = 0;
+            foreach ( int line in aligned )
+            {
+                equalsColumn = Math.Max(equalsColumn, EqualsWidth(kinds[line]));
+            }
 
             // Emit every line from index through the last aligned assignment, re-padding the
             // assignments and passing the interleaved comments straight through.
@@ -95,13 +82,19 @@ public static class AssignmentAligner
                     && string.Equals(kinds[line].Indent, indent, StringComparison.Ordinal)
                     && group.Count >= 2 )
                 {
-                    string aligned = Repad(lines[line], kinds[line], target);
-                    if ( !string.Equals(aligned, lines[line], StringComparison.Ordinal) )
+                    // A compound operator starts early by its length before the '=', so `+=`
+                    // hangs its '+' one column left of the shared '='. A line left out of the
+                    // alignment keeps a single space.
+                    int operatorStart = aligned.Contains(line) && aligned.Count >= 2
+                        ? equalsColumn - (kinds[line].OperatorLength - 1)
+                        : kinds[line].LeftLength + 1;
+                    string repadded = Repad(lines[line], kinds[line], operatorStart);
+                    if ( !string.Equals(repadded, lines[line], StringComparison.Ordinal) )
                     {
                         changed = true;
                     }
 
-                    output.Append(aligned);
+                    output.Append(repadded);
                 }
                 else
                 {
@@ -120,6 +113,50 @@ public static class AssignmentAligner
         return changed ? output.ToString() : formatted;
     }
 
+    /// <summary>Where a line's '=' sits with a single space before its operator.</summary>
+    private static int EqualsWidth(LineKind kind)
+    {
+        return kind.LeftLength + kind.OperatorLength;
+    }
+
+    /// <summary>
+    /// The lines of a run that align together without any of them gaining more than
+    /// <paramref name="maxPadding"/> spaces. While the run's widest and narrowest sides are too far
+    /// apart, whichever of the two is further from the median leaves — so one long outlier
+    /// (`nextID = …` beside a 98-character subscript chain) drops out and the rest still align.
+    /// </summary>
+    private static HashSet<int> WithinPadding(List<int> group, LineKind[] kinds, int maxPadding)
+    {
+        List<int> kept = [.. group];
+        while ( maxPadding > 0 && kept.Count >= 2 )
+        {
+            List<int> byWidth = [.. kept.OrderBy(line => EqualsWidth(kinds[line]))];
+            int narrowest = byWidth[0];
+            int widest = byWidth[^1];
+            int spread = EqualsWidth(kinds[widest]) - EqualsWidth(kinds[narrowest]);
+            if ( spread <= maxPadding )
+            {
+                break;
+            }
+
+            int median = EqualsWidth(kinds[byWidth[byWidth.Count / 2]]);
+            bool widestIsFurther = EqualsWidth(kinds[widest]) - median >= median - EqualsWidth(kinds[narrowest]);
+            kept.Remove(widestIsFurther ? widest : narrowest);
+        }
+
+        return [.. kept];
+    }
+
+    private static LineFacts.RunStep StepOf(LineKind kind, string indent)
+    {
+        if ( kind.Kind == LineRole.Assignment && string.Equals(kind.Indent, indent, StringComparison.Ordinal) )
+        {
+            return LineFacts.RunStep.Member;
+        }
+
+        return kind.Kind == LineRole.Comment ? LineFacts.RunStep.Transparent : LineFacts.RunStep.End;
+    }
+
     private static string Repad(string line, LineKind kind, int target)
     {
         string left = line[..kind.OperatorColumn].TrimEnd();
@@ -135,7 +172,8 @@ public static class AssignmentAligner
         Assignment,
     }
 
-    private readonly record struct LineKind(LineRole Kind, string Indent, int LeftLength, int OperatorColumn);
+    private readonly record struct LineKind(
+        LineRole Kind, string Indent, int LeftLength, int OperatorColumn, int OperatorLength = 1);
 
     private static LineKind[] ClassifyLines(int lineCount, ImmutableArray<Token> tokens, string[] lines)
     {
@@ -171,53 +209,29 @@ public static class AssignmentAligner
             return new LineKind(LineRole.Other, "", 0, 0);
         }
 
-        // The statement must be exactly one: a single terminating semicolon, and no braces or
-        // stray semicolons that would mean this line is something other than `lhs op rhs;`.
-        int depth = 0;
-        int operatorIndex = -1;
-        for ( int i = 0; i < code.Count; i++ )
+        // The statement must be exactly one: a second semicolon means this line is something other
+        // than `lhs op rhs;`.
+        for ( int i = 0; i < code.Count - 1; i++ )
         {
-            TokenKind kind = code[i].Kind;
-            switch ( kind )
+            if ( code[i].Kind == TokenKind.Semicolon )
             {
-                case TokenKind.OpenParen:
-                case TokenKind.OpenBracket:
-                case TokenKind.OpenBrace:
-                    depth++;
-                    break;
-                case TokenKind.CloseParen:
-                case TokenKind.CloseBracket:
-                case TokenKind.CloseBrace:
-                    depth--;
-                    break;
-                case TokenKind.Semicolon:
-                    if ( i != code.Count - 1 )
-                    {
-                        // A second statement on the line: not our shape.
-                        return new LineKind(LineRole.Other, "", 0, 0);
-                    }
-
-                    break;
-                default:
-                    if ( depth == 0 && operatorIndex < 0 && TokenFacts.IsAssignmentOperator(kind) )
-                    {
-                        operatorIndex = i;
-                    }
-
-                    break;
+                return new LineKind(LineRole.Other, "", 0, 0);
             }
         }
 
         // Need an assignment operator at top level, with a left-hand side before it.
+        int operatorIndex = LineFacts.TopLevelAssignment(code);
         if ( operatorIndex <= 0 )
         {
             return new LineKind(LineRole.Other, "", 0, 0);
         }
 
-        int operatorColumn = code[operatorIndex].Range.Start.Character;
+        Token operatorToken = code[operatorIndex];
+        int operatorColumn = operatorToken.Range.Start.Character;
+        int operatorLength = operatorToken.Range.End.Character - operatorColumn;
         string left = lineText[..operatorColumn].TrimEnd();
         string indent = LineFacts.LeadingWhitespace(lineText);
 
-        return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn);
+        return new LineKind(LineRole.Assignment, indent, left.Length, operatorColumn, operatorLength);
     }
 }

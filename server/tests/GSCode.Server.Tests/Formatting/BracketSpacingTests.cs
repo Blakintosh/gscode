@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -21,12 +17,7 @@ public class BracketSpacingTests
 
     private static string Body(string statements)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f( a, i, j, ptr )\n{\n\t" + statements + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f( a, i, j, ptr )\n{\n\t" + statements + "\n}\n");
 
         return GscFormatter.Format(result, s_tabs)!;
     }
@@ -73,8 +64,7 @@ public class BracketSpacingTests
     {
         string once = Body("a[i] = [[ptr]]( a[j] );");
 
-        ParseResult reparsed = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(once), NullInsertProvider.Instance, new NameTable());
+        ParseResult reparsed = TestParse.Analyze(once);
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_tabs));
     }

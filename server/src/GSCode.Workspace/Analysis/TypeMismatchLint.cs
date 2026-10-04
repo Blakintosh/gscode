@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Parser;
-using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Typing;
 
@@ -13,10 +10,8 @@ namespace GSCode.Workspace.Analysis;
 /// Two type-derived findings the union lattice made answerable: a non-array enumerated, and a vector
 /// component that cannot be a number.
 ///
-/// Both were ruled out while the lattice was flat, for the same recorded reason — <c>ScrType.Join</c>
-/// collapsed any disagreement to Unknown, so a rule was silent where it was safe and wrong where it
-/// was not. Real unions change the question into one <see cref="ScrValue.MustBe"/> can answer: every
-/// possible type has to fail before anything is said.
+/// Real unions make both answerable by <see cref="ScrValue.MustBe"/>: every possible type has to fail
+/// before anything is said.
 ///
 /// Reads the per-node map rather than re-deriving anything, so a rule and the type the editor shows
 /// can never disagree about what an expression means.
@@ -38,17 +33,11 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class TypeMismatchLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, FlowTyper typer)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        ScriptTypes types = typer.InferValues(result);
-        Walk(result.Tree.Root, types, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Walk(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ScriptTypes types, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         switch ( node )
         {
@@ -59,11 +48,6 @@ public static class TypeMismatchLint
             case VectorNode vector:
                 InspectVectorComponents(vector, types, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, types, diagnostics);
         }
     }
 
@@ -135,5 +119,4 @@ public static class TypeMismatchLint
                 ScrValues.Describe(value.Types)));
         }
     }
-
 }

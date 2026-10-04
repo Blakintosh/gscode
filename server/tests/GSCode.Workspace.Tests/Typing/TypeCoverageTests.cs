@@ -1,9 +1,5 @@
-using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
 using Xunit;
@@ -16,7 +12,7 @@ namespace GSCode.Workspace.Tests.Typing;
 /// Every one of these produced nothing before: `TypeOf` had no case for indexes, ternaries,
 /// postfixes, arrow calls, qualified names or pointer dereferences, and `WalkStatement` never
 /// entered a foreach's bindings, never walked a for-loop's condition or increment, and fell
-/// straight through `const`. A transpiler needs a value for every node, so the gaps are the work.
+/// straight through `const`. The per-node map is only as useful as the nodes it reaches.
 /// </summary>
 public class TypeCoverageTests
 {
@@ -29,8 +25,7 @@ public class TypeCoverageTests
 
     private static ParseResult Parse(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         // Without this a syntax slip makes every "no hint" assertion below pass for the wrong reason.
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
@@ -145,7 +140,7 @@ public class TypeCoverageTests
         // it certainly is not is the int it held beforehand.
         //
         // Dropping the binding at the join claimed exactly that, and nothing caught it because both
-        // readings project to Unknown — the difference only shows in the union a rewriter reads.
+        // readings project to Unknown — the difference only shows in the union underneath.
         Assert.Equal(
             ScrType.Unknown,
             TypeOf("    item = 5;\n    foreach ( item in a )\n    {\n    }\n    after = item;", "after"));
@@ -203,7 +198,7 @@ public class TypeCoverageTests
         Assert.Equal(ScrType.Unknown, TypeOf("    v = a[ 0 ];", "v"));
     }
 
-    // --- the reference kinds, which are what the transpiler turns on ---
+    // --- the reference kinds ---
 
     [Fact]
     public void AnArrayLiteralIsAnArray()
@@ -217,10 +212,18 @@ public class TypeCoverageTests
         Assert.Equal(ScrType.Struct, TypeOf("    v = spawnstruct();", "v"));
     }
 
+    /// <summary>
+    /// self is whichever object the CALLER threaded the function onto — usually an entity
+    /// (including a sentient AI), but GSC also allows threading onto a struct (level itself
+    /// included); never an array. This per-function pass has no way to see which of the two a
+    /// given call site used. Honestly typed as that union (Entity|Struct, see
+    /// FlowTyper's `self` case) rather than asserted Entity, so it produces no hint at
+    /// all — a union has no single projection.
+    /// </summary>
     [Fact]
-    public void SelfIsAnEntity()
+    public void SelfHasNoConcreteHintedType()
     {
-        Assert.Equal(ScrType.Entity, TypeOf("    v = self;", "v"));
+        Assert.False(HasHint("    v = self;", "v"));
     }
 
     [Fact]
@@ -248,7 +251,7 @@ public class TypeCoverageTests
     [Fact]
     public void ANewInstanceIsDistinctFromABareStruct()
     {
-        // A class instance carries its class name, which a rewriter lowering BO3 objects needs.
+        // A class instance carries its class name, which hovers and go-to-type-definition show.
         // It still projects onto Struct, since ScrType has no member for it.
         Assert.Equal(ScrType.Struct, TypeOf("    v = new Foo();", "v"));
     }

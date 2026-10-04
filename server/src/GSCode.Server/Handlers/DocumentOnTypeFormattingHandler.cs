@@ -1,7 +1,4 @@
-using GSCode.Workspace.Documents;
-using GSCode.Server.Configuration;
 using GSCode.Server.Formatting;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -20,15 +17,13 @@ namespace GSCode.Server.Handlers;
 /// </summary>
 public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHandlerBase
 {
-    private readonly DocumentStore _documents;
+    private readonly FormattingSupport _formatting;
     private readonly TextDocumentSelector _selector;
-    private readonly ServerSettings _settings;
 
-    public DocumentOnTypeFormattingHandler(DocumentStore documents, TextDocumentSelector selector, ServerSettings settings)
+    public DocumentOnTypeFormattingHandler(FormattingSupport formatting, TextDocumentSelector selector)
     {
-        _documents = documents;
+        _formatting = formatting;
         _selector = selector;
-        _settings = settings;
     }
 
     protected override DocumentOnTypeFormattingRegistrationOptions CreateRegistrationOptions(
@@ -48,26 +43,22 @@ public sealed class DocumentOnTypeFormattingHandler : DocumentOnTypeFormattingHa
         // directive block out from under a partial edit would be startling. Alignment stays on —
         // the edits are then clipped to the group around the cursor, so a run re-aligns as you
         // type its next member without touching anything else.
-        FormatOptions options = FormatOptions.From(
-            (int)request.Options.TabSize, request.Options.InsertSpaces, _settings) with { SortDirectives = false };
+        FormatOptions options = _formatting.OptionsFor(request.Options) with { SortDirectives = false };
 
-        if ( FormattingSupport.Prepare(_documents, request.TextDocument.Uri, options) is not FormatRequest prepared
+        if ( _formatting.Prepare(request.TextDocument.Uri, options, cancellationToken) is not FormatRequest prepared
             || prepared.Edits.IsEmpty )
         {
             return Task.FromResult<TextEditContainer?>(null);
         }
 
-        // Keep only edits touching the alignment GROUP around the cursor — the run of lines that
+        // Keep only edits WITHIN the alignment GROUP around the cursor — the run of lines that
         // actually re-flow together when this one is edited. Editing an assignment tidies its run
         // of assignments and stops at the next statement of a different kind, rather than the whole
-        // function body.
-        //
-        // A LINE-level test, not TextRange.Overlaps: the group is a span of whole lines, and an
-        // edit that starts mid-line still belongs to the line it sits on.
-        (int top, int bottom) = FormatScope.GroupAround(prepared.Document.Text.Text, request.Position.Line);
+        // function body. An edit that reaches outside the group is dropped, not applied whole.
+        (int Top, int Bottom) group = FormatScope.GroupAround(prepared.Document.Text.Text, request.Position.Line);
 
         List<TextEdit> textEdits = FormattingSupport.ToLspEdits(
-            prepared.Edits.Where(edit => edit.Range.Start.Line <= bottom && edit.Range.End.Line >= top));
+            prepared.Edits.Where(edit => FormattingSupport.WithinLines(edit, group.Top, group.Bottom)));
 
         if ( textEdits.Count == 0 )
         {

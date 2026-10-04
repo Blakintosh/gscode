@@ -19,8 +19,9 @@ export interface GscodeSettings {
     "codeLens.enabled": boolean;
     "inlayHints.parameterNames": boolean;
     "inlayHints.inferredTypes": boolean;
+    "inlayHints.macroParameterNames": boolean;
+    "completion.autoImport": boolean;
     "completion.literals": boolean;
-    "completion.fieldScope": string;
     "completion.callPunctuation": string;
     "completion.parameterHints": boolean;
     "diagnostics.scope": string;
@@ -31,6 +32,10 @@ export interface GscodeSettings {
     "format.maxBlankLines": number;
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
+    "format.indentCaseLabels": boolean;
+    "format.indentDevBlocks": boolean;
+    "format.fixCasing": boolean;
+    "format.alignMaxPadding": number;
     "game": string;
 }
 
@@ -38,7 +43,7 @@ export interface GscodeSettings {
 export function readSettings(): GscodeSettings {
     const config = workspace.getConfiguration("gscode");
     return {
-        serverLogLevel: config.get<string>("serverLogLevel", "off"),
+        serverLogLevel: config.get<string>("serverLogLevel", "warning"),
         workspaceIndexingMode: config.get<string>("workspaceIndexingMode", "partial"),
         enableWorkspaceCache: config.get<boolean>("enableWorkspaceCache", true),
         "raw.enabled": config.get<boolean>("raw.enabled", true),
@@ -46,11 +51,12 @@ export function readSettings(): GscodeSettings {
         modsPath: config.get<string>("modsPath", ""),
         rawFileWarningMode: config.get<string>("rawFileWarningMode", "stock"),
         "outline.showAssignments": config.get<boolean>("outline.showAssignments", true),
-        "codeLens.enabled": config.get<boolean>("codeLens.enabled", true),
-        "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", true),
-        "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", true),
+        "codeLens.enabled": config.get<boolean>("codeLens.enabled", false),
+        "inlayHints.parameterNames": config.get<boolean>("inlayHints.parameterNames", false),
+        "inlayHints.inferredTypes": config.get<boolean>("inlayHints.inferredTypes", false),
+        "inlayHints.macroParameterNames": config.get<boolean>("inlayHints.macroParameterNames", false),
+        "completion.autoImport": config.get<boolean>("completion.autoImport", true),
         "completion.literals": config.get<boolean>("completion.literals", true),
-        "completion.fieldScope": config.get<string>("completion.fieldScope", "owner"),
         "completion.callPunctuation": config.get<string>("completion.callPunctuation", "parensAndSemicolon"),
         "completion.parameterHints": config.get<boolean>("completion.parameterHints", true),
         "diagnostics.scope": config.get<string>("diagnostics.scope", "workspace"),
@@ -61,6 +67,10 @@ export function readSettings(): GscodeSettings {
         "format.maxBlankLines": config.get<number>("format.maxBlankLines", 2),
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
+        "format.indentCaseLabels": config.get<boolean>("format.indentCaseLabels", true),
+        "format.indentDevBlocks": config.get<boolean>("format.indentDevBlocks", false),
+        "format.fixCasing": config.get<boolean>("format.fixCasing", true),
+        "format.alignMaxPadding": config.get<number>("format.alignMaxPadding", 20),
         "game": config.get<string>("game", "bo3"),
     };
 }

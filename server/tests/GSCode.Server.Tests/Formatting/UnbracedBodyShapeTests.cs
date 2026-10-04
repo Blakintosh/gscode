@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -23,8 +19,7 @@ public class UnbracedBodyShapeTests
 
     private static string Format(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, s_tabs)!;
     }
@@ -59,10 +54,13 @@ public class UnbracedBodyShapeTests
             {
             	if ( n )
             		a();
+
             	while ( n )
             		b();
+
             	for ( i = 0; i < n; i++ )
             		c();
+
             	foreach ( foo in bar )
             		d();
             }
@@ -93,6 +91,7 @@ public class UnbracedBodyShapeTests
             	if ( n )
             		foreach ( foo in bar )
             			deep();
+
             	after();
             }
             """);

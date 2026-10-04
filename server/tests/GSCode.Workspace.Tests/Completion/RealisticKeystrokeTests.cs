@@ -1,14 +1,10 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -21,8 +17,6 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class RealisticKeystrokeTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-
     private readonly ITestOutputHelper _output;
 
     public RealisticKeystrokeTests(ITestOutputHelper output)
@@ -33,14 +27,10 @@ public class RealisticKeystrokeTests
     private static CompletionEngine Build()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction foobar()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction foobar()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
         return new CompletionEngine(database, BuiltinApiSet.Load(api), ObjectFields.Load(api));
@@ -51,12 +41,7 @@ public class RealisticKeystrokeTests
         CompletionEngine engine = Build();
         string text = "#namespace util;\n\nfunction run()\n{\n" + line + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\scripts\main.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"scripts\main.gsc"));
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
             result, "raw", new Position(4, line.Length), callPunctuation: CallPunctuation.ParensAndSemicolon);

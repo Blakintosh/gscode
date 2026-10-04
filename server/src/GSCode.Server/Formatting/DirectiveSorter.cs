@@ -30,8 +30,8 @@ namespace GSCode.Server.Formatting;
 ///   scripts settle it — <c>util_shared.gsc</c> names <c>"generic"</c> at line 1530 and
 ///   <c>"all_player"</c> at 1551 and 1995, and <c>_civ_pickup.gsc</c> carries four, each sitting
 ///   directly above the function whose animations it binds, a thousand lines below any import.
-///   Grouping it with <c>#using</c> hoisted it to the top of the file, which rebinds every
-///   animation between the old position and the new one and cannot be seen in a diff of names.
+///   Grouping it with <c>#using</c> would hoist it to the top of the file and rebind every
+///   animation between the old position and the new one, invisibly in a diff of names.
 ///   The block ends rather than skipping over it, because a directive written BELOW one is below
 ///   it for a reason this pass has no way to check.
 ///
@@ -60,9 +60,8 @@ public static class DirectiveSorter
     {
         switch ( directive )
         {
-            // The two spellings of an import, one per dialect (GameProfile.ImportStyle). Sorting
-            // was a no-op on every Infinity Ward game until #include was here: the block ended at
-            // the first directive in the file, so four of the five dialects got nothing.
+            // The two spellings of an import, one per dialect (GameProfile.ImportStyle). Without
+            // #include here the block would end at the first directive of every Infinity Ward file.
             case "#using":
             case "#include":
                 return 0;
@@ -215,7 +214,6 @@ public static class DirectiveSorter
             return null;
         }
 
-        // Comments trailing the block belong to whatever follows it, not to the last directive.
         List<Entry> ordered = [.. entries];
         ordered.Sort(static (left, right) =>
         {
@@ -255,7 +253,8 @@ public static class DirectiveSorter
             previousGroup = entry.Group;
         }
 
-        // Whatever came after the block, with exactly one blank line before it.
+        // Whatever came after the block, with exactly one blank line before it. Comments trailing
+        // the block are part of this, not of the last directive: they belong to what follows.
         string remainder = string.Join('\n', lines.Skip(consumedThrough + 1)).TrimStart('\n');
         if ( remainder.Length > 0 )
         {

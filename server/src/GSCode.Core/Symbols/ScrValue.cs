@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 
 namespace GSCode.Core.Symbols;
@@ -14,8 +15,7 @@ namespace GSCode.Core.Symbols;
 /// <c>isint()</c> narrowing that kept bools, four hand-written suppression rules so type names
 /// printed correctly, and a regression test class for the resulting false positives.
 ///
-/// Coercion is a RELATION between types, not a property of their encoding. It lives in
-/// <see cref="ScrValues.IsAssignableTo"/>, where it can be read.
+/// Coercion is a RELATION between types, not a property of their encoding.
 ///
 /// <see cref="Number"/> and <see cref="AnyString"/> below are convenience aliases for writing rules.
 /// They are ordinary unions of disjoint bits, never subset claims about their members.
@@ -80,71 +80,6 @@ public enum ScrTypeSet : ulong
     /// </summary>
     Universe = Undefined | Bool | Int | Float | String | IString | HashString
         | Vector | Struct | Array | Entity | Function | Instance,
-
-    /// <summary>
-    /// The kinds passed by reference in EVERY dialect. <see cref="Array"/> is excluded precisely
-    /// because it is not one of them before Black Ops III — it is the whole reason this alias exists.
-    /// </summary>
-    AlwaysByReference = Struct | Entity | Instance,
-}
-
-/// <summary>Why a value is not an exact, single, known type.</summary>
-/// <remarks>
-/// A linter needs none of this: it stays silent on anything uncertain and silence costs nothing. A
-/// transpiler must still emit something for every expression, so "unknown" is only actionable when
-/// it comes with a reason — a parameter nothing has told us about is a different problem from two
-/// branches that genuinely disagree, and they have different fallbacks.
-/// </remarks>
-public enum ScrImprecision
-{
-    /// <summary>Exact. With a single-bit type set, this is the only state safe to rewrite blind.</summary>
-    None = 0,
-
-    /// <summary>A parameter, which nothing in this function types. Call-site inference is what lifts this.</summary>
-    UntypedParameter,
-
-    /// <summary>The value came from a script function, whose body this pass does not re-type.</summary>
-    ScriptFunctionReturn,
-
-    /// <summary>No entry for the called name in this game's builtin library.</summary>
-    BuiltinNotInLibrary,
-
-    /// <summary>The library declared a type this lattice cannot express — <c>any</c>, <c>number</c>.</summary>
-    BuiltinTypeUnmapped,
-
-    /// <summary>The library entry is present but marked low-confidence or unverified.</summary>
-    BuiltinUnverified,
-
-    /// <summary>An element read out of an array. Element types are not modelled.</summary>
-    ArrayElement,
-
-    /// <summary>A field on a struct. Scripts invent these freely, so the engine data says nothing.</summary>
-    StructField,
-
-    /// <summary>A field whose owner's entity kind was not inferred, so the declaring kind is unknown.</summary>
-    UnknownFieldOwner,
-
-    /// <summary>The token came from a macro expansion, so its position is not what the author wrote.</summary>
-    MacroExpanded,
-
-    /// <summary>
-    /// A union produced by a control-flow join. The set is PRECISE — this is not a failure — but it
-    /// records that no single path produced it, which a rewriter may want to surface.
-    /// </summary>
-    BranchDisagreement,
-
-    /// <summary>An expression form this pass does not type.</summary>
-    UnsupportedExpression,
-
-    /// <summary>A global the selected dialect does not have, e.g. <c>world</c> before Black Ops III.</summary>
-    DialectGlobalAbsent,
-
-    /// <summary>
-    /// An output the engine fills in — a <c>waittill</c>/<c>waittillmatch</c> bound argument. The
-    /// notify site decides the value, and may send fewer values than are bound, so undefined is
-    /// always among the possibilities.
-    /// </summary>
-    EngineBound,
 }
 
 /// <summary>
@@ -159,22 +94,48 @@ public enum ScrImprecision
 /// </remarks>
 public readonly record struct ScrConstant
 {
-    private ScrConstant(ScrTypeSet type, long integer, double real, bool boolean, string? text, Vec3 vector)
+    /// <summary>
+    /// The int, float or bool, whichever <see cref="Type"/> says this is. One slot, because a
+    /// constant only ever has one of them.
+    ///
+    /// The payloads were separate fields, and a string or vector carried empty slots for the other
+    /// four: 64 bytes, inside a <see cref="ScrValue"/> that every flow-typer environment entry and
+    /// every recorded expression holds by value. The flow typer's allocation is mostly copies of
+    /// those values, so the empty slots were most of what it copied.
+    /// </summary>
+    private readonly long _bits;
+
+    /// <summary>
+    /// A string constant's text, or a vector constant's <see cref="VectorBox"/>. A vector is boxed
+    /// rather than carried inline, because three doubles in every constant cost 24 bytes on every
+    /// value that is not a vector, which is nearly all of them.
+    /// </summary>
+    private readonly object? _reference;
+
+    private ScrConstant(ScrTypeSet type, long bits, object? reference)
     {
         Type = type;
-        Integer = integer;
-        Real = real;
-        Boolean = boolean;
-        Text = text;
-        Vector = vector;
+        _bits = bits;
+        _reference = reference;
     }
 
     /// <summary>Which of the payloads below is meaningful. Always a single bit.</summary>
     public ScrTypeSet Type { get; }
 
-    public long Integer { get; }
-    public double Real { get; }
-    public bool Boolean { get; }
+    public long Integer
+    {
+        get { return Type == ScrTypeSet.Int ? _bits : 0; }
+    }
+
+    public double Real
+    {
+        get { return Type == ScrTypeSet.Float ? BitConverter.Int64BitsToDouble(_bits) : 0; }
+    }
+
+    public bool Boolean
+    {
+        get { return Type == ScrTypeSet.Bool && _bits != 0; }
+    }
 
     /// <summary>
     /// A string constant's text, which for a LITERAL is the token exactly as written — quotes and
@@ -185,9 +146,15 @@ public readonly record struct ScrConstant
     /// them in Black Ops III's scripts alone, on the most common node kind there is, for a value
     /// almost nothing reads. Use <see cref="Content"/> where the characters themselves are wanted.
     /// </summary>
-    public string? Text { get; }
+    public string? Text
+    {
+        get { return _reference as string; }
+    }
 
-    public Vec3 Vector { get; }
+    public Vec3 Vector
+    {
+        get { return _reference is VectorBox box ? box.Value : default; }
+    }
 
     /// <summary>
     /// The characters between the quotes, allocated on demand. Tolerant of an unquoted string, so a
@@ -211,33 +178,33 @@ public readonly record struct ScrConstant
 
     public static ScrConstant OfInt(long value)
     {
-        return new ScrConstant(ScrTypeSet.Int, value, 0, false, null, default);
+        return new ScrConstant(ScrTypeSet.Int, value, null);
     }
 
     public static ScrConstant OfFloat(double value)
     {
-        return new ScrConstant(ScrTypeSet.Float, 0, value, false, null, default);
+        return new ScrConstant(ScrTypeSet.Float, BitConverter.DoubleToInt64Bits(value), null);
     }
 
     public static ScrConstant OfBool(bool value)
     {
-        return new ScrConstant(ScrTypeSet.Bool, 0, 0, value, null, default);
+        return new ScrConstant(ScrTypeSet.Bool, value ? 1 : 0, null);
     }
 
     /// <summary>A string constant. <paramref name="type"/> distinguishes plain / localized / hashed.</summary>
     public static ScrConstant OfString(string value, ScrTypeSet type = ScrTypeSet.String)
     {
-        return new ScrConstant(type, 0, 0, false, value, default);
+        return new ScrConstant(type, 0, value);
     }
 
     public static ScrConstant OfVector(Vec3 value)
     {
-        return new ScrConstant(ScrTypeSet.Vector, 0, 0, false, null, value);
+        return new ScrConstant(ScrTypeSet.Vector, 0, new VectorBox(value));
     }
 
     public static ScrConstant OfUndefined()
     {
-        return new ScrConstant(ScrTypeSet.Undefined, 0, 0, false, null, default);
+        return new ScrConstant(ScrTypeSet.Undefined, 0, null);
     }
 
     /// <summary>The numeric value of an int or float constant, for arithmetic that widens.</summary>
@@ -286,10 +253,77 @@ public readonly record struct ScrConstant
         {
             case ScrTypeSet.Undefined: return "undefined";
             case ScrTypeSet.Bool: return Boolean ? "true" : "false";
-            case ScrTypeSet.Int: return Integer.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            case ScrTypeSet.Float: return Real.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            case ScrTypeSet.Int: return Integer.ToString(CultureInfo.InvariantCulture);
+            case ScrTypeSet.Float: return Real.ToString("R", CultureInfo.InvariantCulture);
             case ScrTypeSet.Vector: return Vector.ToString();
-            default: return Text is null ? "" : "\"" + Text + "\"";
+            // Content, not Text: a literal's Text already carries its own quotes, and wrapping
+            // those in another pair produced `""foo""` instead of `"foo"`.
+            default: return Content is null ? "" : "\"" + Content + "\"";
+        }
+    }
+
+    /// <summary>A vector payload on the heap, so the constant need not reserve room for one.</summary>
+    private sealed class VectorBox
+    {
+        public VectorBox(Vec3 value)
+        {
+            Value = value;
+        }
+
+        public Vec3 Value { get; }
+    }
+
+    /// <summary>
+    /// Structural equality by VALUE, not by the raw <see cref="Text"/> a string-kind constant
+    /// happens to carry.
+    ///
+    /// Two string constants can mean the same thing while spelling it differently: a real literal
+    /// token's <see cref="Text"/> keeps its quotes, while a folded concatenation's does not (see
+    /// <see cref="Text"/>'s own doc — it is built from <see cref="Content"/> in
+    /// <c>ScrOperators.Additive</c>, precisely to avoid producing quotes-within-quotes). The
+    /// compiler-generated record equality compared <see cref="Text"/> directly, so
+    /// <c>("a" + "b") == "ab"</c> folded to <c>false</c> and a Union that agreed on the same string
+    /// from two differently-spelled sources dropped its constant. Comparing <see cref="Content"/>
+    /// for the three string-ish kinds is the fix; every other kind still compares its own payload,
+    /// where there is no such spelling ambiguity.
+    /// </summary>
+    public bool Equals(ScrConstant other)
+    {
+        if ( Type != other.Type )
+        {
+            return false;
+        }
+
+        switch ( Type )
+        {
+            case ScrTypeSet.Int: return Integer == other.Integer;
+            case ScrTypeSet.Float: return Real.Equals(other.Real);
+            case ScrTypeSet.Bool: return Boolean == other.Boolean;
+            case ScrTypeSet.Vector: return Vector == other.Vector;
+            case ScrTypeSet.String:
+            case ScrTypeSet.IString:
+            case ScrTypeSet.HashString:
+                return string.Equals(Content, other.Content, StringComparison.Ordinal);
+            // Undefined, or any future single-bit kind this switch does not yet know: Type
+            // equality (checked above) is the whole answer, since no payload field is meaningful.
+            default: return true;
+        }
+    }
+
+    /// <summary>Agrees with <see cref="Equals(ScrConstant)"/> — hashes by value, not by raw Text.</summary>
+    public override int GetHashCode()
+    {
+        switch ( Type )
+        {
+            case ScrTypeSet.Int: return HashCode.Combine(Type, Integer);
+            case ScrTypeSet.Float: return HashCode.Combine(Type, Real);
+            case ScrTypeSet.Bool: return HashCode.Combine(Type, Boolean);
+            case ScrTypeSet.Vector: return HashCode.Combine(Type, Vector);
+            case ScrTypeSet.String:
+            case ScrTypeSet.IString:
+            case ScrTypeSet.HashString:
+                return HashCode.Combine(Type, Content is null ? 0 : StringComparer.Ordinal.GetHashCode(Content));
+            default: return Type.GetHashCode();
         }
     }
 }
@@ -299,7 +333,7 @@ public readonly record struct Vec3(double X, double Y, double Z)
 {
     public override string ToString()
     {
-        System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.InvariantCulture;
+        CultureInfo culture = CultureInfo.InvariantCulture;
         return "( " + X.ToString("R", culture) + ", " + Y.ToString("R", culture) + ", " + Z.ToString("R", culture) + " )";
     }
 }
@@ -314,40 +348,21 @@ public readonly record struct Vec3(double X, double Y, double Z)
 public readonly record struct ScrFunctionRef(string? Namespace, string Name);
 
 /// <summary>
-/// What is known about one value: which types it may hold, its constant value if it has one, its
-/// truthiness, its entity kinds, and why it is not exact.
+/// What is known about one value: which types it may hold, its constant value if it has one, and
+/// its truthiness.
 ///
 /// The union is the point. <see cref="ScrType"/> collapses any disagreement to <c>Unknown</c>, which
-/// is right for a lint that must not guess and wrong for a rewriter that must still emit something:
-/// <c>int|string</c> is a usable fact and <c>Unknown</c> is not. Two branches assigning an int and a
-/// string produce <c>Int | String</c> here, and <c>ScrTypes.Join</c> would have produced nothing.
+/// is right for a hover label and too coarse for a rule: two branches assigning an int and a string
+/// produce <c>Int | String</c> here, which is still enough to say the value is never an array.
 ///
-/// Precision is expressed by <see cref="MustBe"/> versus <see cref="MayBe"/> rather than by a
-/// trust flag. v1.5 carried one <c>Indeterminate</c> boolean meaning "do not rely on this", which
-/// could say a value was untrustworthy but never that it was one of exactly two things, one of them
-/// unsafe. That distinction is the whole question for array pass-semantics.
+/// Precision is <see cref="MustBe"/> versus <see cref="MayBe"/> rather than a trust flag: a flag can
+/// say a value is untrustworthy but never that it is one of exactly two things, and a rule that must
+/// not guess acts on the first question and stays silent on the second.
 /// </summary>
 public readonly record struct ScrValue
 {
     /// <summary>Nothing known. Every type is possible.</summary>
-    public static ScrValue Unknown { get; } = new()
-    {
-        Types = ScrTypeSet.Universe,
-        Imprecision = ScrImprecision.UnsupportedExpression,
-    };
-
-    /// <summary>The empty set: a value that cannot exist. What a void call yields.</summary>
-    public static ScrValue Nothing { get; } = new() { Types = ScrTypeSet.None };
-
-    /// <summary>
-    /// An output the engine fills in — a <c>waittill</c> bound argument. Every type is possible,
-    /// undefined included, because the notify site decides and may send fewer values than are bound.
-    /// </summary>
-    public static ScrValue EngineBound { get; } = new()
-    {
-        Types = ScrTypeSet.Universe,
-        Imprecision = ScrImprecision.EngineBound,
-    };
+    public static ScrValue Unknown { get; } = new() { Types = ScrTypeSet.Universe };
 
     public ScrTypeSet Types { get; init; }
 
@@ -360,13 +375,6 @@ public readonly record struct ScrValue
     /// Never use it as a proxy for zero — that was v1.5's divide-by-zero bug.
     /// </summary>
     public bool? Truthiness { get; init; }
-
-    /// <summary>
-    /// Entity kinds this value may be — <c>player</c>, <c>actor</c>, <c>vehicle</c>, <c>weapon</c>.
-    /// Sourced from the bundled API data's <c>instanceType</c>/<c>subType</c>, per game, rather than
-    /// from a hardcoded table. Empty means the kind is unknown, not that there is none.
-    /// </summary>
-    public ImmutableArray<string> EntityKinds { get; init; }
 
     /// <summary>The class of a BO3 <c>new Foo()</c>, when known.</summary>
     public string? InstanceClass { get; init; }
@@ -381,15 +389,12 @@ public readonly record struct ScrValue
     /// </summary>
     public ScrFunctionRef? FunctionTarget { get; init; }
 
-    public ScrImprecision Imprecision { get; init; }
-
     /// <summary>A value of exactly one type, with no constant.</summary>
-    public static ScrValue Of(ScrTypeSet types, ScrImprecision imprecision = ScrImprecision.None)
+    public static ScrValue Of(ScrTypeSet types)
     {
         return new ScrValue
         {
             Types = types,
-            Imprecision = imprecision,
             Truthiness = TruthinessOf(types),
         };
     }
@@ -405,24 +410,6 @@ public readonly record struct ScrValue
         };
     }
 
-    /// <summary>An entity, optionally narrowed to particular kinds.</summary>
-    public static ScrValue OfEntity(ImmutableArray<string> kinds, ScrImprecision imprecision = ScrImprecision.None)
-    {
-        return new ScrValue
-        {
-            Types = ScrTypeSet.Entity,
-            EntityKinds = kinds,
-            Imprecision = imprecision,
-            Truthiness = true,
-        };
-    }
-
-    /// <summary>True when the set is a single bit — the only shape a rewriter can act on directly.</summary>
-    public bool IsExact
-    {
-        get { return Types != ScrTypeSet.None && (Types & (Types - 1)) == 0; }
-    }
-
     /// <summary>True when nothing has been established: the whole universe is still possible.</summary>
     public bool IsUnknown
     {
@@ -431,7 +418,7 @@ public readonly record struct ScrValue
 
     /// <summary>
     /// Every possible type is within <paramref name="expected"/> — the value IS one of these.
-    /// The safe question: <c>MustBe( Array )</c> is what a rewriter acts on.
+    /// The safe question, and the one a rule that must not guess acts on.
     /// </summary>
     public bool MustBe(ScrTypeSet expected)
     {
@@ -449,12 +436,11 @@ public readonly record struct ScrValue
 
     /// <summary>
     /// Set union, for a control-flow join. Never widens and never collapses: <c>Int</c> joined with
-    /// <c>Float</c> is <c>Int | Float</c>, not <c>Float</c>, because <c>1</c> and <c>1.0</c> are
-    /// different text to emit.
+    /// <c>Float</c> is <c>Int | Float</c>, not <c>Float</c>: the join records what each branch
+    /// produced, and widening is the projection's job, not the lattice's.
     ///
     /// A constant survives only if both sides carry the same one. Truthiness survives only if both
-    /// agree. Entity kinds union. Imprecision takes the more severe side, and a disagreement in
-    /// types is itself recorded as <see cref="ScrImprecision.BranchDisagreement"/>.
+    /// agree.
     /// </summary>
     public static ScrValue Union(ScrValue left, ScrValue right)
     {
@@ -469,14 +455,12 @@ public readonly record struct ScrValue
         }
 
         ScrTypeSet types = left.Types | right.Types;
-        bool disagreed = left.Types != right.Types;
 
         return new ScrValue
         {
             Types = types,
             Constant = left.Constant is { } a && right.Constant is { } b && a == b ? a : null,
             Truthiness = left.Truthiness == right.Truthiness ? left.Truthiness : null,
-            EntityKinds = UnionKinds(left.EntityKinds, right.EntityKinds),
             InstanceClass = string.Equals(left.InstanceClass, right.InstanceClass, StringComparison.OrdinalIgnoreCase)
                 ? left.InstanceClass
                 : null,
@@ -485,13 +469,18 @@ public readonly record struct ScrValue
             FunctionTarget = Nullable.Equals(left.FunctionTarget, right.FunctionTarget)
                 ? left.FunctionTarget
                 : null,
-            Imprecision = disagreed && left.Imprecision == ScrImprecision.None && right.Imprecision == ScrImprecision.None
-                ? ScrImprecision.BranchDisagreement
-                : (ScrImprecision)Math.Max((int)left.Imprecision, (int)right.Imprecision),
         };
     }
 
-    /// <summary>Removes types from the set — the <c>isdefined</c>-style narrowing primitive.</summary>
+    /// <summary>
+    /// Removes types from the set — the <c>isdefined</c>-style narrowing primitive.
+    ///
+    /// Every field that depended on the removed bits is recomputed or cleared, not carried over.
+    /// Truthiness is asked again, since removing what made it uncertain can make it certain:
+    /// <c>Struct|Undefined</c> narrowed to <c>Struct</c> is definitely true. InstanceClass and
+    /// FunctionTarget carry a value's IDENTITY and are cleared once their own type bit
+    /// (Instance/Function) is gone.
+    /// </summary>
     public ScrValue Without(ScrTypeSet removed)
     {
         ScrTypeSet remaining = Types & ~removed;
@@ -504,7 +493,9 @@ public readonly record struct ScrValue
         {
             Types = remaining,
             Constant = Constant is { } constant && (constant.Type & removed) != ScrTypeSet.None ? null : Constant,
-            Truthiness = remaining == ScrTypeSet.None ? null : Truthiness,
+            Truthiness = TruthinessOf(remaining),
+            InstanceClass = (remaining & ScrTypeSet.Instance) == ScrTypeSet.None ? null : InstanceClass,
+            FunctionTarget = (remaining & ScrTypeSet.Function) == ScrTypeSet.None ? null : FunctionTarget,
         };
     }
 
@@ -515,12 +506,9 @@ public readonly record struct ScrValue
     }
 
     /// <summary>
-    /// Projects onto the coarse <see cref="ScrType"/> the editor surfaces speak.
-    ///
-    /// This is what keeps every existing consumer — hover, inlay hints, and the two typing lints —
-    /// working unchanged while the walk underneath carries far more. A union has no single-value
-    /// answer, so anything that is not exactly one type projects to <see cref="ScrType.Unknown"/>,
-    /// which is precisely the old behaviour.
+    /// Projects onto the coarse <see cref="ScrType"/> the editor surfaces speak — hover, inlay hints
+    /// and the two typing lints. A union has no single-value answer, so anything that is not exactly
+    /// one type projects to <see cref="ScrType.Unknown"/>.
     /// </summary>
     public ScrType ToScrType()
     {
@@ -543,11 +531,9 @@ public readonly record struct ScrValue
             // A class instance is a struct with a name, and ScrType cannot carry the name.
             case ScrTypeSet.Instance: return ScrType.Struct;
 
-            // The one union the coarse lattice had an answer for: ScrTypes.Join widens an int/float
-            // disagreement to float. Reproduced here rather than collapsing to Unknown, because this
-            // is a PROJECTION — it has to give the editor exactly what the old lattice gave it, and
-            // a hover that used to read "float" must not start reading nothing. The richer value
-            // underneath still says Int|Float, which is what a rewriter needs.
+            // The one union the projection answers: an int/float disagreement widens to float, so a
+            // genuine int/float branch join still hovers "float". The value underneath still says
+            // Int|Float.
             case ScrTypeSet.Number: return ScrType.Float;
 
             default: return ScrType.Unknown;
@@ -602,8 +588,8 @@ public readonly record struct ScrValue
     }
 
     /// <summary>
-    /// Structural equality, hand-written because <see cref="ImmutableArray{T}"/> compares by
-    /// reference and the compiler-generated record equality would inherit that.
+    /// Structural equality, hand-written so a class name compares case-insensitively, as GSC's
+    /// names do; the compiler-generated record equality would compare it ordinally.
     ///
     /// This is not a nicety. v1.5's equivalent used <c>ImmutableHashSet</c> with default equality, so
     /// two structurally identical values compared unequal, and any dataflow worklist carrying one
@@ -615,10 +601,8 @@ public readonly record struct ScrValue
         return Types == other.Types
             && Nullable.Equals(Constant, other.Constant)
             && Truthiness == other.Truthiness
-            && Imprecision == other.Imprecision
             && string.Equals(InstanceClass, other.InstanceClass, StringComparison.OrdinalIgnoreCase)
-            && Nullable.Equals(FunctionTarget, other.FunctionTarget)
-            && KindsEqual(EntityKinds, other.EntityKinds);
+            && Nullable.Equals(FunctionTarget, other.FunctionTarget);
     }
 
     public override int GetHashCode()
@@ -627,22 +611,8 @@ public readonly record struct ScrValue
         hash.Add(Types);
         hash.Add(Constant);
         hash.Add(Truthiness);
-        hash.Add(Imprecision);
         hash.Add(InstanceClass, StringComparer.OrdinalIgnoreCase);
         hash.Add(FunctionTarget);
-
-        // Order-independent, matching KindsEqual: two values whose kinds arrived in a different
-        // order are equal, so they must hash the same.
-        int kinds = 0;
-        if ( !EntityKinds.IsDefaultOrEmpty )
-        {
-            foreach ( string kind in EntityKinds )
-            {
-                kinds ^= StringComparer.OrdinalIgnoreCase.GetHashCode(kind);
-            }
-        }
-
-        hash.Add(kinds);
         return hash.ToHashCode();
     }
 
@@ -672,113 +642,11 @@ public readonly record struct ScrValue
 
         return null;
     }
-
-    private static ImmutableArray<string> UnionKinds(ImmutableArray<string> left, ImmutableArray<string> right)
-    {
-        if ( left.IsDefaultOrEmpty )
-        {
-            return right;
-        }
-
-        if ( right.IsDefaultOrEmpty )
-        {
-            return left;
-        }
-
-        ImmutableArray<string>.Builder builder = ImmutableArray.CreateBuilder<string>();
-        builder.AddRange(left);
-        foreach ( string kind in right )
-        {
-            if ( !builder.Contains(kind, StringComparer.OrdinalIgnoreCase) )
-            {
-                builder.Add(kind);
-            }
-        }
-
-        return builder.ToImmutable();
-    }
-
-    private static bool KindsEqual(ImmutableArray<string> left, ImmutableArray<string> right)
-    {
-        if ( left.IsDefaultOrEmpty && right.IsDefaultOrEmpty )
-        {
-            return true;
-        }
-
-        if ( left.IsDefaultOrEmpty || right.IsDefaultOrEmpty || left.Length != right.Length )
-        {
-            return false;
-        }
-
-        foreach ( string kind in left )
-        {
-            if ( !right.Contains(kind, StringComparer.OrdinalIgnoreCase) )
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }
 
 /// <summary>Helpers over <see cref="ScrValue"/> and <see cref="ScrTypeSet"/>.</summary>
 public static class ScrValues
 {
-    /// <summary>
-    /// Whether a value of <paramref name="from"/> is acceptable where <paramref name="to"/> is
-    /// expected.
-    ///
-    /// Written as a relation rather than encoded in the bits, which is the correction to v1.5. Note
-    /// it is one-directional: an istring is usable as a string, and the reverse also holds because
-    /// a localized lookup falls back to the literal — but int-to-string does NOT hold here even
-    /// though GSC will coerce it, since a transpiler emitting the coercion needs to see it.
-    /// </summary>
-    public static bool IsAssignableTo(ScrTypeSet from, ScrTypeSet to)
-    {
-        if ( from == ScrTypeSet.None || to == ScrTypeSet.None )
-        {
-            return false;
-        }
-
-        ScrTypeSet widened = to;
-
-        if ( (to & ScrTypeSet.AnyString) != ScrTypeSet.None )
-        {
-            widened |= ScrTypeSet.AnyString;
-        }
-
-        // A bool is 0 or 1 wherever a number is wanted.
-        if ( (to & ScrTypeSet.Number) != ScrTypeSet.None )
-        {
-            widened |= ScrTypeSet.Bool;
-        }
-
-        // Every reference kind may be undefined before it is assigned.
-        if ( (to & (ScrTypeSet.Struct | ScrTypeSet.Array | ScrTypeSet.Entity | ScrTypeSet.Instance)) != ScrTypeSet.None )
-        {
-            widened |= ScrTypeSet.Undefined;
-        }
-
-        return (from & ~widened) == ScrTypeSet.None;
-    }
-
-    /// <summary>
-    /// Whether a value of this type is passed by reference under the given dialect.
-    ///
-    /// The whole dialect fork in one predicate: structs, entities and class instances alias in every
-    /// game, and arrays alias only where <c>GameProfile.ArraysPassedByReference</c> holds.
-    /// </summary>
-    public static bool IsByReference(ScrTypeSet type, bool arraysByReference)
-    {
-        if ( type == ScrTypeSet.Array )
-        {
-            return arraysByReference;
-        }
-
-        return type is ScrTypeSet.Struct or ScrTypeSet.Entity or ScrTypeSet.Instance;
-    }
-
     /// <summary>A readable rendering of a type set: <c>int</c>, <c>int|string</c>, <c>any</c>.</summary>
     public static string Describe(ScrTypeSet types)
     {

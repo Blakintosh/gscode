@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.IO.Hashing;
 using System.Text;
 using GSCode.Core;
@@ -7,7 +7,6 @@ using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
@@ -18,32 +17,29 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class ScriptDatabaseTests
 {
-    private const string ToolsRoot = @"C:\bo3";
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string Mods = @"C:\bo3\mods";
 
     private static FakeFileSystem FixtureTree()
     {
         return new FakeFileSystem()
-            // Raw: a shared utility namespace split across two files + a GSH.
-            .AddFile(@$"{Raw}\scripts\shared\util_a.gsc", "#namespace util;\nfunction alpha()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\shared\util_b.gsc", "#namespace util;\nfunction beta()\n{\nalpha();\n}\n")
-            .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define SHARED_FLAG 1\n")
-            .AddFile(@$"{Raw}\scripts\codescripts\struct.gsc", "function raw_struct()\n{\n}\n")
+            // TestPaths.RawRoot: a shared utility namespace split across two files + a GSH.
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_a.gsc"), "#namespace util;\nfunction alpha()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_b.gsc"), "#namespace util;\nfunction beta()\n{\nalpha();\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\shared\shared.gsh"), "#define SHARED_FLAG 1\n")
+            .AddFile(TestPaths.Raw(@"scripts\codescripts\struct.gsc"), "function raw_struct()\n{\n}\n")
             // mod_a shadows struct.gsc and adds its own script using the shared gsh.
-            .AddFile(@$"{Mods}\mod_a\scripts\codescripts\struct.gsc", "function mod_struct()\n{\n}\n")
-            .AddFile(@$"{Mods}\mod_a\scripts\a_main.gsc", "#insert scripts\\shared\\shared.gsh;\nfunction a_main()\n{\nlevel notify(\"round_start\");\n}\n")
+            .AddFile(TestPaths.ModsRoot + @"\mod_a\scripts\codescripts\struct.gsc", "function mod_struct()\n{\n}\n")
+            .AddFile(TestPaths.ModsRoot + @"\mod_a\scripts\a_main.gsc", "#insert scripts\\shared\\shared.gsh;\nfunction a_main()\n{\nlevel notify(\"round_start\");\n}\n")
             // mod_b has its own world.
-            .AddFile(@$"{Mods}\mod_b\scripts\b_main.gsc", "function b_main()\n{\nlevel notify(\"round_start\");\n}\n")
+            .AddFile(TestPaths.ModsRoot + @"\mod_b\scripts\b_main.gsc", "function b_main()\n{\nlevel notify(\"round_start\");\n}\n")
             // The language guard: parallel gsc/csc defining the same namespace::function.
-            .AddFile(@$"{Raw}\scripts\dual\foo.gsc", "#namespace dual;\nfunction ping()\n{\nself notify(\"dual_event\");\n}\n")
-            .AddFile(@$"{Raw}\scripts\dual\foo.csc", "#namespace dual;\nfunction ping()\n{\nself notify(\"dual_event\");\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\dual\foo.gsc"), "#namespace dual;\nfunction ping()\n{\nself notify(\"dual_event\");\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\dual\foo.csc"), "#namespace dual;\nfunction ping()\n{\nself notify(\"dual_event\");\n}\n");
     }
 
     private static async Task<(ScriptDatabase Database, PathResolver Resolver)> IndexFixtureAsync()
     {
         FakeFileSystem fileSystem = FixtureTree();
-        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: Raw, modsPath: Mods, workspaceFolders: [], fileSystem: fileSystem);
+        RootConfig config = RootConfig.Create(rawEnabled: true, rawPath: TestPaths.RawRoot, modsPath: TestPaths.ModsRoot, workspaceFolders: [], fileSystem: fileSystem);
 
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
@@ -113,13 +109,18 @@ public class ScriptDatabaseTests
     {
         (ScriptDatabase database, _) = await IndexFixtureAsync();
 
-        // struct.gsc exists in raw and in mod_a's overlay: from mod_a, the raw copy of
-        // that relative file must not surface its (differently-named) functions when
-        // both would match — here we assert the mod sees ITS struct and raw's function
-        // from the SAME relative path is dropped only when identities collide. Names
-        // differ in fixture, so check both resolve independently first:
+        // struct.gsc exists in both raw and mod_a's overlay, under DIFFERENT function names —
+        // mod_a's copy replaces the raw file WHOLESALE, so from mod_a, only its own mod_struct is
+        // reachable; raw_struct is dead code the running mod never loads, whatever name it has.
         Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "mod_struct"));
-        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "raw_struct"));
+        Assert.Empty(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_a", "", null, "raw_struct"));
+
+        // raw itself still sees its own file: raw does not know or care that some mod exists.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", "", null, "raw_struct"));
+
+        // mod_b never touched struct.gsc, so it still resolves through raw's copy — mod_a's
+        // overlay of the SAME relative path is invisible to its sibling.
+        Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "mod:mod_b", "", null, "raw_struct"));
     }
 
     [Fact]
@@ -172,7 +173,7 @@ public class ScriptDatabaseTests
     {
         (ScriptDatabase database, PathResolver resolver) = await IndexFixtureAsync();
 
-        string gshPath = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\shared.gsh");
+        string gshPath = PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\shared\shared.gsh"));
         Assert.True(database.TryGetGsh(gshPath, out ScriptRecord gshRecord));
 
         MacroRecord macro = Assert.Single(gshRecord.Macros);
@@ -195,16 +196,16 @@ public class ScriptDatabaseTests
     public async Task PrivateFunctions_VisibleWithinTheirNamespace_NotOutsideIt()
     {
         FakeFileSystem fileSystem = FixtureTree()
-            .AddFile(@$"{Raw}\scripts\secret.gsc", "function private hidden()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\secret.gsc"), "function private hidden()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, ToolsRoot + @"\share\raw", ToolsRoot + @"\mods", [], fileSystem);
+        RootConfig config = TestPaths.Config(fileSystem);
         PathResolver resolver = new(config, fileSystem);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, fileSystem, new NameTable());
         await indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None);
 
-        string secretPath = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\secret.gsc");
-        string elsewhere = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\elsewhere.gsc");
+        string secretPath = PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\secret.gsc"));
+        string elsewhere = PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\elsewhere.gsc"));
 
         // Its own file always sees it.
         Assert.Single(DatabaseQueries.LookupFunctions(database.Gsc, "raw", secretPath, null, "hidden"));

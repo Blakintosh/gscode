@@ -17,9 +17,10 @@ namespace GSCode.Workspace.Completion;
 /// for, while, switch, waittill, notify, the dev block — stay in `client/snippets/common.json`,
 /// where they cost nothing and work offline before the server has started.
 ///
-/// The function declaration is not here either: <c>CompletionEngine.FunctionDeclarationSnippet</c>
-/// already writes it the way the dialect declares one, which is what the client's `func`/`funciw`
-/// pair was doing by hand.
+/// The function declaration has no snippet in either place. Its modifiers — `private`, `autoexec`,
+/// or both — sit between the keyword and the name, and one snippet per combination still left
+/// every other combination to be typed back in by hand. The user writes the declaration; the
+/// completion after `function` offers the modifiers.
 /// </summary>
 public static class GscSnippets
 {
@@ -80,18 +81,6 @@ public static class GscSnippets
             "class",
             InsideFunction: false),
         new Entry(
-            "funcauto",
-            "function autoexec ${1:name}()\n{\n\t$0\n}",
-            "Function that runs once on load.",
-            "autoexec",
-            InsideFunction: false),
-        new Entry(
-            "funcpriv",
-            "function private ${1:name}( ${2} )\n{\n\t$0\n}",
-            "Function visible only to files declaring the same namespace.",
-            "private",
-            InsideFunction: false),
-        new Entry(
             "using",
             @"#using scripts\\${1:shared}\\${2:util_shared};",
             "Import a namespace.",
@@ -116,12 +105,10 @@ public static class GscSnippets
             "#include",
             InsideFunction: false),
 
-        // The client contributed this one until it became the last snippet file that broke the rule
-        // the other move established: #precache is BO3's alone (HasPrecacheDirective), and a
-        // contributed snippet cannot be withdrawn per game, so a CoD4 file was offered a directive
-        // its game does not have. The body is the same one DirectiveSnippet writes for a typed '#',
-        // and Retrigger hands the asset type to the same completion arm — so the two routes to a
-        // #precache produce identical text and identical vocabulary.
+        // Here rather than in the client's contributed snippets because #precache is BO3's alone
+        // (HasPrecacheDirective), and a contributed snippet cannot be withdrawn per game. The body is
+        // the same one DirectiveSnippet writes for a typed '#', and Retrigger hands the asset type to
+        // the same completion arm, so both routes to a #precache produce identical text.
         new Entry(
             "precache",
             "#precache( \"$1\", \"${2:asset}\" );",
@@ -136,7 +123,7 @@ public static class GscSnippets
     /// keywords and no directive names them, so <see cref="GscKeywords.IsAvailable"/> has nothing
     /// to answer with. See <see cref="GameProfile.ScriptDocStyle"/>.
     /// </summary>
-    private static readonly Entry AtSignScriptDoc = new(
+    private static readonly Entry s_atSignScriptDoc = new(
         "doc",
         "/@\n\"Name: ${1:name}( <${2:arg}> )\"\n\"Summary: ${3:What it does.}\"\n\"Module: ${4:Utility}\"\n"
             + "\"CallOn: ${5}\"\n\"MandatoryArg: <${2:arg}> : ${6:description}\"\n\"Example: ${7}\"\n"
@@ -145,17 +132,27 @@ public static class GscSnippets
         "",
         InsideFunction: false);
 
-    private static readonly Entry TripleSlashScriptDoc = new(
+    /// <summary>
+    /// The pre-BO3 form, where the fence is not decoration. A doc block there is an ORDINARY
+    /// <c>/* … */</c> comment, so <c>///ScriptDocBegin</c>/<c>///ScriptDocEnd</c> is the only thing
+    /// separating documentation from a comment that happens to sit above a function —
+    /// <c>SymbolExtractor.IsDocCommentToken</c> requires it, and this snippet shipped without one,
+    /// so what it inserted read back as a plain comment and the function it documented hovered
+    /// bare. The lines are quoted for the same reason the BO3 form's are: that is how the shipped
+    /// scripts write them, which is what <c>ScriptDocComment.Parse</c>'s unquote step exists for.
+    /// </summary>
+    private static readonly Entry s_tripleSlashScriptDoc = new(
         "doc",
-        "/*\n\tName: ${1:name}( <${2:arg}> )\n\tSummary: ${3:What it does.}\n\tModule: ${4:Utility}\n"
-            + "\tMandatoryArg: <${2:arg}> : ${5:description}\n\tExample: ${6}\n*/",
+        "/*\n///ScriptDocBegin\n\"Name: ${1:name}( <${2:arg}> )\"\n\"Summary: ${3:What it does.}\"\n"
+            + "\"Module: ${4:Utility}\"\n\"MandatoryArg: <${2:arg}> : ${5:description}\"\n"
+            + "\"Example: ${6}\"\n///ScriptDocEnd\n*/",
         "ScriptDoc block.",
         "",
         InsideFunction: false);
 
     private static Entry ScriptDoc(GameProfile game)
     {
-        return game.ScriptDocStyle == ScriptDocStyle.AtSign ? AtSignScriptDoc : TripleSlashScriptDoc;
+        return game.ScriptDocStyle == ScriptDocStyle.AtSign ? s_atSignScriptDoc : s_tripleSlashScriptDoc;
     }
 
     /// <summary>The snippets this dialect has, for one completion scope.</summary>

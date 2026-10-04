@@ -1,12 +1,8 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -29,9 +25,7 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class MergeDialectScopeTests
 {
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
-
-    private const string Raw = @"C:\iw4";
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
 
     private const string SameStemOtherFile = "is_coop()\n{\n}\n";
     private const string IncludedFile = "exploder_playSound()\n{\n}\n";
@@ -55,27 +49,23 @@ public class MergeDialectScopeTests
     /// </summary>
     private static ImmutableArray<CompletionEntry> CompleteInMpUtility()
     {
-        string editedPath = @$"{Raw}\maps\mp\_utility.gsc";
-
-        TestWorkspace.Built workspace = TestWorkspace.Build(
-            Mw2,
-            Raw,
-            (@$"{Raw}\maps\_utility.gsc", SameStemOtherFile),
-            (@$"{Raw}\common_scripts\utility.gsc", IncludedFile),
-            (editedPath, EditedFile));
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
-        CompletionEngine engine = new(workspace.Database, BuiltinApiSet.Load(api, Mw2), ObjectFields.Load(api, Mw2));
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"maps\_utility.gsc", SameStemOtherFile),
+                new TestFile(@"common_scripts\utility.gsc", IncludedFile),
+                new TestFile(@"maps\mp\_utility.gsc", EditedFile),
+            ],
+            s_mw2);
 
         // Line 8 is the blank line inside exploder_sound's body.
-        return engine.Complete(
-            Analyze(editedPath, EditedFile), "raw", new Position(8, 4), profile: Mw2);
+        return EngineOver(workspace).Complete(
+            workspace.Analyze(@"maps\mp\_utility.gsc"), "raw", new Position(8, 4), profile: s_mw2);
     }
 
-    private static ParseResult Analyze(string path, string text)
+    private static CompletionEngine EngineOver(TestWorkspace workspace)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(text), NullInsertProvider.Instance, new NameTable(), Mw2);
+        string api = Path.Combine(AppContext.BaseDirectory, "Api");
+        return new CompletionEngine(workspace.Database, BuiltinApiSet.Load(api, s_mw2), ObjectFields.Load(api, s_mw2));
     }
 
     /// <summary>
@@ -121,5 +111,45 @@ public class MergeDialectScopeTests
         // this file alone. #include MERGES, so an included file's functions are offered and inserted
         // exactly like a local one.
         Assert.Equal(1, CountOf(CompleteInMpUtility(), "exploder_playSound"));
+    }
+
+    /// <summary>
+    /// MW2's own shape: `maps\_utility.gsc` and `maps\mp\_utility.gsc` share a stem and no
+    /// #include reaches between them, but a THIRD file can still name either one directly by its
+    /// full inline path — `maps\_utility::is_coop()` — with no import at all.
+    /// </summary>
+    private static ImmutableArray<CompletionEntry> CompleteAfterInlinePathQualifier()
+    {
+        const string editedFile = "run()\n{\n    maps\\_utility::\n}\n";
+
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"maps\_utility.gsc", SameStemOtherFile),
+                new TestFile(@"maps\mp\_utility.gsc", IncludedFile),
+                new TestFile(@"maps\mp\gametypes\_globallogic.gsc", editedFile),
+            ],
+            s_mw2);
+
+        // Line 2, right after "maps\_utility::".
+        return EngineOver(workspace).Complete(
+            workspace.Analyze(@"maps\mp\gametypes\_globallogic.gsc"), "raw", new Position(2, 19), profile: s_mw2);
+    }
+
+    [Fact]
+    public void AnInlinePathQualifier_OffersTheFileItNames()
+    {
+        Assert.Equal(1, CountOf(CompleteAfterInlinePathQualifier(), "is_coop"));
+    }
+
+    [Fact]
+    public void AnInlinePathQualifier_DoesNotReachTheOtherFileSharingItsStem()
+    {
+        // The reported false positive, confirmed: `ns::` reads its qualifier as a single
+        // identifier token — the LAST segment of the path — and asks for functions by that bare
+        // stem. Since these dialects have no #namespace, SymbolExtractor defaults every
+        // function's namespace to its own file's name stem, so `maps\_utility::` offered
+        // `exploder_playSound` from the unrelated `maps\mp\_utility.gsc` as readily as `is_coop`
+        // from the file actually named.
+        Assert.Equal(0, CountOf(CompleteAfterInlinePathQualifier(), "exploder_playSound"));
     }
 }

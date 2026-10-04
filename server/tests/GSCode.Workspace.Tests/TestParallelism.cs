@@ -1,8 +1,9 @@
 using Xunit;
 
-// One test class here switches the dialect — GlobalObjectWriteLintTests sets cod4 to prove that
-// `world` is an ordinary name where the engine has no such global, then sets bo3 back. GameProfile
-// .Active is PROCESS-GLOBAL, so while that window is open every other class running in parallel
+// Classes here switch the dialect — every TestWorkspace holds Active on its game through a
+// ProfileScope, and GlobalObjectWriteLintTests scopes cod4 to prove that `world` is an ordinary name
+// where the engine has no such global. GameProfile.Active is PROCESS-GLOBAL, so while any such
+// scope is open every other class running in parallel
 // analyses under cod4: `class`, `const` and constructors stop existing and their tests fail, in a
 // different combination on every run depending on what happened to overlap.
 //

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
@@ -39,7 +39,7 @@ public static class ArgumentCountLint
         GameProfile? profile = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
-        ImmutableArray<string> askingNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> askingNamespaces = result.Extraction.DeclaredNamespaces;
         HashSet<string> ownNamespace = OwnNamespaceFunctions(result, store, contextId, path, askingNamespaces);
         FunctionLookupCache lookups = new(store, contextId, path, askingNamespaces);
 
@@ -179,6 +179,21 @@ public static class ArgumentCountLint
 
         int supplied = call.Arguments.Length;
 
+        // `sys::` names the ENGINE function outright, so it is judged against the library and
+        // nothing else: not against a method of the enclosing class, and not against a script
+        // function of the same name, which is the one thing the qualifier exists to step past.
+        // Read as a namespace it fell through to a script lookup under `sys`, which nothing
+        // declares into, and the rule stood down on every such call.
+        if ( namespaceName is not null && BuiltinQualifier.Matches(namespaceName, game) )
+        {
+            if ( game.HasReliableBuiltinSignatures && builtins.Find(name) is BuiltinFunction explicitBuiltin )
+            {
+                InspectBuiltin(explicitBuiltin, name, supplied, nameRange, diagnostics);
+            }
+
+            return;
+        }
+
         // METHODS BEFORE BUILTINS, and only for the shapes that can mean one. Inside a class body a
         // bare name is a method first — all 525 such calls in the stock scripts are — so consulting
         // the engine library first would judge `stop( a, b )` against a builtin named `stop` that
@@ -226,8 +241,11 @@ public static class ArgumentCountLint
         // ordinally. Passing the source spelling meant this lookup found nothing for any call not
         // written in lower case, so the script half of the rule — 5022 — silently never fired on a
         // camelCase name, which in GSC is most of them.
+        //
+        // Capped at two: all this asks is whether there is exactly one, and a bare name can have
+        // thousands of declarations at scale.
         ImmutableArray<ResolvedFunction> candidates = lookups.Lookup(
-            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true);
+            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true, limit: 2);
 
         // Nothing found, or several possibilities: 5013/5014 report the first and 5007 the second,
         // and picking one of several signatures to judge against would be a guess.
@@ -236,16 +254,27 @@ public static class ArgumentCountLint
             return;
         }
 
-        FunctionSymbol declared = candidates[0].Function;
+        JudgeAgainst(candidates[0].Function, name, supplied, nameRange, diagnostics);
+    }
 
-        // Varargs takes anything.
+    /// <summary>
+    /// The one rule for a call against a single resolved script declaration, function or method
+    /// alike: varargs takes anything, and ONLY the upper bound is checked. Fewer arguments than
+    /// declared is legal and idiomatic — the missing ones are undefined — so a lower bound here
+    /// would flag thousands of correct stock calls.
+    /// </summary>
+    private static void JudgeAgainst(
+        FunctionSymbol declared,
+        string name,
+        int supplied,
+        Core.Text.TextRange nameRange,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
         if ( declared.HasVarargs )
         {
             return;
         }
 
-        // ONLY the upper bound. Fewer arguments than declared is legal and idiomatic — the missing
-        // ones are undefined — so a lower bound here would flag thousands of correct stock calls.
         if ( supplied > declared.Parameters.Length )
         {
             diagnostics.Add(Diagnostic.Create(
@@ -292,13 +321,29 @@ public static class ArgumentCountLint
             return;
         }
 
+        // A non-self receiver resolved through "exactly one class in the workspace declares this
+        // name" alone (see Canonicalize) — but the arrow form also dispatches through a FIELD
+        // holding a raw function POINTER assigned with `&name`, which FunctionResolutionLint
+        // documents reaching the same way: `[[self.classObj]]->onBeginUse( player )` calls a
+        // top-level function three shipped files assign to that field with `&onBeginUse`. If a
+        // top-level function shares the name, the call is genuinely ambiguous between the two, and
+        // judging the class method's arity would be a guess that can land on the wrong signature —
+        // not checked for `[[self]]->`, whose receiver's class is already known rather than guessed.
+        if ( !isSelf && DatabaseQueries.LookupFunctions(
+                store, contextId, askingPath: "", namespaceName: null, name.ToLowerInvariant(), includePrivate: true,
+                limit: 1)
+            .Length > 0 )
+        {
+            return;
+        }
+
         InspectAgainstMethod(
             store, contextId, canonical, name, arrow.Arguments.Length, arrow.MethodToken.RootRange, diagnostics);
     }
 
     /// <summary>
-    /// Compares a call against a resolved method's declared parameters, on the same terms as a
-    /// function: only the upper bound, and never against varargs.
+    /// Compares a call against a resolved method's declared parameters, through the same
+    /// <see cref="JudgeAgainst"/> a function call uses.
     /// </summary>
     private static void InspectAgainstMethod(
         LanguageStore store,
@@ -319,22 +364,7 @@ public static class ArgumentCountLint
             return;
         }
 
-        FunctionSymbol declared = methods[0].Function;
-        if ( declared.HasVarargs )
-        {
-            return;
-        }
-
-        if ( supplied > declared.Parameters.Length )
-        {
-            diagnostics.Add(Diagnostic.Create(
-                nameRange,
-                DiagnosticSeverity.Error,
-                GscDiagnosticCode.TooManyArguments,
-                name,
-                declared.Parameters.Length,
-                supplied));
-        }
+        JudgeAgainst(methods[0].Function, name, supplied, nameRange, diagnostics);
     }
 
     private static void InspectBuiltin(
@@ -428,19 +458,40 @@ public static class ArgumentCountLint
     /// Whether any part of this call's text arrived through a macro expansion. Checked on the
     /// ARGUMENTS as well as the callee, because a macro supplying arguments changes the count while
     /// the author wrote none of them.
+    ///
+    /// Recurses through every node the callee and each argument contain, checking every
+    /// token-bearing shape — not only <see cref="IdentifierNode"/> — because a macro's expansion is
+    /// not restricted to that shape: `util::helper(...)` calls a QUALIFIED name (a
+    /// <see cref="QualifiedNode"/>), and an object-like macro whose body is a literal list —
+    /// `#define DEFAULTS 1, 2` used as `helper( DEFAULTS )` — substitutes verbatim into TWO
+    /// <see cref="LiteralNode"/> arguments the author never wrote at all. Missing either left the
+    /// rule judging a call whose real shape the source does not show.
     /// </summary>
     private static bool CameFromMacro(CallNode call)
     {
-        if ( call.Callee is IdentifierNode identifier
-            && identifier.Token.Provenance.DefinitionSite is not null )
+        return NodeCameFromMacro(call.Callee) || call.Arguments.Any(NodeCameFromMacro);
+    }
+
+    private static bool NodeCameFromMacro(AstNode node)
+    {
+        bool thisNode = node switch
+        {
+            IdentifierNode identifier => identifier.Token.Provenance.DefinitionSite is not null,
+            LiteralNode literal => literal.Token.Provenance.DefinitionSite is not null,
+            QualifiedNode qualified => qualified.NameToken.Provenance.DefinitionSite is not null,
+            PathQualifiedNode path => path.NameToken.Provenance.DefinitionSite is not null,
+            MemberNode member => member.NameToken.Provenance.DefinitionSite is not null,
+            _ => false,
+        };
+
+        if ( thisNode )
         {
             return true;
         }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(call) )
+        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
         {
-            if ( child is IdentifierNode argument
-                && argument.Token.Provenance.DefinitionSite is not null )
+            if ( NodeCameFromMacro(child) )
             {
                 return true;
             }

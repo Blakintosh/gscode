@@ -1,26 +1,22 @@
-using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
-using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Indexing;
 
 public class WatchedFileUpdaterTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     private static (ScriptDatabase Database, WatchedFileUpdater Updater, FakeFileSystem Files) Build()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\shared.gsh", "#define CAP 5\n")
-            .AddFile(@$"{Raw}\scripts\uses_it.gsc", "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\shared.gsh"), "#define CAP 5\n")
+            .AddFile(TestPaths.Raw(@"scripts\uses_it.gsc"), "#insert scripts\\shared\\shared.gsh;\nfunction f()\n{\nx = CAP;\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
@@ -33,7 +29,7 @@ public class WatchedFileUpdaterTests
     public void ChangedGsc_ReindexesTheFile()
     {
         (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
-        string path = @$"{Raw}\scripts\uses_it.gsc";
+        string path = TestPaths.Raw(@"scripts\uses_it.gsc");
 
         files.AddFile(path, "function renamed()\n{\n}\n");
         IReadOnlyList<string> touched = updater.Apply(path, WatchedFileChange.Changed);
@@ -47,7 +43,7 @@ public class WatchedFileUpdaterTests
     public void DeletedGsc_RemovesItFromTheStore()
     {
         (ScriptDatabase database, WatchedFileUpdater updater, _) = Build();
-        string path = @$"{Raw}\scripts\uses_it.gsc";
+        string path = TestPaths.Raw(@"scripts\uses_it.gsc");
 
         updater.Apply(path, WatchedFileChange.Deleted);
 
@@ -59,13 +55,13 @@ public class WatchedFileUpdaterTests
     public void ChangedGsh_ReindexesEveryInsertingFile()
     {
         (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
-        string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
+        string gshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
 
         // Change the macro; the dependent file must be re-indexed as a result.
         files.AddFile(gshPath, "#define CAP 99\n");
         IReadOnlyList<string> touched = updater.Apply(gshPath, WatchedFileChange.Changed);
 
-        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc"), touched);
+        Assert.Contains(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\uses_it.gsc")), touched);
     }
 
     // --- A file the editor has open ---
@@ -79,7 +75,7 @@ public class WatchedFileUpdaterTests
     public void AnOpenFileIsNotReindexedFromDisk()
     {
         (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
-        string path = @$"{Raw}\scripts\uses_it.gsc";
+        string path = TestPaths.Raw(@"scripts\uses_it.gsc");
 
         // Disk moves on while the editor holds a different buffer.
         files.AddFile(path, "function renamed()\n{\n}\n");
@@ -98,7 +94,7 @@ public class WatchedFileUpdaterTests
         // The buffer outlives the file. Dropping the record would break every lookup into a
         // document the user can still see and save back; closing it is what retires the record.
         (ScriptDatabase database, WatchedFileUpdater updater, _) = Build();
-        string path = @$"{Raw}\scripts\uses_it.gsc";
+        string path = TestPaths.Raw(@"scripts\uses_it.gsc");
 
         updater.Apply(path, WatchedFileChange.Deleted, _ => true);
 
@@ -113,13 +109,13 @@ public class WatchedFileUpdaterTests
         // files, and those are not open just because the header is — so skipping them would leave
         // every inserting file compiled against a header the editor has already replaced.
         (_, WatchedFileUpdater updater, FakeFileSystem files) = Build();
-        string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
+        string gshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
 
         files.AddFile(gshPath, "#define CAP 9\n");
         IReadOnlyList<string> touched = updater.Apply(
             gshPath, WatchedFileChange.Changed, path => PathUtil.NormalizeAbsolute(path) == PathUtil.NormalizeAbsolute(gshPath));
 
-        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc"), touched);
+        Assert.Contains(PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\uses_it.gsc")), touched);
     }
 
     [Fact]
@@ -128,8 +124,8 @@ public class WatchedFileUpdaterTests
         // The other half of the skip: a header's dependents are re-indexed FROM DISK, and one of
         // them being open makes that the same clobber the changed file's own gate prevents.
         (ScriptDatabase database, WatchedFileUpdater updater, FakeFileSystem files) = Build();
-        string gshPath = @$"{Raw}\scripts\shared\shared.gsh";
-        string dependent = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\uses_it.gsc");
+        string gshPath = TestPaths.Raw(@"scripts\shared\shared.gsh");
+        string dependent = PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\uses_it.gsc"));
 
         // Disk has moved on behind the buffer whose record the database holds.
         files.AddFile(dependent, "function renamed()\n{\n}\n");

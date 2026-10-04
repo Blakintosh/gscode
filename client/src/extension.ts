@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { createLanguageClient } from "./server";
 import { registerReloadPrompt } from "./reloadPrompt";
+import { pickGame, pickGameFrom } from "./gamePicker";
 
 let client: LanguageClient | undefined;
 
@@ -31,20 +32,105 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(log);
     log.info("GSCode activating");
 
-    const created = await createLanguageClient(context, log);
+    // Shows the server commands in the Command Palette (see `menus.commandPalette`), which would
+    // otherwise list them in every workspace, GSC or not.
+    void vscode.commands.executeCommand("setContext", "gscode.active", true);
+
+    // Commands first, before anything that can stop activation. Every command is declared in
+    // package.json, so the palette lists them whether or not this function got far enough to
+    // register them — and when the .NET runtime was missing it returned before that, so each one
+    // failed with "command not found" instead of saying what was actually wrong.
+    registerCommands(context, log);
+
+    // Settings the running server reads once and cannot pick up afterwards.
+    registerReloadPrompt(context, log);
+
+    let created: LanguageClient | undefined;
+    try {
+        created = await createLanguageClient(context, log);
+    } catch (error) {
+        // A debug session with no server location in client/.env. Logged here so the commands'
+        // "the GSCode log says why" is true of this case too.
+        log.error(`Could not create the language client: ${String(error)}`);
+        return;
+    }
     if (!created) {
         return;
     }
     client = created;
 
+    registerIndexingStatusBar(context, created, log);
+
+    await created.start();
+    log.info("GSCode language client started");
+
+    registerRenameDirectiveFixup(context, created, log);
+    registerSemicolonDeduplication(context);
+}
+
+/**
+ * The running language client, or undefined after telling the user there is none.
+ *
+ * Undefined means activation stopped before a client was created — the .NET runtime is missing, or
+ * a debug session has no server location — and the reason is in the "GSCode" log, so that is what
+ * gets shown.
+ */
+function requireClient(log: vscode.LogOutputChannel): LanguageClient | undefined {
+    if (client === undefined) {
+        log.show();
+        void vscode.window.showErrorMessage(
+            "The GSCode language server is not running. The GSCode log says why.",
+        );
+    }
+
+    return client;
+}
+
+/**
+ * Asks the providers for code actions of one kind at the cursor and applies the first.
+ *
+ * The server attaches every edit up front (no lazy resolve), so the action's `edit` is the whole
+ * change. Several actions of one kind is not a case the server produces; the first is taken.
+ */
+async function applyServerCodeAction(
+    kind: vscode.CodeActionKind,
+    nothingToDo: string,
+    log: vscode.LogOutputChannel,
+): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (editor === undefined || requireClient(log) === undefined) {
+        return;
+    }
+
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        "vscode.executeCodeActionProvider",
+        editor.document.uri,
+        editor.selection,
+        kind.value,
+    ) ?? [];
+
+    const action = actions.find((candidate) => candidate.kind !== undefined && kind.contains(candidate.kind));
+    if (action?.edit === undefined) {
+        void vscode.window.showInformationMessage(nothingToDo);
+        return;
+    }
+
+    await vscode.workspace.applyEdit(action.edit);
+}
+
+function registerCommands(context: vscode.ExtensionContext, log: vscode.LogOutputChannel): void {
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.showOutput", () => {
-            created.outputChannel.show();
+            // With no server there is no server channel, and the "GSCode" log is where the reason
+            // for that was written.
+            if (client === undefined) {
+                log.show();
+                return;
+            }
+
+            client.outputChannel.show();
         }),
     );
-
-    // Settings the running server reads once and cannot pick up afterwards.
-    registerReloadPrompt(context, log);
 
     // Restart the language server, for clearing a wedged session or picking up a rebuilt server
     // binary. It does NOT pick up changed settings: the launch arguments and initializationOptions
@@ -53,8 +139,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // change prompts for that instead.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.restartServer", async () => {
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
             log.info("Restarting GSCode language server");
-            await created.restart();
+            await running.restart();
         }),
     );
 
@@ -70,6 +161,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // It also drains the SQLite writer properly rather than stopping the server and sleeping 300ms.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.clearCacheAndReindex", async () => {
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
             const choice = await vscode.window.showWarningMessage(
                 "Clear the GSCode cache and re-index? The language server will restart.",
                 { modal: true },
@@ -81,7 +177,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             log.info("Clearing cache and reindexing");
             try {
-                const response = await created.sendRequest<{ deleted: boolean; message: string }>(
+                const response = await running.sendRequest<{ deleted: boolean; message: string }>(
                     "gscode/clearCache",
                     {},
                 );
@@ -97,6 +193,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
+    // Pick the game this workspace targets.
+    //
+    // The setting has always existed and the picker has always existed; what was missing was a way
+    // to REACH the picker on purpose. It only appeared when the server happened to notice a file
+    // that did not look like the selected game, and then only once per session — so someone who
+    // dismissed it, or whose scripts are ambiguous, had to go and find gscode.game in settings.
+    //
+    // Sits beside Clear Cache and Reindex because it ends the same way: the game is a launch
+    // argument, so applying it is a window reload rather than anything the running server can do.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.selectGame", async () => {
+            const running = requireClient(log);
+            if (running === undefined) {
+                return;
+            }
+
+            await pickGame(running, log, { title: "Select the game this workspace targets" });
+        }),
+    );
+
     // Open gscode.net for whatever is under the cursor: the engine function's own page when it is
     // one, otherwise the library index for the editor's language.
     //
@@ -106,6 +222,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The GAME comes from the client, not that request: the server answers with a name and a
     // language and says so deliberately, because how the site addresses its pages is not something
     // it should need redeploying over. The client already holds which game the server selected.
+    //
+    // With no server there is no symbol lookup, but the index is still worth opening.
     context.subscriptions.push(
         vscode.commands.registerCommand("gscode.openApiLibrary", async () => {
             const editor = vscode.window.activeTextEditor;
@@ -113,9 +231,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const game = activeGame?.game ?? DEFAULT_LIBRARY_GAME;
             let page = `https://www.gscode.net/library/${game}/${library}`;
 
-            if (editor !== undefined) {
+            if (editor !== undefined && client !== undefined) {
                 try {
-                    const builtin = await created.sendRequest<{ name: string; language: string }>(
+                    const builtin = await client.sendRequest<{ name: string; language: string }>(
                         "gscode/builtinAt",
                         {
                             uri: editor.document.uri.toString(),
@@ -136,6 +254,56 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
 
             await vscode.env.openExternal(vscode.Uri.parse(page));
+        }),
+    );
+
+    // Organize Imports, one click away in the context menu. It is a server code action that already
+    // appears under "Source Action..."; this command says why nothing happened when there is
+    // nothing to do, which the built-in "No code actions available" message does not.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.organizeImports", () =>
+            applyServerCodeAction(
+                vscode.CodeActionKind.SourceOrganizeImports,
+                "Imports are already organized: nothing unused, and the block is sorted.",
+                log,
+            )),
+    );
+
+    // Write the ScriptDoc block for the function the cursor is in, from the right-click menu.
+    //
+    // A request rather than a code action: offered as one it put a lightbulb on every undocumented
+    // function. The server finds the function from the cursor (anywhere in it, declaration or
+    // body), since only it has the parse, and answers with the block and the line it goes above.
+    context.subscriptions.push(
+        vscode.commands.registerCommand("gscode.generateScriptDoc", async () => {
+            const editor = vscode.window.activeTextEditor;
+            const running = requireClient(log);
+            if (editor === undefined || running === undefined) {
+                return;
+            }
+
+            const response = await running.sendRequest<{
+                status: string;
+                function: string;
+                line: number;
+                text: string;
+            }>("gscode/generateScriptDoc", {
+                uri: editor.document.uri.toString(),
+                line: editor.selection.active.line,
+                character: editor.selection.active.character,
+            });
+
+            if (response.status === "documented") {
+                void vscode.window.showInformationMessage(`'${response.function}' already has a ScriptDoc block.`);
+                return;
+            }
+
+            if (response.status !== "generated") {
+                void vscode.window.showInformationMessage("Put the cursor inside a function to document it.");
+                return;
+            }
+
+            await editor.edit((builder) => builder.insert(new vscode.Position(response.line, 0), response.text));
         }),
     );
 
@@ -163,14 +331,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             },
         ),
     );
-
-    registerIndexingStatusBar(context, created, log);
-
-    await created.start();
-    log.info("GSCode language client started");
-
-    registerRenameDirectiveFixup(context, created, log);
-    registerSemicolonDeduplication(context);
 }
 
 /**
@@ -206,6 +366,12 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
                 return;
             }
 
+            // Undo and redo replay edits rather than type them. Redoing a typed ';' that sat
+            // before another one would otherwise delete a semicolon the user never typed again.
+            if (event.reason !== undefined) {
+                return;
+            }
+
             const change = event.contentChanges[0];
             // A single typed ';' — not a paste, not a replacement.
             if (change.text !== ";" || !change.range.isEmpty) {
@@ -221,6 +387,11 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
             // `for ( ;; )` is the language, not a mistake.
             const line = event.document.lineAt(after.line).text;
             if (isInsideForHeader(line, after.character)) {
+                return;
+            }
+
+            // Nor is ";;" inside a string or a comment, which is text rather than a statement end.
+            if (isInsideStringOrComment(line, change.range.start.character)) {
                 return;
             }
 
@@ -243,6 +414,44 @@ function registerSemicolonDeduplication(context: vscode.ExtensionContext): void 
             }
         }),
     );
+}
+
+/**
+ * Whether `character` sits inside a string or a comment, judged from this line alone.
+ *
+ * GSC strings cannot span lines, so the line is enough for them. A block comment can, and one
+ * opened on an earlier line is missed; that costs one surviving duplicate semicolon inside a
+ * comment, where re-scanning the document on every ';' typed would cost far more.
+ */
+function isInsideStringOrComment(line: string, character: number): boolean {
+    let inString = false;
+    let inBlockComment = false;
+
+    for (let index = 0; index < character; index++) {
+        const c = line[index];
+        if (inBlockComment) {
+            if (c === "*" && line[index + 1] === "/") {
+                inBlockComment = false;
+                index++;
+            }
+        } else if (inString) {
+            if (c === "\\") {
+                // The escaped character cannot close the string.
+                index++;
+            } else if (c === '"') {
+                inString = false;
+            }
+        } else if (c === '"') {
+            inString = true;
+        } else if (c === "/" && line[index + 1] === "/") {
+            return true;
+        } else if (c === "/" && line[index + 1] === "*") {
+            inBlockComment = true;
+            index++;
+        }
+    }
+
+    return inString || inBlockComment;
 }
 
 /** Whether `character` sits inside a `for ( … )` header on this line. */
@@ -288,24 +497,38 @@ function registerRenameDirectiveFixup(
 
     context.subscriptions.push(
         vscode.workspace.onWillRenameFiles((event) => {
-            const scripts = event.files.filter((file) => /\.(gsc|csc|gsh)$/i.test(file.oldUri.fsPath));
-            if (scripts.length === 0) {
-                return;
-            }
-
             // waitUntil defers the rename until the edit resolves, so both apply together.
             event.waitUntil(
                 (async () => {
-                    const edit = new vscode.WorkspaceEdit();
-                    let total = 0;
+                    const moves = await scriptMoves(event.files);
+                    if (moves.length === 0) {
+                        return undefined;
+                    }
 
-                    for (const file of scripts) {
-                        const response = await languageClient.sendRequest<{ edits: PlanRenameEdit[] }>(
+                    // One request per script, all at once: planning reads the database and changes
+                    // nothing, so the order they are answered in does not matter.
+                    const responses = await Promise.all(moves.map((move) =>
+                        languageClient.sendRequest<{ edits: PlanRenameEdit[] }>(
                             "gscode/planRename",
-                            { oldPath: file.oldUri.fsPath, newPath: file.newUri.fsPath },
-                        );
+                            { oldPath: move.oldUri.fsPath, newPath: move.newUri.fsPath },
+                            event.token,
+                        )));
 
+                    const edit = new vscode.WorkspaceEdit();
+                    // The same directive can be planned twice. `#using scripts\foo` names foo.gsc
+                    // and foo.csc alike, so moving both plans that edit once for each, and VS Code
+                    // refuses a workspace edit that replaces one range twice — the whole rename
+                    // would lose its fixup.
+                    const seen = new Set<string>();
+
+                    for (const response of responses) {
                         for (const planned of response?.edits ?? []) {
+                            const key = `${planned.path}|${planned.startLine}:${planned.startCharacter}-${planned.endLine}:${planned.endCharacter}`;
+                            if (seen.has(key)) {
+                                continue;
+                            }
+
+                            seen.add(key);
                             edit.replace(
                                 vscode.Uri.file(planned.path),
                                 new vscode.Range(
@@ -316,12 +539,11 @@ function registerRenameDirectiveFixup(
                                 ),
                                 planned.newText,
                             );
-                            total++;
                         }
                     }
 
-                    if (total > 0) {
-                        log.info(`Rename: updating ${total} directive path(s) across the workspace`);
+                    if (seen.size > 0) {
+                        log.info(`Rename: updating ${seen.size} directive path(s) across the workspace`);
                     }
 
                     return edit;
@@ -329,6 +551,58 @@ function registerRenameDirectiveFixup(
             );
         }),
     );
+}
+
+const SCRIPT_FILE = /\.(gsc|csc|gsh)$/i;
+
+/**
+ * Every script a rename moves, with where it ends up.
+ *
+ * A renamed FOLDER arrives as one entry for the folder itself, so filtering the entries by
+ * extension skipped it, and moving a folder of scripts updated no directive that named them. Each
+ * script under it is its own move as far as the server is concerned: it plans by file, and a
+ * directive path names a file.
+ *
+ * The folder is expanded while it is still at its old location — this runs before the rename.
+ */
+async function scriptMoves(
+    files: ReadonlyArray<{ readonly oldUri: vscode.Uri; readonly newUri: vscode.Uri }>,
+): Promise<{ oldUri: vscode.Uri; newUri: vscode.Uri }[]> {
+    const moves = new Map<string, { oldUri: vscode.Uri; newUri: vscode.Uri }>();
+
+    for (const file of files) {
+        if (SCRIPT_FILE.test(file.oldUri.path)) {
+            moves.set(file.oldUri.toString(), file);
+            continue;
+        }
+
+        let stat: vscode.FileStat;
+        try {
+            stat = await vscode.workspace.fs.stat(file.oldUri);
+        } catch {
+            continue;
+        }
+
+        if ((stat.type & vscode.FileType.Directory) === 0) {
+            continue;
+        }
+
+        const scripts = await vscode.workspace.findFiles(
+            new vscode.RelativePattern(file.oldUri, "**/*.{gsc,csc,gsh}"),
+        );
+        for (const script of scripts) {
+            // The part of the path below the folder, which is what moves with it.
+            const below = script.path.slice(file.oldUri.path.length).replace(/^\/+/, "");
+            // Keyed by the old location, so a script both inside a moved folder and listed on its
+            // own is planned once.
+            moves.set(script.toString(), {
+                oldUri: script,
+                newUri: vscode.Uri.joinPath(file.newUri, below),
+            });
+        }
+    }
+
+    return [...moves.values()];
 }
 
 /**
@@ -468,17 +742,12 @@ function registerIndexingStatusBar(
                 return;
             }
 
-            const picked = await vscode.window.showQuickPick(
-                games.map((g) => ({ label: g.label, id: g.id, picked: g.id === params.selectedGame })),
-                { title: "Select the game this workspace targets", placeHolder: "Call of Duty game" },
-            );
-
-            if (picked) {
-                await vscode.workspace
-                    .getConfiguration("gscode")
-                    .update("game", picked.id, vscode.ConfigurationTarget.Workspace);
-                log.info(`Game version set to ${picked.id}.`);
-            }
+            // The same picker the gscode.selectGame command opens, given the roster this
+            // notification already carries. It was a second copy of the pick-and-write here, and
+            // the copies had already diverged: this one wrote to Workspace unconditionally, which
+            // throws when no folder is open, and neither offered the reload that makes the write
+            // do anything.
+            await pickGameFrom(games, params.selectedGame, log, "Select the game this workspace targets");
         },
     );
 
@@ -506,6 +775,24 @@ function registerIndexingStatusBar(
 
             renderTooltip();
             // The server logs its own completion line; repeating it here would double it.
+        },
+    );
+
+    languageClient.onNotification(
+        "gscode/indexingFailed",
+        (params: { reason: string }) => {
+            // A warning icon rather than the checkmark indexingComplete uses: the spinner has to
+            // stop either way, or it would run for the rest of the session looking like a hang
+            // rather than a failure, but showing success here would be worse than the spinner —
+            // it tells the user their workspace is fully indexed when nothing was.
+            statusBar.text = `$(warning) GSCode: indexing failed`;
+            statusBar.tooltip = new vscode.MarkdownString(
+                `**GSCode indexing failed**\n\n${params.reason}\n\n_Click to open the server log._`,
+            );
+            log.error(`Workspace indexing failed: ${params.reason}`);
+            // The server logs its own error line at Warning by default now; this one is the
+            // extension host's own channel, which a user reading only "GSCode" (not "GSCode
+            // Server") would otherwise never see this in at all.
         },
     );
 }

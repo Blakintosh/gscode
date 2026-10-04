@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;

@@ -1,71 +1,39 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 /// <summary>
 /// The #include counterpart to <see cref="UnusedUsingLintTests"/>: an #include contributing nothing
-/// this file calls is a greyed-out hint. Because #include is a merge dialect and the default indexer
-/// runs as BO3 (which would not parse a bare function), the included file is analysed as CoD4 and
-/// committed directly rather than indexed.
+/// this file calls is a greyed-out hint. #include is a merge-dialect import, so the workspace is
+/// indexed as CoD4: under the default BO3 a bare <c>helper()</c> is not a declaration at all.
 /// </summary>
 public class UnusedIncludeLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
 
     /// <summary>A hub declaring nothing of its own, reaching utility only by including it.</summary>
     private const string ChainSource = "#include common_scripts\\utility;\n";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-
-    private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
-    {
-        FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\common_scripts\utility.gsc", "helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\maps\_chain.gsc", ChainSource)
-            .AddFile(@$"{Raw}\maps\_chain2.gsc", ChainSource);
-
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-
-        string utilityPath = @$"{Raw}\common_scripts\utility.gsc";
-        ParseResult utility = ScriptAnalysis.Analyze(
-            utilityPath, ScriptLanguage.Gsc, SourceText.From("helper()\n{\n}\n"), NullInsertProvider.Instance, new NameTable(), Cod4);
-        database.Commit(utility, ResolutionContext.RawContext, isDirty: false, @"common_scripts\utility.gsc");
-
-        // A hub that declares nothing itself and exists only to pull utility in — the shape a
-        // marginal test has to get right.
-        ParseResult chain = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\_chain.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
-        database.Commit(chain, ResolutionContext.RawContext, isDirty: false, @"maps\_chain.gsc");
-
-        ParseResult chain2 = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\_chain2.gsc", ScriptLanguage.Gsc, SourceText.From(ChainSource),
-            NullInsertProvider.Instance, new NameTable(), Cod4);
-        database.Commit(chain2, ResolutionContext.RawContext, isDirty: false, @"maps\_chain2.gsc");
-
-        return (database, resolver);
-    }
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
-        (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable(), Cod4);
+        // A hub that declares nothing itself and exists only to pull utility in — the shape a
+        // marginal test has to get right.
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"common_scripts\utility.gsc", "helper()\n{\n}\n"),
+                new TestFile(@"maps\_chain.gsc", ChainSource),
+                new TestFile(@"maps\_chain2.gsc", ChainSource),
+            ],
+            s_cod4);
 
-        return UnusedIncludeLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
+        return UnusedIncludeLint.Analyze(
+            workspace.Analyze(@"scripts\main.gsc", askingSource), workspace.Database.Gsc, ScriptLanguage.Gsc,
+            workspace.Resolver, TestPaths.Raw(@"scripts\main.gsc"));
     }
 
     [Fact]
@@ -134,10 +102,25 @@ public class UnusedIncludeLintTests
     }
 
     [Fact]
-    public void AnUnresolvableIncludeSuppressesThePass()
+    public void AnUnreadableIncludeIsNotJudged()
     {
-        // A missing target is UsingNotFound/UsingNotFound's job; this lint stays quiet rather than
-        // guessing, so it never reports both a missing AND an unused include for the same line.
+        // A missing target is UsingNotFound's job. The directive never enters Includes, so this
+        // rule still never reports both a missing AND an unused include for one line — what
+        // changed is that the file's OTHER includes are judged now instead of the pass standing
+        // down wholesale.
         Assert.Empty(Lint("#include scripts\\does_not_exist;\nrun()\n{\n}\n"));
+    }
+
+    [Fact]
+    public void AnUnreadableIncludeNoLongerSpares_ItsSiblings()
+    {
+        // The narrowing, stated as the behaviour change: this file used to be told nothing at all
+        // because one of its two includes could not be read. The readable one supplies nothing
+        // called here, and that verdict never depended on the unreadable one.
+        Diagnostic diagnostic = Assert.Single(Lint(
+            "#include scripts\\does_not_exist;\n#include common_scripts\\utility;\nrun()\n{\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.UnusedInclude, diagnostic.Code);
+        Assert.Equal(1, diagnostic.Range.Start.Line);
     }
 }

@@ -1,9 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
 using Xunit;
@@ -26,8 +23,7 @@ public class VectorArithmeticTests
     {
         string source = "function f( a )\n{\n" + body + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 

@@ -42,7 +42,7 @@ public static class DependencyRewrite
 
         ImmutableArray<DependencyEdit>.Builder edits = ImmutableArray.CreateBuilder<DependencyEdit>();
 
-        foreach ( ScriptRecord record in database.AllRecords )
+        foreach ( ScriptRecord record in RecordsWriting(database, DirectiveIndex.WrittenKey(wanted)) )
         {
             foreach ( DependencyEdge edge in record.Dependencies )
             {
@@ -63,6 +63,36 @@ public static class DependencyRewrite
         }
 
         return edits.ToImmutable();
+    }
+
+    /// <summary>
+    /// The records in every store — scripts and headers — with a directive whose path has this
+    /// written key. A superset of those whose directive matches <see cref="Canonical"/>, which the
+    /// caller still tests.
+    /// </summary>
+    private static List<ScriptRecord> RecordsWriting(ScriptDatabase database, string writtenKey)
+    {
+        List<ScriptRecord> records = [];
+        foreach ( LanguageStore store in database.BothLanguageStores )
+        {
+            foreach ( string path in store.FilesWriting(writtenKey) )
+            {
+                if ( store.TryGet(path, out ScriptRecord record) )
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        foreach ( string path in database.GshFilesWriting(writtenKey) )
+        {
+            if ( database.TryGetGsh(path, out ScriptRecord record) )
+            {
+                records.Add(record);
+            }
+        }
+
+        return records;
     }
 
     /// <summary>

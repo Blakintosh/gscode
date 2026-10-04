@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 
@@ -130,10 +131,9 @@ public static class MethodResolution
     /// What a call site reaches — methods and namespace functions alike, so a caller asking "what
     /// does this name resolve to" never has to know which it was. The single routing facade.
     ///
-    /// <see cref="DatabaseQueries.LookupFunctions"/> is deliberately NOT widened to do this instead.
-    /// It treats a null namespace as "any namespace", which is right for a merge dialect but would
-    /// make an unqualified <c>init()</c> match every unrelated <c>init</c> method in the workspace
-    /// the moment methods became visible to it. Routing explicitly keeps that meaning intact.
+    /// <see cref="DatabaseQueries.LookupFunctions"/> is deliberately NOT widened to do this: it
+    /// treats a null namespace as "any namespace", which is right for a merge dialect but would make
+    /// an unqualified <c>init()</c> match every unrelated <c>init</c> method in the workspace.
     /// </summary>
     public static ImmutableArray<ResolvedFunction> ResolveCall(
         LanguageStore store,
@@ -144,6 +144,18 @@ public static class MethodResolution
         ImmutableArray<string> askingNamespaces = default,
         string fileNamespace = "")
     {
+        // The explicit `sys::` form names the engine's function, so no script declaration answers it
+        // and the caller falls back to the builtin library. Asked of the key as WRITTEN, because
+        // Canonicalize below can itself produce a namespace-less key for a bare call inside a class,
+        // which is not this. Without it the fallback at the bottom read the null as "any namespace"
+        // and handed `sys::spawnSpectator()` to `zm::spawnSpectator` in a file that neither is in
+        // `zm` nor imports it. An arrow call is excluded: it keys the same shape and can reach a
+        // top-level function through a field holding a pointer (below).
+        if ( referenceKind != ReferenceKind.MethodCall && BuiltinQualifier.IsBuiltinKey(key, GameProfile.Active) )
+        {
+            return [];
+        }
+
         SymbolKey canonical = Canonicalize(store, askingContextId, key, referenceKind, fileNamespace);
 
         if ( canonical.OwnerClass is not null )
@@ -203,36 +215,25 @@ public static class MethodResolution
     public static string? FindDeclaringClass(
         LanguageStore store, string askingContextId, string classKeyName, string methodKeyName)
     {
-        HashSet<string> visited = new(StringComparer.Ordinal);
-        string? current = classKeyName;
+        string? declaring = null;
 
-        for ( int depth = 0; depth < MaxDepth; depth++ )
+        // No localClasses: this answers a question about what the STORE holds, and handing it the
+        // parse in hand would change which declaration wins.
+        WalkAncestors(store, askingContextId, classKeyName, default, (classSymbol, _) =>
         {
-            if ( current is null || !visited.Add(current) )
-            {
-                return null;
-            }
-
-            ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                store, askingContextId, namespaceName: null, current);
-
-            if ( classes.Length == 0 )
-            {
-                return null;
-            }
-
-            foreach ( FunctionSymbol method in classes[0].Class.Methods )
+            foreach ( FunctionSymbol method in classSymbol.Methods )
             {
                 if ( string.Equals(method.KeyName, methodKeyName, StringComparison.Ordinal) )
                 {
-                    return current;
+                    declaring = classSymbol.KeyName;
+                    return false;
                 }
             }
 
-            current = classes[0].Class.ParentKeyName;
-        }
+            return true;
+        });
 
-        return null;
+        return declaring;
     }
 
     /// <summary>
@@ -255,43 +256,19 @@ public static class MethodResolution
         ImmutableArray<ClassSymbol> localClasses = default)
     {
         Dictionary<string, ClassMethod> byName = new(StringComparer.Ordinal);
-        HashSet<string> visited = new(StringComparer.Ordinal);
-        string? current = classKeyName;
 
-        for ( int depth = 0; depth < MaxDepth; depth++ )
+        WalkAncestors(store, askingContextId, classKeyName, localClasses, (classSymbol, record) =>
         {
-            if ( current is null || !visited.Add(current) )
-            {
-                break;
-            }
-
-            ClassSymbol? resolved = FindLocal(localClasses, current);
-            ScriptRecord? record = null;
-
-            if ( resolved is null )
-            {
-                ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                    store, askingContextId, namespaceName: null, current);
-
-                if ( classes.Length == 0 )
-                {
-                    break;
-                }
-
-                resolved = classes[0].Class;
-                record = classes[0].Record;
-            }
-
-            foreach ( FunctionSymbol method in resolved.Methods )
+            foreach ( FunctionSymbol method in classSymbol.Methods )
             {
                 // TryAdd, not assignment: the walk starts at the most derived class, so the first
                 // declaration of a name seen is the one that wins — which is what makes an override
                 // shadow the method it overrides instead of being offered beside it.
-                byName.TryAdd(method.KeyName, new ClassMethod(method, resolved, record));
+                byName.TryAdd(method.KeyName, new ClassMethod(method, classSymbol, record));
             }
 
-            current = resolved.ParentKeyName;
-        }
+            return true;
+        });
 
         return [.. byName.Values];
     }
@@ -312,6 +289,42 @@ public static class MethodResolution
         ImmutableArray<ClassSymbol> localClasses = default)
     {
         Dictionary<string, ClassMember> byName = new(StringComparer.OrdinalIgnoreCase);
+
+        WalkAncestors(store, askingContextId, classKeyName, localClasses, (classSymbol, _) =>
+        {
+            foreach ( MemberSymbol member in classSymbol.Members )
+            {
+                // TryAdd for the reason MethodsOf uses it: the walk starts at the most derived
+                // class, so a redeclared name resolves to the nearest declaration rather than
+                // being offered twice.
+                byName.TryAdd(member.Name, new ClassMember(member, classSymbol));
+            }
+
+            return true;
+        });
+
+        return [.. byName.Values];
+    }
+
+    /// <summary>
+    /// Walks a class and its ancestors, MOST DERIVED FIRST, handing each resolved class to
+    /// <paramref name="visit"/> until it returns false or the chain ends.
+    ///
+    /// The one walk behind <see cref="FindDeclaringClass"/>, <see cref="MethodsOf"/> and
+    /// <see cref="MembersOf"/>, whose answers must agree: the most-derived-first order that makes an
+    /// override win, the <see cref="MaxDepth"/> bound that stops a cycle the lint missed, the visited
+    /// set that stops a diamond, and a local class winning over the store's copy of the same name.
+    ///
+    /// The record handed to <paramref name="visit"/> is null when the class came from
+    /// <paramref name="localClasses"/> rather than from the store - see <see cref="ClassMethod"/>.
+    /// </summary>
+    private static void WalkAncestors(
+        LanguageStore store,
+        string askingContextId,
+        string classKeyName,
+        ImmutableArray<ClassSymbol> localClasses,
+        Func<ClassSymbol, ScriptRecord?, bool> visit)
+    {
         HashSet<string> visited = new(StringComparer.Ordinal);
         string? current = classKeyName;
 
@@ -319,10 +332,11 @@ public static class MethodResolution
         {
             if ( current is null || !visited.Add(current) )
             {
-                break;
+                return;
             }
 
             ClassSymbol? resolved = FindLocal(localClasses, current);
+            ScriptRecord? record = null;
 
             if ( resolved is null )
             {
@@ -331,24 +345,20 @@ public static class MethodResolution
 
                 if ( classes.Length == 0 )
                 {
-                    break;
+                    return;
                 }
 
                 resolved = classes[0].Class;
+                record = classes[0].Record;
             }
 
-            foreach ( MemberSymbol member in resolved.Members )
+            if ( !visit(resolved, record) )
             {
-                // TryAdd for the reason MethodsOf uses it: the walk starts at the most derived
-                // class, so a redeclared name resolves to the nearest declaration rather than
-                // being offered twice.
-                byName.TryAdd(member.Name, new ClassMember(member, resolved));
+                return;
             }
 
             current = resolved.ParentKeyName;
         }
-
-        return [.. byName.Values];
     }
 
     private static ClassSymbol? FindLocal(ImmutableArray<ClassSymbol> localClasses, string classKeyName)
@@ -408,13 +418,19 @@ public static class MethodResolution
     /// calls, never a declaration, so <c>[[o_obj]]-&gt;play()</c> navigated to nothing while hover,
     /// which resolves by candidate rather than by key, answered correctly.
     /// </summary>
+    /// <param name="onlyPath">
+    /// See <see cref="DatabaseQueries.FindAllReferences"/>'s parameter of the same name. Passed
+    /// through the four collections below rather than applied to their union, so a same-file
+    /// question never reads another file's reference list.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesForCall(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         LanguageStore store,
         string askingContextId,
         SymbolKey key,
-        ReferenceKind referenceKind)
+        ReferenceKind referenceKind,
+        string onlyPath = "")
     {
         if ( key.Kind != SymbolKind.Function )
         {
@@ -424,7 +440,7 @@ public static class MethodResolution
         SymbolKey canonical = Canonicalize(store, askingContextId, key, referenceKind, key.Namespace ?? "");
         if ( canonical.OwnerClass is not null )
         {
-            return FindMethodReferences(database, stores, store, askingContextId, canonical);
+            return FindMethodReferences(database, stores, store, askingContextId, canonical, onlyPath);
         }
 
         if ( referenceKind != ReferenceKind.MethodCall )
@@ -445,7 +461,7 @@ public static class MethodResolution
         {
             foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in FindMethodReferences(
                 database, stores, store, askingContextId,
-                new SymbolKey(null, key.Name, SymbolKind.Function, declarer)) )
+                new SymbolKey(null, key.Name, SymbolKind.Function, declarer), onlyPath) )
             {
                 union[(hit.Record.Path, hit.Entry.Range)] = hit;
             }
@@ -455,18 +471,125 @@ public static class MethodResolution
     }
 
     /// <summary>
+    /// The class that actually declares a <c>var</c> reachable from <paramref name="classKeyName"/>,
+    /// or null when nothing in the chain does.
+    ///
+    /// The member counterpart of <see cref="FindDeclaringClass"/>, and needed for the same reason:
+    /// extraction keys a bare member use by the class whose body it sits in, which for an
+    /// INHERITED member is not the class holding the <c>var</c>.
+    /// </summary>
+    public static string? FindDeclaringClassForMember(
+        LanguageStore store, string askingContextId, string classKeyName, string memberKeyName)
+    {
+        string? declaring = null;
+
+        WalkAncestors(store, askingContextId, classKeyName, default, (classSymbol, _) =>
+        {
+            foreach ( MemberSymbol member in classSymbol.Members )
+            {
+                if ( string.Equals(member.KeyName, memberKeyName, StringComparison.OrdinalIgnoreCase) )
+                {
+                    declaring = classSymbol.KeyName;
+                    return false;
+                }
+            }
+
+            return true;
+        });
+
+        return declaring;
+    }
+
+    /// <summary>
+    /// Every reference to a class <c>var</c>, from the key of any site that names it.
+    ///
+    /// A member has the same reachability problem a method does, in both directions at once. The
+    /// declaration sits on one class; the uses sit in the bodies of that class AND of every class
+    /// that inherits from it, each keyed by the class its own body belongs to. So the key is first
+    /// canonicalized DOWN to the declaring class, then the union is taken back UP across every
+    /// descendant — otherwise renaming a base's <c>var</c> rewrites the declaration and leaves the
+    /// subclasses spelling the old name.
+    ///
+    /// <c>DirectChildren</c> is a real index, so the descendant walk costs the size of the
+    /// hierarchy rather than the size of the workspace. BO3's deepest is three classes.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindMemberReferences(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        LanguageStore store,
+        string askingContextId,
+        SymbolKey key,
+        string onlyPath = "")
+    {
+        if ( key.Kind != SymbolKind.Member || key.OwnerClass is null )
+        {
+            return [];
+        }
+
+        string root = FindDeclaringClassForMember(store, askingContextId, key.OwnerClass, key.Name)
+            ?? key.OwnerClass;
+
+        Dictionary<(string, TextRange), (ScriptRecord, ReferenceEntry)> union = [];
+        foreach ( string owner in HierarchyFrom(store, root) )
+        {
+            foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in DatabaseQueries.FindAllReferences(
+                database,
+                stores,
+                askingContextId,
+                new SymbolKey(null, key.Name, SymbolKind.Member, owner),
+                macroSpansLanguages: false,
+                onlyPath) )
+            {
+                union[(hit.Record.Path, hit.Entry.Range)] = hit;
+            }
+        }
+
+        return [.. union.Values];
+    }
+
+    /// <summary>A class and every class below it, bounded like the ancestor walk above.</summary>
+    private static List<string> HierarchyFrom(LanguageStore store, string classKeyName)
+    {
+        List<string> all = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        Queue<(string Name, int Depth)> pending = new();
+        pending.Enqueue((classKeyName, 0));
+
+        while ( pending.Count > 0 )
+        {
+            (string Name, int Depth) next = pending.Dequeue();
+            if ( next.Depth > MaxDepth || !seen.Add(next.Name) )
+            {
+                continue;
+            }
+
+            all.Add(next.Name);
+            foreach ( string child in store.Classes.DirectChildren(next.Name) )
+            {
+                pending.Enqueue((child, next.Depth + 1));
+            }
+        }
+
+        return all;
+    }
+
+    /// <summary>
     /// Every reference to a class method, given the CANONICAL key of its declaration.
     ///
     /// A method is not reachable under one key the way a function is, so this unions the four ways a
     /// call site can name it. All four are needed for the CodeLens count and the peek list to be
     /// right — and, because they run through here together, for the two to agree.
     /// </summary>
+    /// <param name="onlyPath">
+    /// See <see cref="DatabaseQueries.FindAllReferences"/>'s parameter of the same name.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindMethodReferences(
         ScriptDatabase database,
         ImmutableArray<LanguageStore> stores,
         LanguageStore store,
         string askingContextId,
-        SymbolKey canonical)
+        SymbolKey canonical,
+        string onlyPath = "")
     {
         // Keyed by SITE, not by key: the four collections below overlap, and one call must not be
         // counted twice because it was reachable two ways.
@@ -475,7 +598,7 @@ public static class MethodResolution
         void Collect(SymbolKey key, Func<ReferenceEntry, bool> accept)
         {
             foreach ( (ScriptRecord Record, ReferenceEntry Entry) hit in
-                DatabaseQueries.FindAllReferences(database, stores, askingContextId, key) )
+                DatabaseQueries.FindAllReferences(database, stores, askingContextId, key, onlyPath: onlyPath) )
             {
                 if ( accept(hit.Entry) )
                 {
@@ -520,7 +643,7 @@ public static class MethodResolution
 
             Collect(
                 new SymbolKey(qualifier, canonical.Name, SymbolKind.Function),
-                static entry => entry.Kind == ReferenceKind.Call);
+                static entry => entry.Kind == ReferenceKind.Call && !entry.FromMacro);
         }
 
         // 4. Arrow calls on a receiver whose class is unknown — 155 of the 159 in the stock scripts.
@@ -529,7 +652,7 @@ public static class MethodResolution
         //    unqualified call, because both of those carry Kind == Call.
         Collect(
             new SymbolKey(null, canonical.Name, SymbolKind.Function),
-            static entry => entry.Kind == ReferenceKind.MethodCall);
+            static entry => entry.Kind == ReferenceKind.MethodCall && !entry.FromMacro);
 
         return [.. found.Values];
     }

@@ -11,10 +11,8 @@ namespace GSCode.Workspace.Analysis;
 /// Harmless at runtime, which is why it accumulates: nothing ever complains, so a merge or a
 /// copied header block leaves two of them and the file grows a third next time.
 ///
-/// The quick fix for this has existed since the code-action work
-/// (<c>CodeActionHandler.FindRemovableDuplicates</c>) and nothing reported the problem, so it was
-/// only reachable by putting the cursor on the offending line and going looking. A quick fix
-/// nobody can find is a quick fix nobody has.
+/// Reporting it is also what makes <c>CodeActionHandler.FindRemovableDuplicates</c>' quick fix
+/// reachable from the lightbulb rather than only by going looking on the offending line.
 /// </summary>
 public static class DuplicateImportLint
 {

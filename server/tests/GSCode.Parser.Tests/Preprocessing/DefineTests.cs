@@ -1,5 +1,4 @@
 using GSCode.Core.Diagnostics;
-using GSCode.Parser.Lexing;
 using GSCode.Parser.Preprocessing;
 using Xunit;
 

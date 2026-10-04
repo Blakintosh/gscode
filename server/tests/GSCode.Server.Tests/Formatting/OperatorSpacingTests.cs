@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -23,12 +19,7 @@ public class OperatorSpacingTests
 
     private static string Body(string statement)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f( a, b, level )\n{\n\t" + statement + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f( a, b, level )\n{\n\t" + statement + "\n}\n");
 
         string? formatted = GscFormatter.Format(result, s_tabs);
         Assert.NotNull(formatted);

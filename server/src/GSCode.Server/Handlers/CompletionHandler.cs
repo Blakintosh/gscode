@@ -9,6 +9,11 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using GSCode.Core;
+using GSCode.Parser;
+using GSCode.Parser.Syntax.Ast;
+using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -51,12 +56,6 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return CallPunctuation.ParensAndSemicolon;
     }
 
-    /// <summary>Maps the client setting; anything unrecognised keeps the safer owner-scoped default.</summary>
-    private static FieldScope FieldScopeFromSetting(string value)
-    {
-        return string.Equals(value, "all", StringComparison.OrdinalIgnoreCase) ? FieldScope.All : FieldScope.Owner;
-    }
-
     /// <summary>
     /// Whether the client renders <c>CompletionItem.labelDetails</c> — the dimmed text beside a
     /// label, which is where a parameter list belongs.
@@ -91,7 +90,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// check for the same reason. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst
     /// of keystrokes produces one analysis; completion answers the keystroke that asked, and a
     /// client that types through its own request cancels it and sends another. Without a check,
-    /// every superseded request was still built in full and its result thrown away by the client.
+    /// every superseded request is built in full and its result thrown away by the client.
     ///
     /// Two places, for two different costs. The first is the request that was cancelled before it
     /// was ever started, which is the common one under fast typing and costs nothing to skip. The
@@ -108,28 +107,41 @@ public sealed class CompletionHandler : CompletionHandlerBase
         cancellationToken.ThrowIfCancellationRequested();
 
         // Fresh: the cursor position is live, so it only means anything against live text.
-        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri);
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(new CompletionList());
         }
 
         List<CompletionItem> items = [];
+        bool incomplete = false;
+
         foreach ( CompletionEntry entry in _engine.Complete(
             target.Result,
             target.ContextId,
             request.Position.ToCore(),
             _settings.CompletionLiterals,
-            FieldScopeFromSetting(_settings.CompletionFieldScope),
             CallPunctuationFromSetting(_settings.CompletionCallPunctuation),
             profile: null,
-            parameterHints: _settings.CompletionParameterHints) )
+            parameterHints: _settings.CompletionParameterHints,
+            autoImport: _settings.CompletionAutoImport) )
         {
             cancellationToken.ThrowIfCancellationRequested();
-            items.Add(ToItem(entry, request.TextDocument.Uri));
+            incomplete |= entry.ImportPath.Length > 0 || entry.Narrowed;
+            items.Add(ToItem(entry, request.TextDocument.Uri, target.Result));
         }
 
-        return Task.FromResult(new CompletionList(items));
+        // Incomplete once anything in the list needs an import, or came from a vocabulary list cut to
+        // what was typed (CompletionEntry.Narrowed). Both are matched on the text typed SO FAR and
+        // capped, so the answer is only true for that text: the editor must come back on the next
+        // keystroke rather than filter this page client-side, which would leave a narrower word
+        // showing whatever the wider one happened to reach first. Everything else in the list is
+        // scope-derived and complete, which is why this is not simply always on.
+        //
+        // An EMPTY list is incomplete too. No row is left to carry the flag, and the editor caches an
+        // empty complete answer for the rest of the word — so a cut list that matched nothing would
+        // stay empty after a backspace that widens it again.
+        return Task.FromResult(new CompletionList(items, isIncomplete: incomplete || items.Count == 0));
     }
 
     /// <summary>
@@ -150,7 +162,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             return Task.FromResult(request);
         }
 
-        NavigationTarget? target = _support.Resolve(uri);
+        NavigationTarget? target = _support.Resolve(uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(request);
@@ -225,7 +237,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
                     target.ContextId,
                     target.Path,
                     ns.Length > 0 ? ns : null,
-                    name.ToLowerInvariant(),
+                    NameTable.Shared.InternLower(name),
                     askingNamespaces: target.Namespaces);
 
                 if ( functions.Length > 0 )
@@ -239,7 +251,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
             case nameof(CompletionKind.Class):
             {
                 ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(
-                    target.Store, target.ContextId, ns.Length > 0 ? ns : null, name.ToLowerInvariant());
+                    target.Store, target.ContextId, ns.Length > 0 ? ns : null, NameTable.Shared.InternLower(name));
 
                 return classes.Length > 0 ? MarkdownDocRenderer.RenderClass(classes[0].Class) : null;
             }
@@ -310,7 +322,35 @@ public sealed class CompletionHandler : CompletionHandlerBase
         return new LabelParts(entry.Label + entry.LabelDetail, null, filterText ?? entry.Label);
     }
 
-    private CompletionItem ToItem(CompletionEntry entry, DocumentUri uri)
+    /// <summary>
+    /// The directive an entry needs before its insertion compiles, or null when it needs none.
+    ///
+    /// Built here rather than in the engine because WHERE it goes is a fact about this document —
+    /// after its last import of the same kind — and the completion engine deals in suggestions, not
+    /// in edits. <see cref="ImportEdits"/> is shared with the code actions so the two cannot write
+    /// the same directive two ways.
+    /// </summary>
+    private static TextEditContainer? ImportEditFor(CompletionEntry entry, ParseResult result)
+    {
+        if ( entry.ImportPath.Length == 0 )
+        {
+            return null;
+        }
+
+        bool namespaceStyle = GameProfile.Active.ImportStyle == ImportStyle.Namespace;
+        Position insertAt = namespaceStyle
+            ? ImportEdits.InsertionPoint<UsingNode>(result)
+            : ImportEdits.InsertionPoint<IncludeNode>(result);
+
+        string directive = namespaceStyle ? "#using " : "#include ";
+        return new TextEditContainer(new TextEdit
+        {
+            Range = new TextRange(insertAt, insertAt).ToLsp(),
+            NewText = directive + entry.ImportPath + ";\n",
+        });
+    }
+
+    private CompletionItem ToItem(CompletionEntry entry, DocumentUri uri, ParseResult result)
     {
         // Any tab stop, not just $0: directive snippets place the cursor at $1 first and leave
         // $0 for the end, so checking only for $0 would send them as literal text.
@@ -332,8 +372,9 @@ public sealed class CompletionHandler : CompletionHandlerBase
             FilterText = label.FilterText,
             SortText = SortText(entry),
             InsertTextFormat = isSnippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
-            Command = entry.RetriggerCompletion ? RetriggerCommand : null,
+            Command = entry.RetriggerCompletion ? s_retriggerCommand : null,
             Data = IsResolvable(entry.Kind) ? ResolveData(entry, uri) : null,
+            AdditionalTextEdits = ImportEditFor(entry, result),
         };
     }
 
@@ -345,7 +386,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// '"' trigger character again. This is the editor's own built-in command; a client that does
     /// not have it simply does nothing, which is the behaviour we already had.
     /// </summary>
-    private static readonly Command RetriggerCommand = new()
+    private static readonly Command s_retriggerCommand = new()
     {
         Name = "editor.action.triggerSuggest",
         Title = "Suggest",
@@ -385,8 +426,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// The editor's own fuzzy score comes first and is not being overridden here; this decides what
     /// happens when it is a wash, which in statement scope is constantly, because the list is a
     /// median of 1,930 entries and up to 5,937 of which the great majority are engine builtins.
-    /// Without it the tie-break was the label alone, so typing a prefix of the variable two lines up
-    /// could put an engine function above it for no reason other than alphabetical order.
+    /// Without it the tie-break is the label alone, so typing a prefix of the variable two lines up
+    /// can put an engine function above it for no reason other than alphabetical order.
     ///
     /// The order is by DISTANCE from the cursor, which is the same principle the producers order on:
     /// a name bound in this function, then one bound in this file, then one that had to be imported,

@@ -65,6 +65,30 @@ public enum ScriptDocStyle
 /// </summary>
 public sealed partial record GameProfile
 {
+    /// <summary>
+    /// Identity equality by <see cref="Id"/> alone, rather than the compiler-generated structural
+    /// equality every field would otherwise take part in.
+    ///
+    /// <see cref="GetKeywordIndex"/> builds and caches <see cref="_keywordIndex"/> lazily on first
+    /// use, and the compiler-generated record equality compares private fields along with public
+    /// ones — so two `with`-copies of the SAME profile, identical in every value a caller can see,
+    /// compared unequal the moment one of them answered an <see cref="IsKeyword"/> call and the
+    /// other had not. <see cref="Id"/> is unique across the whole lineage (see
+    /// <c>EveryShortNameIsUnique</c>'s sibling assertion) and is exactly what identifies a profile
+    /// — two profiles sharing an Id are the same game by construction, nothing here ever builds one
+    /// otherwise.
+    /// </summary>
+    public bool Equals(GameProfile? other)
+    {
+        return other is not null && string.Equals(Id, other.Id, StringComparison.Ordinal);
+    }
+
+    /// <summary>Agrees with <see cref="Equals(GameProfile?)"/> — hashes by Id alone.</summary>
+    public override int GetHashCode()
+    {
+        return StringComparer.Ordinal.GetHashCode(Id);
+    }
+
     /// <summary>Short identifier used in logs and cache metadata, e.g. "t7".</summary>
     public required string Id { get; init; }
 
@@ -159,9 +183,8 @@ public sealed partial record GameProfile
     /// Whether a rule may say a name is NOT an engine function: this game's library is complete, or
     /// it ships none and borrows a sibling's list.
     ///
-    /// One predicate rather than the condition spelled out at each reader. It was written three ways
-    /// across two assemblies for a while — the profile flags here, the loader's own-versus-borrowed
-    /// decision, and the lint re-deriving both — and two of the three could disagree.
+    /// One predicate rather than the condition spelled out at each reader, so the profile flags, the
+    /// loader's own-versus-borrowed decision and the lint that reads both cannot disagree.
     /// </summary>
     public bool HasTrustedEngineNames => HasCompleteBuiltinLibrary || EngineNameFallbackPrefix is not null;
 
@@ -274,10 +297,9 @@ public sealed partial record GameProfile
     /// <summary>
     /// Whether the given word is a keyword in this dialect. Called once per word that the central
     /// table has already matched — so the words that reach it are the most frequent ones a script
-    /// contains (<c>if</c>, <c>for</c>, <c>return</c>, <c>wait</c>), not the rarest.
-    ///
-    /// That is why it is a hashed probe rather than the scan it used to be: two dozen entries is
-    /// cheap per call and about twelve case-insensitive comparisons on the hottest path in the lexer.
+    /// contains (<c>if</c>, <c>for</c>, <c>return</c>, <c>wait</c>), not the rarest. Hence a hashed
+    /// probe: a scan of two dozen entries is about twelve case-insensitive comparisons per call on
+    /// the hottest path in the lexer.
     /// </summary>
     public bool IsKeyword(ReadOnlySpan<char> word)
     {
@@ -299,9 +321,17 @@ public sealed partial record GameProfile
     /// it <c>vararg</c> and it is an ARRAY: <c>foreach ( str_flag in vararg )</c> and
     /// <c>vararg.size</c> are how the stock scripts use it (array_shared, util_shared, scene_shared
     /// and animation_shared all do). Derived from the keyword set, so the name lives in ONE place —
-    /// the lexer table — and a rule that needs to recognise the pack does it by token kind.
+    /// a profile's <see cref="Keywords"/> — and a rule that needs to recognise the pack does it by
+    /// token kind rather than a second hardcoded spelling of the word.
     /// </summary>
     public bool HasVarargBinding => HasKeyword("vararg");
+
+    /// <summary>
+    /// Whether a function can be declared <c>private</c>. BO3 only: in every other dialect the word
+    /// is not a keyword, so it lexes as an identifier and no declaration ever carries the flag.
+    /// Derived from the keyword set.
+    /// </summary>
+    public bool HasPrivateFunctions => HasKeyword("private");
 
     /// <summary>Whether a function declaration begins with the <c>function</c> keyword. IW omits it. Derived from the keyword set.</summary>
     public bool HasFunctionKeyword => HasKeyword("function");
@@ -587,6 +617,23 @@ public sealed partial record GameProfile
         get { return [.. ScriptExtensions.Select(static extension => "*" + extension)]; }
     }
 
+    /// <summary>
+    /// Directory names the workspace walk never descends into, because the tools write them and no
+    /// source lives there.
+    ///
+    /// This exists because a workspace folder is often the GAME INSTALL, not a scripts folder: a
+    /// Black Ops III install is 295,640 files, of which 170,328 are under `share\assetconvert` —
+    /// one shader and mesh cache per asset — and 4,329 more under `texture_assets`. Finding 1,105
+    /// scripts meant walking all of it, which took longer than analysing every one of them.
+    ///
+    /// Kept deliberately SHORT and specific to tool output. `zone`, `sound` and `video` were
+    /// measured too and are not worth the risk: they cost nothing on top of these two, and each is
+    /// a name a mod could plausibly give a scripts folder. Skipping a directory a user keeps
+    /// scripts in is a file that silently never gets indexed, which is a worse failure than a slow
+    /// walk.
+    /// </summary>
+    public static ImmutableArray<string> ToolOutputDirectories { get; } = ["assetconvert", "texture_assets"];
+
     private static readonly Lazy<ImmutableArray<GameProfile>> s_lineage = new(BuildLineage);
 
     /// <summary>
@@ -663,7 +710,12 @@ public sealed partial record GameProfile
         return null;
     }
 
-    private static GameProfile? s_active;
+    // Written from the LSP handler thread (ConfigurationHandler, on a live gscode.game push) and
+    // read by every indexing worker thread. volatile costs nothing on a reference-typed field and
+    // rules out a stale read surviving past the write that should have replaced it — Active's own
+    // null-coalescing fallback already makes a torn read merely stale rather than unsafe, so this
+    // is a correctness-under-weak-memory-models fix rather than a fix for an observed bug.
+    private static volatile GameProfile? s_active;
 
     /// <summary>
     /// The profile in force. BO3 by default, changed by <see cref="Select"/> from the

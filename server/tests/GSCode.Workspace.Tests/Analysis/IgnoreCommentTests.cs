@@ -1,16 +1,10 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -25,17 +19,11 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class IgnoreCommentTests
 {
-    private const string Raw = @"C:\bo3\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ImmutableArray<PragmaDirective> Scan(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
     }
@@ -149,16 +137,12 @@ public class IgnoreCommentTests
 
     private static ImmutableArray<Diagnostic> Analyze(string source)
     {
-        string path = @$"{Raw}\scripts\t.gsc";
-        TestWorkspace.Built workspace = TestWorkspace.Build(GameProfile.Active, Raw, (path, source));
-
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        using TestWorkspace workspace = TestWorkspace.Build([new TestFile(@"scripts\t.gsc", source)]);
 
         return WorkspaceLints.Analyze(
-            result,
+            workspace.Analyze(@"scripts\t.gsc"),
             ScriptLanguage.Gsc,
-            path,
+            TestPaths.Raw(@"scripts\t.gsc"),
             workspace.Database,
             workspace.Resolver,
             BuiltinApiSet.Load(ApiDirectory),

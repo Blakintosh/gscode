@@ -3,8 +3,9 @@ using System.Collections.Frozen;
 namespace GSCode.Workspace.Api;
 
 /// <summary>
-/// Engine builtins that only exist in a development build, so calling one outside a
-/// <c>/# #/</c> dev block breaks once the mod ships.
+/// Engine builtins that must be called from inside a <c>/# #/</c> dev block. A dev block is
+/// skipped at runtime unless developer script is enabled on the server, so calling one outside it
+/// works while developing and breaks on a server without it.
 ///
 /// Curated here rather than read from the API data, because the bundled
 /// <c>t7_api_gsc.json</c> carries no such marker — its <c>flags</c> field records
@@ -74,7 +75,7 @@ public static class DevOnlyBuiltins
             "RecordSphere",
             "RecordStar",
 
-            // Misc development-build helpers.
+            // Misc development helpers.
             "DebugBreak",
             "SetAnimForceNew",
             "SetDebugSideSwitch",
@@ -83,7 +84,7 @@ public static class DevOnlyBuiltins
     /// <summary>How many builtins are currently known to be dev-only.</summary>
     public static int Count => s_names.Count;
 
-    /// <summary>True when the builtin exists only in a development build.</summary>
+    /// <summary>True when the builtin must be called from inside a dev block.</summary>
     public static bool Contains(string name)
     {
         return s_names.Contains(name);

@@ -1,14 +1,11 @@
 using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Completion;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
-using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Completion;
@@ -21,8 +18,8 @@ namespace GSCode.Workspace.Tests.Completion;
 /// </summary>
 public class DialectCompletionTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     [Theory]
     [InlineData("foreach")] // MW2+
@@ -39,8 +36,8 @@ public class DialectCompletionTests
     [InlineData("#precache")]
     public void Cod4DoesNotOfferBlackOps3Constructs(string keyword)
     {
-        Assert.False(GscKeywords.IsAvailable(keyword, Cod4));
-        Assert.True(GscKeywords.IsAvailable(keyword, Bo3));
+        Assert.False(GscKeywords.IsAvailable(keyword, s_cod4));
+        Assert.True(GscKeywords.IsAvailable(keyword, s_bo3));
     }
 
     [Theory]
@@ -56,8 +53,8 @@ public class DialectCompletionTests
         // else beginning with '#' through, on a comment claiming the rest "exist across the whole
         // lineage". They do not — `#define` appears in one file per IW-line game, always the same
         // commented-out block of C in _hud.gsc, and the #if family in none.
-        Assert.False(GscKeywords.IsAvailable(directive, Cod4));
-        Assert.True(GscKeywords.IsAvailable(directive, Bo3));
+        Assert.False(GscKeywords.IsAvailable(directive, s_cod4));
+        Assert.True(GscKeywords.IsAvailable(directive, s_bo3));
     }
 
     [Fact]
@@ -65,10 +62,10 @@ public class DialectCompletionTests
     {
         // The genuinely universal directives, and all that is left of the old blanket rule: 193
         // CoD4 files use #using_animtree and 54 use #animtree, against 66 and 45 in BO3.
-        Assert.True(GscKeywords.IsAvailable("#using_animtree", Cod4));
-        Assert.True(GscKeywords.IsAvailable("#using_animtree", Bo3));
-        Assert.True(GscKeywords.IsAvailable("#animtree", Cod4));
-        Assert.True(GscKeywords.IsAvailable("#animtree", Bo3));
+        Assert.True(GscKeywords.IsAvailable("#using_animtree", s_cod4));
+        Assert.True(GscKeywords.IsAvailable("#using_animtree", s_bo3));
+        Assert.True(GscKeywords.IsAvailable("#animtree", s_cod4));
+        Assert.True(GscKeywords.IsAvailable("#animtree", s_bo3));
     }
 
     [Fact]
@@ -86,8 +83,8 @@ public class DialectCompletionTests
     public void Cod4OffersIncludeButBlackOps3DoesNot()
     {
         // #include is the Infinity Ward import; #using is BO3's.
-        Assert.True(GscKeywords.IsAvailable("#include", Cod4));
-        Assert.False(GscKeywords.IsAvailable("#include", Bo3));
+        Assert.True(GscKeywords.IsAvailable("#include", s_cod4));
+        Assert.False(GscKeywords.IsAvailable("#include", s_bo3));
     }
 
     [Theory]
@@ -104,23 +101,23 @@ public class DialectCompletionTests
     [InlineData("#animtree")]
     public void UniversalKeywordsAreOfferedEverywhere(string keyword)
     {
-        Assert.True(GscKeywords.IsAvailable(keyword, Cod4));
-        Assert.True(GscKeywords.IsAvailable(keyword, Bo3));
+        Assert.True(GscKeywords.IsAvailable(keyword, s_cod4));
+        Assert.True(GscKeywords.IsAvailable(keyword, s_bo3));
     }
 
     [Fact]
     public void GlobalObjectsComeFromTheProfile()
     {
         // self/level/game/anim are universal.
-        Assert.Contains("self", Cod4.GlobalObjectNames);
-        Assert.Contains("level", Cod4.GlobalObjectNames);
-        Assert.Contains("anim", Cod4.GlobalObjectNames);
+        Assert.Contains("self", s_cod4.GlobalObjectNames);
+        Assert.Contains("level", s_cod4.GlobalObjectNames);
+        Assert.Contains("anim", s_cod4.GlobalObjectNames);
 
         // world (BO3+) and classes (BO3 class system) are not in the Infinity Ward line.
-        Assert.Contains("world", Bo3.GlobalObjectNames);
-        Assert.DoesNotContain("world", Cod4.GlobalObjectNames);
-        Assert.Contains("classes", Bo3.GlobalObjectNames);
-        Assert.DoesNotContain("classes", Cod4.GlobalObjectNames);
+        Assert.Contains("world", s_bo3.GlobalObjectNames);
+        Assert.DoesNotContain("world", s_cod4.GlobalObjectNames);
+        Assert.Contains("classes", s_bo3.GlobalObjectNames);
+        Assert.DoesNotContain("classes", s_cod4.GlobalObjectNames);
     }
 
     [Fact]
@@ -130,7 +127,7 @@ public class DialectCompletionTests
         // the list was empty: the globals were concatenated onto the keyword list and then run
         // through GscKeywords.IsAvailable, which ends at the profile's keyword set — and no global
         // object is a keyword in any dialect, so every one of them was dropped in every game.
-        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", s_cod4);
 
         Assert.Contains(entries, e => e.Label == "self" && e.Kind == CompletionKind.Variable);
         Assert.Contains(entries, e => e.Label == "level" && e.Kind == CompletionKind.Variable);
@@ -143,30 +140,48 @@ public class DialectCompletionTests
     {
         // Matched on the "global" detail rather than the label alone, so an unrelated field or
         // function that happens to be named `world` cannot make this pass or fail by accident.
-        Assert.Contains(CompleteInCode("", Bo3), e => e.Label == "world" && e.Detail == "global");
-        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == "world" && e.Detail == "global");
+        Assert.Contains(CompleteInCode("", s_bo3), e => e.Label == "world" && e.Detail == "global");
+        Assert.DoesNotContain(CompleteInCode("", s_cod4), e => e.Label == "world" && e.Detail == "global");
 
-        Assert.Contains(CompleteInCode("", Bo3), e => e.Label == "classes" && e.Detail == "global");
-        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == "classes" && e.Detail == "global");
+        Assert.Contains(CompleteInCode("", s_bo3), e => e.Label == "classes" && e.Detail == "global");
+        Assert.DoesNotContain(CompleteInCode("", s_cod4), e => e.Label == "classes" && e.Detail == "global");
     }
 
     [Fact]
     public void GlobalObjectsAreNotOfferedAtTopLevel()
     {
-        // Outside a function body only declarations and directives are legal, and `self` there is
-        // not a thing anyone can write.
+        // File scope is NOT declarations-only — a top-level macro invocation is a call, so it opens
+        // an expression there — but nothing at that position can be sent a call, so `self` is still
+        // not a thing anyone writes. They are held back on a second count as well: a global is a
+        // Variable, which is the first sort tier, so offering them would put them at the head of
+        // every file-scope list.
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("\nmain()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            Cod4);
+        ParseResult result = TestParse.Analyze("\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
 
-        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, 0), profile: Cod4);
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(0, 0), profile: s_cod4);
 
         Assert.DoesNotContain(entries, e => e.Detail == "global");
+    }
+
+    /// <summary>
+    /// File scope now runs the same producers a body does, so the dialect gating has to hold at a
+    /// position it never used to reach. CoD4 has no preprocessor and no class system, so neither a
+    /// macro row nor a BO3 declaration keyword may appear there.
+    /// </summary>
+    [Fact]
+    public void Cod4FileScopeStaysWithinTheDialect()
+    {
+        CompletionEngine engine = BuildEngine();
+        ParseResult result = TestParse.Analyze("#define CAP 5\n\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
+
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(1, 0), profile: s_cod4);
+
+        Assert.DoesNotContain(entries, e => e.Kind == CompletionKind.Macro);
+        Assert.DoesNotContain(entries, e => e.Label == "class");
+        Assert.DoesNotContain(entries, e => e.Label == "#using");
+
+        // The dialect's own file-scope word is still there, so this is not passing on an empty list.
+        Assert.Contains(entries, e => e.Label == "#include");
     }
 
     // --- Dialect-gated snippets ---
@@ -178,7 +193,7 @@ public class DialectCompletionTests
     [Fact]
     public void Cod4IsNotOfferedTheForeachSnippet()
     {
-        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", s_cod4);
 
         Assert.DoesNotContain(entries, e => e.Label == "foreach" && e.Kind == CompletionKind.Snippet);
         Assert.DoesNotContain(entries, e => e.Label == "foreachkv");
@@ -190,7 +205,7 @@ public class DialectCompletionTests
     [Fact]
     public void BlackOps3IsOfferedTheForeachSnippet()
     {
-        ImmutableArray<CompletionEntry> entries = CompleteInCode("", Bo3);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("", s_bo3);
 
         CompletionEntry snippet = Assert.Single(entries, e => e.Label == "foreach");
 
@@ -205,19 +220,17 @@ public class DialectCompletionTests
     [Theory]
     [InlineData("class")]
     [InlineData("new")]
-    [InlineData("funcauto")]
-    [InlineData("funcpriv")]
     [InlineData("using")]
     [InlineData("insert")]
     [InlineData("namespace")]
     [InlineData("precache")]
     public void Cod4IsNotOfferedBlackOps3Snippets(string label)
     {
-        Assert.DoesNotContain(CompleteInCode("", Cod4), e => e.Label == label);
-        Assert.DoesNotContain(TopLevelCompletions(Cod4), e => e.Label == label);
+        Assert.DoesNotContain(CompleteInCode("", s_cod4), e => e.Label == label);
+        Assert.DoesNotContain(TopLevelCompletions(s_cod4), e => e.Label == label);
         Assert.True(
-            CompleteInCode("", Bo3).Any(e => e.Label == label)
-                || TopLevelCompletions(Bo3).Any(e => e.Label == label),
+            CompleteInCode("", s_bo3).Any(e => e.Label == label)
+                || TopLevelCompletions(s_bo3).Any(e => e.Label == label),
             label + " should still be offered somewhere in BO3");
     }
 
@@ -225,11 +238,11 @@ public class DialectCompletionTests
     public void TheImportSnippetFollowsTheDialect()
     {
         // CoD4 merges with #include and BO3 imports with #using; neither has the other's.
-        Assert.Contains(TopLevelCompletions(Cod4), e => e.Label == "include");
-        Assert.DoesNotContain(TopLevelCompletions(Cod4), e => e.Label == "using");
+        Assert.Contains(TopLevelCompletions(s_cod4), e => e.Label == "include");
+        Assert.DoesNotContain(TopLevelCompletions(s_cod4), e => e.Label == "using");
 
-        Assert.Contains(TopLevelCompletions(Bo3), e => e.Label == "using");
-        Assert.DoesNotContain(TopLevelCompletions(Bo3), e => e.Label == "include");
+        Assert.Contains(TopLevelCompletions(s_bo3), e => e.Label == "using");
+        Assert.DoesNotContain(TopLevelCompletions(s_bo3), e => e.Label == "include");
     }
 
     [Fact]
@@ -241,7 +254,7 @@ public class DialectCompletionTests
         // needed two files — one per world. The body here names none of them: the tab stop lands
         // inside the quotes and Retrigger reopens the list, so PrecacheAssetTypes stays the only
         // place the vocabulary is written down and the world split is answered once.
-        CompletionEntry snippet = Assert.Single(TopLevelCompletions(Bo3), e => e.Label == "precache");
+        CompletionEntry snippet = Assert.Single(TopLevelCompletions(s_bo3), e => e.Label == "precache");
 
         Assert.Equal(CompletionKind.Snippet, snippet.Kind);
         Assert.StartsWith("#precache(", snippet.InsertText, StringComparison.Ordinal);
@@ -256,8 +269,8 @@ public class DialectCompletionTests
     {
         // Every dialect has SOME ScriptDoc form, so this one is chosen rather than filtered: both
         // games offer `doc`, and the body is the one their own scripts use.
-        CompletionEntry cod4 = Assert.Single(TopLevelCompletions(Cod4), e => e.Label == "doc");
-        CompletionEntry bo3 = Assert.Single(TopLevelCompletions(Bo3), e => e.Label == "doc");
+        CompletionEntry cod4 = Assert.Single(TopLevelCompletions(s_cod4), e => e.Label == "doc");
+        CompletionEntry bo3 = Assert.Single(TopLevelCompletions(s_bo3), e => e.Label == "doc");
 
         Assert.StartsWith("/*", cod4.InsertText, StringComparison.Ordinal);
         Assert.StartsWith("/@", bo3.InsertText, StringComparison.Ordinal);
@@ -268,7 +281,7 @@ public class DialectCompletionTests
     {
         // The reported case, end to end rather than through IsAvailable alone: this is the list in
         // the screenshot. CoD4 has two top-level directives and was being offered eight.
-        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(Cod4);
+        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(s_cod4);
 
         Assert.Equal(
             new[] { "#include", "#using_animtree" },
@@ -279,7 +292,7 @@ public class DialectCompletionTests
     public void TypingAHashAtTopLevelInBlackOps3_IsUnchanged()
     {
         // The gate must not cost BO3 anything: it is the game that has all of them.
-        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(Bo3);
+        ImmutableArray<CompletionEntry> entries = DirectivesAfterHash(s_bo3);
 
         foreach ( string directive in (string[])["#using", "#insert", "#namespace", "#precache", "#define", "#if"] )
         {
@@ -294,13 +307,7 @@ public class DialectCompletionTests
     private static ImmutableArray<CompletionEntry> DirectivesAfterHash(GameProfile profile)
     {
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("#\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze("#\n", TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(0, 1), profile: profile);
     }
@@ -309,13 +316,7 @@ public class DialectCompletionTests
     private static ImmutableArray<CompletionEntry> TopLevelCompletions(GameProfile profile)
     {
         CompletionEngine engine = BuildEngine();
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze("\n", TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(0, 0), profile: profile);
     }
@@ -328,22 +329,16 @@ public class DialectCompletionTests
     // continues into. The profile is passed explicitly rather than through GameProfile.Active, so
     // these cannot be perturbed by a test that mutates it.
 
-    private const string Raw = @"C:\cod4\raw";
-
-    private static readonly FakeFileSystem PathWorld = new FakeFileSystem()
-        .AddFile(@$"{Raw}\maps\mp\_utility.gsc", "helper()\n{\n}\n")
-        .AddFile(@$"{Raw}\maps\mp\_load.gsc", "load()\n{\n}\n")
-        .AddFile(@$"{Raw}\maps\mp\gametypes\dm.gsc", "main()\n{\n}\n")
-        .AddFile(@$"{Raw}\common_scripts\utility.gsc", "u()\n{\n}\n");
+    private static readonly FakeFileSystem s_pathWorld = new FakeFileSystem()
+        .AddFile(TestPaths.Raw(@"maps\mp\_utility.gsc"), "helper()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"maps\mp\_load.gsc"), "load()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"maps\mp\gametypes\dm.gsc"), "main()\n{\n}\n")
+        .AddFile(TestPaths.Raw(@"common_scripts\utility.gsc"), "u()\n{\n}\n");
 
     private static CompletionEngine BuildEngine()
     {
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\cod4\mods", [], PathWorld);
-        PathResolver resolver = new(config, PathWorld);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, PathWorld, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(s_pathWorld, GameProfile.Cod4, IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         string api = Path.Combine(AppContext.BaseDirectory, "Api");
         return new CompletionEngine(database, BuiltinApiSet.Load(api), ObjectFields.Load(api));
@@ -363,13 +358,7 @@ public class DialectCompletionTests
 
         string opening = profile.HasFunctionKeyword ? "function " : "";
         string text = opening + "main()\n{\n    " + line + "\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(text),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            profile);
+        ParseResult result = TestParse.Analyze(text, TestPaths.Raw(@"maps\mp\test.gsc"), profile);
 
         return engine.Complete(result, "raw", new Position(2, 4 + line.Length), profile: profile);
     }
@@ -377,7 +366,7 @@ public class DialectCompletionTests
     [Fact]
     public void AnInlinePathInCode_OffersTheNextSegment()
     {
-        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\", s_cod4);
 
         Assert.Contains(entries, e => e.Label == "mp" && e.Kind == CompletionKind.PathSegment);
     }
@@ -385,7 +374,7 @@ public class DialectCompletionTests
     [Fact]
     public void AnInlinePath_DescendsToFilesLikeTheDirectivesDo()
     {
-        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\mp\", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\mp\", s_cod4);
 
         Assert.Contains(entries, e => e.Label == "_utility" && e.Kind == CompletionKind.PathFile);
         Assert.Contains(entries, e => e.Label == "gametypes" && e.Kind == CompletionKind.PathSegment);
@@ -397,7 +386,7 @@ public class DialectCompletionTests
     [Fact]
     public void AFolderStillInsertsItsSeparatorAndReopens()
     {
-        CompletionEntry folder = Assert.Single(CompleteInCode(@"maps\", Cod4), e => e.Label == "mp");
+        CompletionEntry folder = Assert.Single(CompleteInCode(@"maps\", s_cod4), e => e.Label == "mp");
 
         Assert.Equal(@"mp\", folder.InsertText);
         Assert.True(folder.RetriggerCompletion);
@@ -408,7 +397,7 @@ public class DialectCompletionTests
     {
         // BO3 has no inline path calls, so a '\' in an expression means nothing there and the
         // ordinary statement list must be what comes back.
-        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\", Bo3);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode(@"maps\", s_bo3);
 
         Assert.DoesNotContain(entries, e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
     }
@@ -418,7 +407,7 @@ public class DialectCompletionTests
     {
         // The separator is the whole disambiguation: without requiring one, every identifier in a
         // function body would look like a path's first segment and the list would become paths.
-        ImmutableArray<CompletionEntry> entries = CompleteInCode("map", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("map", s_cod4);
 
         Assert.DoesNotContain(entries, e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
     }
@@ -434,7 +423,7 @@ public class DialectCompletionTests
         // division on the four inline-path dialects into a path query that matches nothing — and an
         // empty list with IsIncomplete false is cached and filtered client-side, so the rest of the
         // identifier got no suggestions either.
-        ImmutableArray<CompletionEntry> entries = CompleteInCode(line, Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode(line, s_cod4);
 
         Assert.DoesNotContain(entries, e => e.Kind is CompletionKind.PathSegment or CompletionKind.PathFile);
         Assert.NotEmpty(entries);
@@ -445,7 +434,7 @@ public class DialectCompletionTests
     {
         // The other half of the same claim: narrowing the scan to '\' must not cost the feature.
         Assert.Contains(
-            CompleteInCode(@"maps\mp\_ut", Cod4),
+            CompleteInCode(@"maps\mp\_ut", s_cod4),
             e => e.Label == "_utility" && e.Kind == CompletionKind.PathFile);
     }
 
@@ -455,7 +444,7 @@ public class DialectCompletionTests
         // CoD4, WaW and MW2 have no #"..." literal, so the in-body '#' branch had nothing to offer
         // and returned a hard empty list. '#' is a trigger character, so that list popped — the
         // "feels dead" symptom the trigger characters were added to fix.
-        ImmutableArray<CompletionEntry> entries = CompleteInCode("#", Cod4);
+        ImmutableArray<CompletionEntry> entries = CompleteInCode("#", s_cod4);
 
         Assert.NotEmpty(entries);
 
@@ -477,16 +466,10 @@ public class DialectCompletionTests
         // so the whole Infinity Ward line got no path completion on the one directive it writes.
         CompletionEngine engine = BuildEngine();
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @$"{Raw}\maps\mp\test.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("#include maps\\\nmain()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable(),
-            Cod4);
+        ParseResult result = TestParse.Analyze("#include maps\\\nmain()\n{\n}\n", TestPaths.Raw(@"maps\mp\test.gsc"), s_cod4);
 
         ImmutableArray<CompletionEntry> entries = engine.Complete(
-            result, "raw", new Position(0, 14), profile: Cod4);
+            result, "raw", new Position(0, 14), profile: s_cod4);
 
         Assert.Contains(entries, e => e.Label == "mp" && e.Kind == CompletionKind.PathSegment);
     }

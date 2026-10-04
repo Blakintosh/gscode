@@ -131,20 +131,27 @@ public sealed class ObjectFields
     /// Loads the two artifacts from an Api directory, named by the profile (empty when the profile
     /// ships no data, or the files are absent/corrupt).
     /// </summary>
-    public static ObjectFields Load(string apiDirectory, GameProfile? profile = null)
+    /// <param name="onParseFailure">
+    /// The caller's seam for reporting a file that EXISTS but could not be read or parsed — a
+    /// locked file, a permissions problem, corrupt data. Optional and null by default, matching
+    /// <see cref="ApiLoader.LoadFile"/>'s own hook, so a caller that does not need to distinguish
+    /// this from "the profile ships no data" keeps its previous behaviour exactly.
+    /// </param>
+    public static ObjectFields Load(
+        string apiDirectory, GameProfile? profile = null, Action<string, Exception>? onParseFailure = null)
     {
         GameProfile game = profile ?? GameProfile.Active;
 
         Dictionary<string, List<ObjectField>> byName = new(StringComparer.OrdinalIgnoreCase);
         if ( game.ObjectFieldsFileName is string objectFieldsFile )
         {
-            LoadObjectFields(Path.Combine(apiDirectory, objectFieldsFile), byName);
+            LoadObjectFields(Path.Combine(apiDirectory, objectFieldsFile), byName, onParseFailure);
         }
 
         Dictionary<string, RadiantKey> radiant = new(StringComparer.OrdinalIgnoreCase);
         if ( game.RadiantKeysFileName is string radiantKeysFile )
         {
-            LoadRadiantKeys(Path.Combine(apiDirectory, radiantKeysFile), radiant);
+            LoadRadiantKeys(Path.Combine(apiDirectory, radiantKeysFile), radiant, onParseFailure);
         }
 
         FrozenDictionary<string, ImmutableArray<ObjectField>> fields = byName.ToFrozenDictionary(
@@ -155,7 +162,8 @@ public sealed class ObjectFields
         return new ObjectFields(fields, radiant.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
     }
 
-    private static void LoadObjectFields(string path, Dictionary<string, List<ObjectField>> byName)
+    private static void LoadObjectFields(
+        string path, Dictionary<string, List<ObjectField>> byName, Action<string, Exception>? onParseFailure)
     {
         if ( !File.Exists(path) )
         {
@@ -168,8 +176,9 @@ public sealed class ObjectFields
             using FileStream stream = File.OpenRead(path);
             kinds = JsonSerializer.Deserialize(stream, ObjectFieldsJsonContext.Default.DictionaryStringListRawField);
         }
-        catch ( JsonException )
+        catch ( Exception exception ) when ( exception is JsonException or IOException or UnauthorizedAccessException )
         {
+            onParseFailure?.Invoke(path, exception);
             return;
         }
 
@@ -178,9 +187,9 @@ public sealed class ObjectFields
             return;
         }
 
-        foreach ( (string kind, List<RawField> entries) in kinds )
+        foreach ( KeyValuePair<string, List<RawField>> kind in kinds )
         {
-            foreach ( RawField entry in entries )
+            foreach ( RawField entry in kind.Value )
             {
                 if ( entry.Name is null || entry.Type is null )
                 {
@@ -193,12 +202,13 @@ public sealed class ObjectFields
                     byName[entry.Name] = list;
                 }
 
-                list.Add(new ObjectField(entry.Name, entry.Type, entry.ReadOnly, kind));
+                list.Add(new ObjectField(entry.Name, entry.Type, entry.ReadOnly, kind.Key));
             }
         }
     }
 
-    private static void LoadRadiantKeys(string path, Dictionary<string, RadiantKey> radiant)
+    private static void LoadRadiantKeys(
+        string path, Dictionary<string, RadiantKey> radiant, Action<string, Exception>? onParseFailure)
     {
         if ( !File.Exists(path) )
         {
@@ -211,8 +221,9 @@ public sealed class ObjectFields
             using FileStream stream = File.OpenRead(path);
             keys = JsonSerializer.Deserialize(stream, ObjectFieldsJsonContext.Default.ListRawRadiantKey);
         }
-        catch ( JsonException )
+        catch ( Exception exception ) when ( exception is JsonException or IOException or UnauthorizedAccessException )
         {
+            onParseFailure?.Invoke(path, exception);
             return;
         }
 

@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -18,12 +14,7 @@ public class PaddingOptionsTests
 {
     private static string Format(string statement, FormatOptions options)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f( a, i )\n{\n\t" + statement + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f( a, i )\n{\n\t" + statement + "\n}\n");
 
         string? formatted = GscFormatter.Format(result, options with { UseTabs = true });
         Assert.NotNull(formatted);
@@ -116,6 +107,22 @@ public class PaddingOptionsTests
         Assert.Contains(
             expected,
             Format(input, FormatOptions.Default with { SpaceBeforeControlParen = false }), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("for (;;) { break; }", "for ( ;; )")]
+    [InlineData("for ( ;; ) { break; }", "for ( ;; )")]
+    [InlineData("for (i = 0;;) { break; }", "for ( i = 0;; )")]
+    [InlineData("for (;; i++) { break; }", "for ( ;; i++ )")]
+    [InlineData("for (i = 0; i < 1;) { break; }", "for ( i = 0; i < 1; )")]
+    [InlineData("for ( ;;\n\t) { break; }", "for ( ;; )")]
+    [InlineData("for ( i = 0; i < 1;\n\t) { break; }", "for ( i = 0; i < 1; )")]
+    public void AnEmptyForClauseStaysOnItsLine(string input, string expected)
+    {
+        // Reported: `for ( ;;` followed by `)` on a line of its own, whatever the settings.
+        string formatted = Format(input, FormatOptions.Default);
+        Assert.Contains(expected, formatted, StringComparison.Ordinal);
+        Assert.DoesNotContain(";\n", formatted[..formatted.IndexOf('{', formatted.IndexOf("for"))], StringComparison.Ordinal);
     }
 
     [Fact]

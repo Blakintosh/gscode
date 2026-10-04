@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
 using GSCode.Workspace.Database;
+using GSCode.Workspace.Documents;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
 using GSCode.Server.Configuration;
@@ -19,8 +20,13 @@ namespace GSCode.Server.Handlers;
 /// Three things have to happen in order: the resolver is swapped first, since every later
 /// query classifies paths through it; records under removed folders are dropped, because
 /// their files are no longer visible; and the added folders are indexed last. Re-indexing is
-/// a full pass — unchanged files restore from the in-memory cache snapshot, so the cost is a
-/// warm start rather than a cold one.
+/// a full pass — unchanged files restore from the cache snapshot, so the cost is a warm start
+/// rather than a cold one.
+///
+/// This is the only place that indexes twice in one session, and the snapshot is released when a
+/// pass finishes rather than kept for the run — a bo3 workspace's blobs are 21 MB and a bo1 one's
+/// 64, against a 400 MB steady-state budget. So it is re-read here, which is the 13–54 ms this
+/// path pays to keep the other case free.
 /// </summary>
 public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBase
 {
@@ -29,19 +35,31 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     private readonly IFileSystem _fileSystem;
     private readonly ScriptDatabase _database;
     private readonly WorkspaceIndexer _indexer;
+    private readonly DocumentStore _documents;
+    private readonly WorkspaceLintSweep _lintSweep;
+    private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
+    private readonly DependentDiagnosticsRefresher _dependents;
 
     public WorkspaceFoldersHandler(
         ResolverHolder resolver,
         ServerSettings settings,
         IFileSystem fileSystem,
         ScriptDatabase database,
-        WorkspaceIndexer indexer)
+        WorkspaceIndexer indexer,
+        DocumentStore documents,
+        WorkspaceLintSweep lintSweep,
+        WorkspaceDiagnosticsPublisher workspaceDiagnostics,
+        DependentDiagnosticsRefresher dependents)
     {
+        _lintSweep = lintSweep;
+        _workspaceDiagnostics = workspaceDiagnostics;
+        _dependents = dependents;
         _resolver = resolver;
         _settings = settings;
         _fileSystem = fileSystem;
         _database = database;
         _indexer = indexer;
+        _documents = documents;
     }
 
     protected override DidChangeWorkspaceFolderRegistrationOptions CreateRegistrationOptions(ClientCapabilities clientCapabilities)
@@ -66,15 +84,36 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         // Only worth re-indexing when a folder was added; a pure removal has nothing new.
         if ( request.Event.Added.Any() )
         {
+            // reloadSnapshot, not a separate ReloadRestoreSnapshot() call before this: both happen
+            // under the indexer's own pass gate, so a startup pass in flight cannot have its snapshot
+            // swapped out from under it in the gap between two calls.
+            IndexingMode mode = _settings.IndexingMode;
             IndexOutcome outcome = await _indexer
-                .IndexAsync(IndexingModeFor(_settings), NullIndexProgressListener.Instance, cancellationToken)
+                .IndexAsync(
+                    mode, NullIndexProgressListener.Instance, cancellationToken,
+                    reloadSnapshot: true, ownedByEditor: _documents.IsOpen)
                 .ConfigureAwait(false);
 
             Log.Information(
                 "Re-indexed after folder change: {Total} files ({Restored} from cache)",
                 outcome.Total,
                 outcome.Restored);
+
+            // The new folder's files were indexed with their parse diagnostics alone. Startup sweeps
+            // the cross-file lints in full mode, and a folder added later has to be swept the same
+            // way, or its files report less than the ones that were there at start. The whole set,
+            // not the new folder's: an added file can resolve a call another file reported missing.
+            if ( mode == IndexingMode.Full )
+            {
+                await _lintSweep.RunFullSweepAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
+
+        // Either way the set of files moved under every diagnostic in the Problems panel: a removed
+        // folder's problems have to be taken back, an added one's published, and every open file
+        // was linted against the old set. Startup does the same pair after its own index.
+        _workspaceDiagnostics.Refresh();
+        _dependents.Schedule();
 
         return Unit.Value;
     }
@@ -203,20 +242,5 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
             settings.ModsPath.Length == 0 ? null : settings.ModsPath,
             workspaceFolders,
             fileSystem);
-    }
-
-    private static IndexingMode IndexingModeFor(ServerSettings settings)
-    {
-        if ( string.Equals(settings.WorkspaceIndexingMode, "off", StringComparison.OrdinalIgnoreCase) )
-        {
-            return IndexingMode.Off;
-        }
-
-        if ( string.Equals(settings.WorkspaceIndexingMode, "full", StringComparison.OrdinalIgnoreCase) )
-        {
-            return IndexingMode.Full;
-        }
-
-        return IndexingMode.Partial;
     }
 }

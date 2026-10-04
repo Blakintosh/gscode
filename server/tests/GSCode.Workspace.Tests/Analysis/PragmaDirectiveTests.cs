@@ -1,11 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
-using GSCode.Parser.Preprocessing;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -26,12 +22,7 @@ public class PragmaDirectiveTests
 {
     private static ImmutableArray<PragmaDirective> Scan(string source)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return PragmaDirectives.Scan(result.Lexed.Tokens, result.Text);
     }

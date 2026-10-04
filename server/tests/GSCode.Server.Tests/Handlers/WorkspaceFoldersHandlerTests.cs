@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using GSCode.Core.Paths;
-using GSCode.Core.Symbols;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Database;
 using Xunit;
@@ -11,13 +10,7 @@ public class WorkspaceFoldersHandlerTests
 {
     private static ScriptRecord RecordAt(string path, string contextId)
     {
-        return new ScriptRecord
-        {
-            Path = PathUtil.NormalizeAbsolute(path),
-            Language = ScriptLanguage.Gsc,
-            ContextId = contextId,
-            ContentHash = 0,
-        };
+        return TestRecords.At(PathUtil.NormalizeAbsolute(path), contextId);
     }
 
     [Fact]

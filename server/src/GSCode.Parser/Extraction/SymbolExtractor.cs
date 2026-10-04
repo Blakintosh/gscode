@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
+using System.Globalization;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Docs;
@@ -29,6 +30,7 @@ public sealed class SymbolExtractor
     private readonly ImmutableArray<ClassSymbol>.Builder _classes = ImmutableArray.CreateBuilder<ClassSymbol>();
     private readonly ImmutableArray<ReferenceEntry>.Builder _references = ImmutableArray.CreateBuilder<ReferenceEntry>();
     private readonly ImmutableArray<PathCallReference>.Builder _pathCalls = ImmutableArray.CreateBuilder<PathCallReference>();
+    private readonly ImmutableArray<FieldBinding>.Builder _fieldBindings = ImmutableArray.CreateBuilder<FieldBinding>();
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
     // Namespace state while walking (default = the file name stem).
@@ -45,16 +47,27 @@ public sealed class SymbolExtractor
     // walk, and afterwards by ClassSymbol.FullRange for anything that needs it positionally.
     private string? _currentClass;
 
-    // Ranges in THIS file where a macro was invoked. An expansion's AST nodes report the
-    // invocation's range, so containment identifies macro-supplied syntax.
-    private readonly List<TextRange> _macroInvocations = [];
-
-    // How many dev blocks enclose the walk right now; > 0 means release builds drop this code.
+    // How many dev blocks enclose the walk right now; > 0 means the code is dev-only.
     private int _devBlockDepth;
 
     // Whether the walk is inside a `+` chain, where a string literal is a message fragment
     // rather than a name. Nested so an inner expression does not clear an outer concatenation.
     private bool _inStringConcatenation;
+
+    // The range of the field name an assignment is about to write, so that the ordinary expression
+    // walk over the target records it as a write rather than a read.
+    //
+    // A range rather than the token, because the walk reaches the same MemberNode a moment later
+    // through the generic expression case and has to recognise it there; a range is unique to one
+    // token's position, where token identity is a property this file does not otherwise rely on.
+    //
+    // Only the OUTERMOST member of the target is the write. `level.a[ level.b ].c = 1` writes `c`
+    // and reads `a` and `b`, and each of those reaches RecordFieldReference from the same walk.
+    private TextRange? _fieldWriteRange;
+
+    // Which write it is: FieldWrite for a plain `=`, FieldUpdate for the compound family. Only
+    // meaningful while _fieldWriteRange is set, and moves with it.
+    private ReferenceKind _fieldWriteKind;
 
     private readonly GameProfile _profile;
 
@@ -85,25 +98,29 @@ public sealed class SymbolExtractor
         extractor.ReportDuplicateFunctions();
         PerfTracker.End();
 
-        return new ExtractionResult(
+        // The six builders sealed into arrays. Its own scope because the five scopes around it did
+        // NOT add up to the phase on the #insert dialect - bo3 left about a fifth of extract
+        // unattributed where cod4 left under one percent - and a builder is sized by what the file
+        // REFERENCES, which is the quantity #insert inflates.
+        PerfTracker.Begin("extract.build");
+        ExtractionResult built = new ExtractionResult(
             extractor._namespaces.ToImmutable(),
             extractor._functions.ToImmutable(),
             extractor._classes.ToImmutable(),
             extractor._references.ToImmutable(),
             extractor._diagnostics.ToImmutable(),
-            extractor._pathCalls.ToImmutable());
+            extractor._pathCalls.ToImmutable(),
+            extractor._fieldBindings.ToImmutable());
+        PerfTracker.End();
+
+        return built;
     }
 
     private void Run(ParseTree tree, PreprocessResult preprocessed)
     {
-        // Collected BEFORE the walk, because default-parameter validation consults them.
-        foreach ( MacroInvocation invocation in preprocessed.MacroInvocations )
-        {
-            if ( invocation.SourceFile is null )
-            {
-                _macroInvocations.Add(invocation.Range);
-            }
-        }
+        // Before anything is walked, because a method body can read a member the class declares
+        // BELOW it, and a child class can be written above its parent.
+        CollectClassMembers(tree.Root.Elements);
 
         // The dominant scope, and the parent of extract.doc and extract.body: everything the walk
         // does is inside it, so the three read as a breakdown rather than as peers.
@@ -115,8 +132,11 @@ public sealed class SymbolExtractor
 
         PerfTracker.Begin("extract.macros");
 
-        // Macro definitions in THIS file are definitions; every invocation is a use.
-        foreach ( MacroDefinition macro in preprocessed.Macros.All )
+        // Every #define THIS file wrote is a definition reference at its own name — not just the
+        // one Macros kept as the winner. A name defined twice (or a root define a later #insert
+        // shadows) would otherwise have NO definition reference anywhere for the one that lost,
+        // since the table holds only the surviving definition.
+        foreach ( MacroDefinition macro in preprocessed.AllMacroDefinitions )
         {
             if ( macro.SourceFile is null )
             {
@@ -125,27 +145,255 @@ public sealed class SymbolExtractor
             }
         }
 
+        // Positions the loop above already covers, so the body scan below does not double them up.
+        HashSet<(int Line, int Character)> invocationPositions = [];
+
         foreach ( MacroInvocation invocation in preprocessed.MacroInvocations )
         {
             if ( invocation.SourceFile is null )
             {
                 SymbolKey key = new(null, _names.Intern(invocation.Name), SymbolKind.Macro);
                 _references.Add(new ReferenceEntry(key, invocation.Range, ReferenceKind.MacroUse));
+                invocationPositions.Add((invocation.Range.Start.Line, invocation.Range.Start.Character));
+            }
+        }
+
+        // A macro NAME used inside another macro's own #define body — `#define BAR FOO` — is a use
+        // of FOO wherever it sits, whether or not BAR itself is ever invoked. The loop above only
+        // sees this when BAR IS invoked somewhere: the preprocessor walks the body live at
+        // expansion time and records the nested use then (TryExpandBodyToken). An invoked-nowhere
+        // macro's body got no reference at all, so hovering FOO on the #define BAR line — or F12,
+        // or its semantic-token colour — found nothing. Scanning every root-file body directly
+        // answers all three uniformly, whether or not BAR is ever called.
+        foreach ( MacroDefinition macro in preprocessed.AllMacroDefinitions )
+        {
+            if ( macro.SourceFile is not null )
+            {
+                continue;
+            }
+
+            foreach ( PToken bodyToken in macro.Body )
+            {
+                // A parameter reference — `__a` inside IS_TRUE(__a)'s own body — names an
+                // argument, not some other macro that happens to share its spelling.
+                if ( IsMacroParameter(macro.Parameters, bodyToken.Text) )
+                {
+                    continue;
+                }
+
+                if ( !preprocessed.Macros.TryGet(bodyToken.Text, out MacroDefinition _) )
+                {
+                    continue;
+                }
+
+                (int Line, int Character) position = (bodyToken.Range.Start.Line, bodyToken.Range.Start.Character);
+                if ( !invocationPositions.Add(position) )
+                {
+                    continue;
+                }
+
+                SymbolKey key = new(null, _names.Intern(bodyToken.Text), SymbolKind.Macro);
+                _references.Add(new ReferenceEntry(key, bodyToken.Range, ReferenceKind.MacroUse));
             }
         }
 
         PerfTracker.End();
     }
 
+    /// <summary>True when <paramref name="name"/> is one of a function-like macro's OWN parameter names.</summary>
+    private static bool IsMacroParameter(ImmutableArray<string>? parameters, string name)
+    {
+        if ( parameters is null )
+        {
+            return false;
+        }
+
+        foreach ( string parameter in parameters.Value )
+        {
+            if ( string.Equals(parameter, name, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // --- Class members ---
+
+    // Every class this FILE declares, by lowercase name: its parent's name and its own `var`
+    // names. Built before the walk, since a method can read a member declared below it and a
+    // child class can be written above its parent.
+    private readonly Dictionary<string, (string? Parent, HashSet<string> Members)> _classMembers =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    // The depth every in-file ancestor walk stops at. Named rather than repeated so the bound is
+    // one number; a cycle is already stopped by the visited set, and this bounds a chain that is
+    // merely absurd - the same pairing MethodResolution.MaxDepth uses.
+    private const int MaxClassDepth = 32;
+
+    // The members in scope as bare names right now: the current class's own plus every ancestor
+    // THIS FILE declares. Null outside a class body.
+    //
+    // Ancestors in ANOTHER file are missing, which is what one file's parse can see and no more.
+    // 199 of BO3's 206 `var` declarations have their whole hierarchy in one file and are resolved
+    // exactly here; the rest are covered by _currentClassHasUnseenAncestor below, which records
+    // them without being able to prove them.
+    private HashSet<string>? _currentClassMemberNames;
+
+    // True when the current class inherits from one this file does NOT declare, so an unfamiliar
+    // bare name inside it MIGHT be a member and nothing here can tell.
+    //
+    // Those names are recorded anyway, keyed to this class like a known member. A genuine local
+    // recorded this way is harmless: the key carries its own name, so it can only ever be matched
+    // by a query for a member OF THAT NAME — and if the hierarchy really does declare one, then
+    // the bare name IS that member and the entry was right after all. What it buys is the reverse
+    // direction, which is the half a single file's parse cannot otherwise supply: without it a
+    // rename of a base's `var` rewrote the declaration and left every subclass in another file
+    // spelling the old name.
+    //
+    // Scoped to these classes alone so the index does not grow for the 31 of BO3's 33 that see
+    // their whole chain. Verified at the cursor by NavigationSupport.ResolveHit, which asks the
+    // real class graph whether the name is a member before letting a hit stand.
+    private bool _currentClassHasUnseenAncestor;
+
+    private void CollectClassMembers(ImmutableArray<AstNode> elements)
+    {
+        foreach ( AstNode element in elements )
+        {
+            switch ( element )
+            {
+                case ClassNode classNode:
+                {
+                    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+                    foreach ( AstNode member in classNode.Members )
+                    {
+                        if ( member is VarDeclNode varDecl )
+                        {
+                            names.Add(varDecl.NameToken.Text);
+                        }
+                    }
+
+                    _classMembers[_names.InternLower(classNode.NameToken.Text)] =
+                        (classNode.ParentToken is null ? null : _names.InternLower(classNode.ParentToken.Value.Text),
+                         names);
+                    continue;
+                }
+
+                // A class inside a dev block is still a class.
+                case DevBlockDeclNode devBlock:
+                    CollectClassMembers(devBlock.Declarations);
+                    continue;
+
+                default:
+                    continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bare names that mean a member inside <paramref name="classKeyName"/>'s body: its own
+    /// <c>var</c>s and those of every ancestor this file declares.
+    ///
+    /// Bounded like every other ancestor walk here, and for the same reason — a class cycle is a
+    /// state the workspace can be in, which <c>ClassCycleLint</c> reports rather than the walks
+    /// assuming away.
+    /// </summary>
+    private HashSet<string> MemberNamesInScope(string classKeyName)
+    {
+        WalkInFileAncestors(classKeyName, out HashSet<string> names, out bool _);
+        return names;
+    }
+
+    /// <summary>
+    /// True when the in-file ancestor chain of <paramref name="classKeyName"/> runs out at a
+    /// parent this file does not declare — so the chain continues somewhere this parse cannot see,
+    /// and an unfamiliar bare name in the body might be a member of it.
+    /// </summary>
+    private bool HasUnseenAncestor(string classKeyName)
+    {
+        WalkInFileAncestors(classKeyName, out HashSet<string> _, out bool unseen);
+        return unseen;
+    }
+
+    /// <summary>
+    /// One walk up the in-file chain answering both questions the callers above ask: which member
+    /// names it contributes, and whether it ran out at a parent this file does not declare.
+    ///
+    /// Written once because the two answers come from the same loop and have to agree about it —
+    /// the cycle bound and the visited set are the same rule, and a chain one of them thought was
+    /// complete while the other walked further would record a class's members and its candidates
+    /// at once.
+    ///
+    /// Bounded like every other ancestor walk here: a class cycle is a state the workspace can be
+    /// in, which <c>ClassCycleLint</c> reports rather than the walks assuming away.
+    /// </summary>
+    private void WalkInFileAncestors(string classKeyName, out HashSet<string> names, out bool hasUnseenAncestor)
+    {
+        names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        hasUnseenAncestor = false;
+
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+
+        string? current = classKeyName;
+        for ( int depth = 0; current is not null && depth < MaxClassDepth && visited.Add(current); depth++ )
+        {
+            if ( !_classMembers.TryGetValue(current, out (string? Parent, HashSet<string> Members) entry) )
+            {
+                // Named as a parent but not declared here, so the chain continues out of sight.
+                hasUnseenAncestor = true;
+                return;
+            }
+
+            names.UnionWith(entry.Members);
+            current = entry.Parent;
+        }
+    }
+
+    /// <summary>
+    /// True when a bare name in the current class body has to be RECORDED as a member, whether or
+    /// not this file can prove it is one. See <see cref="_currentClassHasUnseenAncestor"/>.
+    /// </summary>
+    private bool IsMemberCandidate(string name)
+    {
+        return IsMemberName(name) || (_currentClass is not null && _currentClassHasUnseenAncestor);
+    }
+
+    /// <summary>
+    /// The key for a class member. Owned by the class whose body the cursor is in, which for an
+    /// INHERITED member is not the class that declares it — the same split
+    /// <c>MethodResolution.Canonicalize</c> already closes for methods, and the reference query
+    /// applies it here too so a base's declaration and a subclass's use meet.
+    /// </summary>
+    private SymbolKey MemberKey(string name)
+    {
+        return new SymbolKey(null, _names.InternLower(name), SymbolKind.Member, _currentClass);
+    }
+
+    /// <summary>
+    /// True when a bare identifier in the current class body names a member rather than a local,
+    /// which is how BO3's own scripts read one — <c>_b_set_goal = true;</c> inside
+    /// <c>cSceneObject</c>, never <c>self._b_set_goal</c>.
+    /// </summary>
+    private bool IsMemberName(string name)
+    {
+        return _currentClass is not null && _currentClassMemberNames?.Contains(name) == true;
+    }
+
     // --- Namespace span bookkeeping ---
 
     private TextRange _currentNamespaceNameRange = TextRange.Empty;
+
+    // The namespace as the #namespace directive spells it, for display and casing; the key above is
+    // what every lookup compares. The file-default namespace has no directive, so it is the key.
+    private string? _currentNamespaceSpelling;
     private Position _currentNamespaceStart = Position.Zero;
 
     private void CloseNamespaceSpan(Position end)
     {
         TextRange governed = new(_currentNamespaceStart, end);
-        _namespaces.Add(new NamespaceSpan(_currentNamespace, _currentNamespace, _currentNamespaceNameRange, governed));
+        _namespaces.Add(new NamespaceSpan(
+            _currentNamespaceSpelling ?? _currentNamespace, _currentNamespace, _currentNamespaceNameRange, governed));
     }
 
     // --- Declaration walk ---
@@ -160,6 +408,7 @@ public sealed class SymbolExtractor
                 {
                     CloseNamespaceSpan(namespaceNode.Range.Start);
                     _currentNamespace = _names.InternLower(namespaceNode.NameToken.Text);
+                    _currentNamespaceSpelling = namespaceNode.NameToken.Text;
                     _currentNamespaceNameRange = namespaceNode.NameToken.RootRange;
                     _currentNamespaceStart = namespaceNode.Range.Start;
                     continue;
@@ -173,8 +422,19 @@ public sealed class SymbolExtractor
                 case PrecacheNode precache:
                     ValidatePrecache(precache);
                     continue;
+                case FileScopeConstantNode constant:
+                {
+                    // An Infinity Ward file-scope constant sits outside any function, so unlike a
+                    // parameter default there is no owning FunctionSymbol to attach an AssignmentSymbol
+                    // to — only the REFERENCES its value makes (a call, a field read, an address-of)
+                    // belong in the file's symbol surface, so the builder here is scratch and discarded.
+                    ImmutableArray<AssignmentSymbol>.Builder discarded = ImmutableArray.CreateBuilder<AssignmentSymbol>();
+                    WalkExpression(constant.Value, discarded);
+                    continue;
+                }
                 case DevBlockDeclNode devBlock:
-                    // Everything declared in here is stripped from a release build.
+                    // Everything declared in here is dev-only: the block is skipped at runtime
+                    // unless developer script is enabled on the server.
                     _devBlockDepth++;
                     WalkDeclarations(devBlock.Declarations, devBlock.Range);
                     _devBlockDepth--;
@@ -214,19 +474,30 @@ public sealed class SymbolExtractor
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
 
         // Recursive over every statement and expression in the function, so this is the other half of
-        // extraction's cost and the one that is genuinely proportional to the code. Separating it
-        // from extract.doc is what makes the two distinguishable: both scale with function count,
-        // but only one of them used to scale with token count as well.
+        // extraction's cost and the one that is genuinely proportional to the code. Timed apart from
+        // extract.doc because both scale with function count but only this one with token count.
         PerfTracker.Begin("extract.body");
         WalkStatement(function.Body, assignments);
         PerfTracker.End();
 
+        string? sourceFile = function.NameToken.Provenance.SourceFile;
         ImmutableArray<ParameterSymbol>.Builder parameters = ImmutableArray.CreateBuilder<ParameterSymbol>();
         foreach ( ParameterNode parameter in function.Parameters )
         {
-            string defaultText = parameter.DefaultValue is null ? "" : AstPrinter.Print(parameter.DefaultValue);
-            parameters.Add(new ParameterSymbol(parameter.NameToken.Text, parameter.ByRef, defaultText));
+            parameters.Add(new ParameterSymbol(
+                parameter.NameToken.Text, parameter.ByRef, DefaultValueText(parameter.DefaultValue, sourceFile)));
         }
+
+        // A name token whose text came out of a MACRO BODY (DefinitionSite set) sits, by its own
+        // Range, inside the #define — e.g. REGISTER_SYSTEM's `function autoexec __init__sytem__()` in
+        // shared.gsh. The declaration belongs to whoever INVOKED the macro, so NameRange and
+        // SourceFile come from the invocation site (RootRange), agreeing with FullRange, which
+        // RangeFrom in Parser.cs also builds from RootRange. Otherwise a CodeLens or go-to-definition
+        // lands on whatever header line the macro is defined at. A function written directly IN a
+        // header has no DefinitionSite and keeps that header as its home.
+        bool fromMacroBody = function.NameToken.Provenance.DefinitionSite is not null;
+        TextRange nameRange = fromMacroBody ? function.NameToken.RootRange : function.NameToken.Range;
+        string declaredIn = fromMacroBody ? "" : sourceFile ?? "";
 
         return new FunctionSymbol
         {
@@ -239,12 +510,42 @@ public sealed class SymbolExtractor
             IsDevOnly = _devBlockDepth > 0,
             Parameters = parameters.ToImmutable(),
             HasVarargs = function.HasVarargs,
-            NameRange = function.NameToken.Range,
+            NameRange = nameRange,
             FullRange = function.Range,
-            SourceFile = function.NameToken.Provenance.SourceFile ?? "",
+            SourceFile = declaredIn,
             Doc = FindDocComment(function.Range.Start.Line, function.NameToken.Provenance.SourceFile),
             Assignments = assignments.ToImmutable(),
         };
+    }
+
+    /// <summary>
+    /// A parameter default AS WRITTEN — what signature help, hover and export signatures show —
+    /// rather than <see cref="AstPrinter"/>'s S-expression debug format, which surfaced verbatim as
+    /// e.g. <c>v = (vector 0 0 1)</c> and <c>n = (prefix- 1)</c>.
+    ///
+    /// A default's <see cref="AstNode.Range"/> is real root-file text only for a ROOT-file function:
+    /// slicing <see cref="_text"/> by it then reproduces exactly what is on screen, macro invocations
+    /// included (the range covers the invocation as written, not its expansion). For a function an
+    /// <c>#insert</c>ed header declares, every token's range collapses onto the insert SITE — see
+    /// <c>Provenance.RootSite</c> — so slicing there would return the directive's own characters. The
+    /// printer stays the fallback for that one case.
+    /// </summary>
+    private string DefaultValueText(ExprNode? defaultValue, string? sourceFile)
+    {
+        if ( defaultValue is null )
+        {
+            return "";
+        }
+
+        if ( sourceFile is not null )
+        {
+            return AstPrinter.Print(defaultValue);
+        }
+
+        TextRange range = defaultValue.Range;
+        int start = _text.GetOffset(range.Start);
+        int end = _text.GetOffset(range.End);
+        return _text.Slice(start, end - start).ToString();
     }
 
     private void ExtractClass(ClassNode classNode)
@@ -263,7 +564,11 @@ public sealed class SymbolExtractor
         // bodies, and the constructor and destructor bodies. Restored rather than nulled at the end
         // so this stays correct if classes ever nest.
         string? enclosingClass = _currentClass;
+        HashSet<string>? enclosingMembers = _currentClassMemberNames;
+        bool enclosingUnseen = _currentClassHasUnseenAncestor;
         _currentClass = classKeyName;
+        _currentClassMemberNames = MemberNamesInScope(classKeyName);
+        _currentClassHasUnseenAncestor = HasUnseenAncestor(classKeyName);
 
         if ( classNode.ParentToken is not null )
         {
@@ -281,8 +586,15 @@ public sealed class SymbolExtractor
             switch ( member )
             {
                 case VarDeclNode varDecl:
+                {
                     members.Add(new MemberSymbol(varDecl.NameToken.Text, _names.InternLower(varDecl.NameToken.Text), varDecl.NameToken.RootRange));
+
+                    // A member is the one field-shaped thing GSC does declare, so unlike a plain
+                    // field it gets a real Definition reference and go-to-definition needs no
+                    // special case for it.
+                    AddReference(MemberKey(varDecl.NameToken.Text), varDecl.NameToken, ReferenceKind.Definition);
                     continue;
+                }
                 case FunctionNode method:
                     // Class methods carry no namespace; the class scopes them.
                     methods.Add(ExtractFunction(method, "", classKeyName));
@@ -315,6 +627,12 @@ public sealed class SymbolExtractor
         }
 
         _currentClass = enclosingClass;
+        _currentClassMemberNames = enclosingMembers;
+        _currentClassHasUnseenAncestor = enclosingUnseen;
+
+        // Same reasoning as ExtractFunction: a class NAMED by a macro body belongs at the
+        // invocation, not at the #define's own position.
+        bool classFromMacroBody = classNode.NameToken.Provenance.DefinitionSite is not null;
 
         _classes.Add(new ClassSymbol
         {
@@ -328,9 +646,9 @@ public sealed class SymbolExtractor
             HasDestructor = destructorSymbol is not null,
             Constructor = constructorSymbol,
             Destructor = destructorSymbol,
-            NameRange = classNode.NameToken.Range,
+            NameRange = classFromMacroBody ? classNode.NameToken.RootRange : classNode.NameToken.Range,
             FullRange = classNode.Range,
-            SourceFile = classNode.NameToken.Provenance.SourceFile ?? "",
+            SourceFile = classFromMacroBody ? "" : classNode.NameToken.Provenance.SourceFile ?? "",
         });
     }
 
@@ -348,6 +666,10 @@ public sealed class SymbolExtractor
         ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>();
         WalkStatement(body, assignments);
 
+        // Same reasoning as ExtractFunction: a constructor/destructor produced by a macro body
+        // belongs at the invocation, not at the #define's own position.
+        bool fromMacroBody = keywordToken.Provenance.DefinitionSite is not null;
+
         return new FunctionSymbol
         {
             Name = keywordToken.Text,
@@ -355,32 +677,12 @@ public sealed class SymbolExtractor
             Namespace = "",
             OwnerClassKeyName = ownerClass,
             IsDevOnly = _devBlockDepth > 0,
-            NameRange = keywordToken.Range,
+            NameRange = fromMacroBody ? keywordToken.RootRange : keywordToken.Range,
             FullRange = fullRange,
-            SourceFile = keywordToken.Provenance.SourceFile ?? "",
+            SourceFile = fromMacroBody ? "" : keywordToken.Provenance.SourceFile ?? "",
             Assignments = assignments.ToImmutable(),
         };
     }
-
-    /// <summary>
-    /// True when the expression occupies a macro invocation's range — i.e. the preprocessor put
-    /// it there. Checked by containment rather than token provenance so it holds for every node
-    /// shape an expansion can produce, not just the ones that carry a token directly.
-    /// </summary>
-    private bool IsMacroSupplied(ExprNode expression)
-    {
-        foreach ( TextRange invocation in _macroInvocations )
-        {
-            if ( invocation.Contains(expression.Range.Start) )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>The spec allows only plain values as parameter defaults: literals, vectors, negated literals.</summary>
 
     private void ValidatePrecache(PrecacheNode precache)
     {
@@ -423,7 +725,7 @@ public sealed class SymbolExtractor
         if ( valueCount < assetType.MinValues || valueCount > assetType.MaxValues )
         {
             string expected = assetType.MinValues == assetType.MaxValues
-                ? assetType.MinValues.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                ? assetType.MinValues.ToString(CultureInfo.InvariantCulture)
                 : $"{assetType.MinValues}-{assetType.MaxValues}";
             AddDiagnostic(GscDiagnosticCode.WrongPrecacheArgumentCount, precache.Range, typeName, expected, valueCount);
         }
@@ -551,10 +853,44 @@ public sealed class SymbolExtractor
         switch ( expression )
         {
             case AssignmentNode assignment:
+            {
                 RecordAssignmentTarget(assignment.Target, assignments);
+
+                // Set across the TARGET walk only. The value is an ordinary expression — `level.a =
+                // level.b` writes `a` and reads `b` — and a nested assignment inside it brings its
+                // own target, so the previous range is restored rather than cleared.
+                bool plain = assignment.Operator == TokenKind.Assign;
+
+                TextRange? enclosingWrite = _fieldWriteRange;
+                ReferenceKind enclosingKind = _fieldWriteKind;
+
+                // A MemberNode target is `owner.field`; a bare IdentifierNode target inside a
+                // class body is a member of that class, written the way BO3's own scripts write
+                // one. Both are assignments to a named thing that is not a local, so both mark
+                // the range their own walk will recognise a moment later.
+                _fieldWriteRange = assignment.Target switch
+                {
+                    MemberNode target => target.NameToken.RootRange,
+                    IdentifierNode named when IsMemberCandidate(named.Token.Text) => named.Token.RootRange,
+                    _ => null,
+                };
+
+                _fieldWriteKind = plain ? ReferenceKind.FieldWrite : ReferenceKind.FieldUpdate;
                 WalkExpression(assignment.Target, assignments);
+                _fieldWriteRange = enclosingWrite;
+                _fieldWriteKind = enclosingKind;
+
+                // Only a plain `=` binds. `level.callback += &foo` is not a thing anyone writes,
+                // and a compound assignment has no single assigned value — the same reason
+                // FlowTyper's own FieldWrite leaves its Value null for that form.
+                if ( plain && assignment.Target is MemberNode bound )
+                {
+                    RecordFieldBinding(bound, assignment.Value);
+                }
+
                 WalkExpression(assignment.Value, assignments);
                 return;
+            }
             case BinaryNode binary:
             {
                 // A string literal spliced into a `+` chain is a message fragment, not a name, so
@@ -572,7 +908,10 @@ public sealed class SymbolExtractor
                 return;
             }
             case TernaryNode ternary:
-                WalkExpression(ternary.Condition, assignments);
+                // The condition is a boolean test, not a message fragment, even when the ternary
+                // itself sits inside a `+` chain — `"a" + ( x > 0 ? "b" : "c" )` must not flag the
+                // comparison's own operands as concatenated literals.
+                WalkWithoutConcatenation(ternary.Condition, assignments);
                 WalkExpression(ternary.WhenTrue, assignments);
                 WalkExpression(ternary.WhenFalse, assignments);
                 return;
@@ -591,6 +930,21 @@ public sealed class SymbolExtractor
             case PostfixNode postfix:
                 WalkExpression(postfix.Operand, assignments);
                 return;
+
+            // A bare name inside a class body that matches a `var` is a MEMBER, not a local. A local
+            // gets no reference — the index is workspace-wide and every `i` would collide — but a
+            // member is declared, shared across the class's methods, and its uses are exactly what
+            // find-references and rename are asked about.
+            //
+            // Read or write by the same rule a field uses, so `_b_set_goal = true` is a write and
+            // `if ( _b_set_goal )` is a read.
+            case IdentifierNode identifier when IsMemberCandidate(identifier.Token.Text):
+                AddReference(
+                    MemberKey(identifier.Token.Text),
+                    identifier.Token,
+                    _fieldWriteRange == identifier.Token.RootRange ? _fieldWriteKind : ReferenceKind.FieldAccess);
+
+                return;
             case ParenNode paren:
                 WalkExpression(paren.Inner, assignments);
                 return;
@@ -604,17 +958,21 @@ public sealed class SymbolExtractor
                 WalkExpression(member.Object, assignments);
                 return;
             case IndexNode index:
-                WalkExpression(index.Object, assignments);
-                WalkExpression(index.Index, assignments);
+                // `"a" + level.flags[ "key" ]` — the index is a lookup key, not a fragment of the
+                // outer concatenation, even though it sits inside one.
+                WalkWithoutConcatenation(index.Object, assignments);
+                WalkWithoutConcatenation(index.Index, assignments);
                 return;
             case PointerDerefNode pointer:
                 WalkExpression(pointer.Pointer, assignments);
                 return;
             case CallNode call:
             {
+                // "a" + foo( "name" ) — the call's target and its arguments are their own
+                // expressions, not fragments of an enclosing `+` chain merely passing through here.
                 if ( call.Target is not null )
                 {
-                    WalkExpression(call.Target, assignments);
+                    WalkWithoutConcatenation(call.Target, assignments);
                 }
 
                 RecordCalleeReference(call.Callee, ReferenceKind.Call);
@@ -643,14 +1001,14 @@ public sealed class SymbolExtractor
                         continue;
                     }
 
-                    WalkExpression(call.Arguments[index], assignments);
+                    WalkWithoutConcatenation(call.Arguments[index], assignments);
                 }
 
                 return;
             }
             case ArrowCallNode arrow:
             {
-                WalkExpression(arrow.Object.Pointer, assignments);
+                WalkWithoutConcatenation(arrow.Object.Pointer, assignments);
 
                 // [[self]]->m() inside a class is a call on THIS class, and that is the only
                 // receiver whose class is knowable without typing the locals. Everything else —
@@ -665,7 +1023,7 @@ public sealed class SymbolExtractor
 
                 foreach ( ExprNode argument in arrow.Arguments )
                 {
-                    WalkExpression(argument, assignments);
+                    WalkWithoutConcatenation(argument, assignments);
                 }
 
                 return;
@@ -677,7 +1035,7 @@ public sealed class SymbolExtractor
 
                 foreach ( ExprNode argument in newNode.Arguments )
                 {
-                    WalkExpression(argument, assignments);
+                    WalkWithoutConcatenation(argument, assignments);
                 }
 
                 return;
@@ -694,11 +1052,31 @@ public sealed class SymbolExtractor
         }
     }
 
+    /// <summary>
+    /// Walks a child expression that begins its OWN expression, not a continuation of an enclosing
+    /// `+` chain — a call's target and arguments, an index, a ternary's condition. `_inStringConcatenation`
+    /// is instance state that <see cref="WalkExpression"/>'s <c>BinaryNode</c> case sets and restores
+    /// around its own two operands; every other node that recurses into an independent sub-expression
+    /// has to break that inheritance itself, or a literal several levels inside a call argument —
+    /// `"a" + foo( "name" )` — is recorded as a message fragment the outer `+` never touches.
+    /// </summary>
+    private void WalkWithoutConcatenation(ExprNode expression, ImmutableArray<AssignmentSymbol>.Builder assignments)
+    {
+        bool wasInConcatenation = _inStringConcatenation;
+        _inStringConcatenation = false;
+        WalkExpression(expression, assignments);
+        _inStringConcatenation = wasInConcatenation;
+    }
+
     private void RecordAssignmentTarget(ExprNode target, ImmutableArray<AssignmentSymbol>.Builder assignments)
     {
         switch ( target )
         {
             case IdentifierNode identifier:
+                // The AssignmentSymbol is kept even when this name is a class member, because
+                // typing, completion and the unused-local lint already read these and already
+                // know a member is not an unused local. The member REFERENCE is emitted by the
+                // target's own walk instead, exactly as a field's is.
                 AddLocalAssignment(identifier.Token, assignments);
                 return;
             case MemberNode { Object: IdentifierNode owner } member:
@@ -746,6 +1124,32 @@ public sealed class SymbolExtractor
 
     private void RecordCalleeReference(ExprNode callee, ReferenceKind kind)
     {
+        if ( !TryCalleeKey(callee, out SymbolKey key, out PToken nameToken) )
+        {
+            return;
+        }
+
+        AddReference(key, nameToken, kind);
+
+        // The leading ::foo local form has an empty path and needs no file pinning.
+        if ( callee is PathQualifiedNode { Path.Length: > 0 } path )
+        {
+            _pathCalls.Add(new PathCallReference(path.Path, path.NameToken.Range));
+        }
+    }
+
+    /// <summary>
+    /// The key a callee expression names, and the token to anchor it at — false for a form that
+    /// names no function at all, such as a <c>[[ expr ]]</c> dereference.
+    ///
+    /// Split out of <see cref="RecordCalleeReference"/> so a FUNCTION REFERENCE bound to a field
+    /// keys identically to a call of the same name. A second copy of these three cases is how the
+    /// two would come to disagree about `sys::`, about an unqualified name inside a class, or about
+    /// the path form — and a binding that keys differently from the call simply resolves to
+    /// nothing, silently.
+    /// </summary>
+    private bool TryCalleeKey(ExprNode callee, out SymbolKey key, out PToken nameToken)
+    {
         switch ( callee )
         {
             case IdentifierNode identifier when identifier.Token.Kind == TokenKind.Identifier:
@@ -756,58 +1160,114 @@ public sealed class SymbolExtractor
                 // target; the namespace remains available as a resolution-time fallback.
                 if ( _currentClass is not null )
                 {
-                    SymbolKey methodKey = new(
+                    key = new SymbolKey(
                         null, _names.InternLower(identifier.Token.Text), SymbolKind.Function, _currentClass);
 
-                    AddReference(methodKey, identifier.Token, kind);
-                    return;
+                    nameToken = identifier.Token;
+                    return true;
                 }
 
                 // Unqualified: keyed under the current namespace state (its primary
                 // resolution target; builtin fallback is a query-time concern). Under a merge
                 // dialect there is no namespace, so the key drops it and the call resolves to the
                 // matching definition wherever the merged scope pulled it in from.
-                SymbolKey key = new(FunctionKeyNamespace(_currentNamespace), _names.InternLower(identifier.Token.Text), SymbolKind.Function);
-                AddReference(key, identifier.Token, kind);
-                return;
+                key = new SymbolKey(
+                    FunctionKeyNamespace(_currentNamespace),
+                    _names.InternLower(identifier.Token.Text),
+                    SymbolKind.Function);
+
+                nameToken = identifier.Token;
+                return true;
             }
             case QualifiedNode qualified:
             {
                 // sys:: is the explicit builtin qualifier — builtins are namespace-less.
                 string namespaceText = _names.InternLower(qualified.NamespaceToken.Text);
-                string? namespaceKey = namespaceText == "sys" ? null : namespaceText;
+                string? namespaceKey = BuiltinQualifier.Matches(namespaceText, _profile) ? null : namespaceText;
 
-                SymbolKey key = new(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
-                AddReference(key, qualified.NameToken, kind);
-                return;
+                key = new SymbolKey(namespaceKey, _names.InternLower(qualified.NameToken.Text), SymbolKind.Function);
+                nameToken = qualified.NameToken;
+                return true;
             }
             case PathQualifiedNode path:
             {
                 // maps\mp\_utility::foo — the Infinity Ward path form. #include MERGES the file's
                 // functions into this scope, so the call resolves by NAME; the path names the
                 // source file, not a namespace. Keyed like an unqualified call (null namespace) so
-                // it unions for find-references; the explicit path is kept alongside so
-                // go-to-definition can pin it to that one file.
-                SymbolKey key = new(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
-                AddReference(key, path.NameToken, kind);
+                // it unions for find-references; the explicit path is kept alongside (by the
+                // caller) so go-to-definition can pin it to that one file.
+                key = new SymbolKey(null, _names.InternLower(path.NameToken.Text), SymbolKind.Function);
+                nameToken = path.NameToken;
+                return true;
+            }
+            default:
+                key = default;
+                nameToken = default;
+                return false;
+        }
+    }
 
-                // The leading ::foo local form has an empty path and needs no file pinning.
-                if ( path.Path.Length > 0 )
+    /// <summary>
+    /// Records what a <c>owner.field = …</c> write PUTS in the field, for the two right-hand sides
+    /// that name one thing outright. See <see cref="FieldBinding"/> for why only those two, and why
+    /// the recognition is syntactic rather than a typing pass.
+    /// </summary>
+    private void RecordFieldBinding(MemberNode target, ExprNode value)
+    {
+        SymbolKey field = new(null, _names.InternLower(target.NameToken.Text), SymbolKind.Field);
+
+        switch ( value )
+        {
+            case NewNode instance:
+                _fieldBindings.Add(new FieldBinding(
+                    field,
+                    new SymbolKey(null, _names.InternLower(instance.ClassToken.Text), SymbolKind.Class),
+                    target.NameToken.RootRange));
+                return;
+
+            // &foo, &ns::foo — an explicit function reference.
+            case PrefixNode { Operator: TokenKind.Ampersand } pointer:
+                if ( TryCalleeKey(pointer.Operand, out SymbolKey addressed, out _) )
                 {
-                    _pathCalls.Add(new PathCallReference(path.Path, path.NameToken.Range));
+                    _fieldBindings.Add(new FieldBinding(field, addressed, target.NameToken.RootRange));
                 }
 
                 return;
-            }
+
+            // A bare QUALIFIED name is a function reference too — `level.cb = ns::foo`. A bare
+            // UNQUALIFIED one deliberately is not: `level.cb = foo` reads a local, which is the
+            // same distinction FlowTyper draws when it decides what carries a FunctionTarget.
+            case QualifiedNode:
+            case PathQualifiedNode:
+                if ( TryCalleeKey(value, out SymbolKey named, out _) )
+                {
+                    _fieldBindings.Add(new FieldBinding(field, named, target.NameToken.RootRange));
+                }
+
+                return;
+
             default:
                 return;
         }
     }
 
+    /// <summary>
+    /// One <c>obj.name</c> site: a read, a plain write, or a compound update, depending on whether
+    /// an enclosing assignment is writing exactly this name — see <see cref="_fieldWriteRange"/>
+    /// and <see cref="_fieldWriteKind"/>.
+    ///
+    /// All three kinds carry the SAME key, which is what keeps find-references, rename and the
+    /// <c>FilesReferencing</c> index answering as they did: the kind separates how the site uses
+    /// the field without splitting the symbol they all name.
+    /// </summary>
     private void RecordFieldReference(PToken nameToken)
     {
         SymbolKey key = new(null, _names.InternLower(nameToken.Text), SymbolKind.Field);
-        AddReference(key, nameToken, ReferenceKind.FieldAccess);
+        ReferenceKind kind = _fieldWriteRange == nameToken.RootRange
+            ? _fieldWriteKind
+            : ReferenceKind.FieldAccess;
+
+        AddReference(key, nameToken, kind);
     }
 
     private void RecordLiteralReference(LiteralNode literal)
@@ -817,7 +1277,7 @@ public sealed class SymbolExtractor
             case TokenKind.String:
             {
                 // Strings are content-exact (case-sensitive).
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text)), SymbolKind.StringLiteral);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text)), SymbolKind.StringLiteral);
                 AddReference(
                     key,
                     literal.Token,
@@ -830,13 +1290,13 @@ public sealed class SymbolExtractor
                 // turned KILLSTREAK_COMBAT_ROBOT_CRATE into killstreak_combat_robot_crate. Safe
                 // to match case-sensitively too — across the stock scripts no hash string or
                 // localized string is ever written with two different casings.
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.HashString);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text, prefixLength: 1)), SymbolKind.HashString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
             case TokenKind.LocalizedString:
             {
-                SymbolKey key = new(null, _names.Intern(Unquote(literal.Token.Text[1..])), SymbolKind.LocalizedString);
+                SymbolKey key = new(null, _names.Intern(UnquoteSpan(literal.Token.Text, prefixLength: 1)), SymbolKind.LocalizedString);
                 AddReference(key, literal.Token, ReferenceKind.Literal);
                 return;
             }
@@ -856,13 +1316,10 @@ public sealed class SymbolExtractor
     /// <summary>
     /// Doc-comment tokens by the line they END on, built once and shared by every lookup.
     ///
-    /// This used to be a scan of <see cref="_rawTokens"/> from the top FOR EACH declaration, which is
-    /// O(functions x tokens): a file's function count and its token count both grow with its size, so
-    /// the cost is quadratic in file size. It was invisible on a median file and dominant on the
-    /// largest — `_utility.gsc` is the slowest file in four of the five game corpora, and extraction
-    /// was the majority of it. Non-BO3 dialects paid worse still, because
-    /// <see cref="IsDocCommentToken"/> materialises and fence-scans the TEXT of every block comment
-    /// it passes, and the old scan passed them all again for every function.
+    /// A scan of <see cref="_rawTokens"/> per declaration is O(functions x tokens), quadratic in file
+    /// size: invisible on a median file and dominant on the largest (`_utility.gsc` is the slowest
+    /// file in four of the five game corpora). Non-BO3 dialects pay worse, because
+    /// <see cref="IsDocCommentToken"/> materialises and fence-scans the TEXT of every block comment.
     ///
     /// Null until first use: a file with no declarations never builds it.
     /// </summary>
@@ -880,9 +1337,8 @@ public sealed class SymbolExtractor
         {
             if ( IsDocCommentToken(token) )
             {
-                // TryAdd, not indexer assignment: the old scan walked tokens in source order and
-                // returned the FIRST match, so where two doc blocks end on one line the earlier
-                // token has to keep winning.
+                // TryAdd, not indexer assignment: where two doc blocks end on one line, the earlier
+                // token in source order wins.
                 _docCommentsByEndLine.TryAdd(token.Range.End.Line, token);
             }
         }
@@ -970,32 +1426,49 @@ public sealed class SymbolExtractor
     }
 
     /// <summary>
-    /// Records a reference at the token's root-file range, unless the token came out of a
+    /// The same trim as <see cref="Unquote"/> — an optional prefix, then the surrounding quotes —
+    /// but as a SPAN: slicing a string allocates a new one at every step, and <see cref="Unquote"/>
+    /// paid for two throwaway strings (the prefix skip, then the quote trim) on every literal
+    /// reference just to compute a POOL LOOKUP KEY, which <see cref="NameTable.Intern"/> already
+    /// takes as a span. For an already-interned literal — the common case, since scripts repeat
+    /// string content constantly — that was two allocations spent on a value the call was about to
+    /// discard either way.
+    /// </summary>
+    private static ReadOnlySpan<char> UnquoteSpan(string text, int prefixLength = 0)
+    {
+        ReadOnlySpan<char> span = text.AsSpan(prefixLength);
+
+        if ( span.Length > 0 && span[0] == '"' )
+        {
+            span = span[1..];
+        }
+
+        if ( span.Length > 0 && span[^1] == '"' )
+        {
+            span = span[..^1];
+        }
+
+        return span;
+    }
+
+    /// <summary>
+    /// Records a reference at the token's root-file range, flagged when the token came out of a
     /// macro body.
     ///
-    /// Expanded tokens report the INVOCATION's range, so recording them would stack a macro's
-    /// whole body onto the one call site: go-to-definition would land on whatever the body
-    /// mentions first, and every expanded call would contribute its own parameter hints there.
-    /// Arguments passed at the call site keep their own provenance and so are still recorded,
-    /// as is the MacroUse reference for the invocation itself.
+    /// Expanded tokens report the INVOCATION's range, because that is the only text on screen:
+    /// the macro's whole body stacks onto the one call site. That is what
+    /// <see cref="ReferenceEntry.FromMacro"/> exists to say, and every consumer that must not
+    /// treat the range as the reference's own text — hover, go-to-definition, parameter hints —
+    /// reads it. Arguments passed at the call site keep their own provenance and so are recorded
+    /// unflagged, as is the MacroUse reference for the invocation itself.
     ///
-    /// The cost is that a function named only inside a macro body gets no reference anywhere,
-    /// since the body is never parsed as code at its definition site either.
+    /// The KIND is left alone: a call a macro expands into is still a call, and needs its import,
+    /// its dev-block check and its argument count like any other.
     /// </summary>
     private void AddReference(SymbolKey key, PToken token, ReferenceKind kind)
     {
-        // Text from a macro body still USES what it names — a file invoking REGISTER_SYSTEM
-        // really does call system::register — but the cursor can never sit on it, because the
-        // characters on screen spell the macro's name. Recording it under a separate kind keeps
-        // the fact while leaving navigation to resolve the macro instead. RootRange is already
-        // the invocation site in this file, so the range is meaningful either way.
-        if ( token.Provenance.DefinitionSite is not null )
-        {
-            _references.Add(new ReferenceEntry(key, token.RootRange, ReferenceKind.ExpandedFromMacro));
-            return;
-        }
-
-        _references.Add(new ReferenceEntry(key, token.RootRange, kind));
+        _references.Add(new ReferenceEntry(
+            key, token.RootRange, kind, FromMacro: token.Provenance.DefinitionSite is not null));
     }
 
     private void AddDiagnostic(GscDiagnosticCode code, TextRange range, params object[] arguments)

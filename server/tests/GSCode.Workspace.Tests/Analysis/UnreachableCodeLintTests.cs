@@ -1,10 +1,6 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using Xunit;
 
@@ -22,14 +18,9 @@ public class UnreachableCodeLintTests
 {
     private static ImmutableArray<Diagnostic> Lint(string body)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("function f()\n{\n" + body + "\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("function f()\n{\n" + body + "\n}\n");
 
-        return UnreachableCodeLint.Analyze(result);
+        return NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode);
     }
 
     [Theory]
@@ -93,16 +84,24 @@ public class UnreachableCodeLintTests
     }
 
     [Fact]
+    public void DeadCodeAfterABreakInsideACase_IsReported()
+    {
+        // A case's own statement list is a flat array (CaseGroupNode.Statements), never wrapped
+        // in a BlockNode the way an ordinary `{ }` body is — so a rule that only ever looked for a
+        // BlockNode never saw a `break;` followed by dead code sitting directly in a case.
+        Diagnostic diagnostic = Assert.Single(Lint(
+            "\tswitch ( x )\n\t{\n\t\tcase 1:\n\t\t\tbreak;\n\t\t\tuse( 1 );\n\t}"));
+
+        Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
+        Assert.Contains("break", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NestedFunctionsAndClassesAreWalked()
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("class C\n{\n\tfunction m()\n\t{\n\t\treturn;\n\t\tx = 1;\n\t}\n}\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("class C\n{\n\tfunction m()\n\t{\n\t\treturn;\n\t\tx = 1;\n\t}\n}\n");
 
-        Assert.Single(UnreachableCodeLint.Analyze(result));
+        Assert.Single(NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode));
     }
 
     [Fact]
@@ -112,14 +111,9 @@ public class UnreachableCodeLintTests
         // into at all — the walker enumerated each container by hand and this one was missing, so
         // dead code inside it went unreported. Nothing in the shipped corpora happens to hit the
         // shape, which is exactly why it needs a test rather than a corpus run to hold it.
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From("/#\nfunction dbg()\n{\n\treturn;\n\tx = 1;\n}\n#/\n"),
-            NullInsertProvider.Instance,
-            new NameTable());
+        ParseResult result = TestParse.Analyze("/#\nfunction dbg()\n{\n\treturn;\n\tx = 1;\n}\n#/\n");
 
-        Diagnostic diagnostic = Assert.Single(UnreachableCodeLint.Analyze(result));
+        Diagnostic diagnostic = Assert.Single(NodeLintHarness.RunOnStatements(result, UnreachableCodeLint.InspectNode));
         Assert.Equal(GscDiagnosticCode.UnreachableCode, diagnostic.Code);
     }
 }

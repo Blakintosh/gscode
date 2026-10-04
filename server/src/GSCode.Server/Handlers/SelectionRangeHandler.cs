@@ -32,8 +32,8 @@ public sealed class SelectionRangeHandler : SelectionRangeHandlerBase
 
     public override Task<Container<SelectionRange>?> Handle(SelectionRangeParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryAnalyzeFresh(
+            request.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument _, out ParseResult result) )
         {
             return Task.FromResult<Container<SelectionRange>?>(null);
         }

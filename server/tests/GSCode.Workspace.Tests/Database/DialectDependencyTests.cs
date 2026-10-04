@@ -1,9 +1,6 @@
-using System.Collections.Immutable;
 using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using Xunit;
@@ -19,19 +16,13 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DialectDependencyTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private const string Source = "#include common_scripts\\utility;\nrun()\n{\n\thelper();\n}\n";
 
     private static ParseResult Analyze()
     {
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\maps\mp\_utility.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(Source),
-            NullInsertProvider.Instance,
-            new NameTable(),
-            Cod4);
+        return TestParse.Analyze(Source, TestPaths.Raw(@"scripts\maps\mp\_utility.gsc"), s_cod4);
     }
 
     [Fact]

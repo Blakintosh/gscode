@@ -1,18 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using LspDiagnostic = OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic;
@@ -29,48 +16,34 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class NamespaceImportFixTests
 {
-    private const string AskingPath = @"c:\bo3\share\raw\scripts\main.gsc";
-    private const string UtilPath = @"c:\bo3\share\raw\scripts\util.gsc";
+    private const string AskingRelativePath = @"scripts\main.gsc";
 
-    private static ParseResult AnalyzeAt(string source, string path)
+    /// <summary>A workspace whose one file, scripts\util.gsc, declares util::helper.</summary>
+    private static Task<HandlerWorkspace> WorkspaceWithUtilAsync(bool utilIsPrivate = false)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
-    private static CodeActionHandler BuildHandler(string askingSource, out DocumentStore documents, bool utilIsPrivate = false)
-    {
-        ScriptDatabase database = new();
         string modifier = utilIsPrivate ? "private " : "";
-        ParseResult util = AnalyzeAt("#namespace util;\nfunction " + modifier + "helper()\n{\n}\n", UtilPath);
-        database.Commit(util, ResolutionContext.RawContext, false, "scripts\\util.gsc");
-
-        return BuildHandlerWith(database, askingSource, out documents);
+        return HandlerWorkspace.BuildAsync(
+            [new TestFile(@"scripts\util.gsc", "#namespace util;\nfunction " + modifier + "helper()\n{\n}\n")]);
     }
 
-    private static CodeActionHandler BuildHandlerWith(ScriptDatabase database, string askingSource)
+    /// <summary>
+    /// The code-action handler with <paramref name="askingSource"/> open as scripts\main.gsc. The
+    /// asking file is opened, not indexed: the fix is for a buffer being written.
+    /// </summary>
+    private static CodeActionHandler HandlerOver(HandlerWorkspace workspace, string askingSource)
     {
-        return BuildHandlerWith(database, askingSource, out DocumentStore _);
-    }
+        workspace.Open(AskingRelativePath, askingSource);
+        DocumentLinter linter = new(
+            workspace.Database, workspace.ResolverHolder, workspace.Builtins, workspace.ObjectFields);
 
-    private static CodeActionHandler BuildHandlerWith(
-        ScriptDatabase database, string askingSource, out DocumentStore documents)
-    {
-        documents = new DocumentStore(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(AskingPath, askingSource, 1);
-        documents.AnalyzeIfStale(document);
-
-        ResolverHolder holder = new(new PhysicalFileSystem());
-        NavigationSupport support = new(documents, database, holder);
-
-        return new CodeActionHandler(documents, support, TextDocumentSelector.ForLanguage("gsc"));
+        return new CodeActionHandler(workspace.Documents, workspace.Navigation, linter, HandlerWorkspace.Selector);
     }
 
     private static async Task<List<CodeAction>> ActionsAtAsync(CodeActionHandler handler, int line, int start, int end)
     {
         CodeActionParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(AskingPath) },
+            TextDocument = HandlerWorkspace.Identify(AskingRelativePath),
             Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(line, start, line, end),
             Context = new CodeActionContext
             {
@@ -97,13 +70,73 @@ public class NamespaceImportFixTests
         return fixes;
     }
 
+    // --- "Quick Fix..." from the right-click menu: no reported diagnostics, just a cursor ---
+    //
+    // VS Code's context-menu "Quick Fix..." sends whatever the CURSOR overlaps, which can be an
+    // empty Context.Diagnostics even though a diagnostic sits elsewhere on the same line — unlike
+    // the lightbulb or hover Quick Fix, both anchored ON the marker. The reported symptom was
+    // "right click -> fix doesn't show".
+
+    // UsingAfterDeclaration (a parser-level diagnostic, always in ParseResult.AllDiagnostics — no
+    // database or physical filesystem resolution needed) on line 2: `#using scripts\late;`.
+    private const string UsingAfterDeclarationSource = "#using scripts\\a;\nfunction f(){}\n#using scripts\\late;\n";
+
+    [Fact]
+    public async Task EmptyContextDiagnostics_StillFindsAFixReportedElsewhereOnTheLine()
+    {
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler handler = HandlerOver(workspace, UsingAfterDeclarationSource);
+
+        CodeActionParams request = new()
+        {
+            TextDocument = HandlerWorkspace.Identify(AskingRelativePath),
+            // A zero-width cursor at the very START of line 2, left of where the diagnostic itself
+            // is reported (over the `#using scripts\late;` text starting at character 0 too, but a
+            // real cursor position need not land inside a squiggle's exact bounds to be "on the
+            // line") — with no diagnostics reported for it, the way a context-menu Quick Fix
+            // arrives when the client decided the cursor was not on the marker.
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(2, 0, 2, 0),
+            Context = new CodeActionContext { Diagnostics = new Container<LspDiagnostic>() },
+        };
+
+        CommandOrCodeActionContainer? container = await handler.Handle(request, CancellationToken.None);
+
+        CodeAction fix = Assert.Single(
+            [.. (container ?? []).Where(a => a.IsCodeAction).Select(a => a.CodeAction!)],
+            f => f.Title!.Contains("Move", StringComparison.Ordinal));
+        Assert.Equal((int)GscDiagnosticCode.UsingAfterDeclaration, Assert.Single(fix.Diagnostics!).Code!.Value.Long);
+    }
+
+    [Fact]
+    public async Task EmptyContextDiagnostics_OffersNothingFromADifferentLine()
+    {
+        // The recomputed fallback is scoped to the requested LINE, not the whole file — otherwise
+        // every Quick Fix request would offer every fix in the document regardless of where it was
+        // asked.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler handler = HandlerOver(workspace, UsingAfterDeclarationSource);
+
+        CodeActionParams request = new()
+        {
+            TextDocument = HandlerWorkspace.Identify(AskingRelativePath),
+            Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(1, 0, 1, 0),
+            Context = new CodeActionContext { Diagnostics = new Container<LspDiagnostic>() },
+        };
+
+        CommandOrCodeActionContainer? container = await handler.Handle(request, CancellationToken.None);
+
+        Assert.DoesNotContain(
+            (container ?? []).Where(a => a.IsCodeAction).Select(a => a.CodeAction!),
+            f => f.Title!.Contains("Move", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task AskingOnTheDiagnostic_OffersTheImport()
     {
         // `util::helper()` — the name token sits at characters 10..16 on line 3, which is both the
         // reference's range and the range 5000 is reported over.
-        CodeActionHandler handler = BuildHandler(
-            "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", out DocumentStore _);
+        using HandlerWorkspace workspace = await WorkspaceWithUtilAsync();
+        CodeActionHandler handler = HandlerOver(workspace, "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n");
 
         List<CodeAction> fixes = await ActionsAtAsync(handler, 3, 10, 16);
 
@@ -116,8 +149,8 @@ public class NamespaceImportFixTests
     {
         // Without this the action is a general lightbulb entry rather than the fix FOR the error,
         // so it is absent from every flow keyed to a diagnostic and never marked preferred.
-        CodeActionHandler handler = BuildHandler(
-            "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", out DocumentStore _);
+        using HandlerWorkspace workspace = await WorkspaceWithUtilAsync();
+        CodeActionHandler handler = HandlerOver(workspace, "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n");
 
         CodeAction fix = Assert.Single(
             await ActionsAtAsync(handler, 3, 10, 16), f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
@@ -132,17 +165,12 @@ public class NamespaceImportFixTests
     {
         // Auto Fix runs preferred actions without asking, so preferring one of two files would pick
         // an import for the user and not say so. Both are still bound to the diagnostic.
-        ScriptDatabase database = new();
-        foreach ( string path in new[] { "scripts\\util.gsc", "scripts\\util_extra.gsc" } )
-        {
-            ParseResult contributor = AnalyzeAt(
-                "#namespace util;\nfunction helper()\n{\n}\n", @"c:\bo3\share\raw\" + path);
-
-            database.Commit(contributor, ResolutionContext.RawContext, false, path);
-        }
-
-        CodeActionHandler handler = BuildHandlerWith(
-            database, "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n");
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(@"scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n"),
+            new TestFile(@"scripts\util_extra.gsc", "#namespace util;\nfunction helper()\n{\n}\n"),
+        ]);
+        CodeActionHandler handler = HandlerOver(workspace, "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n");
 
         List<CodeAction> imports = [];
         foreach ( CodeAction fix in await ActionsAtAsync(handler, 3, 10, 16) )
@@ -164,13 +192,12 @@ public class NamespaceImportFixTests
         // 5018 is reported over the duplicate's PATH range, which sits inside the directive's own
         // range — so the action matches the diagnostic without either having to know about the
         // other's bounds.
-        CodeActionHandler handler = BuildHandlerWith(
-            new ScriptDatabase(),
-            "#using scripts\\util;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n");
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        CodeActionHandler handler = HandlerOver(workspace, "#using scripts\\util;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n");
 
         CodeActionParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(AskingPath) },
+            TextDocument = HandlerWorkspace.Identify(AskingRelativePath),
             Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(1, 0, 1, 20),
             Context = new CodeActionContext
             {
@@ -200,10 +227,25 @@ public class NamespaceImportFixTests
     {
         // Importing the file would not make the call legal, so there is no fix to offer here; 5003
         // is the diagnostic that has the right story for it.
-        CodeActionHandler handler = BuildHandler(
-            "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n", out DocumentStore _, utilIsPrivate: true);
+        using HandlerWorkspace workspace = await WorkspaceWithUtilAsync(utilIsPrivate: true);
+        CodeActionHandler handler = HandlerOver(workspace, "#namespace game;\nfunction run()\n{\n    util::helper();\n}\n");
 
         Assert.DoesNotContain(
             await ActionsAtAsync(handler, 3, 10, 16), f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AskingOnAMacroInvocation_OffersTheImportItsExpansionNeeds()
+    {
+        // The lint reports 5000 here, so the fix has to be offered here too — a diagnostic with no
+        // fix behind it is worse than either half alone. Nothing on this line spells `util::`; the
+        // #define does, and the expanded reference is keyed to the invocation.
+        using HandlerWorkspace workspace = await WorkspaceWithUtilAsync();
+        CodeActionHandler handler = HandlerOver(workspace, "#define HELP() util::helper()\n#namespace game;\nfunction run()\n{\n    HELP();\n}\n");
+
+        List<CodeAction> fixes = await ActionsAtAsync(handler, 4, 4, 8);
+
+        CodeAction fix = Assert.Single(fixes, f => f.Title!.StartsWith("Add #using", StringComparison.Ordinal));
+        Assert.Equal("Add #using scripts\\util", fix.Title);
     }
 }

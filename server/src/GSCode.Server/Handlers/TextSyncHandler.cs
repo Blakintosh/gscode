@@ -1,12 +1,14 @@
 using GSCode.Core;
 using System.Collections.Immutable;
+using System.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Typing;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Server.Mapping;
@@ -24,16 +26,13 @@ namespace GSCode.Server.Handlers;
 /// <summary>Payload for gscode/rawFolderWriteWarning.</summary>
 public sealed record RawFolderWriteWarningParams(string Path, string RelativePath, bool IsStockScript);
 
-/// <summary>One game the extension can be switched to, as offered in the mismatch picker.</summary>
-public sealed record SupportedGame(string Id, string Label);
-
 /// <summary>
 /// Payload for gscode/gameMismatch: the selected game does not match what the file looks like.
 ///
-/// Carries the roster rather than letting the client keep its own. Only the server knows which
-/// profiles are <see cref="GameProfile.Supported"/>, and the client's hardcoded list had drifted to
-/// nine games — four of them cores with no dialect filled in, so picking one wrote a value the
-/// gscode.game enum does not accept and the server then resolved back to BO3.
+/// Carries the roster rather than letting the client keep its own, and carries it HERE rather than
+/// making the client ask: the offer to switch is one notification and should not need a round trip
+/// to be able to list anything. It is the same list <see cref="GameRoster"/> gives the picker
+/// command, so the two offers can never disagree about which games exist.
 /// </summary>
 public sealed record GameMismatchParams(
     string SelectedGame,
@@ -47,8 +46,6 @@ public sealed record GameMismatchParams(
 /// </summary>
 public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 {
-    private const int DebounceMilliseconds = 250;
-
     private readonly DocumentStore _documents;
     private readonly DiagnosticsPublisher _diagnostics;
     private readonly ScriptDatabase _database;
@@ -60,6 +57,15 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
+    private readonly InsertCache _inserts;
+    private readonly ConnectionSettleGate _settleGate;
+    private readonly WorkspaceLintSweep _lintSweep;
+
+    /// <summary>
+    /// Coalesces concurrent analysis requests for one document into one running plus at most one
+    /// queued rerun — see <see cref="SingleFlightAnalysis"/>, which owns the per-path gate state.
+    /// </summary>
+    private readonly SingleFlightAnalysis _singleFlight;
 
     public TextSyncHandler(
         DocumentStore documents,
@@ -72,8 +78,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         DocumentLinter linter,
         ILanguageServerFacade server,
         WorkspaceDiagnosticsPublisher workspaceDiagnostics,
-        DependentDiagnosticsRefresher dependents)
+        DependentDiagnosticsRefresher dependents,
+        InsertCache inserts,
+        ConnectionSettleGate settleGate,
+        WorkspaceLintSweep lintSweep)
     {
+        _lintSweep = lintSweep;
+        _settleGate = settleGate;
+        _inserts = inserts;
         _dependents = dependents;
         _workspaceDiagnostics = workspaceDiagnostics;
         _linter = linter;
@@ -85,6 +97,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         _settings = settings;
         _stockScripts = stockScripts;
         _server = server;
+        _singleFlight = new SingleFlightAnalysis(documents);
     }
 
     public override TextDocumentAttributes GetTextDocumentAttributes(DocumentUri uri)
@@ -115,7 +128,19 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             request.TextDocument.Text,
             request.TextDocument.Version ?? 0);
 
-        AnalyzeAndPublish(document, request.TextDocument.Uri);
+        // Take back the workspace publisher's set BEFORE the client's spelling is remembered: it
+        // published under the on-disk one, which is what the fallback still resolves to here. Then
+        // remember, so everything published from now on addresses the tab the user is looking at.
+        // Both halves matter — without the take-back, a file with indexed problems that is then
+        // opened carries the index's set AND this handler's until the next workspace refresh.
+        _workspaceDiagnostics.OnDocumentOpened(document.Path);
+        _diagnostics.Remember(document.Path, request.TextDocument.Uri);
+
+        // Off the handler thread, not inline: a window's worth of restored tabs would run N full
+        // parse-plus-lint passes back to back ON THIS THREAD, contending with a cold index already
+        // using every other core. Analysis publishes its own diagnostics once it finishes, exactly
+        // like the debounced edit path.
+        ScheduleImmediateAnalysis(document);
         WarnIfGameLooksWrong(document);
         return Unit.Task;
     }
@@ -136,41 +161,22 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             return;
         }
 
-        // Once per session; Interlocked so two files opening at once cannot both prompt.
+        // Once per session; Interlocked so two files opening at once cannot both prompt. Claimed
+        // eagerly rather than after the send completes: the send below is itself deferred until the
+        // connection has settled, so claiming first is what stops two concurrent opens from both
+        // queuing a copy.
         if ( Interlocked.Exchange(ref _gameMismatchNotified, 1) != 0 )
         {
             return;
         }
 
-        _server.SendNotification(
+        _settleGate.SendOnceSettled(() => _server.SendNotification(
             "gscode/gameMismatch",
             new GameMismatchParams(
                 active.ShortName,
                 active.DisplayName,
                 shape == GameShape.BlackOps3,
-                SupportedGames()));
-    }
-
-    /// <summary>
-    /// The games the picker may offer, in release order. Exactly the supported profiles, which is
-    /// also exactly what the gscode.game enum accepts — the two lists are the same list now, so a
-    /// pick can no longer write a setting the schema rejects.
-    ///
-    /// Labelled with the release year, since the display names alone do not separate the two Modern
-    /// Warfare 2s or the two Modern Warfare 3s once the cores are ever promoted.
-    /// </summary>
-    private static List<SupportedGame> SupportedGames()
-    {
-        List<SupportedGame> games = [];
-        foreach ( GameProfile profile in GameProfile.All )
-        {
-            if ( profile.Supported )
-            {
-                games.Add(new SupportedGame(profile.ShortName, profile.DisplayName + " (" + profile.ReleaseYear + ")"));
-            }
-        }
-
-        return games;
+                GameRoster.Supported())));
     }
 
     public override Task<Unit> Handle(DidChangeTextDocumentParams request, CancellationToken cancellationToken)
@@ -185,25 +191,51 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
             _documents.ApplyChange(document, change.Range?.ToCore(), change.Text, request.TextDocument.Version ?? document.Version + 1);
         }
 
-        ScheduleDebouncedAnalysis(document, request.TextDocument.Uri);
+        ScheduleDebouncedAnalysis(document);
         return Unit.Task;
     }
 
-    public override async Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
+    public override Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
         // Saves bypass the debounce: dependents and the cache (P5/P6) key off saved state.
         if ( _documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
-            if ( document.PendingAnalysis is not null )
-            {
-                await document.PendingAnalysis.CancelAsync();
-            }
-
-            AnalyzeAndPublish(document, request.TextDocument.Uri);
+            // Scheduled like every other analysis rather than run right here: inline it would be a
+            // full parse and lint ON THE LSP HANDLER THREAD, and it would go around AnalysisGate, so
+            // a save landing while the debounced pass was running would give one document two
+            // concurrent analyses. Cancelling the pending analysis is part of scheduling, and it
+            // actually STOPS a run that is already past the debounce.
+            ScheduleImmediateAnalysis(document);
+            RefreshDependentsOfSavedHeader(document);
             WarnIfProtectedRawFile(document);
         }
 
-        return Unit.Value;
+        return Unit.Task;
+    }
+
+    /// <summary>
+    /// Republishes the other open documents when the file just saved is a header.
+    ///
+    /// A GSH is read from DISK by every file that inserts it, so its edits reach them at the save
+    /// and not before — which is why this is on the save path rather than the analysis one, and why
+    /// typing in a header costs nothing here. Two things have to happen and neither implies the
+    /// other: the cache has to drop the copy it lexed before the save, and the documents whose
+    /// parses expanded that copy have to be told, since not one character of THEIR text changed.
+    ///
+    /// Without it, editing a macro's value and saving would leave every open dependent showing the
+    /// old value on hover until something was typed into it. The export signature does not cover
+    /// this case: the header's record was committed from its buffer when the debounce fired, so by
+    /// the time the save arrives the signature has already moved and moves no further.
+    /// </summary>
+    private void RefreshDependentsOfSavedHeader(OpenDocument document)
+    {
+        if ( document.Language != ScriptLanguage.Gsh )
+        {
+            return;
+        }
+
+        _inserts.Invalidate(document.Path);
+        _dependents.Schedule(document.Path);
     }
 
     /// <summary>
@@ -238,7 +270,9 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         string path = request.TextDocument.Uri.GetFileSystemPath();
 
         _documents.Close(path);
-        _diagnostics.Clear(request.TextDocument.Uri);
+        _diagnostics.Clear(path);
+        _diagnostics.Forget(path);
+        _singleFlight.Forget(PathUtil.NormalizeAbsolute(path));
 
         // Clearing is right for what THIS handler published, but the file may still be in the
         // workspace scope, where its problems are supposed to stay visible. Without handing it
@@ -248,41 +282,96 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         return Unit.Task;
     }
 
-    private void ScheduleDebouncedAnalysis(OpenDocument document, DocumentUri uri)
+    /// <summary>
+    /// Schedules a document's first analysis (on open) onto the thread pool rather than running
+    /// it on the LSP handler thread — see the call site's comment for why. No delay, unlike
+    /// <see cref="ScheduleDebouncedAnalysis"/>: a file opens once, so there is nothing to coalesce,
+    /// only work to get off the request path. <c>Task.Delay(0, ...)</c> would NOT do that — a
+    /// zero-length delay completes synchronously, running the whole continuation inline on the
+    /// caller's thread exactly like today's bug — so this uses <see cref="Task.Run(Action)"/>
+    /// instead, which is the one thing here that actually guarantees a different thread.
+    /// </summary>
+    private void ScheduleImmediateAnalysis(OpenDocument document)
+    {
+        CancellationToken token = ReplacePendingAnalysis(document);
+
+        _ = Task.Run(() => RunImmediate(document, token), token);
+    }
+
+    /// <summary>
+    /// Cancels whatever analysis the document has queued and installs a new one in its place — the
+    /// first step of both schedules, so a newer open, edit or save always supersedes what was
+    /// waiting, including a run already past the debounce.
+    /// </summary>
+    private static CancellationToken ReplacePendingAnalysis(OpenDocument document)
     {
         document.PendingAnalysis?.Cancel();
         CancellationTokenSource pending = new();
         document.PendingAnalysis = pending;
 
-        _ = RunDebouncedAsync(document, uri, pending.Token);
+        return pending.Token;
     }
 
-    private async Task RunDebouncedAsync(OpenDocument document, DocumentUri uri, CancellationToken cancellationToken)
+    private void RunImmediate(OpenDocument document, CancellationToken cancellationToken)
+    {
+        if ( cancellationToken.IsCancellationRequested )
+        {
+            // Superseded already — an edit arrived before the thread pool picked this up.
+            return;
+        }
+
+        _singleFlight.Run(document, cancellationToken, AnalyzeAndPublish);
+    }
+
+    private void ScheduleDebouncedAnalysis(OpenDocument document)
+    {
+        _ = RunDebouncedAsync(document, ReplacePendingAnalysis(document));
+    }
+
+    private async Task RunDebouncedAsync(OpenDocument document, CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(DebounceMilliseconds, cancellationToken);
-            AnalyzeAndPublish(document, uri);
+            await Task.Delay(AnalysisTiming.DebounceMilliseconds, cancellationToken);
         }
         catch ( OperationCanceledException )
         {
             // Superseded by a newer edit — not an error.
+            return;
         }
-        catch ( Exception exception )
-        {
-            Log.Error(exception, "Analysis failed for {Path}", document.Path);
-        }
+
+        _singleFlight.Run(document, cancellationToken, AnalyzeAndPublish);
     }
 
-    private void AnalyzeAndPublish(OpenDocument document, DocumentUri uri)
+    private void AnalyzeAndPublish(OpenDocument document, CancellationToken cancellationToken)
     {
-        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        long startedTicks = Stopwatch.GetTimestamp();
 
-        ParseResult result = _documents.Analyze(document);
-        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics = _linter.Analyze(document, result);
+        // The WINNING snapshot, not document.Version read afterwards: two analyses of the same
+        // document can run concurrently, OpenDocument.Publish's version CAS decides which one's
+        // parse actually stands, and a caller stamping diagnostics with the LIVE version would
+        // describe even a superseded analysis as being about text the client has already moved
+        // past — which defeats the version's whole purpose (see AnalysisSnapshot/AnalyzeSnapshot).
+        AnalysisSnapshot snapshot = _documents.AnalyzeSnapshot(document, cancellationToken);
+        ParseResult result = snapshot.Result;
+        ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> diagnostics =
+            _linter.Analyze(document, result, cancellationToken);
 
-        _diagnostics.Publish(uri, document.Version, diagnostics);
-        CommitAndRefreshLenses(document, result);
+        // Last look before anything leaves this method. A pass superseded during the lint must not
+        // publish, and — more importantly — must not COMMIT: a record written from a parse of text
+        // the user has already replaced is what every other file's diagnostics are then computed
+        // against. Same for a document that stopped being the open one while this ran.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if ( !AnalysisGate.IsStillLive(_documents, document) )
+        {
+            return;
+        }
+
+        _diagnostics.Publish(document.Path, snapshot.Version, diagnostics);
+        CommitAndScheduleDependents(document, result, diagnostics);
+
+        double elapsedMilliseconds = Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
 
         // The single most useful verbose line there is: it says whether the server reacted to a
         // keystroke at all, how long it took, and what it decided — which is most of what anyone
@@ -290,22 +379,39 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         Log.Verbose(
             "Analysed {Path} v{Version} in {Elapsed:F1}ms → {Count} diagnostic(s)",
             document.Path,
-            document.Version,
-            System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds,
+            snapshot.Version,
+            elapsedMilliseconds,
             diagnostics.Length);
+
+        // The corpus measures a per-file max well inside the debounce (PERF.md), so this is not
+        // expected to fire on ordinary scripts — it exists to turn "we assume every file is fast
+        // enough" into evidence from a real workspace where the assumption is wrong, rather than a
+        // silent pile-up of overlapping analyses (see AnalysisGate) that nobody gets told about.
+        if ( elapsedMilliseconds >= AnalysisTiming.DebounceMilliseconds )
+        {
+            Log.Warning(
+                "Analysis of {Path} took {Elapsed:F0}ms, at or past the {Debounce}ms debounce — "
+                + "sustained editing of this file may overlap several analyses in flight",
+                document.Path,
+                elapsedMilliseconds,
+                AnalysisTiming.DebounceMilliseconds);
+        }
     }
 
     /// <summary>
-    /// Folds the edited file's symbols back into the database and asks the client to re-request
-    /// code lenses.
+    /// Folds the edited file's symbols back into the database, and schedules the fan-out that
+    /// republishes what this edit changed for everyone else.
     ///
-    /// Without the commit, the reference index still held whatever the last INDEX pass saw, so
-    /// adding or removing a call left "N references" showing the old number until a reindex. The
-    /// refresh is needed on top: a lens count depends on every file that references the symbol,
-    /// which the client has no way to know changed, so editing file A never re-requested the
-    /// lenses shown in file B.
+    /// Without the commit the reference index would hold whatever the last INDEX pass saw, so adding
+    /// or removing a call would leave "N references" showing the old number until a reindex.
+    ///
+    /// The code-lens refresh the client needs on top of that is the fan-out's job rather than this
+    /// method's, which is why the name says nothing about lenses: the refresher coalesces exactly
+    /// this event, and sent per analysis it would re-request lenses about four times a second while
+    /// a function's name is typed.
     /// </summary>
-    private void CommitAndRefreshLenses(OpenDocument document, ParseResult result)
+    private void CommitAndScheduleDependents(
+        OpenDocument document, ParseResult result, ImmutableArray<GSCode.Core.Diagnostics.Diagnostic> published)
     {
         ResolutionContext context = _resolver.Current.GetContext(document.Path);
 
@@ -318,6 +424,14 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         ScriptRecord committed = _database.Commit(
             result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
 
+        // In full mode a closed file reports its cross-file problems, and this record is what it
+        // reports once the document closes — so it keeps what was just published, not the parse
+        // diagnostics alone. See WorkspaceLintSweep.KeepOnRecord.
+        if ( _settings.IndexingMode == IndexingMode.Full )
+        {
+            _lintSweep.KeepOnRecord(committed, published);
+        }
+
         // Other open files' diagnostics are computed against this one, and nothing else republishes
         // them. Only when something they can actually SEE moved — an ordinary keystroke inside a
         // function body leaves the signature alone, which is what keeps this off the edit path.
@@ -325,15 +439,5 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         {
             _dependents.Schedule(document.Path);
         }
-
-        if ( !_settings.CodeLensEnabled )
-        {
-            return;
-        }
-
-        // Fire-and-forget: a failed refresh is cosmetic, and this runs on the analysis path.
-        _ = _server.SendRequest("workspace/codeLens/refresh")
-            .ReturningVoid(CancellationToken.None)
-            .ContinueWith(static _ => { }, TaskScheduler.Default);
     }
 }

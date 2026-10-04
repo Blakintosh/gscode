@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -14,6 +15,22 @@ namespace GSCode.Parser.Preprocessing;
 public sealed class Preprocessor
 {
     private const int MaxInsertDepth = 16;
+
+    /// <summary>
+    /// Ceiling on how deeply a function-like macro CALL SITE may nest its own name —
+    /// <c>F(F(F(…</c> — before the innermost is simply left unexpanded rather than descended into.
+    ///
+    /// Unlike <see cref="ExpandBody"/>'s recursion (bounded by how many distinct macros the file
+    /// defines, and guarded against self-recursion by <see cref="_expansionStack"/>), this pair —
+    /// <see cref="TryExpandAt"/> calling <see cref="TryCollectArguments"/>, which calls
+    /// <see cref="TryExpandAt"/> again while scanning arguments for nested macro uses — has nothing
+    /// bounding it but how much TEXT the call site writes, which is under an attacker's or a
+    /// pathological input's control regardless of the file's actual macro count. Confirmed: 20,000
+    /// levels of <c>F(F(F(…</c> overflowed a 1 MB thread stack before this existed. 64 matches
+    /// <see cref="ConditionalEvaluator.MaxDepth"/> and the depth cap used elsewhere in the server
+    /// (ClassCycleLint, MethodResolution) — nothing hand-written comes near it.
+    /// </summary>
+    private const int MaxMacroExpansionDepth = 64;
 
     private readonly string _rootFilePath;
     private readonly IInsertProvider _insertProvider;
@@ -42,13 +59,14 @@ public sealed class Preprocessor
     /// rather than left to grow from empty: a PToken is 40 bytes, so this array crosses the
     /// large-object-heap threshold at about 2,120 entries — which the larger scripts clear — and
     /// each array a doubling chain abandons on the way there is a hole in a heap that is never
-    /// compacted. The width is pinned by TokenWidthTests; it was 80 bytes, and the threshold
-    /// therefore 1,060 entries, until Provenance stopped being copied into every token.
+    /// compacted. The width is pinned by TokenWidthTests.
     /// </summary>
     private readonly List<PToken> _output;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private readonly ImmutableArray<InsertEdge>.Builder _inserts = ImmutableArray.CreateBuilder<InsertEdge>();
+    private readonly ImmutableArray<MacroDefinition>.Builder _allDefinitions = ImmutableArray.CreateBuilder<MacroDefinition>();
     private readonly ImmutableArray<MacroInvocation>.Builder _invocations = ImmutableArray.CreateBuilder<MacroInvocation>();
+    private readonly ImmutableArray<BuiltinExpansion>.Builder _builtinExpansions = ImmutableArray.CreateBuilder<BuiltinExpansion>();
     private readonly ImmutableArray<TextRange>.Builder _disabledRegions = ImmutableArray.CreateBuilder<TextRange>();
 
     // Guards: inserts currently on the splice stack (cycle detection), and macros
@@ -74,6 +92,10 @@ public sealed class Preprocessor
 
     private readonly HashSet<string> _activeInsertPaths = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expansionStack = new(StringComparer.Ordinal);
+
+    // How many function-like macro calls TryExpandAt is currently inside of, via TryCollectArguments'
+    // argument scan re-entering it. See MaxMacroExpansionDepth.
+    private int _expansionDepth;
 
     /// <summary>One file being walked: its tokens, its text, and how it anchors to the root file.</summary>
     private sealed record FileFrame(ImmutableArray<Token> Tokens, SourceText Text, string? SourceFile, TextRange? RootSite, int Depth)
@@ -159,7 +181,9 @@ public sealed class Preprocessor
         return new PreprocessResult(
             [.. preprocessor._output],
             preprocessor._macros,
+            preprocessor._allDefinitions.ToImmutable(),
             preprocessor._invocations.ToImmutable(),
+            preprocessor._builtinExpansions.ToImmutable(),
             preprocessor._inserts.ToImmutable(),
             preprocessor._disabledRegions.ToImmutable(),
             preprocessor._diagnostics.ToImmutable());
@@ -214,12 +238,13 @@ public sealed class Preprocessor
                     break;
             }
 
-            if ( IsMacroCandidate(token.Kind) && TryExpandAt(frame, ref index, sink) )
+            string? interned = null;
+            if ( IsMacroCandidate(token.Kind) && TryExpandAt(frame, ref index, sink, out interned) )
             {
                 continue;
             }
 
-            sink.Add(MakePToken(frame, token));
+            sink.Add(interned is not null ? MakePToken(frame, token, interned) : MakePToken(frame, token));
             index++;
         }
     }
@@ -311,6 +336,7 @@ public sealed class Preprocessor
 
         MacroDefinition definition = new(name, frame.SourceFile, nameToken.Range, parameters, [.. body], documentation);
         _macros.Define(definition);
+        _allDefinitions.Add(definition);
         _recordingDefinitions?.Add(definition);
         return index;
     }
@@ -511,9 +537,19 @@ public sealed class Preprocessor
             && _headerCache.TryGet(inserted.Path, out HeaderContribution known)
             && NestedInsertsResolveAsRecorded(known.Inserts) )
         {
+            // A frame for the header exists here purely so ReportIfAlreadyDefined has a SourceFile
+            // and a DefinedNames set to check each replayed definition against — the same two things
+            // a fresh walk's ParseDefine would have asked. Without this, a collision between a
+            // replayed definition and something the INCLUDING file (or an earlier insert of it)
+            // already defined went unreported, and whether it did depended on whether some unrelated
+            // file happened to insert this header first and warm the cache.
+            FileFrame replayFrame = new(inserted.Tokens, inserted.Text, inserted.Path, rootSite, frame.Depth + 1);
+
             foreach ( MacroDefinition definition in known.Definitions )
             {
+                ReportIfAlreadyDefined(replayFrame, definition.Name, definition.NameRange);
                 _macros.Define(definition);
+                _allDefinitions.Add(definition);
                 _recordingDefinitions?.Add(definition);
             }
 
@@ -549,7 +585,7 @@ public sealed class Preprocessor
         // effect cannot have depended on the file it was inserted from. Anything else is
         // per-includer: emitted tokens land in that file's stream, a diagnostic or an invocation
         // carries the invoking site's range, and a #if can see macros this file happens to have
-        // defined. Those headers keep being walked, exactly as before. BO3's stock headers are all
+        // defined. Those headers are walked every time. BO3's stock headers are all
         // unconditional macro banks (checked: zero #if lines across all 118), so in practice this
         // refuses nothing there.
         bool pureMacroBank = sink.Count == outputBefore
@@ -627,6 +663,12 @@ public sealed class Preprocessor
     {
         Token chainStart = frame.Tokens[index];
         bool branchTaken = false;
+
+        // An #elif or a second #else after the chain's #else is already out of place — #else is
+        // meant to be the last branch — but nothing stopped the chain from simply treating it as one
+        // more (permanently inactive, since branchTaken is already true) branch and reading straight
+        // through to #endif with no diagnostic at all.
+        bool sawElse = false;
         _conditionalChains++;
 
         while ( index < endExclusive )
@@ -634,6 +676,11 @@ public sealed class Preprocessor
             Token directive = frame.Tokens[index];
             TokenKind directiveKind = directive.Kind;
             index++;
+
+            if ( sawElse && directiveKind is TokenKind.ElifDirective or TokenKind.ElseDirective )
+            {
+                AddDiagnostic(frame, directive.Range, GscDiagnosticCode.UnexpectedConditionalDirective, KindText(frame, directive));
+            }
 
             bool active;
             if ( directiveKind == TokenKind.IfDirective || directiveKind == TokenKind.ElifDirective )
@@ -645,6 +692,7 @@ public sealed class Preprocessor
             else
             {
                 // #else takes the branch when nothing before it did.
+                sawElse = true;
                 index = SkipToEndOfLine(frame, index);
                 active = !branchTaken;
             }
@@ -746,12 +794,13 @@ public sealed class Preprocessor
                 continue;
             }
 
-            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, condition) )
+            string? interned = null;
+            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, condition, out interned) )
             {
                 continue;
             }
 
-            condition.Add(MakePToken(frame, current));
+            condition.Add(interned is not null ? MakePToken(frame, current, interned) : MakePToken(frame, current));
             index++;
         }
 
@@ -794,11 +843,15 @@ public sealed class Preprocessor
     /// <summary>
     /// Attempts to expand the macro-candidate token at <paramref name="index"/>. Returns
     /// false when it is not a macro (the caller emits it as an ordinary token).
+    ///
+    /// <paramref name="name"/> is the token's interned text either way, so a caller that gets
+    /// false back — the common case, since most identifiers are not macro uses — can build the
+    /// plain token from it directly instead of interning the same span a second time.
     /// </summary>
-    private bool TryExpandAt(FileFrame frame, ref int index, List<PToken> sink)
+    private bool TryExpandAt(FileFrame frame, ref int index, List<PToken> sink, out string name)
     {
         Token nameToken = frame.Tokens[index];
-        string name = _names.Intern(nameToken.GetText(frame.Text));
+        name = _names.Intern(nameToken.GetText(frame.Text));
 
         if ( TryExpandBuiltin(frame, name, nameToken.Range, index, sink) )
         {
@@ -829,7 +882,22 @@ public sealed class Preprocessor
             return false;
         }
 
-        if ( !TryCollectArguments(frame, openParenIndex, definition, out Dictionary<string, List<PToken>> arguments, out int afterArguments) )
+        // Past the cap, this invocation is simply left unexpanded — the same answer given elsewhere
+        // for a construct too deep to resolve. Returning false rather than consuming anything sends
+        // the caller down its own "not a macro" path, which emits this token as ordinary text and
+        // lets the scan continue: the rest of the pathological chain is walked, just not descended
+        // into, so parsing stays bounded without a diagnostic pretending this is a real error.
+        if ( _expansionDepth >= MaxMacroExpansionDepth )
+        {
+            return false;
+        }
+
+        _expansionDepth++;
+        bool argumentsCollected = TryCollectArguments(
+            frame, openParenIndex, definition, out Dictionary<string, List<PToken>> arguments, out int afterArguments);
+        _expansionDepth--;
+
+        if ( !argumentsCollected )
         {
             index = afterArguments;
             return true;
@@ -860,27 +928,36 @@ public sealed class Preprocessor
                 // stock scripts use it exactly once — spawner_shared.gsc:517 writes
                 // `assert( ..., __FUNCTION__ + " only supports actors and vehicles." )` — which is
                 // why it expands to a String token rather than getting special-cased downstream:
-                // everything after this (typing, concatenation, literal completion, hover) then
-                // treats it as the string it becomes, with no rule of its own.
-                sink.Add(new PToken(
-                    TokenKind.String,
-                    _names.Intern("\"" + QualifiedFunctionNameAt(frame, index) + "\""),
-                    range,
-                    frame.Provenance));
-
+                // everything after this (typing, concatenation, literal completion) then treats it
+                // as the string it becomes, with no rule of its own. Hover is the one exception —
+                // see BuiltinExpansions — since the reader is looking at the literal text
+                // "__FUNCTION__", not at whatever it resolved to.
+                string qualifiedName = QualifiedFunctionNameAt(frame, index);
+                PToken token = new(TokenKind.String, _names.Intern("\"" + qualifiedName + "\""), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, qualifiedName));
                 return true;
             }
             case "__LINE__":
             {
                 // 1-based, matching how compilers report line numbers to users.
-                string line = (range.Start.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                sink.Add(new PToken(TokenKind.Integer, _names.Intern(line), range, frame.Provenance));
+                string line = (range.Start.Line + 1).ToString(CultureInfo.InvariantCulture);
+                PToken token = new(TokenKind.Integer, _names.Intern(line), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, line));
                 return true;
             }
             case "__FILE__":
             {
-                string path = frame.SourceFile ?? _rootFilePath;
-                sink.Add(new PToken(TokenKind.String, _names.Intern("\"" + path + "\""), range, frame.Provenance));
+                // Always the ROOT file being compiled — never frame.SourceFile. #insert splices a
+                // header's declarations as if written inline in the including file, so __FILE__
+                // inside one names the script it ends up part of, not the .gsh that happens to hold
+                // the text; frame.SourceFile answered the latter question for any code physically
+                // written inside an inserted header, which is wrong for the same reason a header's
+                // own line numbers are not renumbered against the file they are inserted into.
+                PToken token = new(TokenKind.String, _names.Intern("\"" + _rootFilePath + "\""), range, frame.Provenance);
+                sink.Add(token);
+                _builtinExpansions.Add(new BuiltinExpansion(name, token.RootRange, _rootFilePath));
                 return true;
             }
             case "FASTFILE":
@@ -1004,12 +1081,13 @@ public sealed class Preprocessor
                 continue;
             }
 
-            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, collected[^1]) )
+            string? interned = null;
+            if ( IsMacroCandidate(current.Kind) && TryExpandAt(frame, ref index, collected[^1], out interned) )
             {
                 continue;
             }
 
-            collected[^1].Add(MakePToken(frame, current));
+            collected[^1].Add(interned is not null ? MakePToken(frame, current, interned) : MakePToken(frame, current));
             index++;
         }
 
@@ -1067,44 +1145,81 @@ public sealed class Preprocessor
         IReadOnlyList<PToken> body = definition.Body;
         int index = 0;
 
+        // Every token this loop re-stamps shares the same SourceFile and DefinitionSite — ParseDefine
+        // stamped the whole body with them at once — and the same rootSite, so the provenance is
+        // identical for every token one ExpandBody call emits. Computed once, lazily, rather than
+        // once per token.
+        Provenance? stamped = null;
+
         while ( index < body.Count )
         {
-            PToken current = body[index];
-
-            if ( IsMacroCandidate(current.Kind) )
+            if ( IsMacroCandidate(body[index].Kind) && TryExpandBodyToken(body, ref index, arguments, rootSite, sink) )
             {
-                // Parameter reference → splice the (already expanded) argument tokens.
-                if ( arguments is not null && arguments.TryGetValue(current.Text, out List<PToken>? argumentTokens) )
-                {
-                    sink.AddRange(argumentTokens);
-                    index++;
-                    continue;
-                }
-
-                // Nested macro use inside the body.
-                if ( _macros.TryGet(current.Text, out MacroDefinition nested) && !_expansionStack.Contains(current.Text) )
-                {
-                    if ( !nested.IsFunctionLike )
-                    {
-                        index++;
-                        ExpandBody(nested, arguments: null, rootSite, sink);
-                        continue;
-                    }
-
-                    if ( TryCollectBodyArguments(body, index + 1, nested, arguments, rootSite, out Dictionary<string, List<PToken>> nestedArguments, out int afterNested) )
-                    {
-                        index = afterNested;
-                        ExpandBody(nested, nestedArguments, rootSite, sink);
-                        continue;
-                    }
-                }
+                continue;
             }
 
-            sink.Add(current with { Provenance = new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite) });
+            PToken current = body[index];
+            stamped ??= new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite);
+            sink.Add(current with { Provenance = stamped });
             index++;
         }
 
         _expansionStack.Remove(definition.Name);
+    }
+
+    /// <summary>
+    /// Handles ONE macro-candidate token found while scanning a macro's BODY — either body content
+    /// being emitted directly (<see cref="ExpandBody"/>'s own loop) or an argument being collected
+    /// for a nested call written inside that body (<see cref="TryCollectBodyArguments"/>'s loop).
+    /// Both ask the same question — does this name consume more tokens before it can just be
+    /// appended as text: a parameter splice, or a nested macro's own use — so both share this rather
+    /// than each answering it differently.
+    ///
+    /// Asked in only one of the two loops, a macro name used as a NESTED call's argument —
+    /// <c>#define WRAP() INNER(VALUE)</c>, VALUE itself a <c>#define</c> — stays a literal identifier,
+    /// and the nested <c>INNER</c> call records no <see cref="MacroInvocation"/>, so hover and
+    /// find-references have nothing to say about a macro used only inside another macro's body.
+    ///
+    /// Returns false when nothing here applies, so the caller appends the token unexpanded —
+    /// matching <see cref="TryExpandAt"/>'s "not a macro" contract at the top level.
+    /// </summary>
+    private bool TryExpandBodyToken(
+        IReadOnlyList<PToken> body, ref int index, Dictionary<string, List<PToken>>? arguments,
+        TextRange rootSite, List<PToken> sink)
+    {
+        PToken current = body[index];
+
+        // Parameter reference → splice the (already expanded) argument tokens.
+        if ( arguments is not null && arguments.TryGetValue(current.Text, out List<PToken>? argumentTokens) )
+        {
+            sink.AddRange(argumentTokens);
+            index++;
+            return true;
+        }
+
+        // Nested macro use inside the body.
+        if ( !_macros.TryGet(current.Text, out MacroDefinition nested) || _expansionStack.Contains(current.Text) )
+        {
+            return false;
+        }
+
+        if ( !nested.IsFunctionLike )
+        {
+            _invocations.Add(new MacroInvocation(current.Text, current.Provenance.SourceFile, current.Range, nested));
+            index++;
+            ExpandBody(nested, arguments: null, rootSite, sink);
+            return true;
+        }
+
+        if ( TryCollectBodyArguments(body, index + 1, nested, arguments, rootSite, out Dictionary<string, List<PToken>> nestedArguments, out int afterNested) )
+        {
+            _invocations.Add(new MacroInvocation(current.Text, current.Provenance.SourceFile, current.Range, nested));
+            index = afterNested;
+            ExpandBody(nested, nestedArguments, rootSite, sink);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Collects a nested invocation's arguments from the remaining BODY tokens.</summary>
@@ -1129,6 +1244,11 @@ public sealed class Preprocessor
         int depth = 1;
         int index = startIndex + 1;
 
+        // Every raw token this scan copies re-stamps to the SAME provenance — one rootSite, and a
+        // SourceFile/DefinitionSite that came from ParseDefine stamping the whole outer body at
+        // once — so it is computed once, lazily, rather than once per token.
+        Provenance? stamped = null;
+
         while ( index < body.Count )
         {
             PToken current = body[index];
@@ -1144,6 +1264,21 @@ public sealed class Preprocessor
                 {
                     afterArguments = index + 1;
                     ImmutableArray<string> parameters = nested.Parameters ?? [];
+
+                    // Same rule as TryCollectArguments' top-level counterpart, and the same reason:
+                    // a macro's parameter list is exact, so a mismatched call silently produces a
+                    // malformed expansion rather than binding fewer/extra values the way a script
+                    // function call would. There is no frame here to anchor at the invocation SITE,
+                    // so this reports at the outer call's rootSite — the only location on screen
+                    // that names any of this.
+                    int supplied = collected.Count == 1 && collected[0].Count == 0 ? 0 : collected.Count;
+                    if ( supplied != parameters.Length )
+                    {
+                        _diagnostics.Add(Diagnostic.Create(
+                            rootSite, DiagnosticSeverity.Error, GscDiagnosticCode.WrongMacroArgumentCount,
+                            nested.Name, parameters.Length, supplied));
+                    }
+
                     for ( int position = 0; position < parameters.Length; position++ )
                     {
                         nestedArguments[parameters[position]] = position < collected.Count ? collected[position] : [];
@@ -1159,15 +1294,16 @@ public sealed class Preprocessor
                 continue;
             }
 
-            // Outer parameters referenced inside nested arguments splice through.
-            if ( outerArguments is not null && IsMacroCandidate(current.Kind) && outerArguments.TryGetValue(current.Text, out List<PToken>? outerTokens) )
+            // An outer parameter reference splices through; a macro NAME written as an argument here
+            // — #define WRAP() INNER(VALUE) — is expanded the same way it would be anywhere else in
+            // the body, via the method ExpandBody's own loop uses for exactly this question.
+            if ( IsMacroCandidate(current.Kind) && TryExpandBodyToken(body, ref index, outerArguments, rootSite, collected[^1]) )
             {
-                collected[^1].AddRange(outerTokens);
-                index++;
                 continue;
             }
 
-            collected[^1].Add(current with { Provenance = new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite) });
+            stamped ??= new Provenance(current.Provenance.SourceFile, rootSite, current.Provenance.DefinitionSite);
+            collected[^1].Add(current with { Provenance = stamped });
             index++;
         }
 
@@ -1179,6 +1315,20 @@ public sealed class Preprocessor
     private PToken MakePToken(FileFrame frame, Token token)
     {
         string text = TokenFacts.GetStaticText(token.Kind) ?? _names.Intern(token.GetText(frame.Text));
+
+        return new PToken(token.Kind, text, token.Range, frame.Provenance);
+    }
+
+    /// <summary>
+    /// Same as <see cref="MakePToken(FileFrame, Token)"/>, but for a caller that already interned
+    /// this exact token's text — every <c>TryExpandAt</c> call site, once it comes back false. Every
+    /// macro-candidate kind (the only kinds routed through that path) has no static text of its own,
+    /// so the fallback below is never actually taken here; it stays for the same reason the other
+    /// overload keeps it — this is a general PToken constructor, not one written only for this case.
+    /// </summary>
+    private static PToken MakePToken(FileFrame frame, Token token, string internedText)
+    {
+        string text = TokenFacts.GetStaticText(token.Kind) ?? internedText;
 
         return new PToken(token.Kind, text, token.Range, frame.Provenance);
     }

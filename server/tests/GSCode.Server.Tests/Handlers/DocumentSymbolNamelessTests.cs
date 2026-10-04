@@ -1,5 +1,3 @@
-using GSCode.Core;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Documents;
@@ -20,12 +18,12 @@ namespace GSCode.Server.Tests.Handlers;
 /// </summary>
 public class DocumentSymbolNamelessTests
 {
-    private static readonly string Path = @"c:\bo3\share\raw\scripts\main.gsc";
+    private static readonly string s_path = TestPaths.Raw(@"scripts\main.gsc");
 
     private static async Task<List<DocumentSymbol>> OutlineAsync(string text)
     {
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(Path, text, version: 1);
+        DocumentStore documents = TestDocuments.Standalone();
+        OpenDocument document = documents.Open(s_path, text, version: 1);
         documents.Analyze(document);
 
         DocumentSymbolHandler handler = new(
@@ -34,7 +32,7 @@ public class DocumentSymbolNamelessTests
             new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
 
         SymbolInformationOrDocumentSymbolContainer? container = await handler.Handle(
-            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(Path)) },
+            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)) },
             CancellationToken.None);
 
         List<DocumentSymbol> symbols = [];
@@ -69,6 +67,42 @@ public class DocumentSymbolNamelessTests
         Assert.NotEmpty(symbols);
         Assert.Contains(Names(symbols), static name => name == "alreadyWritten");
         Assert.DoesNotContain(Names(symbols), string.IsNullOrWhiteSpace);
+    }
+
+    [Fact]
+    public async Task OutlinePopulatesBeforeAnyAnalysisHasEverPublished()
+    {
+        // The startup-indexing race: didOpen's own first analysis runs off the request thread
+        // (TextSyncHandler.ScheduleImmediateAnalysis), queued behind the indexer's thread-pool
+        // work, so a documentSymbol request can arrive before OpenDocument.Analysis is anything
+        // but null. The handler used to answer null there via TryGetAnalyzed's cached-snapshot
+        // read, and LSP has no "ask again" for document symbols, so the outline stayed empty until
+        // the user typed something. Deliberately no Analyze/AnalyzeIfStale call before the request
+        // — this is exactly that race, and the handler must parse for itself instead of trusting a
+        // snapshot that has not been published yet.
+        DocumentStore documents = TestDocuments.Standalone();
+        OpenDocument document = documents.Open(s_path, "#namespace vibing3;\nfunction one()\n{\n}\n", version: 1);
+        Assert.Null(document.Analysis);
+
+        DocumentSymbolHandler handler = new(
+            documents,
+            new ServerSettings(),
+            new TextDocumentSelector(new TextDocumentFilter { Pattern = "**/*.gsc" }));
+
+        SymbolInformationOrDocumentSymbolContainer? container = await handler.Handle(
+            new DocumentSymbolParams { TextDocument = new TextDocumentIdentifier(DocumentUri.FromFileSystemPath(s_path)) },
+            CancellationToken.None);
+
+        List<DocumentSymbol> symbols = [];
+        foreach ( SymbolInformationOrDocumentSymbol entry in container ?? [] )
+        {
+            if ( entry.DocumentSymbol is not null )
+            {
+                symbols.Add(entry.DocumentSymbol);
+            }
+        }
+
+        Assert.Contains(Names(symbols), static name => name == "one");
     }
 
     [Fact]

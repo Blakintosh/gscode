@@ -1,3 +1,4 @@
+using GSCode.Server.Handlers;
 using GSCode.Server.Logging;
 using GSCode.Workspace.Indexing;
 using Serilog.Events;
@@ -46,6 +47,52 @@ public class IndexProgressNotifierTests
         // missing implementation would break them rather than merely losing a log line.
         NullIndexProgressListener listener = NullIndexProgressListener.Instance;
 
-        listener.FileIndexed(@"C:\bo3\share\raw\scripts\main.gsc", TimeSpan.FromMilliseconds(12), restoredFromCache: false);
+        listener.FileIndexed(TestPaths.Raw(@"scripts\main.gsc"), TimeSpan.FromMilliseconds(12), restoredFromCache: false);
+    }
+
+    [Fact]
+    public void OnlyOneOfManyThreadsWinsTheThrottleSlot()
+    {
+        // Progressed is called from inside the indexer's Parallel.ForEachAsync, on every worker
+        // thread. The shared Stopwatch this replaced was not thread-safe, and its check-then-Restart
+        // was not atomic, so several workers passed the gate together and the "at most one per
+        // 40 ms" contract was not enforced at all.
+        ProgressThrottle throttle = new(intervalMilliseconds: 40);
+
+        int winners = 0;
+        // Distinct, increasing counts, so the ordering half never refuses one and what is being
+        // measured is the interval claim alone.
+        Parallel.For(0, 64, index =>
+        {
+            if ( throttle.ShouldSend(index + 1, isFinal: false) )
+            {
+                Interlocked.Increment(ref winners);
+            }
+        });
+
+        Assert.Equal(1, winners);
+    }
+
+    [Fact]
+    public void ACountOlderThanOneAlreadySentIsDropped()
+    {
+        // A parallel walk reports out of ORDER, so a slower worker's older number can land after a
+        // faster one's. Sending it made the status-bar counter visibly run backwards.
+        // No interval, so what is measured here is the ordering half alone.
+        ProgressThrottle throttle = new(intervalMilliseconds: 0);
+
+        Assert.True(throttle.ShouldSend(100, isFinal: false));
+        Assert.False(throttle.ShouldSend(80, isFinal: false));
+        Assert.True(throttle.ShouldSend(120, isFinal: false));
+    }
+
+    [Fact]
+    public void TheFinalCountAlwaysGoesAndNothingFollowsItBackwards()
+    {
+        ProgressThrottle throttle = new(intervalMilliseconds: 0);
+
+        Assert.True(throttle.ShouldSend(900, isFinal: false));
+        Assert.True(throttle.ShouldSend(1000, isFinal: true));
+        Assert.False(throttle.ShouldSend(950, isFinal: false));
     }
 }

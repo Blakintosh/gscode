@@ -1,11 +1,13 @@
-﻿using GSCode.Core;
+using GSCode.Core;
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Lexing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Documents;
+using GSCode.Server.Formatting;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
@@ -16,6 +18,8 @@ using Position = GSCode.Core.Text.Position;
 using ReferenceEntry = GSCode.Core.Symbols.ReferenceEntry;
 using ReferenceKind = GSCode.Core.Symbols.ReferenceKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using GSCode.Core.Paths;
+using Diagnostic = GSCode.Core.Diagnostics.Diagnostic;
 
 namespace GSCode.Server.Handlers;
 
@@ -30,12 +34,14 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 {
     private readonly DocumentStore _documents;
     private readonly NavigationSupport _support;
+    private readonly DocumentLinter _linter;
     private readonly TextDocumentSelector _selector;
 
-    public CodeActionHandler(DocumentStore documents, NavigationSupport support, TextDocumentSelector selector)
+    public CodeActionHandler(DocumentStore documents, NavigationSupport support, DocumentLinter linter, TextDocumentSelector selector)
     {
         _documents = documents;
         _support = support;
+        _linter = linter;
         _selector = selector;
     }
 
@@ -45,7 +51,18 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return new CodeActionRegistrationOptions
         {
             DocumentSelector = _selector,
-            CodeActionKinds = new Container<CodeActionKind>(CodeActionKind.QuickFix),
+
+            // Every kind this handler can produce has to be named here. VS Code's "Source
+            // Action..." and "Refactor..." context-menu entries ask the client's own capability
+            // negotiation whether a server offers that KIND before ever sending a request — with
+            // only QuickFix registered, both menus showed nothing to pick, not an empty result
+            // from an actual request.
+            //
+            // "Generate ScriptDoc block" is not here: it is the gscode/generateScriptDoc request,
+            // run from the right-click menu, because as a refactor it put a lightbulb on every
+            // undocumented function in the file.
+            CodeActionKinds = new Container<CodeActionKind>(
+                CodeActionKind.QuickFix, CodeActionKind.SourceOrganizeImports),
         };
     }
 
@@ -57,14 +74,17 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
     public override Task<CommandOrCodeActionContainer?> Handle(CodeActionParams request, CancellationToken cancellationToken)
     {
-        if ( !_documents.TryGetAnalyzed(
-            request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument _, out ParseResult result) )
+        if ( !_documents.TryAnalyzeFresh(
+            request.TextDocument.Uri.GetFileSystemPath(), cancellationToken, out OpenDocument document, out ParseResult result) )
         {
             return Task.FromResult<CommandOrCodeActionContainer?>(null);
         }
 
         TextRange selection = request.Range.ToCore();
         List<CommandOrCodeAction> actions = [];
+
+        // The two consumers of the lint pass below share one run of it. See RequestLints.
+        RequestLints lints = new(_linter, document, result);
 
         foreach ( RedundantImport duplicate in FindRemovableDuplicates(result, selection) )
         {
@@ -74,10 +94,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 ReportedAt(request, GscDiagnosticCode.DuplicateImport, duplicate.Range))));
         }
 
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is not null )
         {
-            Position insertAt = ImportInsertionPoint<UsingNode>(result);
+            Position insertAt = ImportEdits.InsertionPoint<UsingNode>(result);
             List<MissingUsing> missing = FindMissingUsingSites(result, target.Store, target.ContextId, target.Path, selection);
 
             // How many imports could serve each call site. One means the fix is unambiguous and can
@@ -100,15 +120,85 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        AddDiagnosticFixes(request, result, actions, target);
+        AddDiagnosticFixes(request, result, actions, DiagnosticsForFixes(request, lints, cancellationToken), target);
+
+        // Same TriggerKind gate as DiagnosticsForFixes: VS Code never polls a Source Action
+        // request the way it polls QuickFix for the lightbulb, so this only ever runs on an
+        // explicit ask — but the gate is kept anyway rather than assumed, for the same
+        // defend-against-an-unusual-client reason DiagnosticsForFixes keeps its own.
+        if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) == CodeActionTriggerKind.Invoked )
+        {
+            AddOrganizeImportsAction(
+                request.TextDocument.Uri, result.Text, AllUnusedImportDiagnostics(lints, cancellationToken), actions);
+        }
 
         return Task.FromResult<CommandOrCodeActionContainer?>(new CommandOrCodeActionContainer(actions));
     }
 
     /// <summary>
-    /// Fixes driven by the diagnostics the client reported for the selection. Keyed off the
-    /// request's context rather than re-derived, because the workspace lints run in
-    /// TextSyncHandler and are not recomputable from the ParseResult alone.
+    /// Diagnostics on the request's LINE, so "Quick Fix..." from the right-click context menu
+    /// finds a fix even when the CURSOR (what that command anchors on) sits somewhere else on the
+    /// same line than the squiggle.
+    ///
+    /// <c>request.Context.Diagnostics</c> is exactly what VS Code computed overlapped the request's
+    /// own range, and is used as-is whenever it is non-empty — this never second-guesses a set the
+    /// client actually sent, so the lightbulb, hover "Quick Fix" and the Problems panel (each
+    /// already anchored ON a marker) see no change at all. It is empty specifically for the
+    /// cursor-not-on-the-squiggle case, and that is the one this exists for: the workspace lints
+    /// (unused #using, PreferBooleanLiteral, an unresolved call, …) are not recomputable from the
+    /// ParseResult alone — they run in TextSyncHandler/DocumentLinter — so answering the same
+    /// question the client would have takes running that same pipeline here, once, and keeping only
+    /// what lands on this line.
+    /// </summary>
+    private static IEnumerable<LspDiagnostic> DiagnosticsForFixes(
+        CodeActionParams request, RequestLints lints, CancellationToken cancellationToken)
+    {
+        if ( request.Context.Diagnostics.Any() )
+        {
+            return request.Context.Diagnostics;
+        }
+
+        // Automatic requests are VS Code polling for the LIGHTBULB, not a user action — it fires
+        // on every cursor move/idle pause to decide whether to show the icon at all, far more
+        // often than anyone actually opens the menu. Running a full relint for each one turned
+        // routine cursor movement into continuous background work for no visible benefit: an
+        // automatic request with nothing in Context.Diagnostics already means no lightbulb shows
+        // there, and the fallback below exists for the INVOKED case — the context menu's own
+        // "Quick Fix..." — where the cost is paid once, on an explicit click. Default to Invoked
+        // when the client sends no TriggerKind at all, so an older/other client that never sends
+        // one keeps getting the fallback rather than silently losing it.
+        if ( (request.Context.TriggerKind ?? CodeActionTriggerKind.Invoked) != CodeActionTriggerKind.Invoked )
+        {
+            return request.Context.Diagnostics;
+        }
+
+        // The pass already returns result.AllDiagnostics plus the cross-file lints layered on top
+        // (WorkspaceLints.Analyze's own doc: "the file's own diagnostics plus every cross-file
+        // lint"), so this is the one set that needs asking for, not two — a second pass over
+        // result.AllDiagnostics on its own duplicated every parser-level diagnostic here.
+        int requestedLine = request.Range.Start.Line;
+        List<LspDiagnostic> onThisLine = [];
+
+        foreach ( Diagnostic diagnostic in lints.All(cancellationToken) )
+        {
+            // LINE MEMBERSHIP, not TextRange.Overlaps: Overlaps compares positions inclusively
+            // (Start <= other.End), so a range built from LineRangeOf's (line, 0)-(line+1, 0) —
+            // meant for a whole-line DELETE edit, where touching the next line's start is exactly
+            // the point — touches a diagnostic that starts at column 0 of the FOLLOWING line too.
+            // Asking whether the line sits between a diagnostic's own start and end line avoids
+            // that boundary entirely.
+            if ( diagnostic.Range.Start.Line <= requestedLine && requestedLine <= diagnostic.Range.End.Line )
+            {
+                onThisLine.Add(diagnostic.ToLsp());
+            }
+        }
+
+        return onThisLine;
+    }
+
+    /// <summary>
+    /// Fixes driven by the diagnostics the client reported for the selection, or
+    /// <see cref="DiagnosticsForFixes"/>'s line-scoped recomputation of them.
     /// </summary>
     /// <param name="target">
     /// The workspace view, when there is one. Only the unresolved-call fixes need it — everything
@@ -119,6 +209,21 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         CodeActionParams request,
         ParseResult result,
         List<CommandOrCodeAction> actions,
+        NavigationTarget? target = null)
+    {
+        AddDiagnosticFixes(request, result, actions, request.Context.Diagnostics, target);
+    }
+
+    /// <summary>
+    /// Same as the four-argument overload, but over an EXPLICIT diagnostic list rather than
+    /// <c>request.Context.Diagnostics</c> — see <see cref="DiagnosticsForFixes"/>, the only caller
+    /// that needs the difference.
+    /// </summary>
+    internal static void AddDiagnosticFixes(
+        CodeActionParams request,
+        ParseResult result,
+        List<CommandOrCodeAction> actions,
+        IEnumerable<LspDiagnostic> diagnostics,
         NavigationTarget? target = null)
     {
         DocumentUri uri = request.TextDocument.Uri;
@@ -134,7 +239,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<LspDiagnostic> unusedUsings = [];
         List<LspDiagnostic> unusedIncludes = [];
 
-        foreach ( LspDiagnostic diagnostic in request.Context.Diagnostics )
+        foreach ( LspDiagnostic diagnostic in diagnostics )
         {
             switch ( CodeOf(diagnostic) )
             {
@@ -185,9 +290,64 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
+        // Organize Imports is NOT built here — see BuildOrganizeImportsAction's own call site in
+        // Handle(). This method only ever sees whatever unusedUsings/unusedIncludes the REQUEST's
+        // own diagnostics carried (the client's selection, or DiagnosticsForFixes' one-line
+        // fallback), and "Organize Imports" is a whole-DOCUMENT command by convention — scoping it
+        // to wherever the cursor happened to be when the menu opened read as "1 unused" on a file
+        // that actually had several.
+
         // One click for the common cleanup, rather than N separate fixes.
         AddRemoveAllUnusedAction(uri, unusedUsings, "#using", actions);
         AddRemoveAllUnusedAction(uri, unusedIncludes, "#include", actions);
+    }
+
+    /// <summary>
+    /// The document's lint pass, run at most once per request and only if something asks for it.
+    ///
+    /// Two things in one request want it, for different slices of the same answer:
+    /// <see cref="DiagnosticsForFixes"/> keeps what lands on the request's LINE, and
+    /// <see cref="AllUnusedImportDiagnostics"/> keeps the unused imports in the WHOLE document.
+    /// Both need the same pass over the same unchanged document, so it runs once — safe rather than a
+    /// trade, since a second run could not disagree with the first.
+    ///
+    /// Lazy, because the common request asks for neither: an AUTOMATIC request (VS Code polling for
+    /// the lightbulb on every cursor move) returns before either consumer runs, and must keep
+    /// costing nothing.
+    ///
+    /// Per request and dropped with it, deliberately — the same rule
+    /// <see cref="CallFixContext"/> states for itself. A cache that outlived the request could
+    /// answer for a buffer that has since been edited.
+    /// </summary>
+    internal sealed class RequestLints
+    {
+        private readonly DocumentLinter _linter;
+        private readonly OpenDocument _document;
+        private readonly ParseResult _result;
+
+        private ImmutableArray<Diagnostic>? _all;
+
+        public RequestLints(DocumentLinter linter, OpenDocument document, ParseResult result)
+        {
+            _linter = linter;
+            _document = document;
+            _result = result;
+        }
+
+        /// <summary>Every diagnostic the pass reports, in the order it reports them.</summary>
+        public ImmutableArray<Diagnostic> All(CancellationToken cancellationToken)
+        {
+            if ( _all is ImmutableArray<Diagnostic> already )
+            {
+                return already;
+            }
+
+            ImmutableArray<Diagnostic> analyzed =
+                [.. _linter.Analyze(_document, _result, cancellationToken)];
+
+            _all = analyzed;
+            return analyzed;
+        }
     }
 
     /// <summary>
@@ -250,7 +410,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             if ( !_declaring.TryGetValue(name, out ImmutableArray<ResolvedFunction> found) )
             {
                 found = DatabaseQueries.LookupFunctions(
-                    Store, ContextId, AskingPath, null, name.ToLowerInvariant());
+                    Store, ContextId, AskingPath, null, NameTable.Shared.InternLower(name));
 
                 _declaring[name] = found;
             }
@@ -270,12 +430,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         public Position UsingInsertAt
         {
-            get { return _usingInsertAt ??= ImportInsertionPoint<UsingNode>(Result); }
+            get { return _usingInsertAt ??= ImportEdits.InsertionPoint<UsingNode>(Result); }
         }
 
         public Position IncludeInsertAt
         {
-            get { return _includeInsertAt ??= ImportInsertionPoint<IncludeNode>(Result); }
+            get { return _includeInsertAt ??= ImportEdits.InsertionPoint<IncludeNode>(Result); }
         }
 
         /// <summary>
@@ -293,7 +453,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             {
                 if ( element is UsingNode usingNode )
                 {
-                    paths.Add(StripExtension(NormalizePath(usingNode.Path)));
+                    paths.Add(ImportEdits.PathOf(usingNode.Path));
                 }
             }
 
@@ -311,6 +471,146 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         {
             actions.Add(new CommandOrCodeAction(BuildRemoveAllUnusedAction(uri, unused, directive)));
         }
+    }
+
+    /// <summary>
+    /// The one SourceOrganizeImports action: remove every unused #using/#include it is GIVEN, then
+    /// group and sort the directive block, as one edit. No scoping of its own — the
+    /// file-wide-versus-current-line distinction lives entirely in what
+    /// <see cref="AllUnusedImportDiagnostics"/> gathers (<c>internal</c> so a test can pin that).
+    ///
+    /// The sort is the formatter's own <see cref="DirectiveSorter"/>, so Organize Imports and Format
+    /// Document cannot disagree about the order, and it carries the sorter's guarantees: a line is
+    /// moved but never dropped or edited, and a block whose order matters (a #define above an
+    /// #insert, an #using_animtree) is left alone. It sorts whatever <c>gscode.format.sortDirectives</c>
+    /// says: that setting is about what formatting does unasked, and this is the explicit ask.
+    ///
+    /// Offered whenever it would change something — one unused import, or an unsorted block —
+    /// unlike the QuickFix bulk action, which needs two unused imports because a lone one already
+    /// has its own per-line fix.
+    /// </summary>
+    internal static void AddOrganizeImportsAction(
+        DocumentUri uri,
+        SourceText text,
+        IReadOnlyCollection<LspDiagnostic> unused,
+        List<CommandOrCodeAction> actions)
+    {
+        HashSet<int> removed = [];
+        foreach ( LspDiagnostic diagnostic in unused )
+        {
+            removed.Add(diagnostic.Range.ToCore().Start.Line);
+        }
+
+        // Worked in LF throughout: DirectiveSorter splits on '\n' and writes its separators as
+        // '\n', so a CRLF document is converted on the way in and back on the way out rather than
+        // coming back with mixed endings.
+        string original = text.Text;
+        bool crlf = original.Contains("\r\n", StringComparison.Ordinal);
+        string[] lines = original.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+
+        List<string> kept = [];
+        for ( int line = 0; line < lines.Length; line++ )
+        {
+            if ( !removed.Contains(line) )
+            {
+                kept.Add(lines[line]);
+            }
+        }
+
+        string pruned = string.Join('\n', kept);
+        string? sorted = DirectiveSorter.Sort(pruned);
+        string organized = sorted ?? pruned;
+        if ( crlf )
+        {
+            organized = organized.Replace("\n", "\r\n", StringComparison.Ordinal);
+        }
+
+        if ( string.Equals(organized, original, StringComparison.Ordinal) )
+        {
+            return;
+        }
+
+        string title = (removed.Count, sorted is not null) switch
+        {
+            (> 0, true) => "Organize imports (remove " + removed.Count + " unused, sort)",
+            (> 0, false) => "Organize imports (remove " + removed.Count + " unused)",
+            _ => "Organize imports (sort)",
+        };
+
+        actions.Add(new CommandOrCodeAction(BuildAction(
+            title,
+            uri,
+            [ChangedLinesEdit(text, organized)],
+            unused.Count > 0 ? new Container<LspDiagnostic>(unused) : null,
+            CodeActionKind.SourceOrganizeImports)));
+    }
+
+    /// <summary>
+    /// One edit replacing only the run of whole lines that differ between the document and
+    /// <paramref name="replacement"/>, so the rest of the file — and every caret in it — is
+    /// untouched. The common prefix and suffix are snapped outward to line boundaries, which keeps
+    /// the edit to whole lines and never splits a CRLF.
+    /// </summary>
+    private static TextEdit ChangedLinesEdit(SourceText text, string replacement)
+    {
+        string original = text.Text;
+
+        int prefix = 0;
+        int limit = Math.Min(original.Length, replacement.Length);
+        while ( prefix < limit && original[prefix] == replacement[prefix] )
+        {
+            prefix++;
+        }
+
+        // Back to the start of the line the first difference is on. The splice below is exact
+        // wherever the boundaries fall; snapping them only keeps the edit to whole lines.
+        prefix = prefix == 0 ? 0 : original.LastIndexOf('\n', prefix - 1, prefix) + 1;
+
+        int suffix = 0;
+        while ( suffix < original.Length - prefix
+            && suffix < replacement.Length - prefix
+            && original[original.Length - 1 - suffix] == replacement[replacement.Length - 1 - suffix] )
+        {
+            suffix++;
+        }
+
+        // Shrink the shared suffix until it starts at a line boundary in the original.
+        while ( suffix > 0 && original[original.Length - suffix - 1] != '\n' )
+        {
+            suffix--;
+        }
+
+        int originalEnd = original.Length - suffix;
+        int replacementEnd = replacement.Length - suffix;
+
+        TextRange range = new(text.GetPosition(prefix), text.GetPosition(originalEnd));
+        return new TextEdit { Range = range.ToLsp(), NewText = replacement[prefix..replacementEnd] };
+    }
+
+    /// <summary>
+    /// Every unused <c>#using</c>/<c>#include</c> in the WHOLE document, regardless of the
+    /// request's own range — "Organize Imports" is a whole-file command by convention, unlike
+    /// every other fix in this handler, which only ever needs to answer for the requested
+    /// selection. Runs the same DocumentLinter pipeline <see cref="DiagnosticsForFixes"/> falls
+    /// back to; the two are not combined into one call because that fallback is deliberately
+    /// scoped to one LINE and this deliberately is not.
+    /// </summary>
+    private static ImmutableArray<LspDiagnostic> AllUnusedImportDiagnostics(
+        RequestLints lints, CancellationToken cancellationToken)
+    {
+        ImmutableArray<LspDiagnostic>.Builder unused = ImmutableArray.CreateBuilder<LspDiagnostic>();
+
+        foreach ( Diagnostic diagnostic in lints.All(cancellationToken) )
+        {
+            LspDiagnostic converted = diagnostic.ToLsp();
+            GscDiagnosticCode? code = CodeOf(converted);
+            if ( code is GscDiagnosticCode.UnusedUsing or GscDiagnosticCode.UnusedInclude )
+            {
+                unused.Add(converted);
+            }
+        }
+
+        return unused.ToImmutable();
     }
 
     private static GscDiagnosticCode? CodeOf(LspDiagnostic diagnostic)
@@ -375,7 +675,23 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<LspDiagnostic> unused,
         string directive)
     {
-        // Whole-line deletions on distinct lines never overlap, so order does not matter.
+        List<TextEdit> edits = LineDeletions(unused);
+
+        return QuickFix(
+            "Remove all " + edits.Count + " unused " + directive + " directives",
+            uri,
+            edits,
+            new Container<LspDiagnostic>(unused));
+    }
+
+    /// <summary>
+    /// One whole-line deletion per distinct line the unused-import diagnostics sit on — the edit set
+    /// both Organize Imports and "Remove all unused" apply, so the two cannot disagree about what
+    /// removing every unused import means. Whole-line deletions on distinct lines never overlap, so
+    /// order does not matter.
+    /// </summary>
+    private static List<TextEdit> LineDeletions(IEnumerable<LspDiagnostic> unused)
+    {
         HashSet<int> lines = [];
         List<TextEdit> edits = [];
         foreach ( LspDiagnostic diagnostic in unused )
@@ -387,11 +703,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        return QuickFix(
-            "Remove all " + edits.Count + " unused " + directive + " directives",
-            uri,
-            edits,
-            new Container<LspDiagnostic>(unused));
+        return edits;
     }
 
     /// <summary>
@@ -443,7 +755,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return;
         }
 
-        Position insertAt = ImportInsertionPoint<UsingNode>(result, range.Start.Line);
+        Position insertAt = ImportEdits.InsertionPoint<UsingNode>(result, range.Start.Line);
         if ( insertAt.Line >= range.Start.Line )
         {
             // Nowhere earlier to move it to; leave the diagnostic without a fix.
@@ -480,7 +792,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         List<CodeAction> fixes = [];
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
-        if ( name.Length == 0 || !IsIdentifier(name) )
+        // The lexer's own rule: a stale diagnostic range against an edited buffer is how a fix
+        // would otherwise write a declaration out of something that is not a name.
+        if ( name.Length == 0 || !GscIdentifier.IsIdentifier(name) )
         {
             return fixes;
         }
@@ -538,7 +852,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string usingPath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+            string usingPath = ImportEdits.PathOf(resolved.Record.RelativePath);
 
             // One offer per namespace+file pair. The same namespace spread over several files is
             // normal, and each file is a genuinely different import.
@@ -603,7 +917,9 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         ParseResult result = context.Result;
         TextRange range = diagnostic.Range.ToCore();
         string name = TextAt(result, range);
-        if ( name.Length == 0 || !IsIdentifier(name) )
+        // The lexer's own rule: a stale diagnostic range against an edited buffer is how a fix
+        // would otherwise write a declaration out of something that is not a name.
+        if ( name.Length == 0 || !GscIdentifier.IsIdentifier(name) )
         {
             return fixes;
         }
@@ -626,7 +942,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                 continue;
             }
 
-            string includePath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+            string includePath = ImportEdits.PathOf(resolved.Record.RelativePath);
             if ( !existingIncludes.Contains(includePath) )
             {
                 candidates.Add(includePath);
@@ -776,29 +1092,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return result.Text.Text[start..end].Trim();
     }
 
-    /// <summary>
-    /// Whether the text is a bare identifier. Guards the create-function fix against ever writing a
-    /// declaration out of something that is not a name — a stale diagnostic range against an edited
-    /// buffer is the way that happens.
-    /// </summary>
-    private static bool IsIdentifier(string text)
-    {
-        if ( char.IsDigit(text[0]) )
-        {
-            return false;
-        }
-
-        foreach ( char character in text )
-        {
-            if ( !char.IsLetterOrDigit(character) && character != '_' )
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /// <summary>An import already made earlier in the file, and so removable.</summary>
     internal sealed record RedundantImport(string Path, string Directive, TextRange Range);
 
@@ -842,7 +1135,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
 
             // Only the second-and-later occurrences of a path are redundant.
-            if ( seen.Add(NormalizePath(path)) )
+            if ( seen.Add(PathUtil.NormalizeScriptPath(path)) )
             {
                 continue;
             }
@@ -856,24 +1149,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         return duplicates;
     }
 
-    /// <summary>
-    /// Distinct #using paths that would make a qualified call in the selection resolvable but
-    /// aren't imported yet: for each qualified call, the script-relative path of a visible file
-    /// defining that function, minus the extension. Own-namespace calls and already-imported
-    /// files are skipped.
-    /// </summary>
-    internal static List<string> FindMissingUsings(
-        ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
-    {
-        List<string> paths = [];
-        foreach ( MissingUsing site in FindMissingUsingSites(result, store, contextId, askingPath, selection) )
-        {
-            paths.Add(site.Path);
-        }
-
-        return paths;
-    }
-
     /// <summary>An import that would make one call site resolvable, and the site it belongs to.</summary>
     /// <param name="Range">
     /// The call's NAME range, which is also the range the NamespaceNotImported lint reports over —
@@ -882,7 +1157,12 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     /// </param>
     internal sealed record MissingUsing(string Path, TextRange Range);
 
-    /// <inheritdoc cref="FindMissingUsings"/>
+    /// <summary>
+    /// The imports that would make the qualified calls in the selection resolvable but are not
+    /// there yet: for each such call, the script-relative path of a visible file defining that
+    /// function, minus the extension, paired with the call it answers. Own-namespace calls and
+    /// already-imported files are skipped.
+    /// </summary>
     internal static List<MissingUsing> FindMissingUsingSites(
         ParseResult result, LanguageStore store, string contextId, string askingPath, TextRange selection)
     {
@@ -902,6 +1182,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
 
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
+            // FromMacro entries are included, matching NamespaceUsageLint exactly: it reports the
+            // missing import for a call a macro expanded into, and a diagnostic with no fix behind
+            // it is worse than either half alone. The range is the invocation site in both, which
+            // is what lets the action be matched to the Error the client reported.
             if ( entry.Kind != ReferenceKind.Call
                 || entry.Key.Kind != SymbolKind.Function )
             {
@@ -928,7 +1212,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
                     continue;
                 }
 
-                string usingPath = StripExtension(NormalizePath(resolved.Record.RelativePath));
+                string usingPath = ImportEdits.PathOf(resolved.Record.RelativePath);
                 if ( existingUsings.Contains(usingPath) || !offered.Add(usingPath) )
                 {
                     continue;
@@ -939,32 +1223,6 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         }
 
         return missing;
-    }
-
-    /// <summary>
-    /// Where a new import belongs: just after the last one of its kind, else the top of the file.
-    /// <paramref name="beforeLine"/> caps which directives count, so moving a misplaced <c>#using</c>
-    /// does not target a point below itself — the directive being moved is the very thing that must
-    /// not anchor the insertion.
-    /// </summary>
-    /// <typeparam name="TNode">
-    /// <c>UsingNode</c> or <c>IncludeNode</c>. Written once for both rather than per directive: this
-    /// file learned the same lesson at <see cref="FindRemovableDuplicates"/>, where a
-    /// <c>#using</c>-only helper left the four merge games with a lint and no fix behind it.
-    /// </typeparam>
-    private static Position ImportInsertionPoint<TNode>(ParseResult result, int beforeLine = int.MaxValue)
-        where TNode : AstNode
-    {
-        int line = 0;
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            if ( element is TNode && element.Range.Start.Line < beforeLine )
-            {
-                line = element.Range.Start.Line + 1;
-            }
-        }
-
-        return new Position(line, 0);
     }
 
     private static CodeAction BuildRemoveAction(
@@ -1049,12 +1307,26 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
         Container<LspDiagnostic>? diagnostics,
         bool preferred = false)
     {
+        return BuildAction(title, uri, edits, diagnostics, CodeActionKind.QuickFix, preferred);
+    }
+
+    /// <summary>What <see cref="QuickFix(string, DocumentUri, IEnumerable{TextEdit}, Container{LspDiagnostic}, bool)"/>
+    /// builds, generalised over the action's <see cref="CodeActionKind"/> — every quick fix in this
+    /// file is one, and <see cref="AddOrganizeImportsAction"/> is the one caller that is not.</summary>
+    private static CodeAction BuildAction(
+        string title,
+        DocumentUri uri,
+        IEnumerable<TextEdit> edits,
+        Container<LspDiagnostic>? diagnostics,
+        CodeActionKind kind,
+        bool preferred = false)
+    {
         Dictionary<DocumentUri, IEnumerable<TextEdit>> changes = new() { [uri] = edits };
 
         return new CodeAction
         {
             Title = title,
-            Kind = CodeActionKind.QuickFix,
+            Kind = kind,
             Diagnostics = diagnostics,
             IsPreferred = preferred,
             Edit = new WorkspaceEdit { Changes = changes },
@@ -1075,25 +1347,5 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
     {
         return QuickFix(
             title, uri, edits, diagnostic is null ? null : new Container<LspDiagnostic>(diagnostic), preferred);
-    }
-
-    private static string NormalizePath(string path)
-    {
-        return path.Replace('/', '\\').ToLowerInvariant();
-    }
-
-    private static string StripExtension(string path)
-    {
-        // Scripts are reached by #using, which names them without extension. Strip the server
-        // or client extension; headers keep theirs (#insert names them in full).
-        foreach ( string extension in new[] { GameProfile.Active.ServerScriptExtension, GameProfile.Active.ClientScriptExtension } )
-        {
-            if ( path.EndsWith(extension, StringComparison.Ordinal) )
-            {
-                return path[..^extension.Length];
-            }
-        }
-
-        return path;
     }
 }

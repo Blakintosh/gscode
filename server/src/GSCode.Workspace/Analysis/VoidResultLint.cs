@@ -1,8 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
 
@@ -24,24 +22,12 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class VoidResultLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result, BuiltinApi builtins)
-    {
-        if ( builtins.Count == 0 )
-        {
-            return [];
-        }
-
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        foreach ( AstNode element in result.Tree.Root.Elements )
-        {
-            Walk(element, builtins, diagnostics);
-        }
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Walk(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The caller is responsible for
+    /// the empty-library gate — see <see cref="Applies"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         // The only position that makes the mistake visible: the value is being kept.
         if ( node is AssignmentNode assignment
@@ -52,11 +38,15 @@ public static class VoidResultLint
             diagnostics.Add(Diagnostic.Create(
                 call.Range, DiagnosticSeverity.Warning, GscDiagnosticCode.VoidResultAssigned, name));
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, builtins, diagnostics);
-        }
+    /// <summary>
+    /// Whether this rule speaks about this file at all: a game with no bundled library cannot say
+    /// which functions return nothing.
+    /// </summary>
+    internal static bool Applies(BuiltinApi builtins)
+    {
+        return builtins.Count > 0;
     }
 
     private static bool ReturnsNothing(CallNode call, BuiltinApi builtins, out string name)

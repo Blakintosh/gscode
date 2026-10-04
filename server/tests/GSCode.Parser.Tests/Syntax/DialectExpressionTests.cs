@@ -1,4 +1,3 @@
-using System.Linq;
 using GSCode.Core;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
@@ -14,9 +13,9 @@ namespace GSCode.Parser.Tests.Syntax;
 /// </summary>
 public class DialectExpressionTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly GameProfile Mw2 = GameProfile.ByName("mw2")!;
-    private static readonly GameProfile Bo3 = GameProfile.BlackOps3;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_mw2 = GameProfile.ByName("mw2")!;
+    private static readonly GameProfile s_bo3 = GameProfile.BlackOps3;
 
     /// <summary>Parses a snippet as the body of a function and returns its first expression.</summary>
     private static ExprNode FirstExpression(string statement, GameProfile profile)
@@ -31,7 +30,7 @@ public class DialectExpressionTests
     [Fact]
     public void APathQualifiedCallParses()
     {
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("maps\\mp\\_utility::foo();", Cod4));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("maps\\mp\\_utility::foo();", s_cod4));
 
         PathQualifiedNode callee = Assert.IsType<PathQualifiedNode>(call.Callee);
         Assert.Equal("maps\\mp\\_utility", callee.Path);
@@ -42,7 +41,7 @@ public class DialectExpressionTests
     [Fact]
     public void APathQualifiedCallKeepsItsArguments()
     {
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("maps\\mp\\_utility::foo( a, 1 );", Cod4));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("maps\\mp\\_utility::foo( a, 1 );", s_cod4));
 
         Assert.IsType<PathQualifiedNode>(call.Callee);
         Assert.Equal(2, call.Arguments.Length);
@@ -52,7 +51,7 @@ public class DialectExpressionTests
     public void MethodNotationTakesAPathQualifiedCallee()
     {
         // self maps\mp\_utility::foo() — the path callee applies to a target object.
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("self maps\\mp\\_utility::foo();", Cod4));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("self maps\\mp\\_utility::foo();", s_cod4));
 
         Assert.IsType<PathQualifiedNode>(call.Callee);
         Assert.NotNull(call.Target);
@@ -61,7 +60,7 @@ public class DialectExpressionTests
     [Fact]
     public void ThreadTakesAPathQualifiedCallee()
     {
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("thread maps\\mp\\_utility::foo();", Cod4));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("thread maps\\mp\\_utility::foo();", s_cod4));
 
         Assert.IsType<PathQualifiedNode>(call.Callee);
         Assert.True(call.IsThread);
@@ -72,7 +71,7 @@ public class DialectExpressionTests
     {
         // array_thread( guys, maps\mp\_utility::foo ) — the second argument is a bare pointer,
         // not a call, so it stays a PathQualifiedNode.
-        CallNode outer = Assert.IsType<CallNode>(FirstExpression("array_thread( guys, maps\\mp\\_utility::foo );", Cod4));
+        CallNode outer = Assert.IsType<CallNode>(FirstExpression("array_thread( guys, maps\\mp\\_utility::foo );", s_cod4));
 
         ExprNode pointer = outer.Arguments[1];
         PathQualifiedNode path = Assert.IsType<PathQualifiedNode>(pointer);
@@ -83,7 +82,7 @@ public class DialectExpressionTests
     [Fact]
     public void APathQualifiedCallHasNoDiagnostics()
     {
-        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", s_cod4);
 
         Assert.Empty(tree.Diagnostics);
     }
@@ -92,7 +91,7 @@ public class DialectExpressionTests
     public void ALeadingScopeResolutionIsALocalPointer()
     {
         // array_thread( guys, ::foo ) — ::foo is a local function pointer (empty path).
-        CallNode outer = Assert.IsType<CallNode>(FirstExpression("array_thread( guys, ::foo );", Cod4));
+        CallNode outer = Assert.IsType<CallNode>(FirstExpression("array_thread( guys, ::foo );", s_cod4));
 
         PathQualifiedNode path = Assert.IsType<PathQualifiedNode>(outer.Arguments[1]);
         Assert.Equal("", path.Path);
@@ -102,7 +101,7 @@ public class DialectExpressionTests
     [Fact]
     public void ALeadingScopeResolutionCanBeCalled()
     {
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("::foo();", Cod4));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("::foo();", s_cod4));
 
         PathQualifiedNode callee = Assert.IsType<PathQualifiedNode>(call.Callee);
         Assert.Equal("", callee.Path);
@@ -113,7 +112,7 @@ public class DialectExpressionTests
     public void BlackOps3RejectsALeadingScopeResolution()
     {
         // BO3 needs a namespace before :: -- a bare ::foo does not parse.
-        ParseTree tree = ParserTestHelper.Parse("function run()\n{\n\tx = ::foo;\n}\n", Bo3);
+        ParseTree tree = ParserTestHelper.Parse("function run()\n{\n\tx = ::foo;\n}\n", s_bo3);
 
         Assert.NotEmpty(tree.Diagnostics);
     }
@@ -123,7 +122,7 @@ public class DialectExpressionTests
     {
         // A backslash is not part of any BO3 expression, so the path form does not parse -- the
         // fork leaves BO3 untouched.
-        ParseTree tree = ParserTestHelper.Parse("function run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", Bo3);
+        ParseTree tree = ParserTestHelper.Parse("function run()\n{\n\tmaps\\mp\\_utility::foo();\n}\n", s_bo3);
 
         Assert.NotEmpty(tree.Diagnostics);
     }
@@ -132,7 +131,7 @@ public class DialectExpressionTests
     public void BlackOps3StillParsesNamespaceQualifiedCalls()
     {
         // The T7 ns::foo() form is unchanged -- a QualifiedNode, never a PathQualifiedNode.
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("_utility::foo();", Bo3));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("_utility::foo();", s_bo3));
 
         Assert.IsType<QualifiedNode>(call.Callee);
     }
@@ -141,7 +140,7 @@ public class DialectExpressionTests
     public void ChildThreadIsAThreadedCall()
     {
         // childthread foo() runs on a child thread, so it parses like thread — a threaded call.
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("childthread foo();", Mw2));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("childthread foo();", s_mw2));
 
         Assert.True(call.IsThread);
         Assert.Null(call.Target);
@@ -151,7 +150,7 @@ public class DialectExpressionTests
     public void CallInvokesAFunctionPointerSynchronously()
     {
         // call [[ level.func ]]( a ) — a synchronous (non-thread) pointer-deref call.
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("call [[ level.func ]]( a );", Mw2));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("call [[ level.func ]]( a );", s_mw2));
 
         Assert.False(call.IsThread);
         Assert.IsType<PointerDerefNode>(call.Callee);
@@ -162,7 +161,7 @@ public class DialectExpressionTests
     public void CallTakesAMethodNotationTarget()
     {
         // self call [[ func ]]() — call applies to a target object, like thread does.
-        CallNode call = Assert.IsType<CallNode>(FirstExpression("self call [[ func ]]();", Mw2));
+        CallNode call = Assert.IsType<CallNode>(FirstExpression("self call [[ func ]]();", s_mw2));
 
         Assert.False(call.IsThread);
         Assert.NotNull(call.Target);
@@ -175,7 +174,7 @@ public class DialectExpressionTests
         // `self.trackLoopThread = thisthread;` — the shape every MW2 use takes. Unlike thread/call it
         // modifies nothing; it is the right-hand side, so it parses as an identifier node.
         AssignmentNode assignment = Assert.IsType<AssignmentNode>(
-            FirstExpression("self.trackLoopThread = thisthread;", Mw2));
+            FirstExpression("self.trackLoopThread = thisthread;", s_mw2));
 
         IdentifierNode value = Assert.IsType<IdentifierNode>(assignment.Value);
         Assert.Equal("thisthread", value.Token.Text);
@@ -187,7 +186,7 @@ public class DialectExpressionTests
     {
         // Being a keyword must not make the word unrecognisable to statement recovery — the failure
         // `vararg` had. Nothing in the corpus writes this, so only a test will ever show it.
-        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tthisthread notify( \"done\" );\n}\n", Mw2);
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tthisthread notify( \"done\" );\n}\n", s_mw2);
 
         Assert.Empty(tree.Diagnostics);
     }
@@ -199,7 +198,7 @@ public class DialectExpressionTests
         // shape is everywhere in their scripts, and missing it used to fail the block's first
         // function and every declaration after it.
         ParseTree tree = ParserTestHelper.Parse(
-            "run()\n{\n}\n\n/#\ndrawDebug()\n{\n\twait( 0.05 );\n}\n#/\n\nafter()\n{\n}\n", Cod4);
+            "run()\n{\n}\n\n/#\ndrawDebug()\n{\n\twait( 0.05 );\n}\n#/\n\nafter()\n{\n}\n", s_cod4);
 
         Assert.Empty(tree.Diagnostics);
 
@@ -216,7 +215,7 @@ public class DialectExpressionTests
     {
         // %walk is an anim reference wherever no operand can sit to its left. An allowlist of
         // "after = ( , : ? return" missed every comparison operator, so real code lexed % as modulo.
-        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\t" + statement + "\n}\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\t" + statement + "\n}\n", s_cod4);
 
         Assert.Empty(tree.Diagnostics);
     }
@@ -225,7 +224,7 @@ public class DialectExpressionTests
     public void ModuloStillParsesAfterAnOperand()
     {
         // The other side of the same rule: after an operand, % is modulo, not an anim reference.
-        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tx = a % b;\n\ty = 7 % 2;\n}\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tx = a % b;\n\ty = 7 % 2;\n}\n", s_cod4);
 
         Assert.Empty(tree.Diagnostics);
     }
@@ -234,7 +233,7 @@ public class DialectExpressionTests
     public void AKeywordCanBeAFieldName()
     {
         // self.wait / ent.size — a keyword is a fine field name, and scripts really do use them.
-        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tself.wait = 1;\n\tx = spawner.thread;\n}\n", Cod4);
+        ParseTree tree = ParserTestHelper.Parse("run()\n{\n\tself.wait = 1;\n\tx = spawner.thread;\n}\n", s_cod4);
 
         Assert.Empty(tree.Diagnostics);
     }
@@ -244,7 +243,7 @@ public class DialectExpressionTests
     {
         // BO3's keyword set omits call (its corpus uses it as a variable), so `call = 1;` is a plain
         // assignment there — the word never becomes a keyword.
-        ExprNode expression = FirstExpression("call = 1;", Bo3);
+        ExprNode expression = FirstExpression("call = 1;", s_bo3);
 
         AssignmentNode assignment = Assert.IsType<AssignmentNode>(expression);
         IdentifierNode target = Assert.IsType<IdentifierNode>(assignment.Target);

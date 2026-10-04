@@ -36,7 +36,8 @@ namespace GSCode.Server.Formatting;
 /// </param>
 /// <param name="SpaceBeforeControlParen">
 /// Whether a control-flow keyword is separated from its parenthesis: <c>if ( x )</c> against
-/// <c>if( x )</c>. Independent of the interior padding, so every combination is reachable.
+/// <c>if( x )</c>. Stock is split, 23,645 spaced against 13,600 tight. Independent of the
+/// interior padding, so every combination is reachable.
 /// </param>
 /// <param name="MaxBlankLines">
 /// The longest run of blank lines to preserve. Two by default, which keeps the 2,477 double blanks
@@ -55,6 +56,26 @@ namespace GSCode.Server.Formatting;
 /// defaults it on, the same split already used for <see cref="UseTabs"/>: the code default is the
 /// conservative one, the editor default is the intended one.
 /// </param>
+/// <param name="IndentCaseLabels">
+/// Whether <c>case</c> and <c>default</c> labels sit one level inside their <c>switch</c>, with the
+/// statements under a label one level further. Stock indents them 2,012 times to 517 flush.
+/// </param>
+/// <param name="IndentDevBlocks">
+/// Whether the body of a <c>/# … #/</c> dev block is indented. Off by default: a dev block is a
+/// runtime switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
+/// a real split, so the other answer is a setting rather than a bug.
+/// </param>
+/// <param name="AlignMaxPadding">
+/// The most spaces consecutive alignment may add to one line, 0 for no limit. Caching a value and
+/// then writing a deeply subscripted one aligned the short name ninety columns out; past this the
+/// outlier keeps a single space and the rest of its run still aligns.
+/// </param>
+/// <param name="FixCasing">
+/// Whether keywords are lowercased and calls take their function's declared or documented
+/// spelling. The one option that changes token TEXT rather than whitespace, so it is off here —
+/// the default the corpus gates measure — and on in the client, the split
+/// <see cref="AlignConsecutive"/> uses. See <c>GscFormatter.Casing.cs</c> for what it never touches.
+/// </param>
 public readonly record struct FormatOptions(
     int IndentWidth = 4,
     bool UseTabs = false,
@@ -64,7 +85,11 @@ public readonly record struct FormatOptions(
     bool SpaceBeforeControlParen = true,
     int MaxBlankLines = 2,
     bool SortDirectives = true,
-    bool AlignConsecutive = false)
+    bool AlignConsecutive = false,
+    bool IndentCaseLabels = true,
+    bool IndentDevBlocks = false,
+    bool FixCasing = false,
+    int AlignMaxPadding = 20)
 {
     /// <summary>
     /// The defaults, for callers with no editor settings to hand (tests, corpus gates).
@@ -77,13 +102,8 @@ public readonly record struct FormatOptions(
     public static FormatOptions Default { get; } = new(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
-        SortDirectives: true, AlignConsecutive: false);
-
-    /// <summary>One level of indentation as text.</summary>
-    public string IndentUnit
-    {
-        get { return UseTabs ? "\t" : new string(' ', Math.Max(1, IndentWidth)); }
-    }
+        SortDirectives: true, AlignConsecutive: false,
+        IndentCaseLabels: true, IndentDevBlocks: false, FixCasing: false, AlignMaxPadding: 20);
 
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
@@ -106,6 +126,10 @@ public readonly record struct FormatOptions(
             SpaceBeforeControlParen: settings.FormatSpaceBeforeControlParen,
             MaxBlankLines: Math.Max(0, settings.FormatMaxBlankLines),
             SortDirectives: settings.FormatSortDirectives,
-            AlignConsecutive: settings.FormatAlignConsecutive);
+            AlignConsecutive: settings.FormatAlignConsecutive,
+            IndentCaseLabels: settings.FormatIndentCaseLabels,
+            IndentDevBlocks: settings.FormatIndentDevBlocks,
+            FixCasing: settings.FormatFixCasing,
+            AlignMaxPadding: Math.Max(0, settings.FormatAlignMaxPadding));
     }
 }

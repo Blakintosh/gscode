@@ -1,23 +1,17 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
 
 public class UnusedUsingLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-
     /// <summary>
     /// A small world: util (plain functions), boot (an autoexec), shapes (a class), and
     /// util_more (a second contributor to the SAME namespace as util).
@@ -25,16 +19,14 @@ public class UnusedUsingLintTests
     private static (ScriptDatabase Database, PathResolver Resolver) BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\util.gsc", "#namespace util;\nfunction helper()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\util_more.gsc", "#namespace util;\nfunction extra()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\boot.gsc", "#namespace boot;\nfunction autoexec start()\n{\n}\n")
-            .AddFile(@$"{Raw}\scripts\shapes.gsc", "#namespace shapes;\nclass Circle\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\util.gsc"), "#namespace util;\nfunction helper()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\util_more.gsc"), "#namespace util;\nfunction extra()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\boot.gsc"), "#namespace boot;\nfunction autoexec start()\n{\n}\n")
+            .AddFile(TestPaths.Raw(@"scripts\shapes.gsc"), "#namespace shapes;\nclass Circle\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
         return (database, resolver);
     }
@@ -42,9 +34,8 @@ public class UnusedUsingLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource)
     {
         (ScriptDatabase database, PathResolver resolver) = BuildWorkspace();
-        string askingPath = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        string askingPath = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         return UnusedUsingLint.Analyze(result, database.Gsc, ScriptLanguage.Gsc, resolver, askingPath);
     }
@@ -98,9 +89,39 @@ public class UnusedUsingLintTests
     }
 
     [Fact]
-    public void Suppressed_WhenAUsingCannotBeResolved()
+    public void OnlyTheUnreadableUsingGoesUnjudged()
     {
+        // This used to report nothing at all: one import the workspace could not read stood the
+        // whole pass down. Whether `util` is used depends on this file's references and on util's
+        // own declarations, and a file we cannot read is neither — so it goes unjudged (it never
+        // enters Usings) and the rest are judged as before. The missing one is UsingNotFound's to
+        // report, so this rule still never doubles up on that line.
         string source = "#using scripts\\missing;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(1, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void AnUnresolvedInsertStillSuppressesThePass()
+    {
+        // The gate the old one was standing in for. A header that did not expand takes its macros
+        // with it, so the reference set is short — the exact shape that makes a live import look
+        // unused, and the reference set is this rule's input.
+        string source = "#insert scripts\\missing.gsh;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void AnInsertNamingAScriptSuppressesThePassToo()
+    {
+        // InsertNotFound is one of SIX ways a header fails to deliver its macros, and was the only
+        // one four separate gates asked about. `#insert` takes a .gsh; naming a .gsc is reported as
+        // 2014 and the splice is abandoned exactly as it is for a missing file, so the reference set
+        // is short in exactly the same way. See ImportGate.MacrosLost.
+        string source = "#insert scripts\\util.gsc;\n#using scripts\\util;\n#namespace game;\nfunction run()\n{\n}\n";
 
         Assert.Empty(Lint(source));
     }

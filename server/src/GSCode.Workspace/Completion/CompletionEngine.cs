@@ -4,7 +4,6 @@ using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 
@@ -30,7 +29,6 @@ public sealed partial class CompletionEngine
 
     /// <summary>Produces completion suggestions for a position in an analysed document.</summary>
     /// <param name="includeLiterals">Whether to offer known literals inside a "..."/&amp;"..."/#"..." string (the gscode.completion.literals setting).</param>
-    /// <param name="fieldScope">How widely assignment-derived fields are offered after a `.` (the gscode.completion.fieldScope setting).</param>
     /// <param name="profile">
     /// The dialect to complete for; defaults to the active one. Explicit for the same reason
     /// <c>ScriptAnalysis.Analyze</c> takes it — a test naming its dialect does not have to mutate
@@ -41,18 +39,28 @@ public sealed partial class CompletionEngine
         string contextId,
         Position position,
         bool includeLiterals = true,
-        FieldScope fieldScope = FieldScope.Owner,
         CallPunctuation callPunctuation = CallPunctuation.Parens,
         GameProfile? profile = null,
-        bool parameterHints = true)
+        bool parameterHints = true,
+        bool autoImport = true)
     {
         GameProfile game = profile ?? GameProfile.Active;
         ImmutableArray<Token> tokens = result.Lexed.Tokens;
         int offset = result.Text.GetOffset(position);
 
+        // Inside a comment: nothing legally goes here. Neither FindLiteralAtOffset nor the
+        // trigger-token scan below (PreviousSignificant skips trivia, by design, so the rest of
+        // this method can read the token stream as if comments were not there) ever checked for
+        // one, so the trigger character landed on whatever code precedes the comment instead —
+        // every '/', '.', ':', '#' and '\' typed while writing one popped a completion list.
+        if ( IsInsideComment(tokens, offset) )
+        {
+            return [];
+        }
+
         // Inside a string/istring/hash literal: offer known literals of that kind (or nothing,
         // since statement-scope suggestions never make sense inside a string).
-        int literalIndex = FindLiteralAtOffset(tokens, offset);
+        int literalIndex = FindLiteralAtOffset(result, tokens, offset);
         if ( literalIndex >= 0 )
         {
             // `#precache( "<here>"` is an asset TYPE, not free text. The quote is a completion
@@ -70,24 +78,51 @@ public sealed partial class CompletionEngine
                 return [];
             }
 
-            return LiteralCompletions(result, contextId, LiteralKindOf(tokens[literalIndex].Kind));
+            return LiteralCompletions(
+                result, contextId, LiteralKindOf(tokens[literalIndex].Kind), LiteralTextBefore(result, tokens[literalIndex], offset));
         }
 
         // The token being typed (if the cursor sits in/just after an identifier) and the
         // trigger token before it drive the context decision.
         int currentIndex = FindCurrentWordIndex(tokens, offset);
-        int triggerIndex = PreviousSignificant(tokens, currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset));
+        int triggerIndex = TokenFacts.PreviousSignificant(tokens, currentIndex >= 0 ? currentIndex : FirstAtOrAfter(tokens, offset));
 
         // Every context below is detected by looking BACKWARD for a trigger character, which
         // answers "what did the user just type" but not "is this construct legal here". The
         // directive family is top level ONLY, so inside a function body the backward scan finds a
         // '#' and confidently offers #using, #insert and #namespace in the middle of a call.
-        // The enclosing declaration itself, not just whether there is one. It answers three
-        // questions that used to be asked separately and walked the same ranges each time: which
-        // keyword set is legal, whether `vararg` binds, and — the reason it is carried rather than
-        // reduced to a bool — WHICH parameters and locals are in scope.
+        // The enclosing declaration itself, not just whether there is one. One walk answers three
+        // questions: which keyword set is legal, whether `vararg` binds, and — the reason it is
+        // carried rather than reduced to a bool — WHICH parameters and locals are in scope.
         FunctionSymbol? enclosingFunction = EnclosingFunction(result, position);
         bool insideFunction = enclosingFunction is not null;
+
+        // What punctuation a completed call carries, decided once for every arm below rather than
+        // per arm, because both corrections here are about the POSITION and not about which list
+        // is being produced.
+        //
+        // File scope holds no STATEMENTS, so nothing completed there takes a terminator.
+        // IsStatementPosition scans back from the caret, finds the previous function's '}' and
+        // answers true — right inside a body and meaningless outside one. The macro that stands
+        // alone at that position expands to a DECLARATION (REGISTER_SYSTEM writes `function
+        // autoexec ...() { }`), and all 447 of its uses in the shipped BO3 scripts carry none.
+        //
+        // A function POINTER takes no punctuation at all: `&foo` names the function where `&foo()`
+        // would call it and take the address of the result. BO3 writes 4,564 of these, 585 of them
+        // through a namespace, and both routes came through here — so completing one wrote
+        // parentheses that had to be deleted again. Gated on the dialect's pointer style, since in
+        // the IW line a pointer is a bare qualified name and an '&' is arithmetic.
+        CallPunctuation punctuation = callPunctuation;
+        if ( !insideFunction && punctuation == CallPunctuation.ParensAndSemicolon )
+        {
+            punctuation = CallPunctuation.Parens;
+        }
+
+        if ( game.FunctionPointerStyle == FunctionPointerStyle.Ampersand
+            && IsAddressOfPosition(tokens, triggerIndex) )
+        {
+            punctuation = CallPunctuation.Off;
+        }
 
         if ( !insideFunction )
         {
@@ -124,7 +159,7 @@ public sealed partial class CompletionEngine
                 DirectiveCompletions(game, GscKeywords.BodyDirectives);
 
             return game.HasHashStrings && includeLiterals
-                ? directives.AddRange(LiteralCompletions(result, contextId, SymbolKind.HashString, quoted: true))
+                ? directives.AddRange(LiteralCompletions(result, contextId, SymbolKind.HashString, typed: "", quoted: true))
                 : directives;
         }
 
@@ -189,12 +224,39 @@ public sealed partial class CompletionEngine
         // ns:: — offer functions in that namespace only.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.ScopeResolution )
         {
-            int nsIndex = PreviousSignificant(tokens, triggerIndex);
+            int nsIndex = TokenFacts.PreviousSignificant(tokens, triggerIndex);
             if ( nsIndex >= 0 && tokens[nsIndex].Kind == TokenKind.Identifier )
             {
+                // An inline path call writes its qualifier as a whole PATH
+                // (`maps\mp\_utility::`), not a single identifier — but the token right before
+                // '::' is still just its LAST segment, and these dialects have no #namespace, so
+                // SymbolExtractor defaults every function's namespace to its own file's name
+                // stem. Asking by that bare stem alone reaches every file sharing it, which is
+                // exactly MW2's own shape: `maps\_utility.gsc` and `maps\mp\_utility.gsc`.
+                if ( game.HasInlinePathCalls )
+                {
+                    string writtenPath = InlinePathBefore(result.Text, tokens[nsIndex].End);
+                    if ( writtenPath.Length > 0 )
+                    {
+                        return InlinePathFunctionCompletions(
+                            result, contextId, writtenPath, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
+                    }
+                }
+
                 string ns = tokens[nsIndex].GetText(result.Text).ToString().ToLowerInvariant();
+
+                // `sys::` names the engine's library, not a namespace: asked as one it finds
+                // nothing declared into `sys`, and the editor falls back to word matches from the
+                // buffer. Matches carries the dialect gate, so this agrees with extraction and
+                // resolution about where `sys::` means anything.
+                if ( BuiltinQualifier.Matches(ns, game) )
+                {
+                    return BuiltinQualifiedCompletions(
+                        result, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
+                }
+
                 return NamespaceFunctionCompletions(
-                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, callPunctuation), parameterHints);
+                    result, contextId, ns, CallSnippet(tokens, currentIndex, offset, punctuation), parameterHints);
             }
         }
 
@@ -206,14 +268,15 @@ public sealed partial class CompletionEngine
                 result,
                 contextId,
                 ArrowReceiverClass(result, tokens, triggerIndex, position),
-                CallSnippet(tokens, currentIndex, offset, callPunctuation),
+                CallSnippet(tokens, currentIndex, offset, punctuation),
                 parameterHints);
         }
 
         // owner. — offer fields.
         if ( triggerIndex >= 0 && tokens[triggerIndex].Kind == TokenKind.Dot )
         {
-            return FieldCompletions(result, contextId, OwnerBefore(result, tokens, triggerIndex), fieldScope);
+            return FieldCompletions(
+                result, contextId, OwnerBefore(result, tokens, triggerIndex), WordBefore(result, tokens, currentIndex, offset));
         }
 
         return StatementScopeCompletions(
@@ -222,8 +285,48 @@ public sealed partial class CompletionEngine
             offset,
             position,
             enclosingFunction,
-            CallSnippet(tokens, currentIndex, offset, callPunctuation),
+            CallSnippet(tokens, currentIndex, offset, punctuation),
             game,
-            parameterHints);
+            parameterHints,
+            autoImport ? WordBefore(result, tokens, currentIndex, offset) : "");
+    }
+    /// <summary>
+    /// The part of the identifier under the cursor that has actually been TYPED — <c>get_pl</c> in
+    /// <c>get_pl|ayers</c>, not the whole word.
+    ///
+    /// The auto-import producer and field completion ask, and both need the typed half specifically:
+    /// the rest of the token is text the user is editing over, so matching candidates against the
+    /// whole word would offer nothing the moment the cursor moved into the middle of one.
+    /// </summary>
+    private static string WordBefore(ParseResult result, ImmutableArray<Token> tokens, int currentIndex, int offset)
+    {
+        if ( currentIndex < 0 || tokens[currentIndex].Kind != TokenKind.Identifier )
+        {
+            return "";
+        }
+
+        int start = tokens[currentIndex].Start;
+        if ( offset <= start || offset > tokens[currentIndex].End )
+        {
+            return "";
+        }
+
+        return result.Text.Text[start..offset];
+    }
+
+    /// <summary>
+    /// What has been typed inside the literal the cursor is in: everything after its opening quote up
+    /// to the cursor, whichever sigil comes before the quote — <c>fx/mi</c> in <c>"fx/mi|sc"</c>.
+    /// </summary>
+    private static string LiteralTextBefore(ParseResult result, Token literal, int offset)
+    {
+        string source = result.Text.Text;
+        int quote = source.IndexOf('"', literal.Start, literal.End - literal.Start);
+        if ( quote < 0 || offset <= quote + 1 )
+        {
+            return "";
+        }
+
+        return source[(quote + 1)..Math.Min(offset, literal.End)];
     }
 }

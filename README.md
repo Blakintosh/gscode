@@ -9,6 +9,24 @@ This repository holds two halves: the GSCode **language server** (C#), which spe
 For the extension user guide — including setup, settings, commands, formatting, and in-source
 pragmas — see the [client README](client/README.md). Release notes live there as well.
 
+## What's new in 2.2
+
+The largest release since 2.0: nearly 400 commits across the server, the extension and the tests.
+
+- **Scale.** Every per-request cost is flat from 1,000 to 50,000 files, a warm start at 50,000 is
+  about 4 seconds, and an ordinary Black Ops III workspace indexes in well under a second.
+- **Reliability.** Diagnostics no longer go stale, reappear on closed files or race the startup
+  index, and the cache survives changes made between sessions.
+- **Features.** Go to Implementations and Type Definition, navigation on fields and class members,
+  call hierarchy for methods, macro-aware signature help, hover and lints, auto-import completion,
+  cross-file problems for every file in `full` indexing mode, and a GSCode right-click menu.
+- **Formatting.** Casing fixes, new indentation settings, output closer to the stock scripts, and
+  edits that keep the caret in place.
+
+Upgrading rebuilds the workspace cache once. The [release notes](client/README.md#220-latest) list
+what users will notice, and [CHANGELOG.md](client/CHANGELOG.md) has everything. For engineers, the
+[handbook](docs/README.md) explains how it all fits together.
+
 ## Supported games
 
 Black Ops III is the verified target and the most complete. Four earlier games are supported with
@@ -31,8 +49,9 @@ exist, how functions resolve, and which engine data files load.
 
 ## Getting started
 
-Open a folder of scripts and GSCode indexes it. Two optional settings tell it where the game's own
-scripts live, so that includes and path calls resolve against them:
+Open a folder of scripts and GSCode indexes it. Run **GSCode: Select Game** to pick the dialect — it
+lists only the games with an implemented dialect and marks the one in force. Two optional settings
+tell it where the game's own scripts live, so that includes and path calls resolve against them:
 
 - `gscode.rawPath` — the game's raw script folder. Set this when the folder you have open is a mod
   or a loose set of scripts. Left empty, only the open workspace folders are indexed.
@@ -48,10 +67,12 @@ game's compiler. The goal is to catch everything the compiler catches at build t
 mistakes that otherwise only surface at runtime.
 
 Before opening an issue, try **Developer: Reload Window**, wait for indexing to finish, and check
-the active game plus `gscode.rawPath`, `gscode.modsPath`, and `gscode.raw.enabled`. If results still
-look stale, run **GSCode: Clear Cache and Reindex**. For server or indexing problems, set
-`gscode.serverLogLevel` to `info` or `verbose` and copy the relevant part of the **GSCode Server**
-output. The [client README](client/README.md) has the full troubleshooting and cache-reset guide.
+the active game (**GSCode: Select Game** shows which one the server actually chose, which is not
+always what the setting names) plus `gscode.rawPath`, `gscode.modsPath`, and `gscode.raw.enabled`.
+If results still look stale, run **GSCode: Clear Cache and Reindex**. For server or indexing
+problems, set `gscode.serverLogLevel` to `info` or `verbose` and copy the relevant part of the
+**GSCode Server** output. The [client README](client/README.md) has the full troubleshooting and
+cache-reset guide.
 
 ### Bug reports
 
@@ -136,6 +157,12 @@ Warnings are errors. Two categories are excluded above, and both for the same re
 sweep reads real game installs through `GSCODE_CORPUS_{COD4,WAW,MW2,BO1,BO3}` and, without those
 set, silently sweeps nothing; the perf sweep needs the same installs and makes a second pass over
 every script. This is the filter CI uses.
+
+On Windows, `scripts\` wraps the common runs in batch files: `test.bat` (the command above, per
+project), `sweep.bat`, `corpus.bat`, `perf.bat` and `scale.bat` (the game-corpus suites, cod4 and
+bo3 unless given `all` or a list of games), and `build-vsix.bat` (packages the extension without
+publishing it). Double-click one or run it from a terminal; each file's header says what it takes.
+[docs/README.md](docs/README.md) is the engineering handbook and the place to start;
 [server/ARCHITECTURE.md](server/ARCHITECTURE.md) is the map of the server, and each project carries a
 `FOLDER.md` describing its own contents.
 

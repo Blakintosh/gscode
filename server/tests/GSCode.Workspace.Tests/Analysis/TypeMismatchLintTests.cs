@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
@@ -29,13 +26,15 @@ public class TypeMismatchLintTests
     {
         string source = "function f( a )\n{\n" + body + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
 
         FlowTyper typer = new(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), ObjectFields.Load(ApiDirectory));
-        return TypeMismatchLint.Analyze(result, typer);
+        ScriptTypes types = typer.InferValues(result);
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => TypeMismatchLint.InspectNode(node, types, diagnostics));
     }
 
     // --- 5033: enumerating something that cannot be enumerated ---
@@ -74,6 +73,27 @@ public class TypeMismatchLintTests
         Assert.Empty(Lint(
             "    if ( a )\n    {\n        c = [];\n    }\n    else\n    {\n        c = 5;\n    }\n"
             + "    foreach ( x in c )\n    {\n    }"));
+    }
+
+    [Fact]
+    public void AValueOnlySetLaterInALoopBody_IsNotReportedOnAnEarlierIteration()
+    {
+        // The reported gap: a single pass over a loop body reads it against the environment as it
+        // stood BEFORE the loop, so `p` looked certainly undefined at the foreach — even though a
+        // second iteration reaches it with whatever the tail assignment left there, and GSC has no
+        // per-iteration scoping to stop that from happening.
+        Assert.Empty(Lint(
+            "    p = undefined;\n"
+            + "    for ( i = 0; i < 3; i++ )\n"
+            + "    {\n"
+            + "        if ( i )\n"
+            + "        {\n"
+            + "            foreach ( e in p )\n"
+            + "            {\n"
+            + "            }\n"
+            + "        }\n\n"
+            + "        p = getplayers();\n"
+            + "    }"));
     }
 
     [Fact]

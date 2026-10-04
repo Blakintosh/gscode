@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Workspace.Api;
 using Xunit;
 
@@ -7,6 +8,37 @@ namespace GSCode.Workspace.Tests.Api;
 public class ObjectFieldsTests
 {
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
+
+    [Fact]
+    public void Load_ALockedObjectFieldsFile_ReportsFailureRatherThanThrowing()
+    {
+        // Only JsonException was caught, and there was no onParseFailure hook at all — so a
+        // locked file both crashed the caller AND, if it had not, would have failed silently with
+        // no way to tell "the profile ships no data" apart from "this data exists but is broken".
+        GameProfile bo3 = GameProfile.BlackOps3;
+        string directory = Path.Combine(Path.GetTempPath(), $"gscode_object_fields_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, bo3.ObjectFieldsFileName!);
+        File.WriteAllText(path, "{}");
+
+        try
+        {
+            using FileStream exclusiveLock = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+            List<(string Path, Exception Exception)> failures = [];
+            ObjectFields fields = ObjectFields.Load(directory, bo3, (failedPath, exception) => failures.Add((failedPath, exception)));
+
+            Assert.Empty(fields.FindField("origin"));
+            Assert.Single(failures);
+            Assert.Equal(path, failures[0].Path);
+            Assert.IsType<IOException>(failures[0].Exception);
+        }
+        finally
+        {
+            File.Delete(path);
+            Directory.Delete(directory);
+        }
+    }
 
     [Fact]
     public void Load_HasFieldsAcrossKinds()

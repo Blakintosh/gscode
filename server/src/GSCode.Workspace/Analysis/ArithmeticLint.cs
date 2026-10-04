@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using GSCode.Core.Diagnostics;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 
 namespace GSCode.Workspace.Analysis;
@@ -21,16 +19,11 @@ namespace GSCode.Workspace.Analysis;
 /// </summary>
 public static class ArithmeticLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(ParseResult result)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-
-        Walk(result.Tree.Root, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
-    private static void Walk(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk.
+    /// </summary>
+    internal static void InspectNode(AstNode node, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         switch ( node )
         {
@@ -44,11 +37,6 @@ public static class ArithmeticLint
                 when IsLiteralZero(assignment.Value):
                 Report(assignment.Value, diagnostics);
                 break;
-        }
-
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Walk(child, diagnostics);
         }
     }
 

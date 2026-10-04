@@ -224,7 +224,7 @@
             "text8"
         ],
         "devOnly": false,
-        "reason": "Two corrections. PARAMETERS: the pages list 1; 84 call(s) in the shipped scripts pass up to 8, so the list is short rather than the calls wrong. DEV-ONLY: false, despite the page saying 'Development only'. The shipped scripts call it 438 times outside a /# #/ dev block against 220 inside, so the diagnostic's claim - that the name will not exist in a release build - is contradicted by the game that shipped: were it removed, those 438 calls would not link. The page is best read as 'only useful in development' rather than 'absent in release'. Stated here because the loader's fallback list is Black Ops 3's, where the same count is 2 outside against 269 inside."
+        "reason": "Two corrections. PARAMETERS: the pages list 1; 84 call(s) in the shipped scripts pass up to 8, so the list is short rather than the calls wrong. DEV-ONLY: false, despite the page saying 'Development only'. The shipped scripts call it 438 times outside a /# #/ dev block against 220 inside, so the diagnostic's claim - that the name must be called from inside a dev block - is contradicted by the game that shipped. The page is best read as 'only useful in development' rather than 'dev block only'. Stated here because the loader's fallback list is Black Ops 3's, where the same count is 2 outside against 269 inside."
     },
     {
         "name": "SetAnimRestart",
@@ -370,7 +370,7 @@
     {
         "name": "Line",
         "devOnly": false,
-        "reason": "Same reading as PrintLn: 110 calls outside a /# #/ dev block against 40 inside. The debug-draw primitives are reachable from release code in this engine."
+        "reason": "Same reading as PrintLn: 110 calls outside a /# #/ dev block against 40 inside. The debug-draw primitives are callable outside a dev block in this engine."
     },
     {
         "name": "Print",

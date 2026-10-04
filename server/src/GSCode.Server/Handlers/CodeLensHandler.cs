@@ -40,7 +40,10 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             return Task.FromResult<CodeLensContainer?>(new CodeLensContainer());
         }
 
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        // ResolveFresh, not Resolve: lens ranges are positional, and serving them from the
+        // 250 ms-stale analysis put every lens one edit behind the buffer — the rows jumped on
+        // each keystroke and dragged the viewport with them.
+        NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<CodeLensContainer?>(null);
@@ -48,8 +51,14 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
 
         List<CodeLens> lenses = [];
 
+        // Checked per lens, not per request: every lens runs the shared workspace reference query,
+        // so a file with a few hundred declarations is a few hundred workspace lookups. The client
+        // re-requests lenses after every analysis that moves a file's exports, and cancels the
+        // request it has superseded.
         foreach ( FunctionSymbol function in target.Result.Extraction.Functions )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // The KEY namespace, not the declared one: a merge dialect keys functions by bare
             // name, but still reports a namespace (the file stem), so using it here looked up a
             // key nothing is stored under and every lens read "0 references".
@@ -59,6 +68,8 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // A class key carries NO namespace, for the same reason the function key above carries
             // the KEY one rather than the declared one: it has to match what uses are stored under.
             // A class name is global in T7 — `new Throttle()` names it bare and there is no
@@ -68,13 +79,15 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
 
             // METHODS. The loop above walks Extraction.Functions, which holds top-level functions
-            // only — a method lives on its class — so a class body carried no lenses at all and the
-            // class's own was the only one in it, which reads as lenses landing on the wrong lines.
+            // only — a method lives on its class — so without this a class body shows only the
+            // class's own lens.
             //
             // Keyed with the declaring class and no namespace, matching what extraction writes for a
             // declaration, so the count runs the same query the peek list does.
             foreach ( FunctionSymbol method in classSymbol.Methods )
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 SymbolKey methodKey = new(null, method.KeyName, SymbolKind.Function, classSymbol.KeyName);
                 lenses.Add(MakeLens(request.TextDocument.Uri, method.NameRange, methodKey, target));
             }
@@ -87,6 +100,8 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         // no lenses at all. Inserted macros belong to the header that defines them, not here.
         foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in target.Result.Preprocessed.Macros.All )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if ( macro.SourceFile is not null )
             {
                 continue;
@@ -110,9 +125,9 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         // single-store count under-reported a function called from CSC or a macro used from a
         // header, while clicking the lens went through the client's reference provider.
         int count = 0;
-        foreach ( (ScriptRecord _, ReferenceEntry entry) in _support.FindAllReferences(target, key) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, key) )
         {
-            if ( entry.Kind != ReferenceKind.Definition )
+            if ( reference.Entry.Kind != ReferenceKind.Definition )
             {
                 count++;
             }

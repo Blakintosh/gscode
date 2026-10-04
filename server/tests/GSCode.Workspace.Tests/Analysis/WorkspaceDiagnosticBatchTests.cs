@@ -1,10 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using Xunit;
@@ -18,23 +15,13 @@ public class WorkspaceDiagnosticBatchTests
 {
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc",
-            ScriptLanguage.Gsc,
-            SourceText.From(source),
-            NullInsertProvider.Instance,
-            new NameTable());
-    }
-
     // --- 5018: the same file imported twice ---
 
     [Fact]
     public void AFileImportedTwice()
     {
         Diagnostic duplicate = Assert.Single(DuplicateImportLint.Analyze(
-            Analyze("#using scripts\\shared\\util;\n#using scripts\\shared\\util;\n")));
+            TestParse.Analyze("#using scripts\\shared\\util;\n#using scripts\\shared\\util;\n")));
 
         Assert.Equal(GscDiagnosticCode.DuplicateImport, duplicate.Code);
 
@@ -47,14 +34,30 @@ public class WorkspaceDiagnosticBatchTests
     {
         // The engine resolves either spelling, so these import the same file.
         Assert.Single(DuplicateImportLint.Analyze(
-            Analyze("#using scripts/shared/util;\n#using scripts\\shared\\Util;\n")));
+            TestParse.Analyze("#using scripts/shared/util;\n#using scripts\\shared\\Util;\n")));
     }
 
     [Fact]
     public void DistinctImportsAreFine()
     {
         Assert.Empty(DuplicateImportLint.Analyze(
-            Analyze("#using scripts\\shared\\util;\n#using scripts\\shared\\array;\n")));
+            TestParse.Analyze("#using scripts\\shared\\util;\n#using scripts\\shared\\array;\n")));
+    }
+
+    /// <summary>
+    /// The rule as the server runs it: the shared per-node walk, gated on `Applies`, which stands
+    /// the rule down on a game that bundles no builtin library.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> RunVoidResultLint(ParseResult result, BuiltinApi builtins)
+    {
+        if ( !VoidResultLint.Applies(builtins) )
+        {
+            return [];
+        }
+
+        return NodeLintHarness.Run(
+            result,
+            (node, diagnostics) => VoidResultLint.InspectNode(node, builtins, diagnostics));
     }
 
     // --- 5019: keeping the result of something that returns nothing ---
@@ -64,8 +67,8 @@ public class WorkspaceDiagnosticBatchTests
     {
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Diagnostic diagnostic = Assert.Single(VoidResultLint.Analyze(
-            Analyze("function f()\n{\n\tx = PrintLn( \"a\" );\n}\n"), builtins));
+        Diagnostic diagnostic = Assert.Single(RunVoidResultLint(
+            TestParse.Analyze("function f()\n{\n\tx = PrintLn( \"a\" );\n}\n"), builtins));
 
         Assert.Equal(GscDiagnosticCode.VoidResultAssigned, diagnostic.Code);
     }
@@ -76,8 +79,8 @@ public class WorkspaceDiagnosticBatchTests
         // The mistake is only visible where the value is KEPT; the call itself is ordinary.
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
-            Analyze("function f()\n{\n\tPrintLn( \"a\" );\n}\n"), builtins));
+        Assert.Empty(RunVoidResultLint(
+            TestParse.Analyze("function f()\n{\n\tPrintLn( \"a\" );\n}\n"), builtins));
     }
 
     [Fact]
@@ -85,8 +88,8 @@ public class WorkspaceDiagnosticBatchTests
     {
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
-            Analyze("function f()\n{\n\tt = GetTime();\n}\n"), builtins));
+        Assert.Empty(RunVoidResultLint(
+            TestParse.Analyze("function f()\n{\n\tt = GetTime();\n}\n"), builtins));
     }
 
     [Fact]
@@ -96,8 +99,8 @@ public class WorkspaceDiagnosticBatchTests
         // end on others is legal, so the same claim about a script function would be a guess.
         BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
 
-        Assert.Empty(VoidResultLint.Analyze(
-            Analyze("function f()\n{\n\tx = helper();\n}\nfunction helper()\n{\n}\n"), builtins));
+        Assert.Empty(RunVoidResultLint(
+            TestParse.Analyze("function f()\n{\n\tx = helper();\n}\nfunction helper()\n{\n}\n"), builtins));
     }
 
     // --- 5020: a bound name nothing uses ---
@@ -106,7 +109,7 @@ public class WorkspaceDiagnosticBatchTests
     public void AnUnusedParameterIsFadedNotReported()
     {
         Diagnostic diagnostic = Assert.Single(UnusedBindingLint.Analyze(
-            Analyze("function f( unused )\n{\n\tx = 1;\n}\n")));
+            TestParse.Analyze("function f( unused )\n{\n\tx = 1;\n}\n")));
 
         Assert.Equal(GscDiagnosticCode.UnusedBinding, diagnostic.Code);
 
@@ -122,7 +125,7 @@ public class WorkspaceDiagnosticBatchTests
         // The author's own choice, unlike a callback parameter, so this one really can be deleted:
         // `waittill( "damage" )` is the fix.
         Diagnostic diagnostic = Assert.Single(UnusedBindingLint.Analyze(
-            Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n}\n")));
+            TestParse.Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n}\n")));
 
         Assert.Equal(GscDiagnosticCode.UnusedBinding, diagnostic.Code);
         Assert.Contains("attacker", diagnostic.Message, StringComparison.Ordinal);
@@ -132,7 +135,7 @@ public class WorkspaceDiagnosticBatchTests
     public void AWaittillOutputThatIsUsedIsFine()
     {
         Assert.Empty(UnusedBindingLint.Analyze(
-            Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n\tuse( attacker );\n}\n")));
+            TestParse.Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n\tuse( attacker );\n}\n")));
     }
 
     [Fact]
@@ -141,7 +144,7 @@ public class WorkspaceDiagnosticBatchTests
         // The reason mentions and bindings are separated in one walk: counting `attacker` at the
         // waittill as a use would mean no output was ever unused.
         Assert.Single(UnusedBindingLint.Analyze(
-            Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n}\n")));
+            TestParse.Analyze("function f()\n{\n\tself waittill( \"damage\", attacker );\n}\n")));
     }
 
     [Fact]
@@ -150,7 +153,7 @@ public class WorkspaceDiagnosticBatchTests
         // `out = 1` does something in GSC when the argument is by-reference, and telling that apart
         // needs knowledge this rule does not have — so a mention is a mention.
         Assert.Empty(UnusedBindingLint.Analyze(
-            Analyze("function f( out )\n{\n\tout = 1;\n}\n")));
+            TestParse.Analyze("function f( out )\n{\n\tout = 1;\n}\n")));
     }
 
     [Fact]
@@ -158,6 +161,6 @@ public class WorkspaceDiagnosticBatchTests
     {
         // It reaches its arguments through the vararg mechanism as well as by name.
         Assert.Empty(UnusedBindingLint.Analyze(
-            Analyze("function f( a, ... )\n{\n\tx = 1;\n}\n")));
+            TestParse.Analyze("function f( a, ... )\n{\n\tx = 1;\n}\n")));
     }
 }

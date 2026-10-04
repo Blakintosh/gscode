@@ -1,8 +1,6 @@
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using Xunit;
 
@@ -33,8 +31,7 @@ public class MacroNavigationTests
 
     private static ParseResult Analyze()
     {
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(Source), NullInsertProvider.Instance, new NameTable());
+        return TestParse.Analyze(Source);
     }
 
     private static Position InvocationPosition(ParseResult result)
@@ -65,7 +62,7 @@ public class MacroNavigationTests
         PositionHit hit = SymbolAtPosition.Resolve(result, InvocationPosition(result));
 
         Assert.NotEqual("clear", hit.Key.Name);
-        Assert.NotEqual(ReferenceKind.ExpandedFromMacro, hit.ReferenceKind);
+        Assert.Equal(ReferenceKind.MacroUse, hit.ReferenceKind);
     }
 
     [Fact]
@@ -77,7 +74,7 @@ public class MacroNavigationTests
 
         Assert.Contains(
             result.Extraction.References,
-            entry => entry.Kind == ReferenceKind.ExpandedFromMacro
+            entry => entry.FromMacro
                 && string.Equals(entry.Key.Name, "clear", StringComparison.OrdinalIgnoreCase));
     }
 }

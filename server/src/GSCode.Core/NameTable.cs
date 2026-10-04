@@ -40,18 +40,24 @@ public sealed class NameTable
     /// </summary>
     public string InternLower(ReadOnlySpan<char> text)
     {
-        // Most names are already lowercase; avoid the copy in that common case.
-        bool hasUpper = false;
+        // Most names are already lowercase; avoid the copy in that common case. Checked by asking
+        // whether ToLowerInvariant would actually CHANGE the character, not char.IsUpper — IsUpper
+        // is true only for Unicode category Lu, but a TITLECASE letter (Lt, e.g. U+01C5 'ǅ') is
+        // neither upper nor lower by that test and still lowercases to something different (U+01C6
+        // 'ǆ'). IsUpper()==false was being read as "already canonical", so a titlecase character
+        // skipped the lowercase pass and broke the "this is always the lowercase form" guarantee
+        // every case-insensitive lookup key here depends on.
+        bool needsLowering = false;
         foreach ( char character in text )
         {
-            if ( char.IsUpper(character) )
+            if ( char.ToLowerInvariant(character) != character )
             {
-                hasUpper = true;
+                needsLowering = true;
                 break;
             }
         }
 
-        if ( !hasUpper )
+        if ( !needsLowering )
         {
             return Intern(text);
         }

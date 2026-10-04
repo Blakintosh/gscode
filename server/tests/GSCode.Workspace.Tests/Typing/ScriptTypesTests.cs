@@ -1,8 +1,6 @@
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
@@ -12,11 +10,11 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Typing;
 
 /// <summary>
-/// The per-node query surface, which is what a rewriter consumes.
+/// The per-node query surface.
 ///
-/// The editor surfaces ask about one position or one assignment site. A transpiler walks the tree
-/// it is translating and has to ask about every node it passes, including the ones nothing was ever
-/// reported about — so the map has to be complete and it has to be keyed by identity.
+/// The type-mismatch lint and the inlay hints ask about nodes no assignment names — a foreach
+/// collection, a vector component, the pointer a call goes through — so the map has to cover every
+/// node the walk reaches, and it has to be keyed by identity.
 /// </summary>
 public class ScriptTypesTests
 {
@@ -31,14 +29,13 @@ public class ScriptTypesTests
     {
         string source = "function f( a )\n{\n" + body + "\n}\n";
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.DoesNotContain(result.AllDiagnostics, d => (int)d.Code is >= 3000 and < 4000);
         return result;
     }
 
-    /// <summary>Finds the first node of a kind, by walking the tree the way a rewriter would.</summary>
+    /// <summary>Finds the first node of a kind, walking the tree in source order.</summary>
     private static T FirstOf<T>(AstNode node) where T : ExprNode
     {
         return TryFirstOf<T>(node) ?? throw new InvalidOperationException($"no {typeof(T).Name} in the tree");
@@ -87,7 +84,7 @@ public class ScriptTypesTests
     public void TwoIdenticalLiteralsAreSeparateEntries()
     {
         // The reason the map is keyed by REFERENCE. Every AST node is a record, so structural
-        // equality would make the three zeroes in `( 0, 0, 0 )` one key — and a rewriter asking
+        // equality would make the three zeroes in `( 0, 0, 0 )` one key — and a caller asking
         // about the second would be answered about the first.
         ParseResult result = Parse("    v = ( 0, 0, 0 );");
         ScriptTypes types = NewTyper().InferValues(result);
@@ -132,20 +129,6 @@ public class ScriptTypesTests
     }
 
     [Fact]
-    public void ImprecisionIsCountedByReason()
-    {
-        // The coverage number a transpiler is budgeted against: not merely how much is unknown, but
-        // which unknown to attack next.
-        ScriptTypes types = NewTyper().InferValues(Parse("    x = a;\n    y = a[ 0 ];\n    z = 1;"));
-
-        Dictionary<ScrImprecision, int> histogram = types.ImprecisionHistogram();
-
-        Assert.True(histogram.ContainsKey(ScrImprecision.UntypedParameter));
-        Assert.True(histogram.ContainsKey(ScrImprecision.ArrayElement));
-        Assert.True(histogram.ContainsKey(ScrImprecision.None));
-    }
-
-    [Fact]
     public void AParameterIsKnownToBeAParameter()
     {
         // Parameters were seeded only for the hover pass, so the hint pass could not tell an
@@ -159,7 +142,7 @@ public class ScriptTypesTests
         IdentifierNode read = IdentifierNamed(result.Tree.Root, "a");
 
         Assert.True(types.TryGetValue(read, out ScrValue value));
-        Assert.Equal(ScrImprecision.UntypedParameter, value.Imprecision);
+        Assert.True(value.IsUnknown);
     }
 
     [Fact]
@@ -206,8 +189,8 @@ public class ScriptTypesTests
     [Fact]
     public void TheRicherValueIsAvailableAtAPosition()
     {
-        // TryGetLocalTypeAt gives an editor its coarse label; this gives a rewriter the union and
-        // the reason behind it.
+        // TryGetLocalTypeAt gives an editor its coarse label; this gives go-to-type-definition the
+        // union and the reason behind it.
         ParseResult result = Parse("    if ( a )\n    {\n        v = 1;\n    }\n    else\n    {\n        v = \"text\";\n    }\n    use( v );");
 
         // On the `v` inside `use( v )`. The body starts at line 2 of the wrapped source, so the
@@ -226,13 +209,63 @@ public class ScriptTypesTests
     {
         // The hint and hover passes ask about one name or one position, and must not pay for a whole
         // file's map to answer it. Two passes on one instance must not interfere either.
+        //
+        // The two InferValues calls are given SEPARATE parses of the same source deliberately: one
+        // parse twice would be answered from the memo, and the property under test is that a real
+        // second recording pass is unaffected by the InferAssignments that ran between them.
+        FlowTyper typer = NewTyper();
+
+        ScriptTypes first = typer.InferValues(Parse("    x = 1;"));
+        typer.InferAssignments(Parse("    x = 1;"));
+        ScriptTypes second = typer.InferValues(Parse("    x = 1;"));
+
+        Assert.Equal(first.Count, second.Count);
+    }
+
+    [Fact]
+    public void OneParseIsTypedOnce()
+    {
+        // Three lints ask this typer for the same file's types. Asking twice for one parse must hand
+        // back the SAME object rather than walking again, and a different parse must not be answered
+        // from the first one's memo — reference identity is the whole of the invalidation rule.
         FlowTyper typer = NewTyper();
         ParseResult result = Parse("    x = 1;");
 
         ScriptTypes first = typer.InferValues(result);
-        typer.InferAssignments(result);
-        ScriptTypes second = typer.InferValues(result);
+        ScriptTypes again = typer.InferValues(result);
+        Assert.Same(first, again);
 
-        Assert.Equal(first.Count, second.Count);
+        ScriptTypes other = typer.InferValues(Parse("    x = 1;"));
+        Assert.NotSame(first, other);
+        Assert.Equal(first.Count, other.Count);
+    }
+
+    [Fact]
+    public void TheSharedAnswerIsComputedOncePerParse()
+    {
+        // The lint pass, the inlay hints and hover all read this one, so asking twice for one parse
+        // has to hand back the same object, and a new parse of the same text has to walk again.
+        BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+        ObjectFields fields = ObjectFields.Load(ApiDirectory);
+        ParseResult result = Parse("    x = 1;");
+
+        ScriptTypes first = FlowTyper.InferValuesShared(result, builtins, fields);
+
+        Assert.Same(first, FlowTyper.InferValuesShared(result, builtins, fields));
+        Assert.NotSame(first, FlowTyper.InferValuesShared(Parse("    x = 1;"), builtins, fields));
+    }
+
+    [Fact]
+    public void ACallerWithOtherInputsDoesNotReadAnotherCallersAnswer()
+    {
+        // The answer depends on the field table and the library as well as the parse. A caller
+        // with different ones has to get its own walk, not one computed against someone else's.
+        BuiltinApi builtins = ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc);
+        ParseResult result = Parse("    x = 1;");
+
+        ScriptTypes withFields = FlowTyper.InferValuesShared(result, builtins, ObjectFields.Load(ApiDirectory));
+        ScriptTypes withoutFields = FlowTyper.InferValuesShared(result, builtins, ObjectFields.Empty);
+
+        Assert.NotSame(withFields, withoutFields);
     }
 }

@@ -1,10 +1,9 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -19,17 +18,21 @@ namespace GSCode.Workspace.Analysis;
 /// resolution finds the function anyway, so the build is broken rather than untidy. That the analyser
 /// can resolve it is a fact about the analyser, not about the game.
 ///
-/// It was a Warning first, deliberately. The rule had only just stopped misfiring — it reported 23
-/// false positives on class-method calls until this learned to skip class qualifiers below — and
-/// promoting a rule to Error the same day its false positives are fixed is how red squiggles end up
-/// on working code. It has since held at zero across the stock corpus, which
+/// It holds at zero false positives across the stock corpus, which
 /// <c>CorpusDiagnosticSweepTests.NoNamespaceIsReportedUnimported</c> asserts, so a regression
 /// surfaces there rather than in someone's editor.
 ///
 /// Zero false positives by construction: if any <c>#using</c> cannot be resolved to an indexed
 /// record, the whole lint is suppressed — a namespace that a not-yet-known import might supply
 /// is never flagged. That property is what an Error severity rests on, so weakening any of the
-/// bail-outs below now costs more than it used to.
+/// bail-outs below is an Error-severity regression.
+///
+/// One of the two readers of <see cref="FileImports.Complete"/>, the other being
+/// <see cref="IncludeUsageLint"/> — this same claim in the merge dialect. Here an unreadable file
+/// changes the whole verdict: the claim is that NOTHING this script imports declares the namespace,
+/// and a file nobody can read is exactly the counterexample. The cost is known: a workspace missing
+/// one script is told nothing about any namespace, so an incomplete script dump silences the rule
+/// everywhere.
 ///
 /// Namespace dialects only, which is the same gate <see cref="IncludeUsageLint"/> opens on from the
 /// other side. Where a file merges rather than imports there is no <c>#using</c> to add, and the
@@ -98,9 +101,22 @@ public static class NamespaceUsageLint
         HashSet<string> classNames = ClassNames(store);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+
+        // Keyed on the NAMESPACE, not the range: two namespaces missing at one macro invocation
+        // are two imports to add, and the code action offers both. See MacroReports.
+        HashSet<(TextRange Range, string Namespace)>? reportedFromMacros = null;
+
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.Key.Kind != SymbolKind.Function )
+            // FromMacro is deliberately NOT skipped. `#define HELP() flag::exists( "x" )` reaches
+            // into the `flag` namespace as surely as writing the call out does, and the engine
+            // wants `#using scripts\shared\flag_shared` either way — the preprocessor runs before
+            // anything looks at imports, so what links is the expansion.
+            //
+            // The range is then the INVOCATION, not the callee, so the Error lands on the macro's
+            // name. That is the only text on screen, and it is also where the add-#using fix must
+            // be offered, which CodeActionHandler.FindMissingUsingSites derives from the same entry.
+            if ( !entry.IsFunctionCall )
             {
                 continue;
             }
@@ -117,13 +133,17 @@ public static class NamespaceUsageLint
             // the database knows what a class is. Every one of the 23 times this lint fired on
             // the stock scripts was a class — cScene, cRailTurret, cSecurityMover.
             //
-            // Checked against the class's actual METHOD SET rather than merely its name. The name
-            // test was right about every stock case and wrong in principle: `cScene::no_such_thing()`
-            // names a real class and no real method, and reporting nothing there gave the mistake
-            // nowhere to surface. The chain walk is what makes the strict form safe — an inherited
-            // method is declared by an ancestor, not by the class the call names.
+            // Checked against the class's actual METHOD SET, not merely its name, so
+            // `cScene::no_such_thing()` — a real class, no real method — is still reported. The chain
+            // walk is what makes the strict form safe — an inherited method is declared by an
+            // ancestor, not by the class the call names.
             if ( classNames.Contains(namespaceName)
                 && MethodResolution.FindDeclaringClass(store, askingContextId, namespaceName, entry.Key.Name) is not null )
+            {
+                continue;
+            }
+
+            if ( !MacroReports.ShouldReport(entry, (entry.Range, namespaceName), ref reportedFromMacros) )
             {
                 continue;
             }
@@ -145,8 +165,8 @@ public static class NamespaceUsageLint
     /// </summary>
     private static HashSet<string> ClassNames(LanguageStore store)
     {
-        // Straight off the class graph. This used to scan every record in the store, and this lint
-        // runs per file, so a workspace-wide pass paid it once per file — a store scan squared.
+        // Straight off the class graph: this lint runs per file, so a store scan here would be paid
+        // once per file linted — a store scan squared.
         return [.. store.Classes.AllClassNames()];
     }
 }

@@ -1,6 +1,4 @@
 using System.Collections.Immutable;
-using GSCode.Core;
-using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Preprocessing;
@@ -19,8 +17,7 @@ public class MacroExpansionPreviewTests
 {
     private static ImmutableArray<PToken> BodyOf(string source, string macroName)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
         return definition.Body;
@@ -42,8 +39,7 @@ public class MacroExpansionPreviewTests
 
     private static ImmutableArray<string> ParametersOf(string source, string macroName)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         Assert.True(result.Preprocessed.Macros.TryGet(macroName, out MacroDefinition definition));
         return definition.Parameters ?? [];
@@ -87,21 +83,39 @@ public class MacroExpansionPreviewTests
         Assert.Contains("b", preview);
     }
 
+    /// <summary>Where the invocation's own name ends — <see cref="MacroExpansionPreview.ArgumentsFollowing"/>'s entry point.</summary>
+    private static int AfterName(string invocation)
+    {
+        int index = 0;
+        while ( index < invocation.Length && invocation[index] != '(' && !char.IsWhiteSpace(invocation[index]) )
+        {
+            index++;
+        }
+
+        return index;
+    }
+
     [Theory]
     [InlineData("IS_TRUE( foo )", new[] { "foo" })]
     [InlineData("PAIR( a, b )", new[] { "a", "b" })]
     [InlineData("OUTER( inner( a, b ), c )", new[] { "inner( a, b )", "c" })]
     [InlineData("INDEXED( things[0, 1], c )", new[] { "things[0, 1]", "c" })]
+    [InlineData("FOO( \"a,b\", c )", new[] { "\"a,b\"", "c" })]
+    [InlineData("FOO( \")\" )", new[] { "\")\"" })]
     public void ArgumentsAreSplitOnTopLevelCommas(string invocation, string[] expected)
     {
-        // Nesting matters: a comma inside a nested call belongs to that call, not to this one.
-        Assert.Equal(expected, MacroExpansionPreview.ParseArguments(invocation));
+        // Nesting matters: a comma inside a nested call belongs to that call, not to this one —
+        // and neither does one inside a STRING LITERAL, which is text rather than a delimiter.
+        // `FOO( ")" )` is the sharpest case: without skipping the quoted content, the ')' inside
+        // it closes the argument list one token early.
+        Assert.Equal(expected, MacroExpansionPreview.ArgumentsFollowing(invocation, AfterName(invocation)));
     }
 
     [Fact]
     public void AnObjectLikeMacroHasNoArgumentList()
     {
-        Assert.Empty(MacroExpansionPreview.ParseArguments("MAX_PLAYERS"));
+        string invocation = "MAX_PLAYERS";
+        Assert.Empty(MacroExpansionPreview.ArgumentsFollowing(invocation, AfterName(invocation)));
     }
 
     [Fact]
@@ -113,20 +127,69 @@ public class MacroExpansionPreviewTests
     }
 
     [Fact]
-    public void MultiLineMacro_CollapsesItsContinuations()
+    public void MultiLineMacro_KeepsItsLinesAndDropsItsBackslashes()
     {
-        // The reported NEW_STATE shape: a multi-statement body joined by backslashes.
+        // The reported NEW_STATE shape: a multi-statement body joined by backslashes. The body
+        // opens on the #define's own line, so the base column is out at that opening statement and
+        // the continuations underneath it clamp to the left margin rather than going negative.
         string source = "#define NEW_STATE(__state) flagsys::clear( \"ready\" ); \\\n"
             + "    _str_state = __state; \\\n"
             + "    self notify( __state );\n";
 
         string preview = MacroExpansionPreview.Render(BodyOf(source, "NEW_STATE"));
 
-        // One line, no backslashes, and the statements still separated.
         Assert.DoesNotContain("\\", preview);
-        Assert.DoesNotContain("\n", preview);
-        Assert.Contains("flagsys::clear", preview);
-        Assert.Contains("notify", preview);
+        Assert.Equal(
+            // `notify` lexes as a keyword rather than an identifier, so the spacing heuristic does
+            // not hug its parenthesis. That is the heuristic's own pre-existing answer; what this
+            // test is about is the three lines it is spread over.
+            "flagsys::clear(\"ready\");\n_str_state = __state;\nself notify (__state);",
+            preview);
+    }
+
+    /// <summary>
+    /// The reported REGISTER_SYSTEM shape, and the reason indentation is relative: the whole body
+    /// sits one level in from a `#define` at column 0, so rendering the author's ABSOLUTE columns
+    /// would push every line of every macro to the right inside the code fence.
+    /// </summary>
+    [Fact]
+    public void MultiLineMacro_IndentsRelativeToItsFirstLine()
+    {
+        string source = "#define REGISTER_SYSTEM(__sys,__func,__reqs) \\\n"
+            + "    function autoexec __init__system__() { \\\n"
+            + "        system::register(__sys,__func,undefined,__reqs); \\\n"
+            + "    }\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "REGISTER_SYSTEM"));
+
+        Assert.Equal(
+            "function autoexec __init__system__() {\n"
+            + "    system::register(__sys, __func, undefined, __reqs);\n"
+            + "}",
+            preview);
+    }
+
+    /// <summary>
+    /// The same header written with TABS. A tab is one character in a token's range, so rendering
+    /// the difference between two columns gave a tab-indented body a one-space step — the structure
+    /// present and unreadable. Levels are ranked instead, so how the file was indented does not
+    /// reach the preview.
+    /// </summary>
+    [Fact]
+    public void MultiLineMacro_RendersTabsAndSpacesTheSame()
+    {
+        string spaces = "#define REGISTER_SYSTEM(__sys,__func,__reqs) \\\n"
+            + "    function autoexec __init__system__() { \\\n"
+            + "        system::register(__sys,__func,undefined,__reqs); \\\n"
+            + "    }\n";
+        string tabs = "#define REGISTER_SYSTEM(__sys,__func,__reqs) \\\n"
+            + "\tfunction autoexec __init__system__() { \\\n"
+            + "\t\tsystem::register(__sys,__func,undefined,__reqs); \\\n"
+            + "\t}\n";
+
+        Assert.Equal(
+            MacroExpansionPreview.Render(BodyOf(spaces, "REGISTER_SYSTEM")),
+            MacroExpansionPreview.Render(BodyOf(tabs, "REGISTER_SYSTEM")));
     }
 
     [Fact]
@@ -175,5 +238,70 @@ public class MacroExpansionPreviewTests
         MacroRecord macro = new("FEATURE_FLAG", false, [], TextRange.Empty, "");
 
         Assert.Equal("```gsc\n#define FEATURE_FLAG\n```", MarkdownDocRenderer.RenderMacro(macro));
+    }
+
+    // --- Recursive expansion: a body token that itself names a macro ---
+
+    private static MacroTable MacrosOf(string source)
+    {
+        ParseResult result = TestParse.Analyze(source);
+        return result.Preprocessed.Macros;
+    }
+
+    [Fact]
+    public void BodyNamingAnObjectLikeMacro_ExpandsThroughToItsValue()
+    {
+        // The reported want: `#define FOO "something"` then `#define BAR FOO` should preview BAR
+        // as "something", not the bare word FOO.
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAR"), [], [], MacrosOf(source));
+
+        Assert.Equal("\"something\"", preview);
+    }
+
+    [Fact]
+    public void WithNoMacroTable_StaysOneLevel_UnchangedFromBefore()
+    {
+        // The three-argument overload every other test here uses keeps its old behaviour exactly:
+        // no recursion, because it has no table to recurse against.
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n";
+
+        Assert.Equal("FOO", MacroExpansionPreview.Render(BodyOf(source, "BAR")));
+    }
+
+    [Fact]
+    public void BodyNamingAFunctionLikeMacro_IsLeftBare()
+    {
+        // A function-like macro referenced with no call has no arguments to substitute its own
+        // parameters with, so recursing into it would show its raw parameter names — worse than
+        // just leaving the bare reference. HELPER stays HELPER.
+        const string source = "#define HELPER(x) foo(x)\n#define BAR HELPER\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAR"), [], [], MacrosOf(source));
+
+        Assert.Equal("HELPER", preview);
+    }
+
+    [Fact]
+    public void ThreeLevelChain_ExpandsAllTheWay()
+    {
+        const string source = "#define FOO \"something\"\n#define BAR FOO\n#define BAZ BAR\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "BAZ"), [], [], MacrosOf(source));
+
+        Assert.Equal("\"something\"", preview);
+    }
+
+    [Fact]
+    public void DefineCycle_UnwindsInsteadOfLoopingForever()
+    {
+        // Not valid GSC, but defensive: A -> B -> A must terminate rather than hang the hover
+        // request. Left as the bare name once the cycle is detected.
+        const string source = "#define A B\n#define B A\n";
+
+        string preview = MacroExpansionPreview.Render(BodyOf(source, "A"), [], [], MacrosOf(source));
+
+        Assert.Equal("B", preview);
     }
 }

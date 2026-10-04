@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
-using GSCode.Server.Mapping;
 using MediatR;
 using OmniSharp.Extensions.JsonRpc;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -54,14 +53,14 @@ public sealed class BuiltinAtHandler : IJsonRpcRequestHandler<BuiltinAtParams, B
     {
         BuiltinAtResponse none = new();
 
-        NavigationTarget? target = _support.Resolve(DocumentUri.Parse(request.Uri));
+        NavigationTarget? target = _support.Resolve(DocumentUri.Parse(request.Uri), cancellationToken);
         if ( target is null )
         {
             return Task.FromResult(none);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(
-            target.Result, new GSCode.Core.Text.Position(request.Line, request.Character));
+        PositionHit hit = _support.ResolveHit(
+            target, new GSCode.Core.Text.Position(request.Line, request.Character));
 
         if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Function )
         {

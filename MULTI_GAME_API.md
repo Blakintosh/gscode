@@ -149,8 +149,8 @@ in one commit**, rather than a file at a time.
 
 Delete the copy. Add a `site` prebuild step that copies
 `server/src/GSCode.Workspace/Api/*_api_*.json` into `site/src/lib/apiSource/`, and gitignore the
-destination. The "copies, not a shared source" note is a leftover from when the two lived in
-different repos; they no longer do.
+destination. The "copies, not a shared source" note dates from when the two lived in different
+repos.
 
 If copying at build time is unwanted, the fallback is a CI check asserting the files are
 byte-identical — but that only reports drift, where copying prevents it.

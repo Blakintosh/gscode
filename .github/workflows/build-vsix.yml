@@ -1,0 +1,74 @@
+# Reusable build: publishes the server into client/service and packs a VSIX. Called by
+# prerelease.yml and release.yml so both channels ship the exact same artifact shape; ci.yml keeps
+# its own inline copy because it also runs the tests and lint, which a release build has already
+# had run against the same commit.
+name: Build VSIX
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to stamp into package.json before packing (empty keeps the committed one)
+        type: string
+        default: ""
+      pre-release:
+        description: Pack as a Marketplace pre-release
+        type: boolean
+        default: false
+    outputs:
+      vsix:
+        description: File name of the packed VSIX inside the gscode-vsix artifact
+        value: ${{ jobs.build.outputs.vsix }}
+
+jobs:
+  build:
+    # Same runner as ci.yml. The server is published framework-dependent (the user installs the
+    # .NET 10 runtime), so one VSIX serves every platform and there is no matrix here.
+    runs-on: windows-latest
+    outputs:
+      vsix: ${{ steps.pack.outputs.vsix }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      # --no-git-tag-version because the checkout is detached and we never want the stamped
+      # version committed; it only exists inside the VSIX.
+      - name: Stamp version
+        if: inputs.version != ''
+        run: npm version --no-git-tag-version "${{ inputs.version }}"
+        working-directory: client
+
+      - name: Compile client
+        run: npm run compile
+        working-directory: client
+
+      - name: Bundle server
+        run: npm run bundle-server
+        working-directory: client
+
+      - name: Package extension
+        id: pack
+        shell: bash
+        working-directory: client
+        run: |
+          flag=""
+          if [ "${{ inputs.pre-release }}" = "true" ]; then flag="--pre-release"; fi
+          npx --yes @vscode/vsce package $flag
+          echo "vsix=$(ls *.vsix)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: gscode-vsix
+          path: client/*.vsix
+          if-no-files-found: error

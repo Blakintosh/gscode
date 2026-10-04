@@ -1,15 +1,5 @@
-using System.Threading;
 using GSCode.Core;
-using GSCode.Core.Text;
-using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
-using GSCode.Server.Configuration;
 using GSCode.Server.Handlers;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
-using GSCode.Workspace.Documents;
-using GSCode.Workspace.Resolution;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 
@@ -31,27 +21,16 @@ public class KeywordHoverTests
 {
     private static async Task<Hover?> HoverAtAsync(string source, int line, int character, GameProfile? profile = null)
     {
-        GameProfile game = profile ?? GameProfile.BlackOps3;
-        string path = @"c:\bo3\share\raw\scripts\main.gsc";
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [new TestFile(@"scripts\main.gsc", source)], profile);
+        workspace.Open(@"scripts\main.gsc");
 
-        DocumentStore documents = new(static _ => NullInsertProvider.Instance, new NameTable());
-        OpenDocument document = documents.Open(path, source, 1);
-        documents.AnalyzeIfStale(document);
-
-        ScriptDatabase database = new();
-        ResolverHolder holder = new(new PhysicalFileSystem());
-        NavigationSupport support = new(documents, database, holder);
-
-        string api = Path.Combine(AppContext.BaseDirectory, "Api");
         HoverHandler handler = new(
-            support,
-            BuiltinApiSet.Load(api, game),
-            ObjectFields.Load(api),
-            TextDocumentSelector.ForLanguage("gsc"));
+            workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
 
         HoverParams request = new()
         {
-            TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+            TextDocument = HandlerWorkspace.Identify(@"scripts\main.gsc"),
             Position = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Position(line, character),
         };
 
@@ -88,10 +67,9 @@ public class KeywordHoverTests
         Assert.Contains("undefined", TextOf(hover!), StringComparison.OrdinalIgnoreCase);
     }
 
-    // The Infinity Ward spelling of the profiler pair (prof_begin/prof_end) cannot be driven from
-    // here: DocumentStore analyses with GameProfile.Active, and selecting CoD4 would mutate
-    // process-global state that every other test class in this assembly reads concurrently. The
-    // mapping it depends on is pinned in KeywordDocsTests instead; this covers the path.
+    // The Infinity Ward spelling of the profiler pair (prof_begin/prof_end) is pinned in
+    // KeywordDocsTests; this covers the path. HoverAtAsync takes a profile, so a CoD4 case can be
+    // driven from here now that the harness scopes GameProfile.Active and restores it.
     [Fact]
     public async Task TheProfilerPairHovers()
     {

@@ -1,8 +1,4 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -17,8 +13,7 @@ public class FormatOptionsTests
 {
     private static string Format(string source, FormatOptions? options = null)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return GscFormatter.Format(result, options) ?? throw new InvalidOperationException("formatter refused the input");
     }

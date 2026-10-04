@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Api;
@@ -13,8 +12,7 @@ namespace GSCode.Workspace.Analysis;
 /// <summary>
 /// Hints that a literal <c>0</c>/<c>1</c> passed to a builtin parameter declared <c>bool</c>
 /// should be <c>false</c>/<c>true</c>. Scoped exactly to declared-bool parameters: an int
-/// parameter legitimately takes 0 and 1, and flagging those was the v1 bug this rule's
-/// original test was written to pin down.
+/// parameter legitimately takes 0 and 1.
 ///
 /// Overloads must agree. If any overload declares something other than bool at that position,
 /// the call is left alone, since which overload the author meant is unknowable here.
@@ -25,33 +23,29 @@ namespace GSCode.Workspace.Analysis;
 /// suggestion is worth making at all.
 ///
 /// Field writes are scoped exactly as <see cref="ReadOnlyWriteLint"/> scopes its own: the owner
-/// must be a known entity, weapon declarations do not speak for entity owners, and every entity
-/// kind declaring the name must agree it is bool. A field name is not evidence on its own.
+/// must be a POSSIBLE entity (never confirmed something else, and never the total uncertainty an
+/// untyped owner carries — <c>self</c> sits in exactly that middle ground), weapon declarations
+/// do not speak for entity owners, and every entity kind declaring the name must agree it is
+/// bool. A field name is not evidence on its own.
 /// </summary>
 public static class PreferBooleanLiteralLint
 {
-    public static ImmutableArray<Diagnostic> Analyze(
-        ParseResult result, BuiltinApi builtins, ObjectFields objectFields, FlowTyper typer)
-    {
-        ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        Inspect(result.Tree.Root, builtins, diagnostics);
-        InspectFieldWrites(result, objectFields, typer, diagnostics);
-
-        return diagnostics.ToImmutable();
-    }
-
     private static void InspectFieldWrites(
         ParseResult result,
         ObjectFields objectFields,
-        FlowTyper typer,
+        ScriptTypes types,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        typer.InferAssignments(result, out ImmutableArray<FieldWrite> writes);
+        ImmutableArray<FieldWrite> writes = types.FieldWrites;
 
         foreach ( FieldWrite write in writes )
         {
             // Value is null for `+=` and `++`, which have no single assigned value to judge.
-            if ( write.Value is null || write.OwnerType != ScrType.Entity )
+            // MayBe rather than exact equality (with IsUnknown excluded separately) is the same
+            // gate ReadOnlyWriteLint uses and for the same reason: `self` is never confirmed to be
+            // exactly Entity (see FlowTyper's `self` case), but it is not the total
+            // uncertainty of an untyped owner either, and must keep triggering this rule.
+            if ( write.Value is null || !write.OwnerType.MayBe(ScrTypeSet.Entity) || write.OwnerType.IsUnknown )
             {
                 continue;
             }
@@ -103,17 +97,27 @@ public static class PreferBooleanLiteralLint
         return sawEntityKind;
     }
 
-    private static void Inspect(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
+    /// <summary>
+    /// This rule's whole judgement about ONE node, with no descent of its own, so
+    /// <see cref="NodeLintPass"/> can run it from the shared walk. The field-write half is a
+    /// separate pass over the flow typer's output — see <see cref="InspectRest"/>.
+    /// </summary>
+    internal static void InspectNode(AstNode node, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         if ( node is CallNode call )
         {
             InspectCall(call, builtins, diagnostics);
         }
+    }
 
-        foreach ( AstNode child in AstSearch.ChildrenOf(node) )
-        {
-            Inspect(child, builtins, diagnostics);
-        }
+    /// <summary>Everything this rule does that is not per-node: the field writes the typer found.</summary>
+    internal static void InspectRest(
+        ParseResult result,
+        ObjectFields objectFields,
+        ScriptTypes types,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        InspectFieldWrites(result, objectFields, types, diagnostics);
     }
 
     private static void InspectCall(CallNode call, BuiltinApi builtins, ImmutableArray<Diagnostic>.Builder diagnostics)

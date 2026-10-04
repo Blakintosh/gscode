@@ -9,12 +9,18 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using LspSymbolKind = OmniSharp.Extensions.LanguageServer.Protocol.Models.SymbolKind;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
+using GSCode.Core;
 
 namespace GSCode.Server.Handlers;
 
 /// <summary>
 /// Class type hierarchy: supertypes walk `ClassSymbol.Parent`, subtypes are the classes
 /// whose parent is this class. Single inheritance keeps supertypes at most one per level.
+///
+/// A FIELD prepares on whatever class the scripts put in it — <c>level.scene = new
+/// cAwarenessScene()</c> anchors the hierarchy on <c>cAwarenessScene</c>. Only the anchoring step
+/// knows about fields; once an item exists the walk is the ordinary one, because what it walks is
+/// a class either way.
 /// </summary>
 public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 {
@@ -34,14 +40,32 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchyPrepareParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
-        if ( hit.Kind != HitKind.Reference || hit.Key.Kind != SymbolKind.Class )
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
+        if ( hit.Kind != HitKind.Reference )
+        {
+            return Task.FromResult<Container<TypeHierarchyItem>?>(null);
+        }
+
+        if ( hit.Key.Kind == SymbolKind.Field )
+        {
+            List<TypeHierarchyItem> bound = [];
+            foreach ( ResolvedClass resolved in FieldTargets.ClassesOf(
+                _support, target, hit.Key, cancellationToken) )
+            {
+                bound.Add(MakeItem(resolved.Class, resolved.Record));
+            }
+
+            return Task.FromResult<Container<TypeHierarchyItem>?>(
+                bound.Count > 0 ? new Container<TypeHierarchyItem>(bound) : null);
+        }
+
+        if ( hit.Key.Kind != SymbolKind.Class )
         {
             return Task.FromResult<Container<TypeHierarchyItem>?>(null);
         }
@@ -53,12 +77,12 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         }
 
         return Task.FromResult<Container<TypeHierarchyItem>?>(
-            new Container<TypeHierarchyItem>(MakeItem(classes[0].Class, classes[0].Record, target)));
+            new Container<TypeHierarchyItem>(MakeItem(classes[0].Class, classes[0].Record)));
     }
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySupertypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item);
+        SymbolQueryContext? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self?.ParentKeyName is null )
         {
@@ -66,13 +90,13 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
         }
 
         ImmutableArray<ResolvedClass> parents = DatabaseQueries.LookupClasses(target.Store, target.ContextId, null, self.ParentKeyName);
-        List<TypeHierarchyItem> items = [.. parents.Select(parent => MakeItem(parent.Class, parent.Record, target))];
+        List<TypeHierarchyItem> items = [.. parents.Select(parent => MakeItem(parent.Class, parent.Record))];
         return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>(items));
     }
 
     public override Task<Container<TypeHierarchyItem>?> Handle(TypeHierarchySubtypesParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = ResolveFromItem(request.Item);
+        SymbolQueryContext? target = ResolveFromItem(request.Item, cancellationToken);
         ClassSymbol? self = ClassFromItem(request.Item, target);
         if ( target is null || self is null )
         {
@@ -87,31 +111,37 @@ public sealed class TypeHierarchyHandler : TypeHierarchyHandlerBase
             foreach ( ResolvedClass child in DatabaseQueries.LookupClasses(
                 target.Store, target.ContextId, namespaceName: null, childName) )
             {
-                items.Add(MakeItem(child.Class, child.Record, target));
+                items.Add(MakeItem(child.Class, child.Record));
             }
         }
 
         return Task.FromResult<Container<TypeHierarchyItem>?>(new Container<TypeHierarchyItem>(items));
     }
 
-    private NavigationTarget? ResolveFromItem(TypeHierarchyItem item)
+    /// <summary>
+    /// The file an item names, open or not.
+    ///
+    /// A supertype or subtype almost never lives in a file the user has open, and resolving through
+    /// the document store returned null for those — which the protocol reads as "there are none".
+    /// </summary>
+    private SymbolQueryContext? ResolveFromItem(TypeHierarchyItem item, CancellationToken cancellationToken)
     {
-        return _support.Resolve(item.Uri);
+        return _support.ResolveForQuery(item.Uri, cancellationToken);
     }
 
-    private ClassSymbol? ClassFromItem(TypeHierarchyItem item, NavigationTarget? target)
+    private static ClassSymbol? ClassFromItem(TypeHierarchyItem item, SymbolQueryContext? target)
     {
         if ( target is null )
         {
             return null;
         }
 
-        string keyName = item.Name.ToLowerInvariant();
+        string keyName = NameTable.Shared.InternLower(item.Name);
         ImmutableArray<ResolvedClass> classes = DatabaseQueries.LookupClasses(target.Store, target.ContextId, null, keyName);
         return classes.Length > 0 ? classes[0].Class : null;
     }
 
-    private static TypeHierarchyItem MakeItem(ClassSymbol classSymbol, ScriptRecord record, NavigationTarget target)
+    private static TypeHierarchyItem MakeItem(ClassSymbol classSymbol, ScriptRecord record)
     {
         LspRange nameRange = classSymbol.NameRange.ToLsp();
         return new TypeHierarchyItem

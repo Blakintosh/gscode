@@ -2,15 +2,12 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -22,30 +19,26 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class FunctionResolutionLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
     private static string ApiDirectory => Path.Combine(AppContext.BaseDirectory, "Api");
 
     private static ScriptDatabase BuildWorkspace()
     {
         FakeFileSystem files = new FakeFileSystem()
             .AddFile(
-                @$"{Raw}\scripts\util.gsc",
+                TestPaths.Raw(@"scripts\util.gsc"),
                 "#namespace util;\nfunction shown()\n{\n}\nfunction private hidden()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None).GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
         return database;
     }
 
-    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingPath = @$"{Raw}\scripts\main.gsc")
+    private static ImmutableArray<Diagnostic> Lint(string askingSource, string askingRelativePath = @"scripts\main.gsc")
     {
+        string askingPath = TestPaths.Raw(askingRelativePath);
         ScriptDatabase database = BuildWorkspace();
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, askingPath);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         return FunctionResolutionLint.Analyze(
@@ -121,11 +114,8 @@ public class FunctionResolutionLintTests
         Assert.False(waw.HasCompleteBuiltinLibrary);
 
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc,
-            SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
-            NullInsertProvider.Instance, new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n", path);
 
         BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory);
         Assert.Empty(FunctionResolutionLint.Analyze(
@@ -146,9 +136,8 @@ public class FunctionResolutionLintTests
         // Built here rather than through Lint() so both halves of the rule can be asserted: the
         // missing FILE is reported by the preprocessor, and the lint adds nothing on top of it.
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(source, path);
 
         Assert.Contains(result.AllDiagnostics, static d => d.Code == GscDiagnosticCode.InsertNotFound);
 
@@ -179,11 +168,8 @@ public class FunctionResolutionLintTests
     {
         // Without an API library every builtin call would look unresolved, so the lint stands down.
         ScriptDatabase database = BuildWorkspace();
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc,
-            SourceText.From("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n"),
-            NullInsertProvider.Instance, new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze("#namespace vibing3;\nfunction main()\n{\n    BuiltInDoesNotExist();\n}\n", path);
 
         ImmutableArray<Diagnostic> diagnostics = FunctionResolutionLint.Analyze(
             result, database.Gsc, "raw", path, BuiltinApi.Empty, GameProfile.ByName("waw")!);
@@ -198,23 +184,16 @@ public class FunctionResolutionLintTests
     // and no builtin of that name. Every step is right and 5014's verdict is still the wrong thing
     // to tell someone whose real mistake was targeting the wrong game.
 
-    private const string Cod4Raw = @"C:\cod4\raw";
-
     private static ImmutableArray<Diagnostic> LintAsCod4(string source)
     {
         GameProfile cod4 = GameProfile.Cod4;
-        string askingPath = @$"{Cod4Raw}\maps\mp\test.gsc";
+        string askingPath = TestPaths.Raw(@"maps\mp\test.gsc");
 
         FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, source);
-        RootConfig config = RootConfig.Create(true, Cod4Raw, @"C:\cod4\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, cod4, IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            askingPath, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), cod4);
+        ParseResult result = TestParse.Analyze(source, askingPath, cod4);
 
         // The library must be CoD4's. Loading the active profile's would judge CoD4 code against
         // BO3's engine functions, which is its own bug and would hide this one.
@@ -269,5 +248,158 @@ public class FunctionResolutionLintTests
         string source = "#namespace vibing3;\nfunction main()\n{\n    foreach ( p in level.players )\n    {\n    }\n}\n";
 
         Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void AQualifiedCallAMacroExpandedInto_IsAScriptMiss()
+    {
+        // A .gsh is not compiled on its own and its body is never parsed as code at its definition
+        // site, so the person who can act on this is the one editing the invoking file. The Error
+        // lands on the invocation, the only text on screen.
+        string source =
+            "#using scripts\\util;\n#define HELP() util::no_such_thing()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+        Assert.Equal(5, diagnostic.Range.Start.Line);
+    }
+
+    [Fact]
+    public void AMissingCallAMacroMakesTwice_IsReportedOnce()
+    {
+        // Both calls key to the invocation range and reach the same verdict, so the second is
+        // dropped rather than stacking an identical Error on one word.
+        string source =
+            "#using scripts\\util;\n#define HELP() util::no_such_thing(); util::no_such_thing()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
+
+        Assert.Single(Lint(source));
+    }
+
+    [Fact]
+    public void AResolvingCallAMacroExpandedInto_IsSilent()
+    {
+        string source =
+            "#using scripts\\util;\n#define HELP() util::shown()\n#namespace game;\nfunction main()\n{\n    HELP();\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    // --- Path calls (`maps\mp\_util::foo()`) name a FILE outright ---
+    //
+    // The call reaches what the NAMED file can run: its own functions and what its #include chain
+    // merges into it. Neither the broad by-name lookup (which searches every file the merge dialect
+    // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
+    // able to make a path call resolve on anyone else's say-so.
+
+    private static ImmutableArray<Diagnostic> LintPathCall(
+        string askingSource, params (string Path, string Text)[] otherFiles)
+    {
+        GameProfile mw2 = GameProfile.ByName("mw2")!;
+        string askingPath = TestPaths.Raw(@"maps\main.gsc");
+
+        FakeFileSystem files = new FakeFileSystem().AddFile(askingPath, askingSource);
+        foreach ( (string path, string text) in otherFiles )
+        {
+            files.AddFile(path, text);
+        }
+
+        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files);
+        PathResolver resolver = new(config, files);
+        ScriptDatabase database = new();
+        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable(), profile: mw2);
+        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        ParseResult result = TestParse.Analyze(askingSource, askingPath, mw2);
+
+        BuiltinApiSet builtins = BuiltinApiSet.Load(ApiDirectory, mw2);
+        return FunctionResolutionLint.Analyze(
+            result, database.Gsc, "raw", askingPath, builtins.For(ScriptLanguage.Gsc), mw2, resolver: resolver);
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionAnUnrelatedFileHappensToDeclare_IsStillAMiss()
+    {
+        // The target file EXISTS and is not missing, but does not declare `foo` — a totally
+        // unrelated file elsewhere in the workspace does. The broad by-name lookup used to find
+        // that unrelated declaration and call the reference resolved.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
+            source,
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "bar()\n{\n}\n"),
+            (TestPaths.Raw(@"scripts\unrelated.gsc"), "foo()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+        Assert.Contains("foo", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionTheTargetFileDoesDeclare_IsSilent()
+    {
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(source, (TestPaths.Raw(@"maps\mp\_util.gsc"), "foo()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_ToAFunctionTheTargetFileIncludes_IsSilent()
+    {
+        // Stock CoD4: maps\_documents.gsc calls `maps\_utility::trigger_off()`, and trigger_off is
+        // declared in common_scripts\utility, which maps\_utility includes. It ships and works, and
+        // this reported it as an Error once the check stopped at the named file's own functions.
+        // Two hops, since the compiler flattens the whole chain.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(
+            source,
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\utility;\nbar()\n{\n}\n"),
+            (TestPaths.Raw(@"common_scripts\utility.gsc"), "#include common_scripts\\deeper;\nbaz()\n{\n}\n"),
+            (TestPaths.Raw(@"common_scripts\deeper.gsc"), "foo()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_IntoATargetWhoseIncludeChainDoesNotResolve_StandsDown()
+    {
+        // The function may well live in the include nobody can find, so "not found" would be a
+        // guess. Same condition IncludeUsageLint holds itself to: only a complete closure can say no.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
+
+        Assert.Empty(LintPathCall(
+            source,
+            (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\missing;\nbar()\n{\n}\n")));
+    }
+
+    [Fact]
+    public void APathCall_ToAnotherFile_IsNotSatisfiedByThisFileDeclaringTheSameName()
+    {
+        // The own-file shortcut exists for an UNQUALIFIED call. It must not also excuse a path
+        // call that explicitly named a different file, just because this one happens to declare a
+        // function of the same spelling.
+        string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\nfoo()\n{\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
+            source, (TestPaths.Raw(@"maps\mp\_util.gsc"), "bar()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+    }
+
+    [Fact]
+    public void APathCall_ToAMissingFile_IsReportedOnce_EvenWhenCalledAgainWithDifferentCasing()
+    {
+        // The whole point of reporting the missing FILE rather than every call into it: a
+        // distribution not shipping a file is one problem, not one per call site — and that has to
+        // hold across a spelling difference too, since two calls naming the same file by different
+        // casing are still naming the same file. The dedup set that decides this is
+        // case-insensitive on purpose; this pins that down with a test, since nothing did before.
+        string source = "run()\n{\n"
+            + "    maps\\mp\\_missing::foo();\n"
+            + "    Maps\\MP\\_missing::bar();\n"
+            + "}\n";
+
+        Diagnostic diagnostic = Assert.Single(LintPathCall(source));
+
+        Assert.Equal(GscDiagnosticCode.UsingNotFound, diagnostic.Code);
     }
 }

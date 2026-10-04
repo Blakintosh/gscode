@@ -1,9 +1,5 @@
-using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Parser.Syntax.Ast;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
@@ -28,15 +24,9 @@ public class ValueIdentityTests
         return new FlowTyper(ApiLoader.Load(ApiDirectory, ScriptLanguage.Gsc), ObjectFields.Load(ApiDirectory));
     }
 
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     private static InferredAssignment AssignmentTo(string source, string name)
     {
-        ParseResult result = Analyze(source);
+        ParseResult result = TestParse.Analyze(source);
 
         foreach ( InferredAssignment assignment in NewTyper().InferAssignments(result) )
         {
@@ -121,7 +111,7 @@ public class ValueIdentityTests
     {
         // The same rule the class name follows: a label naming one of two would be wrong half the
         // time it is shown.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "function f( c )\n{\n    if ( c )\n    {\n        p = &one;\n    }\n    else\n    {\n        p = &two;\n    }\n\n    q = p;\n}\n");
 
         FlowTyper typer = NewTyper();
@@ -141,7 +131,7 @@ public class ValueIdentityTests
     public void ADereferenceReportsTheFunctionThePointerHolds()
     {
         // What the inlay-hint pass asks: given the `[[ p ]]` node, whose parameters am I naming?
-        ParseResult result = Analyze("function f()\n{\n    p = &helper;\n    r = [[ p ]]( 1 );\n}\n");
+        ParseResult result = TestParse.Analyze("function f()\n{\n    p = &helper;\n    r = [[ p ]]( 1 );\n}\n");
         ScriptTypes types = NewTyper().InferValues(result);
 
         PointerDerefNode? deref = null;
@@ -164,7 +154,7 @@ public class ValueIdentityTests
     public void AMethodCallObjectIsTypedSoItsClassIsKnown()
     {
         // `[[ thing ]]->bump()` — the class comes from the object, and the walk had never typed it.
-        ParseResult result = Analyze(
+        ParseResult result = TestParse.Analyze(
             "class widget\n{\n    function bump( amount )\n    {\n    }\n}\n\nfunction f()\n{\n    thing = new widget();\n    [[ thing ]]->bump( 1 );\n}\n");
 
         ScriptTypes types = NewTyper().InferValues(result);

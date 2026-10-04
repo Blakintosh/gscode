@@ -2,13 +2,11 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -26,24 +24,19 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class UsingNotFoundLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static (ImmutableArray<Diagnostic> Missing, ImmutableArray<Diagnostic> All) Lint(string source)
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
-        PathResolver resolver = new(config, files);
-        ScriptDatabase database = new();
-        WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable());
-        indexer.IndexAsync(IndexingMode.Partial, NullIndexProgressListener.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        using TestWorkspace workspace = TestWorkspace.Build(files, mode: IndexingMode.Partial);
+        ScriptDatabase database = workspace.Database;
+        PathResolver resolver = workspace.Resolver;
 
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze(source, path);
 
         return (
             UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path),
@@ -57,17 +50,12 @@ public class UsingNotFoundLintTests
         // NOT be flagged -- it links fine at runtime. The lint is fed an EMPTY database (nothing
         // indexed) and a resolver whose file system does have the file.
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\scripts\shared\util_shared.gsc", "#namespace util;\nfunction helper()\n{\n}\n");
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+            .AddFile(TestPaths.Raw(@"scripts\shared\util_shared.gsc"), "#namespace util;\nfunction helper()\n{\n}\n");
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
 
-        string path = @$"{Raw}\scripts\main.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path,
-            ScriptLanguage.Gsc,
-            SourceText.From("#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n"),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance,
-            new NameTable());
+        string path = TestPaths.Raw(@"scripts\main.gsc");
+        ParseResult result = TestParse.Analyze("#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n", path);
 
         Assert.Empty(UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path));
     }
@@ -112,17 +100,15 @@ public class UsingNotFoundLintTests
     private static ImmutableArray<Diagnostic> LintAsCod4(string source)
     {
         FakeFileSystem files = new FakeFileSystem()
-            .AddFile(@$"{Raw}\maps\_utility.gsc", "flag_init( name )\n{\n}\n");
+            .AddFile(TestPaths.Raw(@"maps\_utility.gsc"), "flag_init( name )\n{\n}\n");
 
-        RootConfig config = RootConfig.Create(true, @"C:\bo3\share\raw", @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
 
-        string path = @$"{Raw}\maps\mp\_menus.gsc";
-        ParseResult result = ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source),
-            GSCode.Parser.Preprocessing.NullInsertProvider.Instance, new NameTable(), Cod4);
+        string path = TestPaths.Raw(@"maps\mp\_menus.gsc");
+        ParseResult result = TestParse.Analyze(source, path, s_cod4);
 
-        return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, Cod4);
+        return UsingNotFoundLint.Analyze(result, ScriptLanguage.Gsc, resolver, path, s_cod4);
     }
 
     [Fact]

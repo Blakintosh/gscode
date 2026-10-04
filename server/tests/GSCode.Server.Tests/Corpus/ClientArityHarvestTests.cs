@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;

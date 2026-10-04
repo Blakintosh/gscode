@@ -1,16 +1,11 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Diagnostics;
-using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Analysis;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
-using GSCode.Workspace.Tests.Resolution;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Analysis;
@@ -25,8 +20,7 @@ namespace GSCode.Workspace.Tests.Analysis;
 /// </summary>
 public class ArgumentCountLintTests
 {
-    private const string Raw = @"C:\bo3\share\raw";
-    private const string AskingPath = @"C:\bo3\share\raw\scripts\zm\_zm.gsc";
+    private static readonly string s_askingPath = TestPaths.Raw(@"scripts\zm\_zm.gsc");
 
     /// <summary>
     /// A stand-in for BO3's <c>SpawnSpectator( origin, angles )</c>, both parameters mandatory —
@@ -47,7 +41,7 @@ public class ArgumentCountLintTests
     private static ImmutableArray<Diagnostic> Lint(string askingSource, string? otherFile = null)
     {
         FakeFileSystem files = new();
-        RootConfig config = RootConfig.Create(true, Raw, @"C:\bo3\mods", [], files);
+        RootConfig config = TestPaths.Config(files);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
 
@@ -56,22 +50,20 @@ public class ArgumentCountLintTests
         // so the namespace is the only way this happens.
         if ( otherFile is not null )
         {
-            string otherPath = @$"{Raw}\scripts\zm\_zm_utility.gsc";
-            ParseResult other = ScriptAnalysis.Analyze(
-                otherPath, ScriptLanguage.Gsc, SourceText.From(otherFile), NullInsertProvider.Instance, new NameTable());
+            string otherPath = TestPaths.Raw(@"scripts\zm\_zm_utility.gsc");
+            ParseResult other = TestParse.Analyze(otherFile, otherPath);
 
             database.Commit(other, ResolutionContext.RawContext, isDirty: false, @"scripts\zm\_zm_utility.gsc");
         }
 
-        ParseResult result = ScriptAnalysis.Analyze(
-            AskingPath, ScriptLanguage.Gsc, SourceText.From(askingSource), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(askingSource, s_askingPath);
 
         // The asking file is indexed too, as it is in a live workspace. It matters: the script half of
         // this rule reads declarations from the STORE, so an un-indexed asking file has no arity to
         // judge against and the rule stands down — silently passing a test that meant to exercise it.
         database.Commit(result, ResolutionContext.RawContext, isDirty: false, @"scripts\zm\_zm.gsc");
 
-        return ArgumentCountLint.Analyze(result, database.Gsc, "raw", AskingPath, Builtins());
+        return ArgumentCountLint.Analyze(result, database.Gsc, "raw", s_askingPath, Builtins());
     }
 
     [Fact]
@@ -126,6 +118,36 @@ public class ArgumentCountLintTests
     }
 
     [Fact]
+    public void AnExplicitSysCallIsJudgedAgainstTheBuiltin()
+    {
+        // `sys::` names the engine function outright, so it owes the builtin's mandatory arguments
+        // exactly as the bare call above does. Extraction already reads it that way — it keys
+        // `sys::name` as the namespace-less builtin key — but this rule took `sys` for a script
+        // namespace, found nothing declared in it, and stood down.
+        string source = "#namespace zm;\nfunction respawn()\n{\n    self thread sys::spawnSpectator();\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.WrongBuiltinArgumentCount, reported.Code);
+        Assert.Contains("at least 2", reported.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnExplicitSysCallReachesPastAShadowingScriptFunction()
+    {
+        // The reason `sys::` exists: the file's own spawnSpectator() wins a bare call, and the
+        // qualifier is how a script asks for the engine's instead. Judging it against the script
+        // declaration — or not at all — ignores the one thing the author wrote to say which.
+        string source = "#namespace zm;\n"
+            + "function spawnSpectator()\n{\n}\n"
+            + "function respawn()\n{\n    self thread sys::spawnSpectator();\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.WrongBuiltinArgumentCount, reported.Code);
+    }
+
+    [Fact]
     public void TooManyArgumentsForTheShadowingScriptFunctionIsStillReported()
     {
         // Shadowing moves which declaration is authoritative; it does not switch the rule off. The
@@ -133,6 +155,70 @@ public class ArgumentCountLintTests
         string source = "#namespace zm;\n"
             + "function spawnSpectator()\n{\n}\n"
             + "function respawn()\n{\n    self thread spawnSpectator( 1, 2 );\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.TooManyArguments, reported.Code);
+    }
+
+    // --- CameFromMacro only checked an IdentifierNode callee and IdentifierNode arguments ---
+
+    [Fact]
+    public void AMacroExpandingToAQualifiedCall_StandsDownTheRule()
+    {
+        // `util::helper` lexes as a QualifiedNode, not an IdentifierNode — CameFromMacro's callee
+        // check only matched the latter, so a macro whose body calls a qualified name was never
+        // recognised as the source of the call at all.
+        string source = "#namespace zm;\n#define CALL_HELPER() util::helper( 1, 2, 3 )\n"
+            + "function respawn()\n{\n    CALL_HELPER();\n}\n";
+        string other = "#namespace util;\nfunction helper( a )\n{\n}\n";
+
+        Assert.Empty(Lint(source, other));
+    }
+
+    [Fact]
+    public void AMacroExpandingToALiteralArgumentList_StandsDownTheRule()
+    {
+        // An object-like macro's body substitutes verbatim wherever it is written, so
+        // `helper( DEFAULTS )` becomes `helper( 1, 2 )` after expansion — two LITERAL arguments the
+        // author never wrote, neither of them an IdentifierNode, so CameFromMacro's argument check
+        // never saw them either.
+        string source = "#namespace zm;\n#define DEFAULTS 1, 2\n"
+            + "function helper( a )\n{\n}\n"
+            + "function respawn()\n{\n    helper( DEFAULTS );\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ANonSelfArrowCall_StandsDownWhenATopLevelFunctionSharesTheName()
+    {
+        // FunctionResolutionLint documents the real shape: `[[self.classObj]]->onBeginUse( player )`
+        // calls a top-level function that other files assign to that field with `&onBeginUse` — the
+        // arrow form dispatches through a function-POINTER field as much as through a class. Here
+        // exactly one class ALSO declares a method of that name, so Canonicalize resolved to IT
+        // alone and the call was judged against a 1-parameter method that might not be the target
+        // the pointer actually reaches.
+        string source = "#namespace zm;\n"
+            + "class cFoo\n{\n"
+            + "    function onBeginUse( player )\n    {\n    }\n"
+            + "}\n"
+            + "function onBeginUse( player, extra )\n{\n}\n"
+            + "function respawn()\n{\n    [[ level.classObj ]]->onBeginUse( player, extra );\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
+    public void ANonSelfArrowCall_IsStillJudgedWhenNoTopLevelFunctionSharesTheName()
+    {
+        // The control: without a same-named top-level function, exactly one class declaring the
+        // name is still the unambiguous case the rule exists to judge.
+        string source = "#namespace zm;\n"
+            + "class cFoo\n{\n"
+            + "    function onBeginUse( player )\n    {\n    }\n"
+            + "}\n"
+            + "function respawn()\n{\n    [[ level.classObj ]]->onBeginUse( player, extra );\n}\n";
 
         Diagnostic reported = Assert.Single(Lint(source));
 

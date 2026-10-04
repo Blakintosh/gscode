@@ -7,15 +7,13 @@ namespace GSCode.Parser.Preprocessing;
 /// Where a preprocessed token really came from. All three fields default to "the root
 /// file, as written" — the common case costs nothing.
 ///
-/// A CLASS, held by reference, and that is a memory decision rather than a modelling one.
-/// Provenance describes an expansion SITE — an #insert directive, a macro invocation — of which a
-/// file has a handful, but it is carried by every token in the parse stream. Inline it was 48
-/// bytes (two nullable TextRanges at 20 each, plus the string) inside an 80-byte PToken, so more
-/// than half of every token described where it came from, and for the overwhelming majority of
-/// tokens the answer was three nulls. By reference it is one pointer, and every token that came
-/// from the root file shares <see cref="Root"/>.
+/// A CLASS, held by reference, as a memory decision rather than a modelling one. Provenance
+/// describes an expansion SITE — an #insert directive, a macro invocation — of which a file has a
+/// handful, but every token in the parse stream carries it. Inline it would be 48 bytes of an
+/// 80-byte PToken, and three nulls for the overwhelming majority of tokens; by reference it is one
+/// pointer, and every root-file token shares <see cref="Root"/>.
 ///
-/// A record, so equality stays structural and comparisons that used to compare values still do.
+/// A record, so equality stays structural.
 /// </summary>
 /// <param name="SourceFile">File containing the token's true location; null = the root file itself.</param>
 /// <param name="RootSite">Range in the ROOT file to anchor diagnostics to (the #insert directive

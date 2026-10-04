@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -69,7 +70,7 @@ public sealed partial class CompletionEngine
             }
         }
 
-        ImmutableArray<string> declaredNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> declaredNamespaces = result.Extraction.DeclaredNamespaces;
 
         foreach ( string ns in declaredNamespaces )
         {
@@ -99,10 +100,8 @@ public sealed partial class CompletionEngine
                 break;
             }
 
-            // #include is the merge dialects' import and takes the same script path as #using —
-            // it was simply missing here, so the whole Infinity Ward line got no path completion on
-            // the one directive it actually writes. It is not an #insert: a header is a Treyarch
-            // thing, and those dialects have none.
+            // #include is the merge dialects' import and takes the same script path as #using. It is
+            // not an #insert: a header is a Treyarch thing, and those dialects have none.
             if ( kind == TokenKind.UsingDirective || kind == TokenKind.InsertDirective
                 || kind == TokenKind.IncludeDirective )
             {
@@ -143,43 +142,13 @@ public sealed partial class CompletionEngine
         int lastSeparator = typed.LastIndexOf('\\');
         string directory = lastSeparator >= 0 ? typed[..(lastSeparator + 1)] : "";
 
-        // Segment -> whether it is a folder (has more path below it).
+        // Segment -> whether it is a folder (has more path below it). Read from the folder index
+        // rather than by rewriting every record's path and testing it against the typed folder,
+        // which made this per-keystroke list grow with the workspace.
         Dictionary<string, bool> segments = new(StringComparer.OrdinalIgnoreCase);
-
-        foreach ( ScriptRecord record in PathCandidates(result, isInsert) )
+        foreach ( (string Segment, bool IsFolder) child in PathChildren(result, isInsert, directory, contextId) )
         {
-            if ( record.RelativePath.Length == 0 || !ScriptDatabase.CanSee(contextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            // #insert writes the extension, #using does not — an asymmetry of the language, not
-            // of this code, and unanimous across the stock scripts: all 2,137 #inserts end in
-            // .gsh and all 7,738 #usings are bare. Keeping the extension for #insert also makes
-            // the segmenting below fall out for free, since the leaf is simply "shared.gsh".
-            string relative = record.RelativePath.Replace('/', '\\');
-            string path = isInsert
-                ? relative
-                : System.IO.Path.ChangeExtension(relative, null) ?? relative;
-
-            if ( !path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) )
-            {
-                continue;
-            }
-
-            string remainder = path[directory.Length..];
-            if ( remainder.Length == 0 )
-            {
-                continue;
-            }
-
-            int separator = remainder.IndexOf('\\');
-            bool isFolder = separator >= 0;
-            string segment = isFolder ? remainder[..separator] : remainder;
-
-            // A name that is both a folder and a file lists as a folder, which is the one with
-            // more below it to reach.
-            segments[segment] = segments.TryGetValue(segment, out bool existing) ? existing || isFolder : isFolder;
+            segments[child.Segment] = segments.TryGetValue(child.Segment, out bool existing) ? existing || child.IsFolder : child.IsFolder;
         }
 
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
@@ -198,25 +167,35 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
-    /// The records a path directive may name: headers for <c>#insert</c>, this file's own
+    /// What a path directive may name under one folder: headers for <c>#insert</c>, this file's own
     /// language for <c>#using</c>. A <c>.gsc</c> never includes a <c>.csc</c> or vice versa.
+    ///
+    /// <c>#insert</c> writes the extension, <c>#using</c> does not — an asymmetry of the language,
+    /// and unanimous across the stock scripts: all 2,137 <c>#insert</c>s end in <c>.gsh</c> and all
+    /// 7,738 <c>#using</c>s are bare. The two indexes keep their paths in those two forms.
     /// </summary>
-    private IEnumerable<ScriptRecord> PathCandidates(ParseResult result, bool isInsert)
+    private List<(string Segment, bool IsFolder)> PathChildren(
+        ParseResult result, bool isInsert, string directory, string contextId)
     {
         if ( isInsert )
         {
-            return _database.AllGshRecords;
+            return _database.GshPathChildren(directory, contextId);
         }
 
-        return _database.StoreFor(result.Language).AllRecords;
+        return _database.StoreFor(result.Language).PathChildren(directory, contextId);
     }
 
+    /// <summary>
+    /// The literals of one kind this file uses, and the workspace's cut to what has been typed — see
+    /// <see cref="VocabularyCut"/> for which ones and why a list of every one is not sent.
+    /// </summary>
+    /// <param name="typed">What has been typed inside the literal so far, or "" before any of it.</param>
     /// <param name="quoted">
     /// Whether to insert the surrounding quotes. True when only the sigil has been typed — at
     /// `notify(#` the cursor is not inside a string yet, so the entry has to supply them.
     /// </param>
     private ImmutableArray<CompletionEntry> LiteralCompletions(
-        ParseResult result, string contextId, SymbolKind literalKind, bool quoted = false)
+        ParseResult result, string contextId, SymbolKind literalKind, string typed, bool quoted = false)
     {
         LanguageStore store = _database.StoreFor(result.Language);
 
@@ -229,15 +208,138 @@ public sealed partial class CompletionEngine
         // are already excluded upstream: a string spliced into a `+` chain is recorded as
         // ConcatenatedLiteral, and this only accepts ReferenceKind.Literal.
         CollectLiterals(result.Extraction.References, literalKind, seen, entries, quoted);
-        foreach ( ScriptRecord record in store.AllRecords )
+
+        // The workspace's DISTINCT literals, from the store's vocabulary, rather than every
+        // reference of every record — see VocabularyIndex for what that walk cost at scale.
+        string detail = LiteralDetail(literalKind);
+        VocabularyCut cut = new(typed);
+        store.VisibleLiterals(literalKind, contextId, name =>
         {
-            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
+            if ( IsNameLike(name.Name) && !seen.Contains(name.Name) )
             {
-                CollectLiterals(record.References, literalKind, seen, entries, quoted);
+                cut.Offer(new VocabularyCandidate(name.Name, name.Files, detail));
             }
+        });
+
+        foreach ( VocabularyCandidate candidate in cut.Best() )
+        {
+            AddLiteral(candidate.Name, detail, seen, entries, quoted);
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The most workspace names one literal or field list carries, beyond the file's own.
+    ///
+    /// Not a comfort setting. cod4 at 50,000 files has 18,144 distinct string literals, and sending
+    /// them all put 2.3 million characters of JSON on the wire for every completion inside a string:
+    /// 70 ms p50 to serialize and 16 MB of garbage, against 6.6 ms to build the list. The user picks
+    /// from what is on screen, and the list is marked incomplete (CompletionEntry.Narrowed), so the
+    /// next keystroke re-asks with more text rather than filtering this page.
+    /// </summary>
+    private const int MaximumVocabularyCandidates = 200;
+
+    /// <summary>A workspace name a literal or field list may offer, before the list is cut to what was typed.</summary>
+    private readonly record struct VocabularyCandidate(string Name, int Files, string Detail, string Documentation = "");
+
+    /// <summary>
+    /// The best <see cref="MaximumVocabularyCandidates"/> of the names offered to it that contain the
+    /// typed text, ignoring case. Names the text BEGINS come ahead of names it only appears in; then
+    /// the more files write a name the earlier it comes; then by name, so the cut never depends on the
+    /// index's order.
+    ///
+    /// Contains rather than begins-with because literals are paths as often as names: typing
+    /// <c>misc</c> is reaching for <c>fx/misc/smoke</c> as much as for <c>misc_model</c>. With nothing
+    /// typed every name matches and the ranking alone decides — the most widely used ones.
+    ///
+    /// Offered one name at a time, straight from the index walk, so a list of every candidate never
+    /// exists: a heap holds the best so far with the worst on top, and each newcomer either replaces
+    /// that one or is dropped. Sorting all of cod4's 18,144 literals to keep 200 cost more than the
+    /// walk that found them.
+    /// </summary>
+    private sealed class VocabularyCut
+    {
+        private readonly string _typed;
+        private readonly PriorityQueue<VocabularyCandidate, RankKey> _best = new(WorstFirst.Instance);
+
+        public VocabularyCut(string typed)
+        {
+            _typed = typed;
+        }
+
+        public void Offer(VocabularyCandidate candidate)
+        {
+            bool prefix = false;
+            if ( _typed.Length > 0 )
+            {
+                int at = candidate.Name.IndexOf(_typed, StringComparison.OrdinalIgnoreCase);
+                if ( at < 0 )
+                {
+                    return;
+                }
+
+                prefix = at == 0;
+            }
+
+            RankKey rank = new(prefix, candidate.Files, candidate.Name);
+            if ( _best.Count < MaximumVocabularyCandidates )
+            {
+                _best.Enqueue(candidate, rank);
+                return;
+            }
+
+            _best.TryPeek(out _, out RankKey worst);
+            if ( Compare(rank, worst) < 0 )
+            {
+                _best.DequeueEnqueue(candidate, rank);
+            }
+        }
+
+        /// <summary>The kept names, best first.</summary>
+        public List<VocabularyCandidate> Best()
+        {
+            List<VocabularyCandidate> kept = new(_best.Count);
+            while ( _best.TryDequeue(out VocabularyCandidate candidate, out _) )
+            {
+                kept.Add(candidate);
+            }
+
+            // Dequeued worst first.
+            kept.Reverse();
+            return kept;
+        }
+
+        /// <summary>Negative when <paramref name="left"/> ranks ahead of <paramref name="right"/>.</summary>
+        private static int Compare(RankKey left, RankKey right)
+        {
+            if ( left.Prefix != right.Prefix )
+            {
+                return left.Prefix ? -1 : 1;
+            }
+
+            int files = right.Files.CompareTo(left.Files);
+            if ( files != 0 )
+            {
+                return files;
+            }
+
+            int name = string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
+            return name != 0 ? name : string.CompareOrdinal(left.Name, right.Name);
+        }
+
+        private readonly record struct RankKey(bool Prefix, int Files, string Name);
+
+        /// <summary>Orders the heap so its top is the WORST kept name — the one a better newcomer evicts.</summary>
+        private sealed class WorstFirst : IComparer<RankKey>
+        {
+            public static readonly WorstFirst Instance = new();
+
+            public int Compare(RankKey left, RankKey right)
+            {
+                return VocabularyCut.Compare(right, left);
+            }
+        }
     }
 
     private static void CollectLiterals(
@@ -250,25 +352,31 @@ public sealed partial class CompletionEngine
         string detail = LiteralDetail(literalKind);
         foreach ( ReferenceEntry entry in references )
         {
-            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind )
+            // Literals inside a macro body are skipped: the range is the invocation site, and the
+            // text is the macro author's, not a name this file uses.
+            if ( entry.Kind != ReferenceKind.Literal || entry.Key.Kind != literalKind || entry.FromMacro )
             {
                 continue;
             }
 
-            if ( !IsNameLike(entry.Key.Name) )
-            {
-                continue;
-            }
-
-            if ( seen.Add(entry.Key.Name) )
-            {
-                entries.Add(new CompletionEntry(
-                    entry.Key.Name,
-                    CompletionKind.Literal,
-                    detail,
-                    quoted ? "\"" + entry.Key.Name + "\"" : ""));
-            }
+            AddLiteral(entry.Key.Name, detail, seen, entries, quoted);
         }
+    }
+
+    private static void AddLiteral(
+        string name, string detail, HashSet<string> seen, ImmutableArray<CompletionEntry>.Builder entries, bool quoted)
+    {
+        if ( !IsNameLike(name) || !seen.Add(name) )
+        {
+            return;
+        }
+
+        entries.Add(new CompletionEntry(
+            name,
+            CompletionKind.Literal,
+            detail,
+            quoted ? "\"" + name + "\"" : "",
+            Narrowed: true));
     }
 
     /// <summary>The shortest run of letters and digits a literal must have to read as a name.</summary>
@@ -358,7 +466,7 @@ public sealed partial class CompletionEngine
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, DatabaseQueries.DeclaredNamespaces(result)) )
+        foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, result.Extraction.DeclaredNamespaces) )
         {
             if ( seen.Add(function.KeyName) )
             {
@@ -366,8 +474,8 @@ public sealed partial class CompletionEngine
             }
         }
 
-        // Typing `cScene::` used to return nothing at all: the qualifier is not a namespace, so the
-        // namespace query found none of its 59 methods.
+        // `cScene::` names a class, not a namespace, so the namespace query alone finds none of its
+        // methods.
         foreach ( ClassMethod method in MethodResolution.MethodsOf(store, contextId, ns, result.Extraction.Classes) )
         {
             if ( seen.Add(method.Method.KeyName) )
@@ -377,6 +485,95 @@ public sealed partial class CompletionEngine
         }
 
         return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// What may follow an inline path qualifier (<c>maps\mp\_utility::</c>) on a merge dialect: the
+    /// functions of the ONE file that path names, by relative path rather than by bare name stem.
+    ///
+    /// Namespace matching would ask for functions by the qualifier's LAST segment alone
+    /// (<c>_utility</c>), which reaches every file sharing that stem — exactly MW2's own shape,
+    /// where <c>maps\_utility.gsc</c> and <c>maps\mp\_utility.gsc</c> both default their functions'
+    /// namespace to the name they share.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> InlinePathFunctionCompletions(
+        ParseResult result, string contextId, string writtenPath, string callSuffix, bool parameterHints)
+    {
+        LanguageStore store = _database.StoreFor(result.Language);
+        string normalizedWritten = RelativePathIndex.Normalize(writtenPath);
+
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        // The files at that path, from the relative-path index, keyed on the same normalization.
+        foreach ( ScriptRecord record in DatabaseQueries.RecordsAt(store, [normalizedWritten]) )
+        {
+            if ( !ScriptDatabase.CanSee(contextId, record.ContextId) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( seen.Add(function.KeyName) )
+                {
+                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                }
+            }
+        }
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// How much has to be typed before functions this file cannot call yet are offered.
+    ///
+    /// Not a comfort setting. Statement scope already returns a median of 1,930 entries, and the
+    /// candidates here come from the whole workspace rather than from what is in scope — so
+    /// offering them from the first character would bury the names that ARE in scope under names
+    /// that cost a directive, in the position where the user is most likely typing a local.
+    /// Three characters is the point where a name is being reached for rather than begun.
+    /// </summary>
+    private const int MinimumImportPrefix = 3;
+
+    /// <summary>
+    /// The most unimported candidates one list carries. A cap rather than a full answer because the
+    /// user picks from what is on screen — and because the handler marks the list incomplete when
+    /// this truncates, so the next keystroke re-asks with a narrower prefix instead of the editor
+    /// filtering a stale page.
+    /// </summary>
+    private const int MaximumImportCandidates = 50;
+
+    /// <summary>
+    /// Functions in files this one has not imported, offered with the directive they need.
+    ///
+    /// Skipped for any name already in the list: something in scope under that name is what the
+    /// user meant, and a second row that costs an import would be the same word twice.
+    /// </summary>
+    private void AddUnimportedFunctions(
+        ParseResult result,
+        string contextId,
+        GameProfile game,
+        string callSuffix,
+        bool parameterHints,
+        string typedWord,
+        HashSet<string> seenFunctions,
+        ImmutableArray<CompletionEntry>.Builder entries)
+    {
+        if ( typedWord.Length < MinimumImportPrefix )
+        {
+            return;
+        }
+
+        LanguageStore store = _database.StoreFor(result.Language);
+        foreach ( UnimportedFunction candidate in DatabaseQueries.UnimportedFunctions(
+            store, contextId, result.FilePath, result, typedWord, MaximumImportCandidates, game) )
+        {
+            if ( seenFunctions.Add(candidate.Function.KeyName) )
+            {
+                entries.Add(UnimportedFunctionEntry(candidate, game, callSuffix, parameterHints));
+            }
+        }
     }
 
     /// <summary>
@@ -468,39 +665,55 @@ public sealed partial class CompletionEngine
         return entries.ToImmutable();
     }
 
+    /// <summary>
+    /// The fields this file assigns and <c>.size</c>, always; and the workspace's assigned fields, the
+    /// engine's object fields and the radiant map keys, cut to what has been typed after the dot —
+    /// see <see cref="VocabularyCut"/>.
+    /// </summary>
+    /// <param name="typed">What has been typed of the field name so far, or "" right after the dot.</param>
     private ImmutableArray<CompletionEntry> FieldCompletions(
         ParseResult result,
         string contextId,
         string ownerName,
-        FieldScope fieldScope)
+        string typed)
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        // Scope only when asked AND the owner is known; otherwise every owner contributes.
-        bool scopeToOwner = fieldScope == FieldScope.Owner && ownerName.Length > 0;
-
-        // The live file first, so unsaved edits are offered immediately, then every visible
-        // record — a field assigned on `level` in one file is reachable from all of them.
-        CollectAssignedFields(result.Extraction.Functions, scopeToOwner, ownerName, seen, entries);
-
+        // Every field assigned anywhere visible, on ANY owner. The name before the dot says nothing
+        // about the object: `self` is whatever the function was called on, and after
+        // `blah = level;` a `blah.` is level. Offering only fields assigned under the same variable
+        // name hid `level.foo` from exactly those two, so the owner only names the row's header.
+        //
+        // From the store's vocabulary rather than every function of every record — see
+        // VocabularyIndex — grouped by the name the engine sees.
         LanguageStore fieldStore = _database.StoreFor(result.Language);
-        foreach ( ScriptRecord record in fieldStore.AllRecords )
+        FieldSpellings spellings = new(fieldStore.VisibleFieldNames(contextId));
+
+        // The live file first, so unsaved edits are offered immediately and in the file's own
+        // spelling, then every visible record's.
+        CollectAssignedFields(result.Extraction.Functions, ownerName, spellings, seen, entries);
+
+        // The .size pseudo-member, whatever has been typed: it is what an array is asked for.
+        if ( seen.Add("size") )
         {
-            if ( ScriptDatabase.CanSee(contextId, record.ContextId) )
+            entries.Add(new CompletionEntry("size", CompletionKind.Field, "int (read-only)", Narrowed: true));
+        }
+
+        VocabularyCut cut = new(typed);
+        foreach ( VocabularyName mostUsed in spellings.MostUsed() )
+        {
+            // The most-used spelling labels the row.
+            string label = mostUsed.Name;
+            if ( seen.Add(label) )
             {
-                CollectAssignedFields(record.Functions, scopeToOwner, ownerName, seen, entries);
+                cut.Offer(new VocabularyCandidate(label, mostUsed.Files, "field"));
             }
         }
 
-        // The .size pseudo-member.
-        if ( seen.Add("size") )
-        {
-            entries.Add(new CompletionEntry("size", CompletionKind.Field, "int (read-only)"));
-        }
-
         // Engine object fields. The owner's entity kind isn't known at this point, so every
-        // documented field name is offered with its type when the declaring kinds agree.
+        // documented field name is offered with its type when the declaring kinds agree. No file
+        // count: they rank after the workspace's own fields unless the typed text reaches them.
         foreach ( string fieldName in _objectFields.FieldNames() )
         {
             if ( !seen.Add(fieldName) )
@@ -511,12 +724,8 @@ public sealed partial class CompletionEngine
             // A name can be both; take the radiant comment as documentation so the doc is not
             // lost to the de-duplication below.
             RadiantKey? alsoAKey = _objectFields.FindRadiantKey(fieldName, result.Language);
-            entries.Add(new CompletionEntry(
-                fieldName,
-                CompletionKind.Field,
-                DescribeField(_objectFields.FindField(fieldName)),
-                "",
-                alsoAKey?.Comment ?? ""));
+            cut.Offer(new VocabularyCandidate(
+                fieldName, 0, DescribeField(_objectFields.FindField(fieldName)), alsoAKey?.Comment ?? ""));
         }
 
         // Radiant map-entity KVP keys, which scripts read straight off spawned entities.
@@ -527,17 +736,158 @@ public sealed partial class CompletionEngine
                 continue;
             }
 
-            entries.Add(new CompletionEntry(key.Name, CompletionKind.Field, key.Type + " (map key)", "", key.Comment));
+            cut.Offer(new VocabularyCandidate(key.Name, 0, key.Type + " (map key)", key.Comment));
+        }
+
+        // The row's text is built only for the rows kept: it names the owner and lists spellings,
+        // and building it for all ~7,000 names to send 200 was the allocation the cut exists to avoid.
+        foreach ( VocabularyCandidate candidate in cut.Best() )
+        {
+            entries.Add(FieldEntry(candidate.Name, candidate.Detail, candidate.Documentation, ownerName, spellings));
         }
 
         return entries.ToImmutable();
     }
 
-    /// <summary>Adds field names written as `owner.name = ...`, optionally only for one owner.</summary>
+    /// <summary>
+    /// The workspace's field spellings grouped by the name the engine sees, which ignores case: the
+    /// most-used spelling of each, and every spelling of the few written more than one way, most-used
+    /// first — by files writing it, then ordinally, so the order never depends on the index's.
+    ///
+    /// Kept as WRITTEN rather than folded to one case. A workspace that writes both <c>level.foo</c>
+    /// and <c>level.Foo</c> has one field, but which spelling a row shows was an accident of index
+    /// order, and the other spelling is worth seeing: it is how someone else wrote the same field.
+    ///
+    /// A list only for a name written more than one way. Nearly every field has one spelling, and a
+    /// list per name was 6,738 of them a request on bo3 at 50,000 files.
+    /// </summary>
+    private sealed class FieldSpellings
+    {
+        private readonly Dictionary<string, VocabularyName> _mostUsed = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<VocabularyName>> _several = new(StringComparer.OrdinalIgnoreCase);
+
+        public FieldSpellings(List<VocabularyName> names)
+        {
+            foreach ( VocabularyName name in names )
+            {
+                if ( !_mostUsed.TryGetValue(name.Name, out VocabularyName first) )
+                {
+                    _mostUsed[name.Name] = name;
+                    continue;
+                }
+
+                if ( !_several.TryGetValue(name.Name, out List<VocabularyName>? written) )
+                {
+                    written = [first];
+                    _several[name.Name] = written;
+                }
+
+                written.Add(name);
+            }
+
+            foreach ( KeyValuePair<string, List<VocabularyName>> name in _several )
+            {
+                name.Value.Sort(static (left, right) =>
+                {
+                    int files = right.Files.CompareTo(left.Files);
+                    return files != 0 ? files : string.CompareOrdinal(left.Name, right.Name);
+                });
+
+                _mostUsed[name.Key] = name.Value[0];
+            }
+        }
+
+        /// <summary>One spelling per field: the most used.</summary>
+        public IEnumerable<VocabularyName> MostUsed()
+        {
+            return _mostUsed.Values;
+        }
+
+        /// <summary>
+        /// Every spelling of this field OTHER than <paramref name="label"/>, most used first, or null
+        /// when there is none — the common case, for which nothing is built. The label need not be
+        /// the most-used spelling: a row for the edited file's own field is labelled the way that
+        /// file writes it, which can be a spelling nothing indexed uses at all.
+        /// </summary>
+        public List<VocabularyName>? OtherSpellings(string label)
+        {
+            if ( _several.TryGetValue(label, out List<VocabularyName>? written) )
+            {
+                List<VocabularyName> others = [];
+                foreach ( VocabularyName spelling in written )
+                {
+                    if ( !string.Equals(spelling.Name, label, StringComparison.Ordinal) )
+                    {
+                        others.Add(spelling);
+                    }
+                }
+
+                return others.Count == 0 ? null : others;
+            }
+
+            if ( _mostUsed.TryGetValue(label, out VocabularyName only)
+                && !string.Equals(only.Name, label, StringComparison.Ordinal) )
+            {
+                return [only];
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// One field row. The detail names what is being completed — <c>level.foo · field</c>, or the
+    /// engine's type for one of its fields, <c>self.origin · vector</c> — with the owner left off
+    /// when the cursor has none to name. A field the workspace writes in more than one casing says so
+    /// twice: <c>+4 spellings</c> dimmed beside the label, where it can be seen without opening
+    /// anything, and each spelling with how many files write it in the documentation.
+    /// </summary>
+    /// <param name="kind">What the field is: "field" for one the workspace assigns, else a type.</param>
+    /// <param name="documentation">Documentation the field already has — a map key's comment.</param>
+    private static CompletionEntry FieldEntry(
+        string label, string kind, string documentation, string ownerName, FieldSpellings spellings)
+    {
+        string detail = ownerName.Length > 0 ? ownerName + "." + label + " · " + kind : kind;
+
+        List<VocabularyName>? others = spellings.OtherSpellings(label);
+        if ( others is null )
+        {
+            return new CompletionEntry(label, CompletionKind.Field, detail, "", documentation, Narrowed: true);
+        }
+
+        string written = SpellingsDocumentation(others);
+        return new CompletionEntry(
+            label,
+            CompletionKind.Field,
+            detail,
+            "",
+            documentation.Length > 0 ? written + "\n\n" + documentation : written,
+            LabelDetail: others.Count == 1 ? " +1 spelling" : $" +{others.Count} spellings",
+            Narrowed: true);
+    }
+
+    /// <summary>The other spellings of a field, each with how many files write it, as Markdown.</summary>
+    private static string SpellingsDocumentation(List<VocabularyName> others)
+    {
+        StringBuilder markdown = new("Also written in this workspace as:\n\n");
+        foreach ( VocabularyName spelling in others )
+        {
+            markdown.Append("- `").Append(spelling.Name).Append("` — ")
+                .Append(spelling.Files).Append(spelling.Files == 1 ? " file\n" : " files\n");
+        }
+
+        markdown.Append("\nGSC field names ignore case, so these are one field.");
+        return markdown.ToString();
+    }
+
+    /// <summary>
+    /// Adds field names written as `owner.name = ...`, optionally only for one owner, in this file's
+    /// own spelling — the first it writes, where it writes more than one.
+    /// </summary>
     private static void CollectAssignedFields(
         ImmutableArray<FunctionSymbol> functions,
-        bool scopeToOwner,
         string ownerName,
+        FieldSpellings spellings,
         HashSet<string> seen,
         ImmutableArray<CompletionEntry>.Builder entries)
     {
@@ -551,14 +901,9 @@ public sealed partial class CompletionEngine
                     continue;
                 }
 
-                if ( scopeToOwner && !string.Equals(assignment.OwnerName, ownerName, StringComparison.Ordinal) )
-                {
-                    continue;
-                }
-
                 if ( seen.Add(assignment.Name) )
                 {
-                    entries.Add(new CompletionEntry(assignment.Name, CompletionKind.Field, "field"));
+                    entries.Add(FieldEntry(assignment.Name, "field", "", ownerName, spellings));
                 }
             }
         }
@@ -568,11 +913,10 @@ public sealed partial class CompletionEngine
     /// The names bound INSIDE this function: its parameters, then the locals assigned above the
     /// cursor.
     ///
-    /// These were never offered at all. Nothing in the workspace lists is per-function, so the one
-    /// category of name a script writes most — the variable three lines up — was the one category
-    /// completion could not produce, and the editor's own word-based suggestions were what filled
-    /// the gap until the server's lists (a median of 1,168 entries in statement scope) began
-    /// out-scoring them.
+    /// Nothing in the workspace lists is per-function, so without this the one category of name a script
+    /// writes most — the variable three lines up — is the one completion cannot produce, and the
+    /// server's lists (a median of 1,168 entries in statement scope) out-score the editor's own word
+    /// suggestions that would otherwise fill the gap.
     ///
     /// A local's introduction is an ASSIGNMENT, since GSC has no declaration form: the same
     /// definition <see cref="LocalDefinition"/> resolves go-to-definition against, so the two
@@ -665,9 +1009,13 @@ public sealed partial class CompletionEngine
     /// so the two never disagree — and where it is not null it also names the parameters and locals
     /// that are in scope, which no other input to this method can answer.
     /// </param>
+    /// <param name="typedWord">
+    /// What has been typed of the word under the cursor, or "" when nothing has been or auto-import
+    /// is off. Only the unimported-function arm reads it — see <see cref="MinimumImportPrefix"/>.
+    /// </param>
     private ImmutableArray<CompletionEntry> StatementScopeCompletions(
         ParseResult result, string contextId, int offset, Position position, FunctionSymbol? enclosingFunction,
-        string callSuffix, GameProfile game, bool parameterHints)
+        string callSuffix, GameProfile game, bool parameterHints, string typedWord = "")
     {
         ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
         bool insideFunction = enclosingFunction is not null;
@@ -684,13 +1032,22 @@ public sealed partial class CompletionEngine
         // Both scopes are filtered to what the active game actually has, so e.g. CoD4 is not
         // offered class/#using. The dialect's global objects are NOT folded in here — see the
         // separate loop below for why.
-        IEnumerable<string> words = insideFunction
-            ? GscKeywords.StatementKeywords
-            : GscKeywords.TopLevelKeywords;
-
-        if ( !insideFunction )
+        //
+        // File scope takes BOTH lists, because it is not the declarations-only position it looks
+        // like. A top-level macro invocation is a CALL, so it opens an expression outside every
+        // function body: the shipped BO3 scripts pass `undefined` to REGISTER_SYSTEM 467 times, and
+        // `undefined` is a statement-scope word that file scope could not complete. Splitting the
+        // statement list into expression atoms and control flow would buy nothing but a rule to
+        // maintain — `if` offered at file scope is noise, not a wrong answer.
+        List<string> words = [];
+        if ( insideFunction )
         {
-            entries.Add(FunctionDeclarationSnippet(game));
+            words.AddRange(GscKeywords.StatementKeywords);
+        }
+        else
+        {
+            words.AddRange(GscKeywords.TopLevelKeywords);
+            words.AddRange(GscKeywords.StatementKeywords);
         }
 
         // The parameter pack is offered per-FUNCTION rather than from the keyword list, because
@@ -764,15 +1121,12 @@ public sealed partial class CompletionEngine
             // cases the snippet is the bare word plus the punctuation that follows it every time —
             // there is nothing the plain keyword does that it does not.
             //
-            // `function` at top level is the same rule, spelled separately because its snippet is
-            // FunctionDeclarationSnippet above: that one is built per dialect rather than listed,
-            // since the merge games declare with a bare name and have no `function` keyword to hide.
+            // `function` is deliberately NOT a snippet. A declaration may carry `private` and
+            // `autoexec` between the keyword and the name, and a snippet that wrote the name and
+            // braces in one go left no room for them — the modifiers had to be typed back in after
+            // the fact. The bare keyword leaves the caret where DeclarationNameCompletions offers
+            // them.
             if ( snippetLabels.Contains(keyword) )
-            {
-                continue;
-            }
-
-            if ( !insideFunction && string.Equals(keyword, "function", StringComparison.Ordinal) )
             {
                 continue;
             }
@@ -783,11 +1137,10 @@ public sealed partial class CompletionEngine
                 keyword, CompletionKind.Keyword, "", KeywordInsertText(keyword, callSuffix), documentation));
         }
 
-        if ( !insideFunction )
-        {
-            return entries.ToImmutable();
-        }
-
+        // Everything below applies at file scope too. The macros a header supplies, the file's own
+        // functions and its classes are not per-CURSOR facts — the macro table is built per parse
+        // from this file plus the headers it #inserts, and a function is in scope for the file, not
+        // for a body — so the two scopes differ only where a name is BOUND differently.
         LanguageStore store = _database.StoreFor(result.Language);
 
         // The class this cursor is inside, read from the live extraction's ranges rather than the
@@ -818,7 +1171,13 @@ public sealed partial class CompletionEngine
             }
         }
 
-        CollectLocalScope(enclosingFunction!, position, boundNames, entries);
+        // Parameters and locals are the one category that genuinely IS per-cursor: outside a
+        // declaration nothing is bound, so there is nothing to collect rather than a list to
+        // suppress.
+        if ( enclosingFunction is not null )
+        {
+            CollectLocalScope(enclosingFunction, position, boundNames, entries);
+        }
 
         // Methods of the class this cursor is inside, own and inherited — a bare name written in a
         // class body means a method: all 525 such calls in the stock BO3 scripts do. They are added
@@ -837,19 +1196,25 @@ public sealed partial class CompletionEngine
         //
         // The table is built per parse, from the root file and the headers it #inserts — that is
         // already the answer to "what can this file expand", so the file each definition came from
-        // does not narrow it. Filtering to `SourceFile is null` kept only the root file's own,
-        // which threw away the ones a header exists to supply: a script whose constants all live
-        // in a shared .gsh got none of them, which is the normal arrangement rather than an
-        // unusual one.
-        foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+        // does not narrow it. Filtering to `SourceFile is null` would keep only the root file's own
+        // and throw away the ones a header exists to supply: a script whose constants all live in a
+        // shared .gsh would get none of them, and that is the normal arrangement.
+        // Gated on the dialect, like every other category here. The preprocessor records a #define
+        // whatever game is active, but only BO3 HAS one: in the IW line the single #define in the
+        // corpus is a commented-out block of C in _hud.gsc, and completing its name would offer an
+        // expansion the engine will never perform.
+        if ( game.HasMacros )
         {
-            entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            foreach ( GSCode.Parser.Preprocessing.MacroDefinition macro in result.Preprocessed.Macros.All )
+            {
+                entries.Add(MacroEntry(macro, callSuffix, parameterHints));
+            }
         }
 
         // The declared set rather than the namespace spans, which carry a leading region named after
         // the file whenever its imports sit above its #namespace line — a phantom that cost a full
         // store scan per keystroke to return nothing.
-        ImmutableArray<string> ownNamespaces = DatabaseQueries.DeclaredNamespaces(result);
+        ImmutableArray<string> ownNamespaces = result.Extraction.DeclaredNamespaces;
 
         // Functions reachable through an import, dialect-dependent. A namespace dialect (BO3) still
         // needs the qualifier at the call site even though only the bare name was typed — so these
@@ -874,13 +1239,32 @@ public sealed partial class CompletionEngine
         //
         // The include scope alone is the answer for a merge dialect: this file, plus the files it
         // actually includes.
+        //
+        // The file's own functions come from the live extraction FIRST — same treatment as the
+        // classes just below — so one typed a moment ago completes before the record is
+        // reindexed. Both branches below still read the STORE for "this file's own functions" too
+        // (a namespace dialect through its own-namespace loop, a merge dialect through
+        // FunctionsInIncludeScope's same-file arm), so seenFunctions keeps that from adding a
+        // second, stale-shaped row for a name the live extraction already offered.
+        HashSet<string> seenFunctions = new(StringComparer.OrdinalIgnoreCase);
+        foreach ( FunctionSymbol function in result.Extraction.Functions )
+        {
+            if ( seenFunctions.Add(function.KeyName) )
+            {
+                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+            }
+        }
+
         if ( game.ResolvesByNamespace )
         {
             foreach ( string ns in ownNamespaces )
             {
                 foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(store, contextId, result.FilePath, ns, ownNamespaces) )
                 {
-                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                    if ( seenFunctions.Add(function.KeyName) )
+                    {
+                        entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                    }
                 }
             }
 
@@ -894,6 +1278,9 @@ public sealed partial class CompletionEngine
                 // reachable by already knowing it existed.
                 entries.Add(NamespaceEntry(ns));
 
+                // Not gated on seenFunctions: this is a DIFFERENT reachability path (through an
+                // import, inserted qualified) from the bare-name entry above, even for the same
+                // function name.
                 foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInNamespace(
                     store, contextId, result.FilePath, ns, ownNamespaces) )
                 {
@@ -906,9 +1293,14 @@ public sealed partial class CompletionEngine
             foreach ( FunctionSymbol function in DatabaseQueries.FunctionsInIncludeScope(
                 store, contextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result)) )
             {
-                entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                if ( seenFunctions.Add(function.KeyName) )
+                {
+                    entries.Add(FunctionEntry(function, callSuffix, parameterHints));
+                }
             }
         }
+
+        AddUnimportedFunctions(result, contextId, game, callSuffix, parameterHints, typedWord, seenFunctions, entries);
 
         // Classes this file may name (for `new C()` and `C::`) — its own, plus those in the files
         // it #usings. The file's own come from the live extraction as well as the store, so a
@@ -930,12 +1322,33 @@ public sealed partial class CompletionEngine
             entries.Add(new CompletionEntry(className, CompletionKind.Class, "class"));
         }
 
-        // Namespace-less builtins.
+        AddBuiltins(result, callSuffix, parameterHints, entries);
+
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// What may follow <c>sys::</c>: the engine's library and nothing else. Not the script functions
+    /// that share a builtin's name — stepping past those is the one thing the qualifier is for.
+    /// </summary>
+    private ImmutableArray<CompletionEntry> BuiltinQualifiedCompletions(
+        ParseResult result, string callSuffix, bool parameterHints)
+    {
+        ImmutableArray<CompletionEntry>.Builder entries = ImmutableArray.CreateBuilder<CompletionEntry>();
+        AddBuiltins(result, callSuffix, parameterHints, entries);
+        return entries.ToImmutable();
+    }
+
+    /// <summary>
+    /// The namespace-less builtins, for statement scope and for <c>sys::</c> alike, so the two lists
+    /// cannot come to differ in what they offer.
+    /// </summary>
+    private void AddBuiltins(
+        ParseResult result, string callSuffix, bool parameterHints, ImmutableArray<CompletionEntry>.Builder entries)
+    {
         foreach ( BuiltinFunction builtin in _builtins.For(result.Language).All )
         {
             entries.Add(BuiltinEntry(builtin, callSuffix, parameterHints));
         }
-
-        return entries.ToImmutable();
     }
 }

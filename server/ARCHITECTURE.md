@@ -9,8 +9,8 @@ semantic tokens, code lens, rename, call/type hierarchy, inlay hints, type-flow 
 formatting, and code actions — plus the client command surface, snippets, docs and packaging. Five
 games are supported rather than one; `GAME_PROFILES.md` says what each dialect claims and why.
 
-Whatever is still open lives in `FOLLOWUPS.md` and nowhere else. A phase number repeated here is a
-second copy of a fact that moves, which is exactly what went stale in the paragraph this replaced.
+Whatever is still open lives in `FOLLOWUPS.md` and nowhere else. A phase number repeated here would
+be a second copy of a fact that moves.
 
 ## Required toolchain
 
@@ -42,10 +42,18 @@ opts that one project out of CA2007 (ConfigureAwait) per the async rules.
 Per-file analysis: `SourceText → Lexer (Token[]) → Preprocessor (PToken + provenance)
 → Parser (AST records) → Extraction (ScriptRecord)`. Records land in the
 `ScriptDatabase` — two independent language stores (GSC, CSC) plus a shared GSH macro
-store — persisted incrementally to a per-workspace SQLite cache. LSP handlers read
-immutable record snapshots; open documents keep their full `ParseResult` in the
+store — persisted incrementally to a per-workspace SQLite cache as compact binary records. LSP
+handlers read immutable record snapshots; open documents keep their full `ParseResult` in the
 `DocumentStore`. Path/mod-overlay questions (`share\raw` vs `mods\<name>` vs workspace)
 are answered solely by the `PathResolver`.
+
+Each language store keeps a set of inverted indexes beside its records — by reference key, declared
+name (bare and namespace-qualified), namespace, class, script path, the files naming a path, and the
+workspace's literal and field vocabulary — maintained in the same per-file diff that swaps a record
+in. The rule they exist for: **nothing a keystroke or a request pays walks every record.** A walk
+that does is a per-request cost growing with the workspace, as measured at 50,000 files; with the
+indexes, completion, one file's lint pass and the navigation handlers stay flat to that size
+(`PERF.md`, the scale section).
 
 ## Language features (LSP handlers)
 
@@ -58,23 +66,29 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
   push-model `publishDiagnostics` merging parse diagnostics with the cross-file lints — all of them,
   through `Analysis/WorkspaceLints.Analyze`, which is the one entry point and currently runs
-  twenty-five rules. Naming a single lint here read as if it were the whole merged set.
+  twenty-six rules — seventeen called directly and nine more sharing `NodeLintPass`'s single AST
+  walk. Naming a single lint here read as if it were the whole merged set. Open documents always
+  get the cross-file lints from live text; `workspaceIndexingMode: full` (`WorkspaceLintSweep`) also
+  runs them over every indexed CLOSED file, storing the merged result on the record, and
+  `DependentDiagnosticsRefresher` re-sweeps just the closed files an edit's declared functions
+  reach (`LanguageStore.FilesReferencing`) rather than the workspace.
 - **Read**: hover (with inferred local types), definition, references (incl. literals),
   document highlight, document links, document/workspace symbols, folding, selection ranges,
   semantic tokens (full/delta/range).
 - **Assist**: completion + signature help, code lens (reference counts), rename (+prepareRename),
   call and type hierarchy, inlay hints (inferred types + parameter names).
 - **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions —
-  remove-duplicate and add-missing `#using`, add-missing `#include` (5026), and the pair offered for
-  a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it.
+  remove-duplicate and add-missing `#using`, add-missing `#include` (5026), the pair offered for
+  a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it,
+  and Organize Imports (remove unused, then sort the block with the formatter's `DirectiveSorter`).
+  Generate ScriptDoc block is deliberately not a code action: it is the `gscode/generateScriptDoc`
+  request behind a right-click command, so undocumented functions carry no lightbulb.
 
 Type inference is `Workspace/Typing/FlowTyper`, a small per-function forward type-flow pass seeded
 with engine object-field types; it feeds inlay hints, hovers and two lints. It carries `ScrValue`
-(`Core/Symbols`) — a union lattice with constant folding, entity kinds and a reason attached to every
-imprecision — and projects onto the coarse `ScrType` at its public boundary, so those consumers see
-what they always saw. The richer value is reached through `InferValues`, and exists for a future
-dialect-to-dialect transpiler: a lint may stay silent on an unknown, a rewriter has to emit something
-anyway and needs to know why it does not know.
+(`Core/Symbols`) — a union lattice with constant folding — and projects onto the coarse `ScrType` at its public boundary, so those consumers see what they
+always saw. The richer value is reached through `InferValues` and `TryGetValueAt`, which the
+field-write and type-mismatch lints, the pointer-call inlay hints and go-to-type-definition read.
 
 ## The client (`client/`)
 
@@ -84,20 +98,30 @@ verifying the .NET 10 runtime is installed (prompting a download if missing). Ca
 GSC/CSC/GSH language registrations, TextMate grammar, semantic-token scope mapping, and
 quick-suggestion defaults. Two log channels: "GSCode" (`LogOutputChannel`, extension-host
 lifecycle) and "GSCode Server" (the server's stderr/Serilog). A status-bar item shows the live
-indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications. Commands:
-`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`,
-`gscode.openApiLibrary` (`shift+f1` in GSC, CSC, and GSH files), and the
-`gscode.showReferences` bridge for code-lens clicks. Settings flow to the server via
+indexing counter driven by `gscode/indexingStarted|Progress|Complete` notifications, with
+`gscode/indexingFailed` turning it into a warning rather than a spinner that never stops. Commands:
+`gscode.showOutput`, `gscode.restartServer`, `gscode.clearCacheAndReindex`, `gscode.selectGame`
+(the game picker, whose roster comes from the server over `gscode/supportedGames` so the client
+never keeps its own list of which dialects exist), `gscode.openApiLibrary` (`shift+f1` in GSC,
+CSC, and GSH files), `gscode.organizeImports`, `gscode.generateScriptDoc`, and the
+`gscode.showReferences` bridge for code-lens clicks. Every command but the last is also in a
+**GSCode** submenu of the editor's right-click menu. Settings flow to the server via
 `initializationOptions.gscode` and `workspace/didChangeConfiguration`.
 
 ## Dev-time tooling
 
 `tools/field-data/` holds ALL engine field data: `sources/originals/` (verbatim game
 files: ScriptObjectFields.xlsx, radiant keys.txt) and `sources/curated/` (editable
-JSON source of truth). A P7 tool converts curated → the bundled runtime artifacts in
-`GSCode.Workspace/Api/`.
+JSON source of truth). The tool converts curated → the bundled runtime artifacts in
+`GSCode.Workspace/Api/`; `tools/field-data/FOLDER.md` covers the layers and the
+`regenerate-game-data` skill the procedure.
 
 ## Documentation convention
+
+`docs/` at the repository root is the narrative layer above this file and the `FOLDER.md`s: the
+mental model, step-by-step lifecycles, the feature and diagnostic catalogs, the invariants and a
+glossary. It links here rather than repeating per-file detail; `docs/README.md` says which document
+owns which kind of fact.
 
 `FOLDER.md` lives **one per project** (`GSCode.Core`, `GSCode.Parser`, `GSCode.Workspace`,
 `GSCode.Server`, `tools/field-data`, `tests`, `client/src`) rather than one per directory, with a `##`
@@ -114,7 +138,8 @@ heading (`Parser.cs (+ .Declarations / .Statements / .Expressions partials)`,
 be unreadable, so it groups them by area with a keyword-bearing sentence each —
 the point being to find the right class by searching for the construct. It also carries the
 canonical list of ENVIRONMENT VARIABLES (`GSCODE_CORPUS_<GAME>`,
-`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, and `GSCODE_SWEEP_REPORT`),
+`GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, `GSCODE_SWEEP_REPORT`, and the
+`GSCODE_SCALE_*` trio behind the scale sweep),
 since most of them exist to point tests at game data or reports and were otherwise discoverable
 only by reading fixture source.
 
@@ -122,6 +147,7 @@ only by reading fixture source.
 
 `FOLLOWUPS.md` holds only what still needs a decision, and is the single place that tracks it. The
 larger items there today: modelling variadic builtins (which is what blocks restoring the upper
-bound on argument counts), the type-derived diagnostic family 1.5 raised and this tree does not,
-the opt-in `apiUpdate.ts` refresh, the optional headless CLI, and two corpus grammar gaps
-consciously left alone.
+bound on argument counts), the six of 1.5's type-derived diagnostics still blocked (mostly on
+wrong types in the bundled game data), the opt-in `apiUpdate.ts` refresh, the optional headless
+CLI, the dialect-to-dialect transpiler whose groundwork was removed unused (with the route back),
+and one corpus grammar gap consciously left alone.

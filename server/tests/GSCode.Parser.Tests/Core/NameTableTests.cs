@@ -37,6 +37,23 @@ public class NameTableTests
         Assert.Same(canonical, table.InternLower("getplayername".AsSpan()));
     }
 
+    /// <summary>
+    /// The "already lowercase" fast path scans with <c>char.IsUpper</c>, but that only catches
+    /// Unicode category Lu (uppercase). A TITLECASE letter (Lt, e.g. U+01C5 'ǅ') is neither upper
+    /// nor lower — IsUpper returns false for it — yet ToLowerInvariant still changes it (to 'ǆ',
+    /// U+01C6). The fast path mistook IsUpper()==false for "already canonical" and skipped the
+    /// lowercase pass entirely, so the interned string was not actually lowercase-canonical.
+    /// </summary>
+    [Fact]
+    public void InternLower_LowercasesATitlecaseLetterTheFastPathWouldOtherwiseMiss()
+    {
+        NameTable table = new();
+
+        string canonical = table.InternLower("ǅxyz".AsSpan());
+
+        Assert.Equal("ǆxyz", canonical);
+    }
+
     [Fact]
     public void PathUtil_NormalizeAbsolute_CanonicalizesCaseAndTrims()
     {
@@ -72,5 +89,56 @@ public class NameTableTests
         Assert.True(PathUtil.IsUnder($"{root}{sep}sub{sep}file.gsc", root));
         Assert.False(PathUtil.IsUnder($"{root}other{sep}file.gsc", root));
         Assert.False(PathUtil.IsUnder(root, root));
+    }
+
+    /// <summary>
+    /// A drive root is its OWN separator — <c>Path.GetFullPath</c> returns <c>C:\</c>, not
+    /// <c>C:</c> — and trimming that trailing separator like any other path turns it into a
+    /// DRIVE-RELATIVE path instead. <c>Path.GetFullPath("c:")</c> resolves against the current
+    /// directory, not the drive root, so a workspace opened at a drive root silently normalized to
+    /// somewhere else entirely; and <c>Path.Combine("c:", "share\\raw")</c> (as RootConfig does)
+    /// produces the drive-relative <c>c:share\raw</c> rather than <c>c:\share\raw</c>.
+    /// </summary>
+    [Fact]
+    public void PathUtil_NormalizeAbsolute_KeepsADriveRootRooted()
+    {
+        if ( !OperatingSystem.IsWindows() )
+        {
+            return;
+        }
+
+        string normalized = PathUtil.NormalizeAbsolute(@"C:\");
+
+        Assert.Equal(@"c:\", normalized);
+        Assert.True(Path.IsPathRooted(normalized));
+    }
+
+    /// <summary>The Linux counterpart: the filesystem root is `/`, and trimming its separator emptied it.</summary>
+    [Fact]
+    public void PathUtil_NormalizeAbsolute_KeepsTheFilesystemRootRooted()
+    {
+        if ( !OperatingSystem.IsLinux() )
+        {
+            return;
+        }
+
+        Assert.Equal("/", PathUtil.NormalizeAbsolute("/"));
+    }
+
+    /// <summary>
+    /// <see cref="PathUtil.IsUnder"/>'s separator-boundary check assumed its directory argument
+    /// never itself ends in a separator — true for every ordinary normalized path, but not for a
+    /// normalized drive root, which is its own trailing separator.
+    /// </summary>
+    [Fact]
+    public void PathUtil_IsUnder_AcceptsADriveRootDirectory()
+    {
+        if ( !OperatingSystem.IsWindows() )
+        {
+            return;
+        }
+
+        Assert.True(PathUtil.IsUnder(@"c:\raw\file.gsc", @"c:\"));
+        Assert.False(PathUtil.IsUnder(@"c:\", @"c:\"));
     }
 }

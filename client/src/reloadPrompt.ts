@@ -20,6 +20,30 @@ const RESTART_REQUIRED: ReadonlyArray<{ section: string; label: string }> = [
 ];
 
 /**
+ * The restart-required settings package.json lists under `restrictedConfigurations`: in an
+ * untrusted workspace VS Code ignores their workspace values.
+ */
+const RESTRICTED_IN_UNTRUSTED: ReadonlyArray<{ key: string; label: string }> = [
+    { key: "rawPath", label: "raw folder" },
+    { key: "modsPath", label: "mods folder" },
+];
+
+/**
+ * Set by a command that writes one of the above and prompts about it ITSELF.
+ *
+ * The game picker is the case: it writes gscode.game and immediately asks to reload, so the generic
+ * prompt below would be a second notification saying the same thing about the same edit. One shot
+ * rather than a scope, because the write and the change event are one turn apart and anything
+ * longer-lived would swallow a real edit made while it was open.
+ */
+let suppressNext = false;
+
+/** Skips the next restart-required prompt. See {@link suppressNext}. */
+export function suppressReloadPromptOnce(): void {
+    suppressNext = true;
+}
+
+/**
  * Prompts to reload the window when one of the above changes.
  *
  * A window reload rather than `gscode.restartServer`, which is NOT sufficient here: the server's
@@ -36,6 +60,28 @@ export function registerReloadPrompt(
     // the other behind.
     let prompting = false;
 
+    const promptReload = async (changed: string[]) => {
+        if (prompting) {
+            return;
+        }
+
+        prompting = true;
+        try {
+            const choice = await vscode.window.showInformationMessage(
+                `The GSCode ${changed.join(" and ")} setting${changed.length > 1 ? "s" : ""} changed. `
+                + "Reload the window to apply it.",
+                "Reload Window",
+                "Later",
+            );
+
+            if (choice === "Reload Window") {
+                await vscode.commands.executeCommand("workbench.action.reloadWindow");
+            }
+        } finally {
+            prompting = false;
+        }
+    };
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (event) => {
             const changed = RESTART_REQUIRED
@@ -46,22 +92,36 @@ export function registerReloadPrompt(
                 return;
             }
 
-            log.info(`Restart-required setting changed: ${changed.join(", ")}`);
-            prompting = true;
-            try {
-                const choice = await vscode.window.showInformationMessage(
-                    `The GSCode ${changed.join(" and ")} setting${changed.length > 1 ? "s" : ""} changed. `
-                    + "Reload the window to apply it.",
-                    "Reload Window",
-                    "Later",
-                );
-
-                if (choice === "Reload Window") {
-                    await vscode.commands.executeCommand("workbench.action.reloadWindow");
-                }
-            } finally {
-                prompting = false;
+            if (suppressNext) {
+                suppressNext = false;
+                log.info(`Restart-required setting changed by a command that prompts itself: ${changed.join(", ")}`);
+                return;
             }
+
+            log.info(`Restart-required setting changed: ${changed.join(", ")}`);
+            await promptReload(changed);
+        }),
+    );
+
+    // Trusting the workspace changes two of these without anyone editing them. rawPath and modsPath
+    // are restricted settings (see `capabilities` in package.json): until the workspace is trusted,
+    // VS Code answers them from user settings only, so the server started without the workspace's
+    // values — and granting trust makes those the effective ones in a session that already read
+    // them. Whether VS Code reports that as a configuration change is not documented, so it is not
+    // relied on: a workspace value for either one is reason enough to ask.
+    context.subscriptions.push(
+        vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+            const config = vscode.workspace.getConfiguration("gscode");
+            const changed = RESTRICTED_IN_UNTRUSTED
+                .filter((setting) => config.inspect(setting.key)?.workspaceValue !== undefined)
+                .map((setting) => setting.label);
+
+            if (changed.length === 0) {
+                return;
+            }
+
+            log.info(`Workspace trusted; its own values now apply to: ${changed.join(", ")}`);
+            await promptReload(changed);
         }),
     );
 }

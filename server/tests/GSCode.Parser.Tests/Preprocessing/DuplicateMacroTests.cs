@@ -18,7 +18,7 @@ namespace GSCode.Parser.Tests.Preprocessing;
 public class DuplicateMacroTests
 {
     private const string GshPath = @"scripts\shared\flags.gsh";
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
 
     private static int Count(PreprocessResult result, GscDiagnosticCode code)
     {
@@ -68,6 +68,19 @@ public class DuplicateMacroTests
     }
 
     [Fact]
+    public void AllMacroDefinitionsKeepsBothWhereMacrosKeepsOnlyTheWinner()
+    {
+        // Macros (the table) answers "what does MAX resolve to" and correctly keeps only the
+        // second. AllMacroDefinitions answers "what did the file declare" and must keep both, since
+        // the FIRST #define's own name deserves a definition reference too — see
+        // SymbolExtractor.Run, which used to read Macros.All and so only ever saw the winner.
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\nx = MAX;");
+
+        Assert.Equal(1, result.Macros.Count);
+        Assert.Equal(2, result.AllMacroDefinitions.Length);
+    }
+
+    [Fact]
     public void ANameDefinedOnceIsFine()
     {
         PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MIN 1\n");
@@ -103,6 +116,33 @@ public class DuplicateMacroTests
 
         // Names the file being replaced, which is the only part the reader cannot see for themselves.
         Assert.Contains("flags.gsh", reported.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AHeaderRedefiningWhatTheScriptAlreadyDefinedIsReportedToo_EvenWhenTheHeaderIsReplayedFromCache()
+    {
+        // Same finding as AHeaderRedefiningWhatTheScriptAlreadyDefinedIsReportedToo, but the header's
+        // contribution comes from the cache instead of a fresh walk. The replay path
+        // (Preprocessor.HandleInsert) re-registers each cached definition directly into the macro
+        // table without ever calling ReportIfAlreadyDefined for it — so whether this collision is
+        // reported must not depend on whether some UNRELATED file happened to insert the same header
+        // first and warmed the cache.
+        FakeHeaderMacroCache cache = new();
+        FakeInsertProvider provider = new FakeInsertProvider()
+            .AddInsert(GshPath, "#define FLAG 2\n");
+
+        // Warm the cache: a file with no FLAG of its own, so the header is a pure macro bank and
+        // gets cached.
+        PreprocessTestHelper.Run($"#insert {GshPath};\n", provider, cache);
+
+        // The file under test never triggers a fresh walk of the header — it hits the cache. Its own
+        // FLAG comes first, so the header's (replayed) definition is the one that wins and should be
+        // the one reported, exactly as the from-scratch walk reports it in the sibling test above.
+        PreprocessResult result = PreprocessTestHelper.Run(
+            $"#define FLAG 1\n#insert {GshPath};\nx = FLAG;", provider, cache);
+
+        Assert.Single(result.Diagnostics, d => d.Code == GscDiagnosticCode.DuplicateMacroDefinition);
+        Assert.Equal(["x", "=", "2", ";"], PreprocessTestHelper.Texts(result));
     }
 
     [Fact]
@@ -208,7 +248,7 @@ public class DuplicateMacroTests
         // The duplicate rule follows the machinery rather than the dialect for exactly that reason.
         // Gating it on HasMacros would make it Black Ops III's alone, so the same user would
         // `#pragma disable 2016` and lose duplicate-macro checking with it, silently.
-        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: Cod4);
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: s_cod4);
 
         Assert.Contains(
             result.Diagnostics, d => d.Code == GscDiagnosticCode.MacrosNotInDialect);
@@ -221,7 +261,7 @@ public class DuplicateMacroTests
     {
         // The point above, stated as the behaviour a user would see. 2016 is reported once per file;
         // the duplicate is a separate code, so `#pragma disable 2016` does not take it with it.
-        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: Cod4);
+        PreprocessResult result = PreprocessTestHelper.Run("#define MAX 4\n#define MAX 8\n", profile: s_cod4);
 
         Assert.Single(result.Diagnostics, d => d.Code == GscDiagnosticCode.DuplicateMacroDefinition);
     }

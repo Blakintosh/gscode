@@ -1,9 +1,7 @@
 using System.Collections.Immutable;
-using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Typing;
 using Xunit;
@@ -22,8 +20,7 @@ public class FlowTyperTests
     private static Dictionary<string, ScrType> InferByFirstToken(string body)
     {
         string source = "function f()\n{\n" + body + "\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         FlowTyper typer = NewTyper();
         ImmutableArray<InferredAssignment> inferred = typer.InferAssignments(result);
@@ -43,9 +40,9 @@ public class FlowTyperTests
     [Fact]
     public void AssignmentsInsideADevBlockAreTyped()
     {
-        // `/# … #/` is real code that runs in a debug build. FlowTyper's walk had no case for the
-        // node at all, so nothing inside one was ever visited — no inlay, no hover type, and
-        // nothing for the field lints to see.
+        // `/# … #/` is real code that runs when developer script is enabled. FlowTyper's walk had
+        // no case for the node at all, so nothing inside one was ever visited — no inlay, no hover
+        // type, and nothing for the field lints to see.
         Dictionary<string, ScrType> types = InferByFirstToken(
             "    /#\n        debugCount = 5;\n        level.debugName = \"x\";\n    #/");
 
@@ -56,7 +53,7 @@ public class FlowTyperTests
     [Fact]
     public void ADevBlockLocalIsNotAssumedToExistAfterIt()
     {
-        // The block is compiled out of a release build, so code after it cannot assume anything it
+        // The block is skipped without developer script, so code after it cannot assume anything it
         // assigned still holds — the same treatment a loop body gets for the same reason.
         string source = "function f()\n{\n\t/#\n\tn = 5;\n\t#/\n\n\tuse( n );\n}\n";
 
@@ -103,8 +100,7 @@ public class FlowTyperTests
         // Keyed by the whole path, so hinting `self.count` does not suppress `level.count`. Both
         // are first-for-name, which is what the inlay surface filters on.
         string source = "function f()\n{\n    self.count = 1;\n    level.count = 2;\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         ImmutableArray<InferredAssignment> inferred = NewTyper().InferAssignments(result);
 
@@ -145,8 +141,10 @@ public class FlowTyperTests
     [Fact]
     public void Globals_AreTyped()
     {
-        Dictionary<string, ScrType> types = InferByFirstToken("    e = self;\n    l = level;\n    g = game;");
-        Assert.Equal(ScrType.Entity, types["e"]);
+        // self is deliberately excluded here — it is a real Entity|Struct|Array union (whichever
+        // object the caller threaded the function onto, which this pass does not track), so it
+        // produces no hint at all rather than a single ScrType. See SelfHasNoConcreteHintedType.
+        Dictionary<string, ScrType> types = InferByFirstToken("    l = level;\n    g = game;");
         Assert.Equal(ScrType.Struct, types["l"]);
         Assert.Equal(ScrType.Array, types["g"]);
     }
@@ -195,8 +193,7 @@ public class FlowTyperTests
         // cursor. IsFirstForName is what inlay hints filter on, so the `: int` label appears once
         // rather than at every reassignment.
         string source = "function f()\n{\n    a = 1;\n    a = \"now a string\";\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         ImmutableArray<InferredAssignment> assignments = NewTyper().InferAssignments(result);
         InferredAssignment[] toA = [.. assignments.Where(a => a.Name == "a")];
@@ -219,8 +216,7 @@ public class FlowTyperTests
     public void HoverLookup_ReturnsLocalType_AtUsageSite()
     {
         string source = "function f()\n{\n    count = 5;\n    other = count;\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
         FlowTyper typer = NewTyper();
 
         // Position on 'count' where it is READ in `other = count;` (line 3, char 12).
@@ -235,8 +231,7 @@ public class FlowTyperTests
     public void HoverLookup_ReturnsFalse_ForUntypedParameter()
     {
         string source = "function f( amount )\n{\n    use( amount );\n}\n";
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
         FlowTyper typer = NewTyper();
 
         // 'amount' is a parameter, never assigned a concrete type -> no hover.
@@ -245,12 +240,24 @@ public class FlowTyperTests
         Assert.False(found);
     }
 
+    [Fact]
+    public void ArithmeticOnAnUntypedParameterHasNoHoverType()
+    {
+        // `amount` is never given a concrete type, so `amount + 1` used to fold to the operator
+        // table's fallback for "not enough is known" — a bare Number, which ToScrType widens back
+        // to `float` (the one special case that keeps a real int/float branch join showing
+        // correctly). Hover therefore showed `float` for a value nothing established was even
+        // numeric: `amount` could just as legally have been a string, making this a concatenation.
+        string source = "function f( amount )\n{\n\tb = amount + 1;\n\tuse( b );\n}\n";
+
+        Assert.False(HoverAt(source, new Position(3, 6), out _));
+    }
+
     // --- Branches: the environment at the cursor, not the last arm written ---
 
     private static bool HoverAt(string source, Position position, out LocalTypeHover hover)
     {
-        ParseResult result = ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        ParseResult result = TestParse.Analyze(source);
 
         return NewTyper().TryGetLocalTypeAt(result, position, out hover);
     }
@@ -293,6 +300,29 @@ public class FlowTyperTests
     }
 
     [Fact]
+    public void InsideAnArm_AnAssignmentInTheConditionIsSeen()
+    {
+        // `if ( ( n = 5 ) )` is the deliberate form that suppresses 3013 (see
+        // TypeExpressionForEffects's own comment on ParenNode), and the condition's effects apply
+        // on every path — the NORMAL join already types it before cloning into each arm. The
+        // cursor shortcut for "inside one arm" skipped straight to narrowing and walking the arm,
+        // never typing the condition at all, so `n` had no entry in the environment whatsoever.
+        string source = "function f()\n{\n\tif ( ( n = 5 ) )\n\t{\n\t\tuse( n );\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void InsideTheElseArm_AnAssignmentInTheConditionIsSeen()
+    {
+        string source = "function f()\n{\n\tif ( ( n = 5 ) )\n\t{\n\t}\n\telse\n\t{\n\t\tuse( n );\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(7, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
     public void InsideALoopBody_TheBodyHasRun()
     {
         // The zero-iteration alternative is not a possibility the code inside the body allows for.
@@ -314,14 +344,59 @@ public class FlowTyperTests
         Assert.False(HoverAt(source, new Position(7, 6), out _));
     }
 
+    // --- switch: a cursor inside one case is on THAT path, and fallthrough carries effects ---
+
+    [Fact]
+    public void InsideACase_TheCaseOwnValueIsReported_NotTheMergeOfEveryCase()
+    {
+        // The reported gap: WalkSwitch always finished by overwriting the shared environment with
+        // the JOIN of every case, however the cursor's own case walked it moment-to-moment — so
+        // `x` at the marked spot showed `string|int`, projecting to Unknown, instead of the case's
+        // own `int`.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = \"a\";\n\t\tbreak;\n\tcase 2:\n\t\tx = 5;\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        Assert.True(HoverAt(source, new Position(9, 7), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    [Fact]
+    public void FallthroughCase_InheritsTheEffectsOfTheCaseAbove()
+    {
+        // A case with no leading break/return/continue is reached by falling through from the one
+        // above it as much as by matching its own label — but it was always walked from the
+        // PRE-SWITCH environment, losing every effect the case above had. Case 2 is ALSO reachable
+        // directly (jumping straight to its own label with case 1 never having run), so the honest
+        // answer is a union — x MAY be int, it is not CERTAINLY int, and asserting the stronger
+        // claim would be exactly the kind of guess this pass refuses to make. Before the fix `x`
+        // had no entry in the environment here at all, since case 1's effects never reached it.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = 5;\n\tcase 2:\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        ParseResult result = TestParse.Analyze(source);
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(7, 7), out ScrValue value));
+        Assert.True(value.MayBe(ScrTypeSet.Int));
+    }
+
+    [Fact]
+    public void ACaseThatBreaks_DoesNotLeakIntoTheNextCase()
+    {
+        // The mirror of the fallthrough case: a case that DOES break must not hand its effects to
+        // the one after it.
+        string source =
+            "function f( k )\n{\n\tswitch ( k )\n\t{\n\tcase 1:\n\t\tx = 5;\n\t\tbreak;\n\tcase 2:\n\t\tuse( x );\n\t\tbreak;\n\t}\n}\n";
+
+        Assert.False(HoverAt(source, new Position(8, 7), out _));
+    }
+
     // --- The type AT the cursor, not the type it started as ---
 
     private static ParseResult Reassigned()
     {
         // count is an int, then a string, then read once more.
         string source = "function f()\n{\n    count = 5;\n    a = count;\n    count = \"hello\";\n    b = count;\n}\n";
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
+        return TestParse.Analyze(source);
     }
 
     [Fact]
@@ -354,5 +429,78 @@ public class FlowTyperTests
 
         Assert.True(typer.TryGetLocalTypeAt(Reassigned(), new Position(2, 5), out LocalTypeHover hover));
         Assert.Equal(ScrType.Int, hover.Type);
+    }
+
+    // --- Compound assignment and ++/-- apply the operator, rather than keeping the old value ---
+
+    [Fact]
+    public void ACompoundAssignment_AppliesTheOperatorRatherThanKeepingTheOldType()
+    {
+        // The reported gap: `x = 0; x += 0.5;` kept reporting `int` for x, though adding a float
+        // promotes the result — compound assignment was never typed at all, so the environment
+        // still held whatever `x` was before the `+=`.
+        string source = "function f()\n{\n\tx = 0;\n\tx += 0.5;\n\tuse( x );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Float, hover.Type);
+    }
+
+    [Fact]
+    public void AnIncrement_AppliesTheOperatorRatherThanKeepingTheStaleConstant()
+    {
+        // `i = 0; ... i++;` kept the CONSTANT 0 for the rest of the flow: `x++` as a bare statement
+        // was typed for its value and then thrown away, never written back to the environment.
+        string source = "function f()\n{\n\ti = 0;\n\ti++;\n\tuse( i );\n}\n";
+
+        ParseResult result = TestParse.Analyze(source);
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
+        Assert.Equal(ScrType.Int, value.ToScrType());
+        Assert.Equal(1, value.Constant!.Value.Integer);
+    }
+
+    [Fact]
+    public void ADecrement_AppliesTheOperator()
+    {
+        string source = "function f()\n{\n\ti = 5;\n\ti--;\n\tuse( i );\n}\n";
+
+        ParseResult result = TestParse.Analyze(source);
+
+        Assert.True(NewTyper().TryGetValueAt(result, new Position(4, 6), out ScrValue value));
+        Assert.Equal(4, value.Constant!.Value.Integer);
+    }
+
+    // --- Subscript writes: `a[i] = v` says as much about `a` as `a = value` does ---
+
+    [Fact]
+    public void ASubscriptWrite_MakesTheBaseAnArray()
+    {
+        // The reported gap: `a[i] = v` never touched `a`'s entry in the environment at all, so a
+        // variable that started life as `undefined` stayed `undefined` for the rest of the flow —
+        // even though a subscript write is exactly how GSC creates or grows an array.
+        string source = "function f()\n{\n\tspots = undefined;\n\tspots[ 0 ] = 1;\n\tuse( spots );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
+    }
+
+    [Fact]
+    public void ASubscriptWrite_OnAnAlreadyKnownArray_KeepsItAnArray()
+    {
+        string source = "function f()\n{\n\tspots = [];\n\tspots[ 0 ] = 1;\n\tuse( spots );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
+    }
+
+    [Fact]
+    public void ASubscriptWrite_OnAChainedIndex_StillBindsTheOuterBase()
+    {
+        // `a[ i ][ j ] = v` chains through more than one IndexNode before reaching the identifier
+        // that is actually being grown — the walk must not stop at the first level.
+        string source = "function f()\n{\n\ta = undefined;\n\ta[ 0 ][ 1 ] = 1;\n\tuse( a );\n}\n";
+
+        Assert.True(HoverAt(source, new Position(4, 6), out LocalTypeHover hover));
+        Assert.Equal(ScrType.Array, hover.Type);
     }
 }

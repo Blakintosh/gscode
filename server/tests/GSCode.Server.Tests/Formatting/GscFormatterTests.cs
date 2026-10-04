@@ -1,9 +1,6 @@
-using GSCode.Core;
-using GSCode.Core.Symbols;
+using System.Collections.Immutable;
 using GSCode.Core.Text;
-using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Preprocessing;
 using GSCode.Server.Formatting;
 using Xunit;
 
@@ -11,15 +8,9 @@ namespace GSCode.Server.Tests.Formatting;
 
 public class GscFormatterTests
 {
-    private static ParseResult Analyze(string source)
-    {
-        return ScriptAnalysis.Analyze(
-            @"c:\ws\scripts\t.gsc", ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable());
-    }
-
     private static string? Format(string source)
     {
-        return GscFormatter.Format(Analyze(source));
+        return GscFormatter.Format(TestParse.Analyze(source));
     }
 
     /// <summary>The non-trivia token kinds+texts of two sources, for the fidelity gate.</summary>
@@ -130,27 +121,27 @@ public class GscFormatterTests
     }
 
     [Fact]
-    public void FormatMinimal_TrimsToTheChangedRegion()
+    public void FormatMinimalEdits_TrimsToTheChangedRegion()
     {
         // Only the "a=0;" line needs spacing; the edit must not span the whole file.
         string source = "function f()\n{\n    a=0;\n}\n";
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
-        Assert.NotNull(edit);
-        Assert.Equal(2, edit.Value.Range.Start.Line);
+        GscFormatter.FormatEdit edit = Assert.Single(edits);
+        Assert.Equal(2, edit.Range.Start.Line);
         // The reflow only reinserts spacing around '='; the edit is that small.
-        Assert.Contains(" = ", edit.Value.NewText);
+        Assert.Contains(" = ", edit.NewText);
     }
 
     [Fact]
-    public void FormatMinimal_ReturnsNull_WhenAlreadyFormatted()
+    public void FormatMinimalEdits_ReturnsEmpty_WhenAlreadyFormatted()
     {
         string source = "function f()\n{\n    a = 0;\n}\n";
 
-        GscFormatter.FormatEdit? edit = GscFormatter.FormatMinimal(Analyze(source));
+        ImmutableArray<GscFormatter.FormatEdit> edits = GscFormatter.FormatMinimalEdits(TestParse.Analyze(source));
 
-        Assert.Null(edit);
+        Assert.Empty(edits);
     }
 
     [Fact]

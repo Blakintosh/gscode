@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Symbols;
 using GSCode.Parser;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Analysis;
@@ -14,9 +15,8 @@ namespace GSCode.Server.Handlers;
 ///
 /// A thin thing on purpose — it holds no state and decides nothing. What it owns is the ARGUMENT
 /// LIST. <see cref="WorkspaceLints.Analyze"/> takes seven arguments, four of which are workspace
-/// singletons that never vary within a session, and it was called from two handlers that each
-/// injected all four for that one line and nothing else. Two copies of a seven-argument call is two
-/// places to update when the pipeline gains an input, and one of them is easy to miss.
+/// singletons that never vary within a session; two handlers call it, and each would otherwise
+/// inject all four for that one line and hold its own copy of a seven-argument call.
 /// </summary>
 public sealed class DocumentLinter
 {
@@ -43,9 +43,28 @@ public sealed class DocumentLinter
     /// produced it, and re-reading <c>LatestResult</c> here would let a concurrent analysis swap it
     /// for a different parse than the one they published a version number for.
     /// </param>
-    public ImmutableArray<Diagnostic> Analyze(OpenDocument document, ParseResult result)
+    /// <remarks>
+    /// The flow typer's answer is left in the shared cache for an OPEN document only, where the
+    /// inlay hints and hover will ask for the same parse next. Nothing asks about a closed file.
+    /// </remarks>
+    public ImmutableArray<Diagnostic> Analyze(
+        OpenDocument document, ParseResult result, CancellationToken cancellationToken = default)
     {
         return WorkspaceLints.Analyze(
-            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields);
+            result, document.Language, document.Path, _database, _resolver.Current, _builtins, _objectFields,
+            cancellationToken, shareTypes: true);
+    }
+
+    /// <summary>
+    /// Same pipeline, for a caller with no <see cref="OpenDocument"/> — the full-mode workspace
+    /// lint sweep (<see cref="WorkspaceLintSweep"/>), which re-analyses a CLOSED file straight
+    /// from disk and needs exactly the two facts an <see cref="OpenDocument"/> would otherwise
+    /// have supplied.
+    /// </summary>
+    public ImmutableArray<Diagnostic> Analyze(
+        ScriptLanguage language, string path, ParseResult result, CancellationToken cancellationToken = default)
+    {
+        return WorkspaceLints.Analyze(
+            result, language, path, _database, _resolver.Current, _builtins, _objectFields, cancellationToken);
     }
 }

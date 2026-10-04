@@ -14,19 +14,30 @@ public static class PathUtil
     /// produces one that does not exist, so there the canonical form preserves case —
     /// still unambiguous, because every key derives from a single real disk path.
     /// </summary>
-    private static readonly bool LowercaseAbsolutePaths =
+    private static readonly bool s_lowercaseAbsolutePaths =
         OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
 
     /// <summary>
     /// Canonical form for an absolute on-disk path: full path, no trailing separator,
     /// lowercase on case-insensitive filesystems (exact case on Linux), interned. This
     /// is the ScriptDatabase key format.
+    ///
+    /// A root path — <c>C:\</c> on Windows, <c>/</c> everywhere else — is NEVER trimmed, even
+    /// though it is also its own trailing separator: trimming it produced <c>C:</c>, a
+    /// drive-RELATIVE path rather than an absolute one (<c>Path.GetFullPath("c:")</c> resolves
+    /// against the current directory, not the drive root), and on Linux the same trim emptied the
+    /// path to <c>""</c> entirely.
     /// </summary>
     public static string NormalizeAbsolute(string path)
     {
         string full = Path.GetFullPath(path);
-        full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return LowercaseAbsolutePaths ? NameTable.Shared.InternLower(full) : NameTable.Shared.Intern(full);
+
+        if ( !string.Equals(full, Path.GetPathRoot(full), StringComparison.Ordinal) )
+        {
+            full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        return s_lowercaseAbsolutePaths ? NameTable.Shared.InternLower(full) : NameTable.Shared.Intern(full);
     }
 
     /// <summary>
@@ -50,9 +61,25 @@ public static class PathUtil
         return Path.ChangeExtension(scriptPath, null) ?? scriptPath;
     }
 
-    /// <summary>True when <paramref name="path"/> sits underneath <paramref name="directory"/> (both already normalized).</summary>
+    /// <summary>
+    /// True when <paramref name="path"/> sits underneath <paramref name="directory"/> (both
+    /// already normalized).
+    ///
+    /// <paramref name="directory"/> ending in a separator gets its own branch: that is what a
+    /// normalized DRIVE ROOT looks like (<c>c:\</c>, or <c>/</c> on Linux — see
+    /// <see cref="NormalizeAbsolute"/>), and the boundary check below assumes the opposite, that
+    /// the directory's own separator is still ahead of it in <paramref name="path"/>. Indexing
+    /// <c>path[directory.Length]</c> against a root directory landed one character INTO the first
+    /// path segment instead of on the separator, so every path under a root drive compared
+    /// falsely not-under it.
+    /// </summary>
     public static bool IsUnder(string path, string directory)
     {
+        if ( directory.Length > 0 && directory[^1] is '\\' or '/' )
+        {
+            return path.Length > directory.Length && path.StartsWith(directory, StringComparison.Ordinal);
+        }
+
         if ( path.Length <= directory.Length )
         {
             return false;

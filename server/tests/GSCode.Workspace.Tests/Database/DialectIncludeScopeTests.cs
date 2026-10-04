@@ -1,11 +1,8 @@
 using System.Collections.Immutable;
-using System.Linq;
 using GSCode.Core;
 using GSCode.Core.Symbols;
-using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Extraction;
-using GSCode.Parser.Preprocessing;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 using Xunit;
@@ -21,13 +18,12 @@ namespace GSCode.Workspace.Tests.Database;
 /// </summary>
 public class DialectIncludeScopeTests
 {
-    private static readonly GameProfile Cod4 = GameProfile.ByName("cod4")!;
-    private static readonly SymbolKey HelperKey = new(null, "helper", SymbolKind.Function);
+    private static readonly GameProfile s_cod4 = GameProfile.ByName("cod4")!;
+    private static readonly SymbolKey s_helperKey = new(null, "helper", SymbolKind.Function);
 
     private static ParseResult AnalyzeIw(string path, string source)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Cod4);
+        return TestParse.Analyze(source, path, s_cod4);
     }
 
     /// <summary>Two files each defining helper(); returns the definition set keyed (null, helper).</summary>
@@ -36,7 +32,7 @@ public class DialectIncludeScopeTests
         database.Commit(AnalyzeIw(@"c:\ws\common.gsc", "helper()\n{\n}\n"), ResolutionContext.RawContext, false, @"common_scripts\utility.gsc");
         database.Commit(AnalyzeIw(@"c:\ws\other.gsc", "helper()\n{\n}\n"), ResolutionContext.RawContext, false, @"unrelated\other.gsc");
 
-        return [.. DatabaseQueries.FindReferences(database.Gsc, "raw", HelperKey)
+        return [.. DatabaseQueries.FindReferences(database.Gsc, "raw", s_helperKey)
             .Where(reference => reference.Entry.Kind == ReferenceKind.Definition)];
     }
 
@@ -179,12 +175,11 @@ public class DialectIncludeScopeTests
     // `scripts\zm\gametypes\_globallogic_utils.gsc`. So `globallogic_utils::func` names two
     // declarations, and only the asking file's `#using` list says which one it means.
 
-    private static readonly GameProfile Bo3 = GameProfile.ByName("bo3")!;
+    private static readonly GameProfile s_bo3 = GameProfile.ByName("bo3")!;
 
     private static ParseResult AnalyzeBo3(string path, string source)
     {
-        return ScriptAnalysis.Analyze(
-            path, ScriptLanguage.Gsc, SourceText.From(source), NullInsertProvider.Instance, new NameTable(), Bo3);
+        return TestParse.Analyze(source, path, s_bo3);
     }
 
     /// <summary>The MP and ZM copies of one namespace, each declaring the same function.</summary>
@@ -225,7 +220,7 @@ public class DialectIncludeScopeTests
             + "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n");
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped = DatabaseQueries.PreferIncludeScope(
-            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, Bo3));
+            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, s_bo3));
 
         (ScriptRecord Record, ReferenceEntry Entry) only = Assert.Single(scoped);
         Assert.Equal(@"scripts\zm\gametypes\_globallogic_utils.gsc", only.Record.RelativePath);
@@ -242,7 +237,7 @@ public class DialectIncludeScopeTests
             @"c:\raw\spawn.gsc", "function run()\n{\n    globallogic_utils::get_time_remaining();\n}\n");
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped = DatabaseQueries.PreferIncludeScope(
-            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, Bo3));
+            both, @"scripts\zm\gametypes\_globallogic_spawn.gsc", DatabaseQueries.LinkedScriptPaths(spawn, s_bo3));
 
         Assert.Equal(2, scoped.Length);
     }
@@ -257,7 +252,7 @@ public class DialectIncludeScopeTests
             "#using scripts\\zm\\gametypes\\_globallogic_utils;\n#using scripts\\shared\\util_shared;\n"
             + "function run()\n{\n}\n");
 
-        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(spawn, Bo3);
+        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(spawn, s_bo3);
 
         Assert.Equal(2, paths.Length);
         Assert.Contains(@"scripts\zm\gametypes\_globallogic_utils", paths);
@@ -269,7 +264,7 @@ public class DialectIncludeScopeTests
     {
         ParseResult main = AnalyzeIw(@"c:\ws\main.gsc", "#include common_scripts\\utility;\nrun()\n{\n}\n");
 
-        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(main, Cod4);
+        ImmutableArray<string> paths = DatabaseQueries.LinkedScriptPaths(main, s_cod4);
 
         Assert.Equal(@"common_scripts\utility", Assert.Single(paths));
     }
@@ -282,8 +277,8 @@ public class DialectIncludeScopeTests
         ParseResult usingOnly = AnalyzeBo3(
             @"c:\raw\spawn.gsc", "#using scripts\\shared\\util_shared;\nfunction run()\n{\n}\n");
 
-        Assert.Empty(DatabaseQueries.LinkedScriptPaths(usingOnly, Cod4));
-        Assert.Single(DatabaseQueries.LinkedScriptPaths(usingOnly, Bo3));
+        Assert.Empty(DatabaseQueries.LinkedScriptPaths(usingOnly, s_cod4));
+        Assert.Single(DatabaseQueries.LinkedScriptPaths(usingOnly, s_bo3));
     }
 
     // --- ScopeToIncludeGraph: the same collision, in the reference COUNT ---
@@ -307,9 +302,9 @@ public class DialectIncludeScopeTests
             DatabaseQueries.FindReferences(database.Gsc, "raw", key);
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> zm = DatabaseQueries.ScopeToIncludeGraph(
-            all, @"scripts\zm\gametypes\_globallogic_utils.gsc", Bo3);
+            all, @"scripts\zm\gametypes\_globallogic_utils.gsc", s_bo3);
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> mp = DatabaseQueries.ScopeToIncludeGraph(
-            all, @"scripts\mp\gametypes\_globallogic_utils.gsc", Bo3);
+            all, @"scripts\mp\gametypes\_globallogic_utils.gsc", s_bo3);
 
         // ZM keeps its own definition plus the call; MP keeps only its own definition.
         Assert.Equal(2, zm.Length);
@@ -337,7 +332,7 @@ public class DialectIncludeScopeTests
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> zm = DatabaseQueries.ScopeToIncludeGraph(
             DatabaseQueries.FindReferences(database.Gsc, "raw", key),
             @"scripts\zm\gametypes\_globallogic_utils.gsc",
-            Bo3);
+            s_bo3);
 
         // The qualified call still counts for the ZM copy despite spawn.gsc's own same-named function.
         Assert.Contains(zm, reference => reference.Entry.Kind == ReferenceKind.Call);

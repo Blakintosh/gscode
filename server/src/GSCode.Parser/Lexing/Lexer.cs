@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Text;
@@ -13,17 +14,13 @@ namespace GSCode.Parser.Lexing;
 public sealed class Lexer
 {
     /// <summary>
-    /// The character classes the scan runs over, as vector-searchable sets.
-    ///
-    /// Every run below — whitespace, a word, a digit sequence, the body of a comment or a string —
-    /// used to be a loop testing one character per iteration. <see cref="SearchValues{T}"/> answers
-    /// the same question over many characters at a time, and comment and string text is most of the
-    /// CHARACTER volume of a decompiled script even though it is a handful of its tokens.
+    /// The character classes the scan runs over, as vector-searchable sets. Every run below —
+    /// whitespace, a word, a digit sequence, the body of a comment or a string — is searched many
+    /// characters at a time rather than one per iteration, and comment and string text is most of
+    /// the CHARACTER volume of a decompiled script even though it is a handful of its tokens.
     /// </summary>
     private static readonly SearchValues<char> s_spacesAndTabs = SearchValues.Create(" \t");
     private static readonly SearchValues<char> s_lineBreaks = SearchValues.Create("\r\n");
-    private static readonly SearchValues<char> s_wordChars = SearchValues.Create(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
     private static readonly SearchValues<char> s_digits = SearchValues.Create("0123456789");
     private static readonly SearchValues<char> s_hexDigits = SearchValues.Create("0123456789abcdefABCDEF");
 
@@ -74,7 +71,7 @@ public sealed class Lexer
             // Fail-safe: the scan must always advance; a stall here would hang the server.
             if ( _offset == startOffset )
             {
-                System.Diagnostics.Debug.Fail("Lexer did not advance — fix the token path that stalled.");
+                Debug.Fail("Lexer did not advance — fix the token path that stalled.");
                 _offset++;
             }
         }
@@ -184,7 +181,7 @@ public sealed class Lexer
                 break;
         }
 
-        if ( IsWordStart(current) )
+        if ( GscIdentifier.IsWordStart(current) )
         {
             LexIdentifierOrKeyword();
             return;
@@ -230,7 +227,7 @@ public sealed class Lexer
     private void LexIdentifierOrKeyword()
     {
         int start = _offset;
-        _offset = SkipWhile(s_wordChars, _offset);
+        _offset = SkipWhile(GscIdentifier.WordChars, _offset);
 
         ReadOnlySpan<char> word = _source.AsSpan(start, _offset - start);
         if ( Keywords.TryMatchKeyword(word, _profile, out TokenKind keywordKind) )
@@ -492,7 +489,7 @@ public sealed class Lexer
         // Whole-word directive match, so "#iffoo" is an unknown directive rather than
         // silently lexing as "#if" + "foo".
         int wordStart = _offset + 1;
-        int wordEnd = SkipWhile(s_wordChars, wordStart);
+        int wordEnd = SkipWhile(GscIdentifier.WordChars, wordStart);
 
         if ( wordEnd == wordStart )
         {
@@ -553,10 +550,10 @@ public sealed class Lexer
         // after = ( , : ? return, or at the very start. Everywhere else % is modulo.
         int nameStart = AnimReferenceNameStart();
 
-        if ( nameStart < _source.Length && IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
+        if ( nameStart < _source.Length && GscIdentifier.IsWordStart(_source[nameStart]) && IsAnimReferenceContext() )
         {
             int start = _offset;
-            _offset = SkipWhile(s_wordChars, nameStart);
+            _offset = SkipWhile(GscIdentifier.WordChars, nameStart);
 
             // One token covering the % AND the name, spaces included, so the reference has a single
             // range to hover, rename and report at. Consumers take the name with
@@ -795,11 +792,6 @@ public sealed class Lexer
         }
 
         return _source[index];
-    }
-
-    private static bool IsWordStart(char character)
-    {
-        return char.IsAsciiLetter(character) || character == '_';
     }
 
     private static bool IsNewline(char character)

@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -32,13 +31,13 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
 
     public override Task<LocationContainer?> Handle(ReferenceParams request, CancellationToken cancellationToken)
     {
-        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri);
+        NavigationTarget? target = _support.Resolve(request.TextDocument.Uri, cancellationToken);
         if ( target is null )
         {
             return Task.FromResult<LocationContainer?>(null);
         }
 
-        PositionHit hit = SymbolAtPosition.Resolve(target.Result, request.Position.ToCore());
+        PositionHit hit = _support.ResolveHit(target, request.Position.ToCore());
 
         bool includeDeclaration = request.Context?.IncludeDeclaration ?? true;
 
@@ -60,14 +59,18 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
             _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
 
-        foreach ( (ScriptRecord record, ReferenceEntry entry) in found )
+        // Per entry, because each builds a DocumentUri: the shared query's own comment names a
+        // 1,970-reference case, and find-references is one of the requests a client re-sends.
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in found )
         {
-            if ( !includeDeclaration && entry.Kind == ReferenceKind.Definition )
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if ( !includeDeclaration && reference.Entry.Kind == ReferenceKind.Definition )
             {
                 continue;
             }
 
-            locations.Add(LspMapping.LocationAt(record.Path, entry.Range));
+            locations.Add(LspMapping.LocationAt(reference.Record.Path, reference.Entry.Range));
         }
 
         return Task.FromResult<LocationContainer?>(new LocationContainer(locations));

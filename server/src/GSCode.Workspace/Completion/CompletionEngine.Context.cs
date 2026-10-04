@@ -1,12 +1,9 @@
 using System.Collections.Immutable;
-using GSCode.Core;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Parser;
 using GSCode.Parser.Lexing;
-using GSCode.Parser.Syntax;
-using GSCode.Workspace.Api;
-using GSCode.Workspace.Database;
 
 namespace GSCode.Workspace.Completion;
 /// <summary>
@@ -40,7 +37,7 @@ public sealed partial class CompletionEngine
             // wherever else it appears.
             case TokenKind.Private:
             case TokenKind.Autoexec:
-                int previous = PreviousSignificant(tokens, triggerIndex);
+                int previous = TokenFacts.PreviousSignificant(tokens, triggerIndex);
                 return previous >= 0 && tokens[previous].Kind == TokenKind.Function;
 
             default:
@@ -80,6 +77,43 @@ public sealed partial class CompletionEngine
     }
 
     /// <summary>
+    /// Whether the name being completed is the operand of a function-pointer <c>&amp;</c> — either
+    /// directly (<c>&amp;foo</c>) or through a namespace (<c>&amp;util::foo</c>), which is how 585 of
+    /// BO3's 4,564 pointers are written.
+    ///
+    /// Only the punctuation depends on this, not the list: what may be pointed at is what may be
+    /// called, so the same producers answer both. The caller gates it on the dialect's pointer
+    /// style, since a pre-BO3 <c>&amp;</c> is arithmetic and its pointers are bare qualified names.
+    /// </summary>
+    private static bool IsAddressOfPosition(ImmutableArray<Token> tokens, int triggerIndex)
+    {
+        if ( triggerIndex < 0 )
+        {
+            return false;
+        }
+
+        if ( tokens[triggerIndex].Kind == TokenKind.Ampersand )
+        {
+            return true;
+        }
+
+        // `&util::` — the trigger is the '::', so the '&' sits two significant tokens back.
+        if ( tokens[triggerIndex].Kind != TokenKind.ScopeResolution )
+        {
+            return false;
+        }
+
+        int namespaceIndex = TokenFacts.PreviousSignificant(tokens, triggerIndex);
+        if ( namespaceIndex < 0 || tokens[namespaceIndex].Kind != TokenKind.Identifier )
+        {
+            return false;
+        }
+
+        int beforeNamespace = TokenFacts.PreviousSignificant(tokens, namespaceIndex);
+        return beforeNamespace >= 0 && tokens[beforeNamespace].Kind == TokenKind.Ampersand;
+    }
+
+    /// <summary>
     /// Whether the lone colon at <paramref name="colonIndex"/> is the first half of a <c>::</c>
     /// being typed, rather than a ternary's divider.
     ///
@@ -93,7 +127,7 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static bool IsIncompleteScopeResolution(ImmutableArray<Token> tokens, int colonIndex)
     {
-        int nameIndex = PreviousSignificant(tokens, colonIndex);
+        int nameIndex = TokenFacts.PreviousSignificant(tokens, colonIndex);
         if ( nameIndex < 0 || tokens[nameIndex].Kind != TokenKind.Identifier )
         {
             return false;
@@ -131,13 +165,13 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static bool IsPrecacheAssetTypeLiteral(ImmutableArray<Token> tokens, int literalIndex)
     {
-        int openParen = PreviousSignificant(tokens, literalIndex);
+        int openParen = TokenFacts.PreviousSignificant(tokens, literalIndex);
         if ( openParen < 0 || tokens[openParen].Kind != TokenKind.OpenParen )
         {
             return false;
         }
 
-        int directive = PreviousSignificant(tokens, openParen);
+        int directive = TokenFacts.PreviousSignificant(tokens, openParen);
         return directive >= 0 && tokens[directive].Kind == TokenKind.PrecacheDirective;
     }
 
@@ -167,10 +201,10 @@ public sealed partial class CompletionEngine
         // Walk back over the deref rather than re-parsing, since this runs mid-keystroke where the
         // tree may not contain the call at all. `]]` lexes as TWO CloseBracket tokens, not one, so
         // this skips however many are there instead of assuming a single closing token.
-        int receiver = PreviousSignificant(tokens, arrowIndex);
+        int receiver = TokenFacts.PreviousSignificant(tokens, arrowIndex);
         while ( receiver >= 0 && tokens[receiver].Kind == TokenKind.CloseBracket )
         {
-            receiver = PreviousSignificant(tokens, receiver);
+            receiver = TokenFacts.PreviousSignificant(tokens, receiver);
         }
 
         if ( receiver < 0 || tokens[receiver].Kind != TokenKind.Identifier )
@@ -227,7 +261,15 @@ public sealed partial class CompletionEngine
             cursor--;
         }
 
-        return cursor > 0 && text.Text[cursor - 1] == '#';
+        if ( cursor == 0 || text.Text[cursor - 1] != '#' )
+        {
+            return false;
+        }
+
+        // `/#` opens a dev block, not a directive — and '#' is a completion trigger character, so
+        // every dev block opened would otherwise pop the top-level directive list right as it was
+        // typed.
+        return cursor < 2 || text.Text[cursor - 2] != '/';
     }
 
     private static bool IsWordChar(char c)
@@ -286,8 +328,20 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static string OwnerBefore(ParseResult result, ImmutableArray<Token> tokens, int dotIndex)
     {
-        int ownerIndex = PreviousSignificant(tokens, dotIndex);
+        int ownerIndex = TokenFacts.PreviousSignificant(tokens, dotIndex);
         if ( ownerIndex < 0 || tokens[ownerIndex].Kind != TokenKind.Identifier )
+        {
+            return "";
+        }
+
+        // A member OF a member — `self.owner.` — reads the SAME as a plain local before the dot:
+        // "owner" is an Identifier token here too. But it names a field on `self`, not a local,
+        // and a nested write like `self.owner.field = value` is never recorded as an assignment at
+        // all, so there is no genuine "owner" to scope by. Narrowing to it anyway found nothing and
+        // returned a near-empty list where the honestly-unknown-owner case (an index or call
+        // result, just above) already knows to widen instead.
+        int beforeOwner = TokenFacts.PreviousSignificant(tokens, ownerIndex);
+        if ( beforeOwner >= 0 && tokens[beforeOwner].Kind is TokenKind.Dot or TokenKind.CloseBracket )
         {
             return "";
         }
@@ -435,7 +489,7 @@ public sealed partial class CompletionEngine
                 continue;
             }
 
-            int keyword = PreviousSignificant(tokens, scan);
+            int keyword = TokenFacts.PreviousSignificant(tokens, scan);
             return keyword >= 0
                 && tokens[keyword].Kind is TokenKind.If or TokenKind.While
                     or TokenKind.For or TokenKind.Foreach;
@@ -460,13 +514,27 @@ public sealed partial class CompletionEngine
             return false;
         }
 
-        int before = PreviousSignificant(tokens, triggerIndex);
+        int before = TokenFacts.PreviousSignificant(tokens, triggerIndex);
         return before >= 0 && tokens[before].Kind == TokenKind.PrecacheDirective && kind == TokenKind.OpenParen;
     }
 
     /// <summary>Index of the string/istring/hash literal the cursor is typing inside, else -1.</summary>
-    private static int FindLiteralAtOffset(ImmutableArray<Token> tokens, int offset)
+    private static int FindLiteralAtOffset(ParseResult result, ImmutableArray<Token> tokens, int offset)
     {
+        // Strings cannot span lines, so the lexer reports EXACTLY the unterminated ones — over a
+        // range starting at the same offset as the token itself — which settles "is this one still
+        // open" without guessing from its trailing character. A guess trips on an escaped quote
+        // landing right at the end of an unterminated string, or on the bare opening quote alone
+        // (nothing to actually close) reading as if it were its own closing one.
+        HashSet<int> unterminatedStarts = [];
+        foreach ( Diagnostic diagnostic in result.AllDiagnostics )
+        {
+            if ( diagnostic.Code == GscDiagnosticCode.UnterminatedString )
+            {
+                unterminatedStarts.Add(result.Text.GetOffset(diagnostic.Range.Start));
+            }
+        }
+
         for ( int index = 0; index < tokens.Length; index++ )
         {
             Token token = tokens[index];
@@ -474,9 +542,17 @@ public sealed partial class CompletionEngine
                 || token.Kind == TokenKind.LocalizedString
                 || token.Kind == TokenKind.HashString;
 
-            // Strictly past the opening quote, up to and including the end (handles a still-open
-            // string that runs to the end of the line).
-            if ( isLiteral && offset > token.Start && offset <= token.End )
+            if ( !isLiteral || offset <= token.Start )
+            {
+                continue;
+            }
+
+            // Up to and INCLUDING the end is right for a still-open string running to the end of
+            // the line — there is no closing quote to stop before. A CLOSED one's closing quote IS
+            // its last character, so the position right after it (typing the quote is itself a
+            // completion trigger) is one past where the literal actually ends, and must not count.
+            bool closed = !unterminatedStarts.Contains(token.Start);
+            if ( closed ? offset < token.End : offset <= token.End )
             {
                 return index;
             }
@@ -496,6 +572,27 @@ public sealed partial class CompletionEngine
             default:
                 return SymbolKind.StringLiteral;
         }
+    }
+
+    /// <summary>
+    /// Whether the offset sits strictly inside a comment token. Comments are TRIVIA, so the trigger
+    /// scan below (<see cref="TokenFacts.PreviousSignificant"/>) skips right over them — by design, so the rest
+    /// of completion can read the token stream as if they were not there — but nothing upstream
+    /// checked for this FIRST, so the trigger character landed on whatever code precedes the
+    /// comment.
+    /// </summary>
+    private static bool IsInsideComment(ImmutableArray<Token> tokens, int offset)
+    {
+        foreach ( Token token in tokens )
+        {
+            if ( token.Kind is TokenKind.LineComment or TokenKind.BlockComment or TokenKind.DocComment
+                && offset > token.Start && offset <= token.End )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Index of the identifier token the cursor is inside or just after, else -1.</summary>
@@ -527,17 +624,6 @@ public sealed partial class CompletionEngine
         return tokens.Length;
     }
 
-    private static int PreviousSignificant(ImmutableArray<Token> tokens, int fromIndex)
-    {
-        int index = fromIndex - 1;
-        while ( index >= 0 && tokens[index].IsTrivia )
-        {
-            index--;
-        }
-
-        return index;
-    }
-
     /// <summary>
     /// The function or class METHOD whose body contains this position.
     ///
@@ -550,42 +636,6 @@ public sealed partial class CompletionEngine
     /// </summary>
     private static FunctionSymbol? EnclosingFunction(ParseResult result, Position position)
     {
-        foreach ( FunctionSymbol function in result.Extraction.Functions )
-        {
-            if ( function.FullRange.Contains(position) )
-            {
-                return function;
-            }
-        }
-
-        foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
-        {
-            if ( !classSymbol.FullRange.Contains(position) )
-            {
-                continue;
-            }
-
-            foreach ( FunctionSymbol method in classSymbol.Methods )
-            {
-                if ( method.FullRange.Contains(position) )
-                {
-                    return method;
-                }
-            }
-
-            // A constructor or destructor body is a function body too, for every purpose this
-            // answers — which is why they are carried on the class at all.
-            if ( classSymbol.Constructor is not null && classSymbol.Constructor.FullRange.Contains(position) )
-            {
-                return classSymbol.Constructor;
-            }
-
-            if ( classSymbol.Destructor is not null && classSymbol.Destructor.FullRange.Contains(position) )
-            {
-                return classSymbol.Destructor;
-            }
-        }
-
-        return null;
+        return GSCode.Core.Symbols.EnclosingFunction.At(result.Extraction.Functions, result.Extraction.Classes, position);
     }
 }

@@ -12,7 +12,7 @@ namespace GSCode.Parser.Extraction;
 /// whole include scope. <see cref="NameRange"/> matches the reference's range, which is how the two
 /// are paired. The leading <c>::foo</c> local form has an empty path and is not recorded.
 /// </summary>
-public sealed record PathCallReference(string Path, TextRange NameRange);
+public readonly record struct PathCallReference(string Path, TextRange NameRange);
 
 /// <summary>
 /// The extracted symbol surface of one file: namespaces, declarations with their
@@ -25,12 +25,17 @@ public sealed record ExtractionResult(
     ImmutableArray<ClassSymbol> Classes,
     ImmutableArray<ReferenceEntry> References,
     ImmutableArray<Diagnostic> Diagnostics,
-    ImmutableArray<PathCallReference> PathCalls)
+    ImmutableArray<PathCallReference> PathCalls,
+    ImmutableArray<FieldBinding> FieldBindings)
 {
     /// <summary>
     /// The namespaces this file declares into — the SET question, as opposed to the positional one
     /// <see cref="Namespaces"/> answers. See <see cref="NamespaceSpan"/> for why the two differ and
     /// why reading the spans as a set yields a phantom named after the file.
+    ///
+    /// What callers pass as <c>askingNamespaces</c> for the namespace-privacy rule, read from the
+    /// live parse so unsaved edits count at once. Counting the phantom span as declared handed a file
+    /// the private members of any namespace that happened to share its filename.
     /// </summary>
     public ImmutableArray<string> DeclaredNamespaces => DeclaredNamespaceSet.From(Functions, Classes);
 }

@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Paths;
+using GSCode.Core.Symbols;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
 using GSCode.Workspace.Resolution;
@@ -70,6 +71,34 @@ public class WatcherRaceTests
         Assert.True(Declares(database, "other"));
     }
 
+    [Fact]
+    public void AFileDeletedWhileItIsBeingIndexedStaysDeleted()
+    {
+        // A branch switch mid-way through a cold index: the slow call has read the file, then the
+        // file goes and the watcher's Deleted event removes it from the store. The recheck before
+        // the commit cannot read the file; taking that as "still matches" brought the record
+        // back for the rest of the session.
+        FakeFileSystem inner = new FakeFileSystem().AddFile(s_scriptPath, AfterEdit);
+        RootConfig config = TestPaths.Config(inner);
+        PathResolver resolver = new(config, inner);
+        ScriptDatabase database = new();
+
+        WorkspaceIndexer? indexer = null;
+        RaceFileSystem race = new(
+            inner,
+            s_scriptPath,
+            onFirstRead: () =>
+            {
+                inner.RemoveFile(s_scriptPath);
+                indexer!.RemoveFile(PathUtil.NormalizeAbsolute(s_scriptPath), ScriptLanguage.Gsc);
+            });
+
+        indexer = new WorkspaceIndexer(database, () => resolver, race, new NameTable());
+        indexer.IndexFile(s_scriptPath);
+
+        Assert.False(Declares(database, "other"));
+    }
+
     /// <summary>Delegates everything to the same in-memory tree, but fires a hook on the FIRST read of one tracked path.</summary>
     private sealed class RaceFileSystem : IFileSystem
     {
@@ -97,6 +126,13 @@ public class WatcherRaceTests
 
         public string ReadAllText(string absolutePath)
         {
+            // What the real disk throws for a file that is gone; the in-memory tree's own
+            // KeyNotFoundException is not something production ever sees.
+            if ( !_inner.FileExists(absolutePath) )
+            {
+                throw new FileNotFoundException(null, absolutePath);
+            }
+
             string content = _inner.ReadAllText(absolutePath);
 
             if ( !_fired && PathUtil.NormalizeAbsolute(absolutePath) == _racedPath )

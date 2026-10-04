@@ -700,11 +700,16 @@ public sealed class WorkspaceIndexer
         {
             return _fileSystem.ReadAllText(normalizedPath) == analysedContent;
         }
+        catch ( Exception exception ) when ( exception is FileNotFoundException or DirectoryNotFoundException )
+        {
+            // Deleted since it was read. The watched-file event for that deletion may already have
+            // removed the record, and committing now would bring it back for the session.
+            return false;
+        }
         catch ( Exception exception ) when ( exception is IOException or UnauthorizedAccessException )
         {
-            // An unreadable recheck almost always means "deleted mid-analysis" — and a genuine
-            // deletion is caught by its own watched-file event regardless of what this call does,
-            // so there is nothing safer to do here than let the commit through as analysed.
+            // Present but unreadable for now (locked by an editor mid-save, say): the file is still
+            // there, so let the commit through as analysed; its own watched-file event follows.
             return true;
         }
     }

@@ -732,7 +732,9 @@ public static partial class GscFormatter
             // A label whose body is a braced block takes no case indent: the braces supply the
             // level, so `{`, `}` and the `break;` after them sit in the label's column. Stock
             // writes it that way 59 times against 47, and every time with the break beside them.
-            bool bracedCaseBody = roles.LabelColon[index] && NextIsOpenBrace(significant, index);
+            // `IndentCaseBlocks` is the other 47: the block indents like any other case body.
+            bool bracedCaseBody = !options.IndentCaseBlocks
+                && roles.LabelColon[index] && NextIsOpenBrace(significant, index);
             if ( bracedCaseBody && blocks.Count > 0 && blocks[^1].IsSwitch )
             {
                 blocks[^1].CaseOpen = false;

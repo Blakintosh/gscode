@@ -178,6 +178,7 @@ code it suppresses and says where it stops.
 | `gscode.format.sortDirectives` | `true` | Group and sort the directive block at the top of a file. |
 | `gscode.format.alignConsecutive` | `true` | Line up the `=` of consecutive assignments. |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch`. |
+| `gscode.format.indentCaseBlocks` | `false` | Indent a braced case body inside its label. Off puts its `{`, `}` and `break;` level with `case`. |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block. |
 | `gscode.format.alignMaxPadding` | `20` | The most spaces alignment may add to one line. A far longer or shorter left-hand side keeps a single space instead of pushing its run across the screen. `0` removes the limit. |
 | `gscode.format.fixCasing` | `true` | Lowercase keywords (`IsDefined` → `isdefined`), and give functions, namespaces and classes the spelling they are declared with. Macros match exactly, so they are never touched. |
@@ -259,8 +260,8 @@ to at the place it is used.
 - Field and literal lists cut to what you have typed.
 
 **Formatting.**
-- New settings: `fixCasing` gives keywords and calls their declared spelling; `indentCaseLabels` and
-  `indentDevBlocks` set the two indentations the stock scripts split on; `alignMaxPadding` caps
+- New settings: `fixCasing` gives keywords and calls their declared spelling; `indentCaseLabels`,
+  `indentCaseBlocks` and `indentDevBlocks` set the indentations the stock scripts split on; `alignMaxPadding` caps
   alignment.
 - Output now matches the stock scripts more closely: continuation lines, split conditions, blank
   lines after blocks, spaced `?:` and base-class colons, one `case` label per line.

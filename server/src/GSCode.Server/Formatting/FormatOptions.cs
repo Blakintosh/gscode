@@ -60,6 +60,12 @@ namespace GSCode.Server.Formatting;
 /// Whether <c>case</c> and <c>default</c> labels sit one level inside their <c>switch</c>, with the
 /// statements under a label one level further. Stock indents them 2,012 times to 517 flush.
 /// </param>
+/// <param name="IndentCaseBlocks">
+/// Whether a case body written as one braced block is indented inside its label, putting its
+/// statements two levels in from the <c>case</c>. Off by default: the <c>{</c>, the <c>}</c> and the
+/// <c>break;</c> after them sit in the label's column, which stock writes 59 times against 47. A
+/// case body without braces is indented one level either way.
+/// </param>
 /// <param name="IndentDevBlocks">
 /// Whether the body of a <c>/# … #/</c> dev block is indented. Off by default: a dev block is a
 /// runtime switch rather than a scope, and stock keeps it flush 316 times to 194 indented —
@@ -87,6 +93,7 @@ public readonly record struct FormatOptions(
     bool SortDirectives = true,
     bool AlignConsecutive = false,
     bool IndentCaseLabels = true,
+    bool IndentCaseBlocks = false,
     bool IndentDevBlocks = false,
     bool FixCasing = false,
     int AlignMaxPadding = 20)
@@ -103,7 +110,7 @@ public readonly record struct FormatOptions(
         IndentWidth: 4, UseTabs: false, PadParens: true, PadCallParens: true, PadBrackets: true,
         SpaceBeforeControlParen: true, MaxBlankLines: 2,
         SortDirectives: true, AlignConsecutive: false,
-        IndentCaseLabels: true, IndentDevBlocks: false, FixCasing: false, AlignMaxPadding: 20);
+        IndentCaseLabels: true, IndentCaseBlocks: false, IndentDevBlocks: false, FixCasing: false, AlignMaxPadding: 20);
 
     /// <summary>
     /// The options for a WHOLE-document format: the editor's own indentation settings, which arrive
@@ -128,6 +135,7 @@ public readonly record struct FormatOptions(
             SortDirectives: settings.FormatSortDirectives,
             AlignConsecutive: settings.FormatAlignConsecutive,
             IndentCaseLabels: settings.FormatIndentCaseLabels,
+            IndentCaseBlocks: settings.FormatIndentCaseBlocks,
             IndentDevBlocks: settings.FormatIndentDevBlocks,
             FixCasing: settings.FormatFixCasing,
             AlignMaxPadding: Math.Max(0, settings.FormatAlignMaxPadding));

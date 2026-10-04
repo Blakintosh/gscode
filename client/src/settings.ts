@@ -33,6 +33,7 @@ export interface GscodeSettings {
     "format.sortDirectives": boolean;
     "format.alignConsecutive": boolean;
     "format.indentCaseLabels": boolean;
+    "format.indentCaseBlocks": boolean;
     "format.indentDevBlocks": boolean;
     "format.fixCasing": boolean;
     "format.alignMaxPadding": number;
@@ -68,6 +69,7 @@ export function readSettings(): GscodeSettings {
         "format.sortDirectives": config.get<boolean>("format.sortDirectives", true),
         "format.alignConsecutive": config.get<boolean>("format.alignConsecutive", true),
         "format.indentCaseLabels": config.get<boolean>("format.indentCaseLabels", true),
+        "format.indentCaseBlocks": config.get<boolean>("format.indentCaseBlocks", false),
         "format.indentDevBlocks": config.get<boolean>("format.indentDevBlocks", false),
         "format.fixCasing": config.get<boolean>("format.fixCasing", true),
         "format.alignMaxPadding": config.get<number>("format.alignMaxPadding", 20),

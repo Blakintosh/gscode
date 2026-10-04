@@ -118,7 +118,8 @@ column instead.
 A case body written as a braced block takes no extra level: the braces supply it. The `{`, the `}`
 and anything after them in that case, a `break;` included, sit in the label's column. Stock does
 this 59 times against 47 with the block indented, and in every such case the `break;` sits beside
-the braces.
+the braces. `gscode.format.indentCaseBlocks` is the other 47: the block indents inside its label like
+any other case body, and its statements sit two levels in from `case`.
 
 ```gsc
 switch ( type )
@@ -385,6 +386,7 @@ function flop()
 | `gscode.format.sortDirectives` | `true` | Group and sort the leading directive block. Format Document only |
 | `gscode.format.alignConsecutive` | `true` | Align the operators of consecutive assignments. All three requests; on-type is clipped to the group around the cursor, range to the selection |
 | `gscode.format.indentCaseLabels` | `true` | `case` labels one level inside their `switch` (§3) |
+| `gscode.format.indentCaseBlocks` | `false` | Indent a braced case body inside its label (§3) |
 | `gscode.format.indentDevBlocks` | `false` | Indent the body of a `/# … #/` dev block (§3) |
 | `gscode.format.alignMaxPadding` | `20` | The most spaces alignment may add to one line; `0` for no limit (§6) |
 | `gscode.format.fixCasing` | `true` | Lowercase keywords; give functions, namespaces and classes their declared spelling (§10) |

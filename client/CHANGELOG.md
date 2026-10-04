@@ -74,8 +74,9 @@ is gone (see **Removed**). Inlay hints are now off by default; turn on the ones 
   becomes `GetPlayers()`, `FOo()` becomes `foo()`, `Util::` becomes `util::`. A bare call takes the
   builtin's spelling when there is one, since it resolves to the builtin first. Macros match exactly
   and are never recased.
-- `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column) and
-  `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block), for the two
+- `gscode.format.indentCaseLabels` (on; off puts `case` in the switch's column),
+  `gscode.format.indentCaseBlocks` (off; on indents a braced case body inside its label) and
+  `gscode.format.indentDevBlocks` (off; on indents the body of a `/# … #/` block), for the
   indentations the stock scripts split on.
 - `gscode.format.alignMaxPadding` (20): consecutive alignment no longer pushes a short name's `=`
   across the screen to match a deeply subscripted neighbour. A line further than this from the rest

@@ -85,6 +85,14 @@ public static class RecordSerializer
             int length = (int)header.ReadVarUInt();
             int payloadStart = 1 + header.Position;
 
+            // Deflate expands by at most about 1032 to 1, so a length past that is a corrupt header.
+            // Renting it threw OutOfMemoryException, which nothing on the indexing path catches:
+            // one bad blob failed the index on every start until the cache was cleared.
+            if ( length < 0 || length > (long)(blob.Length - payloadStart) * 1032 )
+            {
+                return null;
+            }
+
             body = ArrayPool<byte>.Shared.Rent(length);
             using ( MemoryStream input = new(blob, payloadStart, blob.Length - payloadStart) )
             using ( DeflateStream deflate = new(input, CompressionMode.Decompress) )

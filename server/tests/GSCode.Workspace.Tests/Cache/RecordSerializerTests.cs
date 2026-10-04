@@ -112,6 +112,27 @@ public class RecordSerializerTests
         Assert.Null(RecordSerializer.Deserialize(corrupted));
     }
 
+    [Theory]
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x07 })]
+    [InlineData(new byte[] { 0x80, 0x80, 0x80, 0x80, 0x04 })]
+    [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x0F })]
+    public void ACorruptLengthHeader_IsUnreadableRatherThanAnAllocation(byte[] length)
+    {
+        // The header's length was rented straight from the pool: 0x7FFFFFFF threw
+        // OutOfMemoryException, which nothing on the indexing path catches, so one bad blob failed
+        // every start until the cache was cleared. A real payload follows, so only the header lies.
+        byte[] blob = RecordSerializer.Serialize(FullyPopulated());
+        int payloadStart = 1;
+        while ( (blob[payloadStart] & 0x80) != 0 )
+        {
+            payloadStart++;
+        }
+
+        byte[] corrupted = [blob[0], .. length, .. blob[(payloadStart + 1)..]];
+
+        Assert.Null(RecordSerializer.Deserialize(corrupted));
+    }
+
     private static string AsJson(ScriptRecord record)
     {
         return JsonSerializer.Serialize(record);

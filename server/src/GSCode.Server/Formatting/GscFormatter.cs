@@ -1193,7 +1193,10 @@ public static partial class GscFormatter
         /// <summary>Called before the token is written, so its own line uses the right indent.</summary>
         public void BeforeToken(TokenKind kind)
         {
-            if ( !_awaitingBody )
+            // A comment after the header is not the body. Taking it for one owed a level that the
+            // `{` on the next line never released, so `if ( a ) // note` pushed its whole braced
+            // block one level right and left the `}` out of step with it.
+            if ( !_awaitingBody || LineFacts.IsComment(kind) )
             {
                 return;
             }

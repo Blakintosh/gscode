@@ -161,6 +161,11 @@ compiled out of a "release build". The number is unchanged, so pragmas keep work
 - The `doc` snippet on the four pre-BO3 games writes the `///ScriptDocBegin`/`///ScriptDocEnd`
   fence, without which what it inserted read back as an ordinary comment and the function it
   documented hovered with no documentation at all.
+- A comment on the same line as an `if`, `else if`, `else`, `for`, `foreach` or `while` header no
+  longer pushes its braced body one level right with the `}` out of step.
+- A split `if` condition's continuation lines are indented under the condition rather than left
+  in the `if`'s column, and a comment after `for ( ; x; )` no longer splits the header in two.
+- The space after a ternary's `:` is kept: `b ? &foo : &bar` used to come out `b ? &foo: &bar`.
 
 **Diagnostics and analysis**
 - With `workspaceIndexingMode: "full"`, a closed file keeps its cross-file problems after it has

@@ -10,6 +10,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
 
 namespace GSCode.Server.Handlers;
@@ -70,6 +71,13 @@ public sealed class RenameHandler : RenameHandlerBase
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // One occurrence that cannot be edited safely refuses the whole rename: half a rename
+            // is the outcome this handler exists to avoid.
+            if ( RenamedSpan(hit.Key, reference.Entry.Range) is not TextRange span )
+            {
+                return Task.FromResult<WorkspaceEdit?>(null);
+            }
+
             DocumentUri uri = DocumentUri.FromFileSystemPath(reference.Record.Path);
             if ( !edits.TryGetValue(uri, out List<TextEdit>? list) )
             {
@@ -77,7 +85,7 @@ public sealed class RenameHandler : RenameHandlerBase
                 edits[uri] = list;
             }
 
-            list.Add(new TextEdit { Range = reference.Entry.Range.ToLsp(), NewText = request.NewName });
+            list.Add(new TextEdit { Range = span.ToLsp(), NewText = request.NewName });
         }
 
         if ( edits.Count == 0 )
@@ -164,6 +172,59 @@ public sealed class RenameHandler : RenameHandlerBase
             default:
                 return GscIdentifier.IsIdentifier(newName);
         }
+    }
+
+    /// <summary>
+    /// The part of a reference a rename rewrites, or null when it cannot be found safely.
+    ///
+    /// For a name that is the whole token. A literal's reference covers its whole token too —
+    /// <c>"spawned"</c>, <c>#"spawned"</c>, <c>&amp;"MENU_X"</c>, <c>%run</c> — but its name is only
+    /// the content, so writing the new name over the token dropped the quotes and turned
+    /// <c>notify( "spawned" )</c> into <c>notify( ready )</c> in every file. The content is the
+    /// key's name, which is the token's raw text between its quotes (or after its <c>%</c>), so it
+    /// sits a fixed distance back from the token's end. A string with no closing quote fails the
+    /// check against the token's start and is refused rather than guessed at.
+    ///
+    /// <c>PrepareRenameHandler</c> returns the same span, so the rename box shows the bare name.
+    /// </summary>
+    internal static TextRange? RenamedSpan(SymbolKey key, TextRange token)
+    {
+        int prefix;
+        switch ( key.Kind )
+        {
+            case SymbolKind.StringLiteral:
+                prefix = 1;
+                break;
+
+            case SymbolKind.HashString:
+            case SymbolKind.LocalizedString:
+                prefix = 2;
+                break;
+
+            case SymbolKind.AnimReference:
+            {
+                // `%run` and `% run` are one token; the name is the tail either way.
+                int nameStart = token.End.Character - key.Name.Length;
+                if ( token.Start.Line != token.End.Line || nameStart <= token.Start.Character )
+                {
+                    return null;
+                }
+
+                return new TextRange(new Position(token.End.Line, nameStart), token.End);
+            }
+
+            default:
+                return token;
+        }
+
+        int contentEnd = token.End.Character - 1;
+        int contentStart = contentEnd - key.Name.Length;
+        if ( token.Start.Line != token.End.Line || contentStart != token.Start.Character + prefix )
+        {
+            return null;
+        }
+
+        return new TextRange(new Position(token.End.Line, contentStart), new Position(token.End.Line, contentEnd));
     }
 
     /// <summary>

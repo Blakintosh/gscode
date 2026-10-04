@@ -5,6 +5,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -58,7 +59,13 @@ public sealed class PrepareRenameHandler : IPrepareRenameHandler
             return Task.FromResult(LocalRangeAt(target, request.Position.ToCore()));
         }
 
-        return Task.FromResult<RangeOrPlaceholderRange?>(new RangeOrPlaceholderRange(hit.Range.ToLsp()));
+        // A literal offers its content, not its quotes: the rename writes only inside them.
+        if ( RenameHandler.RenamedSpan(hit.Key, hit.Range) is not TextRange span )
+        {
+            return Task.FromResult<RangeOrPlaceholderRange?>(null);
+        }
+
+        return Task.FromResult<RangeOrPlaceholderRange?>(new RangeOrPlaceholderRange(span.ToLsp()));
     }
 
     /// <summary>

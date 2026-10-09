@@ -38,7 +38,8 @@
 
 	const navLinks = [
 		{ href: '/', label: 'Home', exact: true },
-		{ href: '/library', label: 'Library' }
+		{ href: '/library', label: 'Library' },
+		{ href: '/tools', label: 'Tools' }
 	];
 
 	/** The rest of the ecosystem — same server, same look, different jobs. */

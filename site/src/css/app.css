@@ -538,3 +538,109 @@
 		}
 	}
 }
+
+/* ── Site-specific: the Mod Tools page ───────────────────────────────────── */
+/* Apex, Blackbird and Ultrasound are their own apps: their sections sit on the apps'
+   neutral graphite (--app-*), with each mascot's one colour (--eye, --burn, --sonar).
+   The *-ink variants are those colours as text, dark enough to read on light. Their mocks
+   use the apps' own faces, Geist and IBM Plex Mono, loaded only where a mock renders. */
+@font-face {
+	font-family: 'Geist';
+	font-weight: 400;
+	font-display: swap;
+	src: url('/fonts/Geist-Regular.ttf') format('truetype');
+}
+@font-face {
+	font-family: 'Geist';
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/Geist-Medium.ttf') format('truetype');
+}
+@font-face {
+	font-family: 'IBM Plex Mono';
+	font-weight: 400;
+	font-display: swap;
+	src: url('/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+}
+
+:root {
+	--app-ground: #f4f4f4;
+	--app-panel: #ffffff;
+	--app-raise: #efefef;
+	--app-edge: #e0e0e0;
+	--app-text: #1b1b1b;
+	--app-mute: #555555;
+	--app-dim: #6e6e6e;
+	--app-cmd: #0b7466;
+	--app-err: #c22a4e;
+	--app-warn: #9a5a00;
+	--app-ok: #1f7a4d;
+	--eye: #7fd6f6;
+	--eye-ink: #0b6b84;
+	--burn: #ff5a1f;
+	--burn-ink: #b8400f;
+	--sonar: #55e6fa;
+	--sonar-ink: #0b6b84;
+	--cast: rgba(16, 24, 29, 0.22);
+}
+.dark {
+	--app-ground: #1b1b1b;
+	--app-panel: #202020;
+	--app-raise: #262626;
+	--app-edge: #2f2f2f;
+	--app-text: #e6e6e6;
+	--app-mute: #a3a3a3;
+	--app-dim: #8a8a8a;
+	--app-cmd: #3ed1bd;
+	--app-err: #f0506e;
+	--app-warn: #e5a33b;
+	--app-ok: #4cc38a;
+	--eye-ink: #7fd6f6;
+	--burn-ink: #ff7a3d;
+	--sonar-ink: #55e6fa;
+	--cast: rgba(0, 0, 0, 0.55);
+}
+
+@theme inline {
+	--color-app-ground: var(--app-ground);
+	--color-app-panel: var(--app-panel);
+	--color-app-raise: var(--app-raise);
+	--color-app-edge: var(--app-edge);
+	--color-app-text: var(--app-text);
+	--color-app-mute: var(--app-mute);
+	--color-app-dim: var(--app-dim);
+	--color-app-cmd: var(--app-cmd);
+	--color-app-err: var(--app-err);
+	--color-app-warn: var(--app-warn);
+	--color-app-ok: var(--app-ok);
+	--color-eye: var(--eye);
+	--color-eye-ink: var(--eye-ink);
+	--color-burn: var(--burn);
+	--color-burn-ink: var(--burn-ink);
+	--color-sonar: var(--sonar);
+	--color-sonar-ink: var(--sonar-ink);
+	--font-app: 'Geist', ui-sans-serif, system-ui, sans-serif;
+	--font-app-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+
+/* A mascot standing in the page's one light: its shadow falls down and to the left. */
+@utility cast {
+	filter: drop-shadow(-14px 18px 10px var(--cast));
+}
+@utility cast-sm {
+	filter: drop-shadow(-6px 8px 5px var(--cast));
+}
+
+@keyframes caret {
+	0%,
+	49% {
+		opacity: 1;
+	}
+	50%,
+	100% {
+		opacity: 0;
+	}
+}
+@utility caret {
+	animation: caret 1s steps(1) infinite;
+}

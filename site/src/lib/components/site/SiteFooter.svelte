@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		assetplaceUrl,
 		discordInviteUrl,
@@ -12,15 +13,20 @@
 
 	const ext = (href: string) => ({ href, target: '_blank', rel: 'noopener noreferrer' });
 	const link = 'hover:text-foreground transition-colors';
+
+	/** The Mod Tools page signs off as gscode tools, the family it introduces. */
+	const onTools = $derived(page.url.pathname.startsWith('/tools'));
 </script>
 
 <!-- Footer sits back on ground with a top edge — the page ends, it does not lift. -->
 <footer class="border-border bg-background mt-16 border-t">
 	<div class="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-4">
 		<div class="md:col-span-2">
-			<Logo />
+			<Logo property={onTools ? 'tools' : undefined} />
 			<p class="text-muted-foreground mt-4 max-w-sm text-sm">
-				A language server for Call of Duty GSC and CSC.
+				{onTools
+					? 'A family of apps that replace the stock Black Ops III Mod Tools.'
+					: 'A language server for Call of Duty GSC and CSC.'}
 			</p>
 			<div class="mt-5 flex items-center gap-5">
 				<a
@@ -45,6 +51,7 @@
 			<ul class="text-muted-foreground space-y-2 text-sm">
 				<li><a {...ext(marketplaceUrl)} class={link}>Install for VS Code</a></li>
 				<li><a href="/library" class={link}>Function library</a></li>
+				<li><a href="/tools" class={link}>Mod tools</a></li>
 				<li><a href="/contributing" class={link}>Contributing</a></li>
 			</ul>
 		</div>
@@ -65,5 +72,11 @@
 		>
 			gscode · GPL-3.0 · a community project. not affiliated with Activision or Treyarch.
 		</p>
+		{#if onTools}
+			<p class="text-dim mx-auto -mt-3 max-w-7xl px-4 pb-5 font-mono text-xs tracking-label uppercase sm:px-6">
+				Apex, Blackbird and Ultrasound are independent community tools, not affiliated with Treyarch, Activision or Call
+				of Duty.
+			</p>
+		{/if}
 	</div>
 </footer>

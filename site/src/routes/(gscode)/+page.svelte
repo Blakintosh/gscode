@@ -8,6 +8,7 @@
 	import HoverWidget from '$lib/components/home/HoverWidget.svelte';
 	import CompletionsWidget from '$lib/components/home/CompletionsWidget.svelte';
 	import GamesWidget from '$lib/components/home/GamesWidget.svelte';
+	import ToolsBanner from '$lib/components/home/ToolsBanner.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import {
 		assetplaceUrl,
@@ -48,6 +49,8 @@
 	<meta property="og:url" content={siteUrl} />
 	<meta name="twitter:card" content="summary_large_image" />
 </svelte:head>
+
+<ToolsBanner />
 
 <!-- ── Hero: the whole viewport is the frame. One light source, top-right. ─────────── -->
 <section class="bg-popover relative overflow-hidden" aria-labelledby="hero-title">

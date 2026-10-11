@@ -72,6 +72,26 @@ public class FunctionResolutionLintTests
         Assert.Contains("scriptFunctionDoesNotExist", diagnostic.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("x = &other::missing;")]
+    [InlineData("x = &missingLocal;")]
+    public void AFunctionReferenceMatchingNothing_IsAScriptMiss(string statement)
+    {
+        string source = "#namespace vibing3;\nfunction main()\n{\n    " + statement + "\n}\n";
+
+        Diagnostic diagnostic = Assert.Single(Lint(source));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
+    }
+
+    [Fact]
+    public void AFunctionReferenceToAKnownFunction_IsClean()
+    {
+        string source = "#namespace vibing3;\nfunction main()\n{\n    x = &local;\n    y = &util::shown;\n}\nfunction local()\n{\n}\n";
+
+        Assert.DoesNotContain(Lint(source), d => d.Code == GscDiagnosticCode.ScriptFunctionNotFound);
+    }
+
     [Fact]
     public void BothKindsAreReportedTogether()
     {

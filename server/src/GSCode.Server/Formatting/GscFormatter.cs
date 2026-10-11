@@ -1483,7 +1483,7 @@ public static partial class GscFormatter
     {
         return IsControlFlowKeyword(previous)
             || IsBinaryOrAssignmentOperator(previous)
-            || previous is TokenKind.Return or TokenKind.Case or TokenKind.Colon;
+            || previous is TokenKind.Return or TokenKind.Case or TokenKind.Colon or TokenKind.Comma;
     }
 
     private static bool NoSpaceAfter(TokenKind kind)

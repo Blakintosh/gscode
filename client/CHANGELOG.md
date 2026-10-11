@@ -4,6 +4,16 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## 2.2.1
+
+### Fixed
+
+- A function reference to something that does not exist (`&zm_blockers::missing`, or `&localMissing`)
+  is now reported as a missing script function (`gscode-5014`). It used to pass the check and fail at
+  link time with "unresolved external".
+- Format Document puts a space after the comma between two parenthesised arguments, so vectors come
+  out as `( 0, 0, 0 ), ( 0, 0, 0 )` rather than `( 0, 0, 0 ),( 0, 0, 0 )`.
+
 ## 2.2.0
 
 2.2.0 rather than 2.1.0: the Marketplace keeps odd minors for pre-releases, which are published as

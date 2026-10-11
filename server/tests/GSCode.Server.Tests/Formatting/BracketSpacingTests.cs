@@ -68,4 +68,13 @@ public class BracketSpacingTests
 
         Assert.Equal(once, GscFormatter.Format(reparsed, s_tabs));
     }
+
+    [Fact]
+    public void AGroupedArgumentAfterACommaTakesASpace()
+    {
+        string formatted = Body("f( ( 0, 0, 0 ),( 1, 1, 1 ) );");
+
+        Assert.Contains("), (", formatted, StringComparison.Ordinal);
+        Assert.DoesNotContain("),(", formatted, StringComparison.Ordinal);
+    }
 }

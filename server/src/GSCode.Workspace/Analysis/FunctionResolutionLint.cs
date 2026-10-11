@@ -230,7 +230,10 @@ public static class FunctionResolutionLint
             // that one excludes the arrow form, and this rule is the one that wants it. An
             // unresolved [[x]]->name() is a script function nobody declares, and saying so is the
             // whole of the MethodCall arm below.
-            bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall;
+            //
+            // A function REFERENCE (`&ns::foo`) is held to the same standard: it resolves at link
+            // time exactly as a call does, and an unresolved one throws "unresolved external".
+            bool isCall = entry.Kind is ReferenceKind.Call or ReferenceKind.MethodCall or ReferenceKind.AddressOf;
             if ( !isCall || entry.Key.Kind != SymbolKind.Function )
             {
                 continue;
@@ -335,6 +338,23 @@ public static class FunctionResolutionLint
                     DiagnosticSeverity.Error,
                     GscDiagnosticCode.ScriptFunctionNotFound,
                     entry.Key.Name));
+                continue;
+            }
+
+            // A function reference cannot name a builtin, so an unqualified one that matched no script
+            // function is a script miss. Stands down when an import failed to resolve, since in a
+            // merge dialect the missing file may have declared it.
+            if ( entry.Kind == ReferenceKind.AddressOf )
+            {
+                if ( !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        entry.Range,
+                        DiagnosticSeverity.Error,
+                        GscDiagnosticCode.ScriptFunctionNotFound,
+                        entry.Key.Name));
+                }
+
                 continue;
             }
 

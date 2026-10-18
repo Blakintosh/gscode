@@ -4,6 +4,13 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## 2.2.2
+
+### Fixed
+
+- File icons have their own colours again: GSC blue, CSC green and GSH purple. Since 2.0 CSC had been
+  a lighter shade of the GSC teal and GSH grey, which made the three hard to tell apart in the explorer.
+
 ## 2.2.1
 
 ### Fixed

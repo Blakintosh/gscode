@@ -16,9 +16,10 @@ internal static class ParserTestHelper
         GameProfile game = profile ?? GameProfile.BlackOps3;
         SourceText text = SourceText.From(source);
         LexResult lexed = Lexer.Lex(text, game);
+        NameTable names = new();
         PreprocessResult preprocessed = Preprocessor.Process(
-            @"c:\work\scripts\test.gsc", lexed.Tokens, text, NullInsertProvider.Instance, new NameTable());
-        return Parser.Syntax.Parser.Parse(preprocessed.Tokens, game);
+            @"c:\work\scripts\test.gsc", lexed.Tokens, text, NullInsertProvider.Instance, names);
+        return Parser.Syntax.Parser.Parse(preprocessed.Tokens, names, game);
     }
 
     /// <summary>S-expression of the whole script node.</summary>

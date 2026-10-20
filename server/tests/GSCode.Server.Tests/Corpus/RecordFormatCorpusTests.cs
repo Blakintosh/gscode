@@ -75,7 +75,7 @@ public class RecordFormatCorpusTests
                 byte[] blob = RecordSerializer.Serialize(record);
                 blobBytes += blob.Length;
 
-                ScriptRecord? restored = RecordSerializer.Deserialize(blob);
+                ScriptRecord? restored = RecordSerializer.Deserialize(blob, new NameTable());
                 if ( restored is null || JsonSerializer.Serialize(record) != JsonSerializer.Serialize(restored) )
                 {
                     mismatched.Add(record.Path);

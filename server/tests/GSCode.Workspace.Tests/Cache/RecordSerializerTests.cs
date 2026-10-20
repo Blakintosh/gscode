@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
@@ -60,7 +61,7 @@ public class RecordSerializerTests
     {
         ScriptRecord record = FullyPopulated();
 
-        ScriptRecord? restored = RecordSerializer.Deserialize(RecordSerializer.Serialize(record));
+        ScriptRecord? restored = RecordSerializer.Deserialize(RecordSerializer.Serialize(record), new NameTable());
 
         Assert.NotNull(restored);
         Assert.Equal(AsJson(record), AsJson(restored));
@@ -74,10 +75,35 @@ public class RecordSerializerTests
             Functions = [FullyPopulated().Functions[0] with { Doc = new ScriptDocComment() }],
         };
 
-        ScriptRecord? restored = RecordSerializer.Deserialize(RecordSerializer.Serialize(record));
+        ScriptRecord? restored = RecordSerializer.Deserialize(RecordSerializer.Serialize(record), new NameTable());
 
         Assert.NotNull(restored);
         Assert.Same(ScriptDocComment.None, restored.Functions[0].Doc);
+    }
+
+    /// <summary>
+    /// A warm start reads every record from its own blob, and the per-blob string table only
+    /// shares within one. Names and paths must come back as the pool's instances — the same ones a
+    /// live parse hands out — or every file holds its own copy of every name. Free text stays out
+    /// of the pool, which never gives an entry back.
+    /// </summary>
+    [Fact]
+    public void NamesAndPaths_ComeBackAsThePoolsInstances_AndFreeTextDoesNot()
+    {
+        NameTable names = new();
+        ScriptRecord? first = RecordSerializer.Deserialize(RecordSerializer.Serialize(FullyPopulated()), names);
+        ScriptRecord? second = RecordSerializer.Deserialize(RecordSerializer.Serialize(FullyPopulated()), names);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Same(names.Intern("dothing"), first.Functions[0].KeyName);
+        Assert.Same(first.Functions[0].KeyName, second.Functions[0].KeyName);
+        Assert.Same(first.References[0].Key.Name, second.References[0].Key.Name);
+        Assert.Same(first.Dependencies[0].RawPath, second.Dependencies[0].RawPath);
+        Assert.Same(first.PathCallTargets[0].Path, second.PathCallTargets[0].Path);
+        Assert.Same(first.ContextId, second.ContextId);
+        Assert.NotSame(first.Functions[0].Doc.Summary, second.Functions[0].Doc.Summary);
+        Assert.NotSame(first.Diagnostics[0].Message, second.Diagnostics[0].Message);
     }
 
     [Fact]
@@ -89,7 +115,7 @@ public class RecordSerializerTests
             JsonSerializer.Serialize(gzip, FullyPopulated());
         }
 
-        Assert.Null(RecordSerializer.Deserialize(output.ToArray()));
+        Assert.Null(RecordSerializer.Deserialize(output.ToArray(), new NameTable()));
     }
 
     [Fact]
@@ -99,7 +125,7 @@ public class RecordSerializerTests
 
         for ( int length = 0; length < blob.Length; length += Math.Max(1, blob.Length / 50) )
         {
-            Assert.Null(RecordSerializer.Deserialize(blob[..length]));
+            Assert.Null(RecordSerializer.Deserialize(blob[..length], new NameTable()));
         }
 
         // Past the header, so the marker still matches and the payload is what is wrong.
@@ -109,7 +135,7 @@ public class RecordSerializerTests
             corrupted[index] ^= 0x5A;
         }
 
-        Assert.Null(RecordSerializer.Deserialize(corrupted));
+        Assert.Null(RecordSerializer.Deserialize(corrupted, new NameTable()));
     }
 
     [Theory]
@@ -130,7 +156,7 @@ public class RecordSerializerTests
 
         byte[] corrupted = [blob[0], .. length, .. blob[(payloadStart + 1)..]];
 
-        Assert.Null(RecordSerializer.Deserialize(corrupted));
+        Assert.Null(RecordSerializer.Deserialize(corrupted, new NameTable()));
     }
 
     private static string AsJson(ScriptRecord record)

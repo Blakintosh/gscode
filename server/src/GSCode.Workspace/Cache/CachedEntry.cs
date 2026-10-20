@@ -1,3 +1,4 @@
+using GSCode.Core;
 using GSCode.Workspace.Database;
 
 namespace GSCode.Workspace.Cache;
@@ -16,9 +17,9 @@ namespace GSCode.Workspace.Cache;
 /// </summary>
 public sealed record CachedEntry(ulong ContentHash, byte[] Blob)
 {
-    /// <summary>Decompresses and parses the record, or null when the blob is unreadable.</summary>
-    public ScriptRecord? Materialize()
+    /// <summary>Decompresses and parses the record, interning its names in <paramref name="names"/>, or null when the blob is unreadable.</summary>
+    public ScriptRecord? Materialize(NameTable names)
     {
-        return RecordSerializer.Deserialize(Blob);
+        return RecordSerializer.Deserialize(Blob, names);
     }
 }

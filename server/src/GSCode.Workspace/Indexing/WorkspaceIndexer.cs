@@ -597,7 +597,7 @@ public sealed class WorkspaceIndexer
             {
                 // Null when the blob is corrupt, which falls through to a normal analysis below
                 // rather than failing the file — the same outcome a missing cache entry has.
-                restored = cached.Materialize();
+                restored = cached.Materialize(_names);
                 if ( restored is not null )
                 {
                     // Both are pure functions of (path, current RootConfig), same as the

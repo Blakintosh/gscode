@@ -95,7 +95,7 @@ public class WorkspaceIndexerOwnershipTests
             IReadOnlyDictionary<string, GSCode.Workspace.Cache.CachedEntry> restored = cache.LoadAll();
             Assert.True(restored.TryGetValue(PathUtil.NormalizeAbsolute(openPath), out GSCode.Workspace.Cache.CachedEntry? entry));
 
-            ScriptRecord? cached = entry!.Materialize();
+            ScriptRecord? cached = entry!.Materialize(new NameTable());
             Assert.NotNull(cached);
             Assert.Contains(cached!.Functions, function => function.Name == "stale_disk_only");
         }

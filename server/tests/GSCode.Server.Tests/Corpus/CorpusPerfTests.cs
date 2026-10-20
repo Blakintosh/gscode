@@ -984,7 +984,7 @@ public class CorpusPerfTests
         double preprocess = phase.Elapsed.TotalMilliseconds;
 
         phase.Restart();
-        ParseTree tree = GSCode.Parser.Syntax.Parser.Parse(preprocessed.Tokens, game);
+        ParseTree tree = GSCode.Parser.Syntax.Parser.Parse(preprocessed.Tokens, names, game);
         double parse = phase.Elapsed.TotalMilliseconds;
 
         phase.Restart();

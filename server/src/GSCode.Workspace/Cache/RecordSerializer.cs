@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.IO.Compression;
 using System.Text;
+using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Docs;
 using GSCode.Core.Symbols;
@@ -70,8 +71,11 @@ public static class RecordSerializer
         return output.ToArray();
     }
 
-    /// <summary>Decompresses and deserializes a record, or null when the blob is unreadable.</summary>
-    public static ScriptRecord? Deserialize(byte[] blob)
+    /// <summary>
+    /// Decompresses and deserializes a record, or null when the blob is unreadable. Its names and
+    /// paths are interned in <paramref name="names"/>.
+    /// </summary>
+    public static ScriptRecord? Deserialize(byte[] blob, NameTable names)
     {
         if ( blob.Length < 2 || blob[0] != FormatMarker )
         {
@@ -81,7 +85,7 @@ public static class RecordSerializer
         byte[]? body = null;
         try
         {
-            RecordReader header = new(blob.AsSpan(1));
+            RecordReader header = new(blob.AsSpan(1), names);
             int length = (int)header.ReadVarUInt();
             int payloadStart = 1 + header.Position;
 
@@ -100,7 +104,7 @@ public static class RecordSerializer
                 deflate.ReadExactly(body, 0, length);
             }
 
-            RecordReader reader = new(body.AsSpan(0, length));
+            RecordReader reader = new(body.AsSpan(0, length), names);
             return ReadRecord(ref reader);
         }
         catch ( Exception exception ) when ( exception is InvalidDataException or EndOfStreamException
@@ -251,7 +255,7 @@ public static class RecordSerializer
             bool isFunctionLike = reader.ReadBool();
             ImmutableArray<string> parameters = reader.ReadStrings();
             TextRange nameRange = reader.ReadRange();
-            string documentation = reader.ReadRequiredString();
+            string documentation = reader.ReadText();
             macros.Add(new MacroRecord(name, isFunctionLike, parameters, nameRange, documentation));
         }
 
@@ -391,7 +395,7 @@ public static class RecordSerializer
         {
             string parameterName = reader.ReadRequiredString();
             bool byRef = reader.ReadBool();
-            string defaultValueText = reader.ReadRequiredString();
+            string defaultValueText = reader.ReadText();
             parameters.Add(new ParameterSymbol(parameterName, byRef, defaultValueText));
         }
 
@@ -574,24 +578,24 @@ public static class RecordSerializer
             return ScriptDocComment.None;
         }
 
-        string rawText = reader.ReadRequiredString();
-        string name = reader.ReadRequiredString();
-        string summary = reader.ReadRequiredString();
-        string module = reader.ReadRequiredString();
-        string callOn = reader.ReadRequiredString();
-        string spmp = reader.ReadRequiredString();
+        string rawText = reader.ReadText();
+        string name = reader.ReadText();
+        string summary = reader.ReadText();
+        string module = reader.ReadText();
+        string callOn = reader.ReadText();
+        string spmp = reader.ReadText();
 
         int argumentCount = reader.ReadCount();
         ImmutableArray<ScriptDocArgument>.Builder arguments = ImmutableArray.CreateBuilder<ScriptDocArgument>(argumentCount);
         for ( int index = 0; index < argumentCount; index++ )
         {
-            string argumentName = reader.ReadRequiredString();
-            string description = reader.ReadRequiredString();
+            string argumentName = reader.ReadText();
+            string description = reader.ReadText();
             bool optional = reader.ReadBool();
             arguments.Add(new ScriptDocArgument(argumentName, description, optional));
         }
 
-        ImmutableArray<string> examples = reader.ReadStrings();
+        ImmutableArray<string> examples = reader.ReadTexts();
 
         return new ScriptDocComment
         {
@@ -633,7 +637,7 @@ public static class RecordSerializer
         TextRange range = reader.ReadRange();
         DiagnosticSeverity severity = (DiagnosticSeverity)reader.ReadVarUInt();
         GscDiagnosticCode code = (GscDiagnosticCode)reader.ReadVarUInt();
-        string message = reader.ReadRequiredString();
+        string message = reader.ReadText();
 
         int tagCount = reader.ReadCount();
         ImmutableArray<DiagnosticTag>.Builder tags = ImmutableArray.CreateBuilder<DiagnosticTag>(tagCount);
@@ -648,7 +652,7 @@ public static class RecordSerializer
         {
             string filePath = reader.ReadRequiredString();
             TextRange relationRange = reader.ReadRange();
-            string relationMessage = reader.ReadRequiredString();
+            string relationMessage = reader.ReadText();
             relations.Add(new DiagnosticRelation(filePath, relationRange, relationMessage));
         }
 
@@ -787,16 +791,27 @@ public static class RecordSerializer
         }
     }
 
-    /// <summary>The reading half. Any malformed input surfaces as one of the exceptions <see cref="Deserialize"/> catches.</summary>
+    /// <summary>
+    /// The reading half. Any malformed input surfaces as one of the exceptions <see cref="Deserialize"/> catches.
+    ///
+    /// Names and paths are interned through the same <see cref="NameTable"/> the live parse uses
+    /// (<see cref="ReadString"/>); free text — doc comments, default-value text, diagnostic
+    /// messages — is not (<see cref="ReadText"/>), matching what a cold parse interns. The per-blob
+    /// table only removes repeats within one file: without the pool, a warm start held its own copy
+    /// of every name in every file, about a quarter more retained heap than a cold index of the
+    /// same records.
+    /// </summary>
     private ref struct RecordReader
     {
         private readonly ReadOnlySpan<byte> _data;
+        private readonly NameTable _names;
         private int _position;
         private List<string>? _strings;
 
-        public RecordReader(ReadOnlySpan<byte> data)
+        public RecordReader(ReadOnlySpan<byte> data, NameTable names)
         {
             _data = data;
+            _names = names;
             _position = 0;
             _strings = null;
         }
@@ -855,7 +870,54 @@ public static class RecordSerializer
             return value;
         }
 
+        /// <summary>A name or path: interned.</summary>
         public string? ReadString()
+        {
+            return ReadTableString(intern: true);
+        }
+
+        public string ReadRequiredString()
+        {
+            return ReadString() ?? throw new InvalidDataException("A required string was null.");
+        }
+
+        public ImmutableArray<string> ReadStrings()
+        {
+            int count = ReadCount();
+            ImmutableArray<string>.Builder values = ImmutableArray.CreateBuilder<string>(count);
+            for ( int index = 0; index < count; index++ )
+            {
+                values.Add(ReadRequiredString());
+            }
+
+            return values.MoveToImmutable();
+        }
+
+        /// <summary>Free text, mostly unique: not interned, since the pool never gives an entry back.</summary>
+        public string ReadText()
+        {
+            return ReadTableString(intern: false) ?? throw new InvalidDataException("A required string was null.");
+        }
+
+        public ImmutableArray<string> ReadTexts()
+        {
+            int count = ReadCount();
+            ImmutableArray<string>.Builder values = ImmutableArray.CreateBuilder<string>(count);
+            for ( int index = 0; index < count; index++ )
+            {
+                values.Add(ReadText());
+            }
+
+            return values.MoveToImmutable();
+        }
+
+        /// <summary>
+        /// One string through the per-blob table. A repeat returns whichever instance the first read
+        /// made, so text that equals an earlier name comes back interned, and a name that equals
+        /// earlier text does not — either way the content is right, and the record order puts names
+        /// first.
+        /// </summary>
+        private string? ReadTableString(bool intern)
         {
             _strings ??= new List<string>(256);
 
@@ -876,27 +938,34 @@ public static class RecordSerializer
             }
 
             int byteCount = ReadCount();
-            string value = Encoding.UTF8.GetString(_data.Slice(_position, byteCount));
+            ReadOnlySpan<byte> bytes = _data.Slice(_position, byteCount);
+            string value = intern ? InternUtf8(bytes) : Encoding.UTF8.GetString(bytes);
             _position += byteCount;
             _strings.Add(value);
             return value;
         }
 
-        public string ReadRequiredString()
+        /// <summary>Decodes into a scratch buffer and interns, so a name already pooled allocates nothing.</summary>
+        private readonly string InternUtf8(ReadOnlySpan<byte> bytes)
         {
-            return ReadString() ?? throw new InvalidDataException("A required string was null.");
-        }
-
-        public ImmutableArray<string> ReadStrings()
-        {
-            int count = ReadCount();
-            ImmutableArray<string>.Builder values = ImmutableArray.CreateBuilder<string>(count);
-            for ( int index = 0; index < count; index++ )
+            // UTF-8 never decodes to more UTF-16 chars than it has bytes, invalid bytes included.
+            if ( bytes.Length <= 256 )
             {
-                values.Add(ReadRequiredString());
+                Span<char> buffer = stackalloc char[bytes.Length];
+                int written = Encoding.UTF8.GetChars(bytes, buffer);
+                return _names.Intern(buffer[..written]);
             }
 
-            return values.MoveToImmutable();
+            char[] rented = ArrayPool<char>.Shared.Rent(bytes.Length);
+            try
+            {
+                int written = Encoding.UTF8.GetChars(bytes, rented);
+                return _names.Intern(rented.AsSpan(0, written));
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
         }
 
         public TextRange ReadRange()

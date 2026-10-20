@@ -607,10 +607,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
   gains or loses a settable property, and `RecordFormatCorpusTests` round-trips every record a real
   index produces and compares their JSON. Deserialize returns null on anything malformed — truncated,
   corrupted, or another layout — so one bad row costs one re-analysis.
+- Names and paths are read through the indexer's `NameTable` (`ReadString`), free text — doc
+  comments, default-value text, diagnostic messages — is not (`ReadText`), matching what a cold
+  parse interns. The per-blob table only shares within one file, so before this a warm start held
+  its own copy of every name in every file: about a quarter more retained heap than a cold index of
+  the same records (bo3 10k files: 549 MB warm against 437 MB cold; now 437 against 427).
 
 ## Cache/CachedEntry.cs
 
-- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize()` — one cached
+- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize(NameTable)` — one cached
   record still in its stored form. The deserialize is deliberately NOT done when the cache is read:
   `LoadAll` runs before the indexer knows which files are current, so materialising everything there
   paid gzip inflation and a JSON parse for files about to be re-analysed anyway — on ONE thread, in

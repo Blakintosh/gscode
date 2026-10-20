@@ -497,7 +497,7 @@ public sealed partial class Parser
         Expect(TokenKind.ScopeResolution, "::");
         PToken nameToken = Expect(TokenKind.Identifier, "function name");
 
-        return new PathQualifiedNode(RangeFrom(start), path.ToString(), pathRange, nameToken);
+        return new PathQualifiedNode(RangeFrom(start), _names.Intern(path.ToString()), pathRange, nameToken);
     }
 
     /// <summary>Parses callee + argument list into a call node (target/thread supplied by the caller).</summary>

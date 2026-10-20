@@ -195,7 +195,7 @@ public sealed partial class Parser
 
         Expect(TokenKind.Semicolon, ";");
 
-        path = builder.ToString();
+        path = _names.Intern(builder.ToString());
         pathRange = firstPathToken is not null
             ? new TextRange(firstPathToken.Value.RootRange.Start, lastPathToken!.Value.RootRange.End)
             : directive.RootRange;

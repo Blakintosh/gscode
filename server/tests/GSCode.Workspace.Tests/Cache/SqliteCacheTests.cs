@@ -126,7 +126,7 @@ public class SqliteCacheTests : IDisposable
             // reason a warm start can decide a file is stale without deserializing it.
             Assert.Equal(record.ContentHash, entry.ContentHash);
 
-            ScriptRecord? loaded = entry.Materialize();
+            ScriptRecord? loaded = entry.Materialize(new NameTable());
             Assert.NotNull(loaded);
             Assert.Equal(record.Path, loaded.Path);
             Assert.Equal(record.ContentHash, loaded.ContentHash);
@@ -291,7 +291,7 @@ public class SqliteCacheTests : IDisposable
                 // the column the freshness check reads, and the blob behind it.
                 Assert.Equal((ulong)(100 + index), entry.ContentHash);
 
-                ScriptRecord? loaded = entry.Materialize();
+                ScriptRecord? loaded = entry.Materialize(new NameTable());
                 Assert.NotNull(loaded);
                 Assert.Equal((ulong)(100 + index), loaded.ContentHash);
             }

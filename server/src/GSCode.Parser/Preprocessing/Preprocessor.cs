@@ -480,7 +480,7 @@ public sealed class Preprocessor
         Token firstPath = frame.Tokens[firstPathIndex];
         Token lastPath = frame.Tokens[lastPathIndex];
         TextRange pathRange = new(firstPath.Range.Start, lastPath.Range.End);
-        string rawPath = frame.Text.Slice(firstPath.Start, lastPath.End - firstPath.Start).ToString().Trim();
+        string rawPath = _names.Intern(frame.Text.Slice(firstPath.Start, lastPath.End - firstPath.Start).Trim());
 
         if ( !sawSemicolon )
         {

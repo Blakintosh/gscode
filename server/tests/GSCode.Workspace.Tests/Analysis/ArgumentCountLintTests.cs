@@ -161,6 +161,23 @@ public class ArgumentCountLintTests
         Assert.Equal(GscDiagnosticCode.TooManyArguments, reported.Code);
     }
 
+    [Fact]
+    public void ABareCall_IsJudgedAgainstItsOwnNamespace_ThoughAnotherNamespaceDeclaresTheName()
+    {
+        // A bare call reaches the namespace governing it, never another — #using cannot bring an
+        // unqualified name into reach. It was looked up by bare name across every namespace instead,
+        // found two declarations of `helper`, and stood down, so a file's calls to its own functions
+        // went unchecked whenever any other namespace happened to share a name.
+        string source = "#namespace zm;\n"
+            + "function helper( a )\n{\n}\n"
+            + "function run()\n{\n    helper( 1, 2 );\n}\n";
+        string otherNamespace = "#namespace zm_utility;\nfunction helper( a, b )\n{\n}\n";
+
+        Diagnostic reported = Assert.Single(Lint(source, otherNamespace));
+
+        Assert.Equal(GscDiagnosticCode.TooManyArguments, reported.Code);
+    }
+
     // --- CameFromMacro only checked an IdentifierNode callee and IdentifierNode arguments ---
 
     [Fact]

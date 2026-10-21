@@ -338,7 +338,9 @@ public class PathResolverTests
     ///
     /// The result was always correct — a `seen` set deduplicated the paths — but the second walk
     /// still happened in full, and on a real install that tree is 160,382 files. So the assertion
-    /// worth making is about the WALK, not the output: the file system is asked once.
+    /// worth making is about the WALK, not the output. The install itself is not walked at all now
+    /// (see GameFolderScopeTests), so the file system is asked exactly twice: raw's script folder
+    /// and the mods — once each, though the install is open twice over.
     /// </summary>
     [Fact]
     public void EnumerateIndexTargets_WalksAContainedRootOnlyOnce()
@@ -351,8 +353,9 @@ public class PathResolverTests
         List<string> targets = [.. resolver.EnumerateIndexTargets()];
 
         Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\shared\util_shared.gsc"), targets);
+        Assert.Contains(PathUtil.NormalizeAbsolute(@$"{Mods}\mod_b\scripts\b_only.gsc"), targets);
         Assert.Equal(targets.Count, new HashSet<string>(targets, StringComparer.Ordinal).Count);
-        Assert.Equal(1, fileSystem.EnumerationCount);
+        Assert.Equal(2, fileSystem.EnumerationCount);
     }
 
     /// <summary>

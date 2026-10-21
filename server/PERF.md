@@ -1717,6 +1717,28 @@ timeline reconstruction.
 more when cold, since it is directories not visited at all, but no cold measurement is recorded here
 — dropping the Windows file cache is not something this harness does.
 
+### 2026-10-20: the install is no longer walked, only the folders scripts live in
+
+The pruning above still walked everything in the install that was not tool output. A workspace
+folder that holds raw (or devraw) is now treated as the game install: it is not walked, and its
+scripts come through raw, devraw and the mods. Within raw, BO3 walks only `scripts`
+(`GameProfile.RawScriptsSubfolder`), where all 980 of its stock scripts are; every earlier game
+spreads them over `maps`, `animscripts`, `character`, `aitype`, `clientscripts` and more, so all of
+raw is still walked there, and so is a raw with no `scripts` folder. `devraw`, beside raw, is
+indexed too, after raw.
+
+Same file list, before and after, on every corpus root walked as raw and on the cod4 and BO1
+installs opened whole. The one difference is a BO3 install opened as a workspace folder:
+
+| BO3 install opened, warm | files | enumeration |
+|---|---:|---:|
+| before | 1,106 | 285–287 ms |
+| after | 1,086 | **10–12 ms** |
+
+The 20 dropped are 12 scripts under `usermaps\*\scripts` and 8 under `rex\templates` — outside raw
+and mods, so not indexed unless their folder is opened on its own. A cache restored from before this
+change drops their records on the next start, as it does for any file the walk no longer returns.
+
 ## Measured: the COMMIT gate, where the contention was real and the wall-clock was not
 
 `index.commit` has been called "the one worth attention" in this file since the first cold-index

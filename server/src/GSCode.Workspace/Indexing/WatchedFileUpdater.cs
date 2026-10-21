@@ -48,6 +48,50 @@ public sealed class WatchedFileUpdater
     /// </param>
     public IReadOnlyList<string> Apply(string path, WatchedFileChange change, Func<string, bool>? ownedByEditor = null)
     {
+        List<string> touched = [.. ApplyToFile(path, change, ownedByEditor)];
+
+        // Raw shadows devraw at the same relative path, so a raw file appearing retires the devraw
+        // copy the index held in its place, and one vanishing brings that copy back. Without this
+        // the index keeps answering from whichever existed when it was built until a restart.
+        if ( change == WatchedFileChange.Changed )
+        {
+            return touched;
+        }
+
+        string? devRaw = _indexer.DevRawCounterpart(path);
+        if ( devRaw is null )
+        {
+            return touched;
+        }
+
+        if ( change == WatchedFileChange.Created )
+        {
+            if ( _database.TryGetAnyRecord(devRaw, out _) )
+            {
+                _indexer.RemoveFile(devRaw, ScriptAnalysis.LanguageFromPath(devRaw));
+            }
+        }
+        else if ( ownedByEditor is null || !ownedByEditor(devRaw) )
+        {
+            _indexer.IndexFile(devRaw);
+            touched.Add(devRaw);
+        }
+
+        return touched;
+    }
+
+    /// <summary>
+    /// Whether a created or changed file belongs in the index: one the cold index would visit, or
+    /// one it already holds. A script appearing in a folder the walk skips — the game install outside
+    /// raw's script folder — stays out, as it would after a restart.
+    /// </summary>
+    private bool ShouldIndex(string normalizedPath)
+    {
+        return _indexer.IsIndexTarget(normalizedPath) || _database.TryGetAnyRecord(normalizedPath, out _);
+    }
+
+    private IReadOnlyList<string> ApplyToFile(string path, WatchedFileChange change, Func<string, bool>? ownedByEditor)
+    {
         string normalized = PathUtil.NormalizeAbsolute(path);
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
         bool ownsChangedFile = ownedByEditor is not null && ownedByEditor(normalized);
@@ -101,7 +145,7 @@ public sealed class WatchedFileUpdater
         {
             // Re-analysing dependents re-reads the header, so drop the stale lexed copy first.
             _indexer.InvalidateGsh(normalized);
-            if ( !ownsChangedFile )
+            if ( !ownsChangedFile && ShouldIndex(normalized) )
             {
                 _indexer.IndexFile(normalized);
             }
@@ -120,7 +164,7 @@ public sealed class WatchedFileUpdater
             return ReindexInserters(normalized, HeaderRelativePath(normalized, language), ownedByEditor);
         }
 
-        if ( ownsChangedFile )
+        if ( ownsChangedFile || !ShouldIndex(normalized) )
         {
             return [];
         }

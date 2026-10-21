@@ -752,6 +752,18 @@ public sealed class WorkspaceIndexer
         _resolverProvider().InvalidateResolutionCache();
     }
 
+    /// <summary>Whether a cold index would visit this file — see <see cref="PathResolver.IsIndexTarget"/>.</summary>
+    public bool IsIndexTarget(string path)
+    {
+        return Resolver.IsIndexTarget(path);
+    }
+
+    /// <summary>The devraw file a raw one shadows — see <see cref="PathResolver.DevRawCounterpart"/>.</summary>
+    public string? DevRawCounterpart(string path)
+    {
+        return Resolver.DevRawCounterpart(path);
+    }
+
     /// <summary>Removes a deleted file from the database, persistent cache, and insert cache.</summary>
     public void RemoveFile(string normalizedPath, ScriptLanguage language)
     {

@@ -324,7 +324,7 @@ public class FunctionResolutionLintTests
             files.AddFile(path, text);
         }
 
-        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files);
+        RootConfig config = RootConfig.Create(true, TestPaths.RawRoot, null, [], files, mw2);
         PathResolver resolver = new(config, files);
         ScriptDatabase database = new();
         WorkspaceIndexer indexer = new(database, () => resolver, files, new NameTable(), profile: mw2);

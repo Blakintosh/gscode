@@ -734,6 +734,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   - `FindRootAbove(startFolders, subfolder, fileSystem)` — each start folder is exhausted to the
     drive before the next is tried, so an earlier workspace folder wins outright rather than losing
     to a shallower match under one the user listed second.
+  - `DevRawRoot` — the `devraw` folder beside raw (`share\devraw` on BO3), derived only when it is
+    on disk and raw is enabled. Another raw: raw context, same relative paths, searched after raw —
+    the engine's order, from CoD4's `FS_Startup` in KisakCOD; BO3's is assumed to match.
+  - `RawScriptsSubfolder` — the profile's script folder under raw and devraw (`scripts` on BO3,
+    "" elsewhere), taken with the rest of the layout so a resolver built for one game does not read
+    another's from `GameProfile.Active`.
 
 ## Resolution/ResolutionContext.cs
 
@@ -751,8 +757,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
     the key an overlay shadows on. Both entry points NORMALIZE what they are given. Unnormalized
     input would come back `""` as `ScriptRecord.RelativePath`, and every import match downstream
     would silently never fire.
-  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw] ·
-    Workspace: [base, other folders, raw]; first existing file wins. Rooted paths, drive letters,
+  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw, devraw] · Raw: [raw,
+    devraw] · Workspace: [base, other folders, raw, devraw]; first existing file wins. Rooted paths, drive letters,
     and ".." are rejected. Both slash styles accepted. Memoized by `(context, relative path)`, MISS
     included: an uncached miss walks every root and is asked about on every keystroke by two
     independent callers resolving the same directive list (`FileImports` and `UsingNotFoundLint`) —
@@ -761,8 +767,18 @@ lints, `Completion/` and `Typing/` the information surfaces.
     (`WatchedFileUpdater.Apply`, both branches, regardless of language) — coarse, but those events
     are user-paced, and a create can turn a cached miss into a hit just as a delete can turn a
     cached hit into a miss.
-  - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
-    folders, deduplicated (cold-start indexing input).
+  - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh the cold index visits, deduplicated: raw's
+    and devraw's script folder (all of raw on pre-BO3 games, or when raw has no `scripts`), the
+    mods, and every workspace folder that is not the game install. A workspace folder holding raw
+    or devraw is the install opened in the editor and is not walked — its scripts come through
+    raw, devraw and mods (BO3: 295,640 files walked for 1,105 scripts before). A devraw file raw
+    also has is skipped: raw shadows it, and two raw-context records with one relative path would
+    shadow nothing.
+  - `IsIndexTarget(path)` — the same answer for one file, from the same `WalkRoots()`; what a
+    watched create or change asks (`WatchedFileUpdater.ShouldIndex`), so a script appearing where
+    the walk does not look stays out of the index until a restart would have put it in.
+  - `DevRawCounterpart(path)` — the devraw file a raw one shadows. `WatchedFileUpdater.Apply`
+    retires it when the raw file appears and indexes it when the raw file goes.
 
 ## Analysis/NamespaceUsageLint.cs
 

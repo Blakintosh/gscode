@@ -21,8 +21,8 @@ namespace GSCode.Server.Handlers;
 /// What else the other files' part depends on is the open file's SHAPE, not its body: what it
 /// declares, imports and path-calls decides which declaration a key means and which files reach
 /// it. That is <see cref="SignatureOf"/>, and a change to it starts the file's counts over. Not
-/// cached at all: a file another context also has a copy of, since an overlay's own references
-/// decide whether its raw twin's count, and a file the store does not hold.
+/// cached at all: a mod or workspace file overriding a raw script, since its own references decide
+/// whether the raw copy's count (see <see cref="ShadowsRaw"/>), and a file the store does not hold.
 /// </summary>
 public sealed class LensCountCache
 {
@@ -125,7 +125,7 @@ public sealed class LensCountCache
             return null;
         }
 
-        if ( record.RelativePath.Length > 0 && target.Store.FilesAt(RelativePathIndex.Normalize(record.RelativePath)).Length > 1 )
+        if ( ShadowsRaw(target.Store, record) )
         {
             return null;
         }
@@ -176,6 +176,34 @@ public sealed class LensCountCache
         }
 
         return signature.ToString();
+    }
+
+    /// <summary>
+    /// Whether this file is a mod or workspace copy of a raw script. The reference query drops a raw
+    /// file's references when an overlay the asker sees at the same path references the key at all,
+    /// so this file's own body decides part of the OTHER files' count.
+    ///
+    /// Only that direction. A raw file with a mod's copy beside it was refused too at first, and
+    /// those are the stock scripts every workspace calls into, where the counts cost most: the
+    /// scale run found every one refused, because the installed mods carry copies of them. A raw
+    /// asker sees no overlay, so its body never decides another file's count.
+    /// </summary>
+    private static bool ShadowsRaw(LanguageStore store, ScriptRecord record)
+    {
+        if ( record.ContextId == "raw" || record.RelativePath.Length == 0 )
+        {
+            return false;
+        }
+
+        foreach ( string twin in store.FilesAt(RelativePathIndex.Normalize(record.RelativePath)) )
+        {
+            if ( store.TryGet(twin, out ScriptRecord other) && other.ContextId == "raw" )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AppendFunction(StringBuilder signature, FunctionSymbol function)

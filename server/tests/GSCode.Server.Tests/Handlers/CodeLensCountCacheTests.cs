@@ -11,7 +11,8 @@ namespace GSCode.Server.Tests.Handlers;
 /// CodeLens keeps the part of each count that comes from other files while only the open file is
 /// written (<see cref="LensCountCache"/>). A kept count is only worth having if it is never stale,
 /// so each fact here writes something between two requests and requires the second count to see
-/// it: another file's new call, a file that did not exist, and the open file's own edit.
+/// it: another file's new call, a file that did not exist, and the open file's own edit — and the
+/// same for a raw script a mod carries its own copy of, which is where the counts cost most.
 /// </summary>
 public sealed class CodeLensCountCacheTests
 {
@@ -76,6 +77,27 @@ public sealed class CodeLensCountCacheTests
         Assert.Equal(1, await HelperCountAsync(workspace, handler));
 
         Commit(workspace, @"scripts\second.gsc", CallerSource.Replace("#namespace caller;", "#namespace second;"));
+
+        Assert.Equal(2, await HelperCountAsync(workspace, handler));
+    }
+
+    [Fact]
+    public async Task ARawScriptAModCopies_StillSeesAnotherFilesNewCall()
+    {
+        // A mod's copy of lib.gsc sits beside the raw one. The raw file's counts are kept anyway —
+        // nothing the raw scripts can see depends on the mod — so they have to stay right.
+        (HandlerWorkspace workspace, CodeLensHandler handler) = await BuildAsync();
+        using HandlerWorkspace disposing = workspace;
+
+        string modCopy = TestPaths.ModsRoot + @"\m\scripts\lib.gsc";
+        workspace.Files.AddFile(modCopy, LibSource);
+        OpenDocument copy = workspace.Documents.Open(modCopy, LibSource, version: 1);
+        workspace.Database.Commit(
+            workspace.Documents.AnalyzeIfStale(copy), workspace.Resolver.GetContext(modCopy), isDirty: false, @"scripts\lib.gsc");
+
+        Assert.Equal(1, await HelperCountAsync(workspace, handler));
+
+        Commit(workspace, @"scripts\caller.gsc", CallerSource.Replace("    lib::helper();\n", "    lib::helper();\n    lib::helper();\n"));
 
         Assert.Equal(2, await HelperCountAsync(workspace, handler));
     }

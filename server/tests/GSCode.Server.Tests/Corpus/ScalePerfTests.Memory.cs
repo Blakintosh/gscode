@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using GSCode.Workspace.Database;
 
@@ -42,6 +43,88 @@ public partial class ScalePerfTests
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// The heap through one phase, sampled every 250 ms on its own thread: working set, what the
+    /// allocator has handed out, what the GC has committed, and — as of the last collection — each
+    /// generation's size, the large-object heap included.
+    ///
+    /// At 10,000 heavy files the cold index peaked at 9.6 GB of working set against 2.1 GB retained,
+    /// with no heap limit anywhere near. Whether that gap is gen0 budgets, promoted garbage or the
+    /// large-object heap decides what could shrink it, and a single peak cannot say which.
+    /// </summary>
+    private sealed class HeapSampler : IDisposable
+    {
+        private readonly Thread _thread;
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private readonly List<(double Seconds, string Line, long WorkingSet)> _samples = [];
+        private volatile bool _stopped;
+
+        public HeapSampler()
+        {
+            _thread = new Thread(Run) { IsBackground = true, Name = "scale heap sampler" };
+            _thread.Start();
+        }
+
+        private void Run()
+        {
+            using Process self = Process.GetCurrentProcess();
+            while ( !_stopped )
+            {
+                self.Refresh();
+                GCMemoryInfo info = GC.GetGCMemoryInfo(GCKind.Any);
+                ReadOnlySpan<GCGenerationInfo> generations = info.GenerationInfo;
+                string line = $"{_clock.Elapsed.TotalSeconds,6:F1} s  working set {self.WorkingSet64 / 1048576.0,7:F0} MB  "
+                    + $"allocated {GC.GetTotalMemory(false) / 1048576.0,7:F0}  committed {info.TotalCommittedBytes / 1048576.0,7:F0}  "
+                    + $"last GC #{info.Index} gen{info.Generation}: gen0 {Mb(generations, 0)} gen1 {Mb(generations, 1)} "
+                    + $"gen2 {Mb(generations, 2)} loh {Mb(generations, 3)} poh {Mb(generations, 4)} MB, "
+                    + $"promoted {info.PromotedBytes / 1048576.0:F0}";
+                lock ( _samples )
+                {
+                    _samples.Add((_clock.Elapsed.TotalSeconds, line, self.WorkingSet64));
+                }
+
+                Thread.Sleep(250);
+            }
+        }
+
+        private static string Mb(ReadOnlySpan<GCGenerationInfo> generations, int index)
+        {
+            return index < generations.Length ? $"{generations[index].SizeAfterBytes / 1048576.0:F0}" : "-";
+        }
+
+        /// <summary>About a dozen samples spread over the phase, and the one at the peak working set.</summary>
+        public List<string> Stop()
+        {
+            _stopped = true;
+            _thread.Join();
+
+            List<string> lines = [];
+            lock ( _samples )
+            {
+                if ( _samples.Count == 0 )
+                {
+                    return lines;
+                }
+
+                int step = Math.Max(1, _samples.Count / 12);
+                for ( int index = 0; index < _samples.Count; index += step )
+                {
+                    lines.Add(_samples[index].Line);
+                }
+
+                (double Seconds, string Line, long WorkingSet) peak = _samples.MaxBy(sample => sample.WorkingSet);
+                lines.Add("PEAK " + peak.Line);
+            }
+
+            return lines;
+        }
+
+        public void Dispose()
+        {
+            _stopped = true;
+        }
     }
 
     private sealed class RecordCensus

@@ -75,6 +75,9 @@ public partial class ScalePerfTests
         public double ColdGcPauseSeconds { get; set; }
         public string ColdCollections { get; set; } = "";
 
+        /// <summary>The heap through the cold index — see <see cref="HeapSampler"/>.</summary>
+        public List<string> ColdHeapTimeline { get; set; } = [];
+
         /// <summary>A sampled record's bytes by field — see ScalePerfTests.Memory.</summary>
         public List<(string Field, double KilobytesPerRecord)> Census { get; set; } = [];
 
@@ -250,10 +253,12 @@ public partial class ScalePerfTests
             int gen2Before = GC.CollectionCount(2);
 
             Phase("cold index");
+            using HeapSampler sampler = new();
             Stopwatch cold = Stopwatch.StartNew();
             IndexOutcome coldOutcome = await indexer.IndexAsync(
                 IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
             cold.Stop();
+            row.ColdHeapTimeline = sampler.Stop();
             row.ColdSeconds = cold.Elapsed.TotalSeconds;
             row.ColdGcPauseSeconds = (GC.GetTotalPauseDuration() - pauseBefore).TotalSeconds;
             row.ColdCollections = $"{GC.CollectionCount(0) - gen0Before}/{GC.CollectionCount(1) - gen1Before}/{GC.CollectionCount(2) - gen2Before}";
@@ -275,6 +280,14 @@ public partial class ScalePerfTests
             GCMemoryInfo heap = GC.GetGCMemoryInfo(GCKind.Any);
             row.HeapMegabytes = heap.HeapSizeBytes / 1048576.0;
             row.FragmentedMegabytes = heap.FragmentedBytes / 1048576.0;
+
+            // GSCODE_SCALE_COLD_ONLY: the cold index and what it leaves behind, nothing after — for
+            // trying a GC setting or an allocation change in seconds rather than a whole run.
+            if ( Environment.GetEnvironmentVariable("GSCODE_SCALE_COLD_ONLY") == "1" )
+            {
+                GC.KeepAlive(database);
+                return row;
+            }
 
             string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
             BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
@@ -777,6 +790,11 @@ public partial class ScalePerfTests
         _output.WriteLine($"     compaction pause  {row.CompactMilliseconds,8:F0} ms");
         _output.WriteLine($"     GC in cold index  {row.ColdGcPauseSeconds,8:F1} s paused  (collections gen0/1/2 {row.ColdCollections}); heap {row.HeapMegabytes:F0} MB, fragmented {row.FragmentedMegabytes:F0} MB");
         _output.WriteLine($"     peak working set  {row.PeakAfterColdMegabytes,8:F0} MB after the cold index, {row.PeakMegabytes:F0} MB over the whole run");
+        foreach ( string sample in row.ColdHeapTimeline )
+        {
+            _output.WriteLine($"       cold heap {sample}");
+        }
+
         _output.WriteLine($"     record bytes      {row.Census.Sum(field => field.KilobytesPerRecord),8:F1} KB a sampled record, by field:");
         foreach ( (string Field, double KilobytesPerRecord) field in row.Census.Take(12) )
         {

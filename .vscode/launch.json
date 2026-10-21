@@ -42,6 +42,35 @@
 				"VSCODE_DEBUG": "true",
 				"SHOULD_TEST_IN_RELEASE": "true"
 			}
+		},
+		{
+			// Release server, opened on a generated scale workspace under %TEMP%\gscode-scale.
+			// scripts\scale-workspace.bat builds one and prints its name; the prompt defaults to bo3
+			// at 10,000 files with scripts\zm\_zm.gsc duplicated. The Release server, since Debug
+			// timings are not what anyone running 50,000 files would see.
+			"name": "Run Extension (scale workspace)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/client",
+				"${env:TEMP}/gscode-scale/${input:scaleWorkspace}.code-workspace"
+			],
+			"outFiles": [
+				"${workspaceFolder}/client/out/**/*.js"
+			],
+			"preLaunchTask": "build: release",
+			"env": {
+				"VSCODE_DEBUG": "true",
+				"SHOULD_TEST_IN_RELEASE": "true"
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "scaleWorkspace",
+			"type": "promptString",
+			"description": "Which generated scale workspace to open, by name (scripts\\scale-workspace.bat prints it)",
+			"default": "bo3-10000-zm"
 		}
 	]
 }

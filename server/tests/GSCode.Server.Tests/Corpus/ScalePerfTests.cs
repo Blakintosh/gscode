@@ -60,12 +60,14 @@ public partial class ScalePerfTests
     private sealed class ScaleRow
     {
         public string Game { get; set; } = "";
+        public string Shape { get; set; } = "";
         public int Total { get; set; }
         public double ComplexShare { get; set; }
         public double ColdSeconds { get; set; }
         public double EnumerateSeconds { get; set; }
         public double Parallelism { get; set; }
         public double RetainedMegabytes { get; set; }
+        public double RetainedAfterSweepMegabytes { get; set; }
         public double WorkingSetMegabytes { get; set; }
         public double CompactMilliseconds { get; set; }
         public double CompletionP50 { get; set; }
@@ -104,6 +106,9 @@ public partial class ScalePerfTests
         /// <summary>The broad-list queries — see ScalePerfTests.Lookups.</summary>
         public LookupRow? Lookups { get; set; }
 
+        /// <summary>The requests whose answer grows with the workspace — see ScalePerfTests.Heavy.</summary>
+        public HeavyRow? Heavy { get; set; }
+
         /// <summary>Per lint rule: the worst single file and the p99, so a rule that grows with the workspace is named.</summary>
         public List<(string Rule, double Max, double P99)> LintRules { get; } = [];
 
@@ -125,6 +130,7 @@ public partial class ScalePerfTests
         }
 
         List<ScaleRow> rows = [];
+        string? reportSuffix = null;
         foreach ( GameProfile game in games )
         {
             foreach ( int size in sizes )
@@ -134,7 +140,13 @@ public partial class ScalePerfTests
                 generate.Stop();
                 _output.WriteLine(
                     $"########## {game.ShortName} {corpus.TotalFiles:N0} files ({corpus.CopiedFiles:N0} copied, "
-                    + $"{corpus.ComplexShare * 100:F0}% above-median size) — workspace ready in {generate.Elapsed.TotalSeconds:F1} s");
+                    + $"{corpus.ComplexShare * 100:F0}% above-median size; {corpus.Shape}) — workspace ready in {generate.Elapsed.TotalSeconds:F1} s");
+                _output.WriteLine($"     editor workspace  {corpus.CodeWorkspace}");
+
+                if ( corpus.SingleSource is not null )
+                {
+                    reportSuffix = Path.GetFileNameWithoutExtension(corpus.SingleSource).TrimStart('_');
+                }
 
                 ScaleRow row = await MeasureAsync(corpus);
                 rows.Add(row);
@@ -142,7 +154,38 @@ public partial class ScalePerfTests
             }
         }
 
-        WriteReport(rows);
+        WriteReport(rows, reportSuffix);
+    }
+
+    /// <summary>
+    /// Builds the workspaces <see cref="Scale_WhereTheTimeGoes"/> would measure and prints their
+    /// <c>.code-workspace</c> files, without measuring anything — for opening one in the editor.
+    /// Its own category so it can run without the measurement; a scale run picks it up too, where
+    /// it finds the workspace already built and costs nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "ScaleWorkspace")]
+    public void Scale_GenerateEditorWorkspaces()
+    {
+        IReadOnlyList<int> sizes = ScaleCorpusFixture.Sizes();
+        IReadOnlyList<GameProfile> games = ScaleCorpusFixture.Games();
+        if ( sizes.Count == 0 || games.Count == 0 )
+        {
+            _output.WriteLine("SKIPPED: set GSCODE_SCALE_SIZES (e.g. 10000,25000,50000) and a GSCODE_CORPUS_<GAME> for the game.");
+            return;
+        }
+
+        foreach ( GameProfile game in games )
+        {
+            foreach ( int size in sizes )
+            {
+                Stopwatch generate = Stopwatch.StartNew();
+                ScaleCorpus corpus = ScaleCorpusFixture.Ensure(game, size);
+                generate.Stop();
+                _output.WriteLine(
+                    $"{game.ShortName} {corpus.TotalFiles:N0} files ({corpus.Shape}), ready in {generate.Elapsed.TotalSeconds:F1} s: {corpus.CodeWorkspace}");
+            }
+        }
     }
 
     private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus)
@@ -153,7 +196,10 @@ public partial class ScalePerfTests
         try
         {
             GameProfile.Select(corpus.Profile.ShortName);
-            ScaleRow row = new() { Game = corpus.Profile.ShortName, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare };
+            ScaleRow row = new()
+            {
+                Game = corpus.Profile.ShortName, Shape = corpus.Shape, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare,
+            };
 
             PerfReport.Memory baseline = PerfReport.Sample();
 
@@ -191,8 +237,14 @@ public partial class ScalePerfTests
             MeasureRequests(row, corpus, sample, database, resolver, names, inserts, builtins, objectFields);
             await MeasureHandlersAsync(row, corpus, database, resolver, names, builtins, objectFields);
             row.Lookups = MeasureLookups(corpus, database, resolver, names, inserts, new CompletionEngine(database, builtins, objectFields));
+            row.Heavy = await MeasureHeavyAsync(corpus, database, resolver, names, builtins, objectFields);
 
             row.LintSweepSeconds = await MeasureLintSweepAsync(database, indexer, resolver, builtins, objectFields);
+
+            // Again after every request and the sweep have READ the index: anything the index
+            // caches on a read, which the figure taken after the cold index cannot see.
+            Compact();
+            row.RetainedAfterSweepMegabytes = (PerfReport.Sample().ManagedLive - baseline.ManagedLive) / 1048576.0;
 
             GC.KeepAlive(database);
             database = null!;
@@ -663,7 +715,8 @@ public partial class ScalePerfTests
 
         _output.WriteLine($"     cold index        {row.ColdSeconds,8:F1} s   budget {coldBudget,6:F1} s   {Verdict(row.ColdSeconds, coldBudget)}  (find {row.EnumerateSeconds:F1} s, {row.Parallelism:F1}x parallel)");
         _output.WriteLine($"     warm start        {row.WarmSeconds,8:F1} s   budget {warmBudget,6:F1} s   {Verdict(row.WarmSeconds, warmBudget)}  (LoadAll {row.LoadAllMilliseconds:F0} ms / {row.LoadAllMegabytes:F0} MB, index {row.WarmIndexSeconds:F1} s)");
-        _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; working set {row.WorkingSetMegabytes:F0} MB)");
+        _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; {row.RetainedMegabytes * 1024 / Math.Max(1, row.Total):F0} KB a file; working set {row.WorkingSetMegabytes:F0} MB)");
+        _output.WriteLine($"     after the sweep   {row.RetainedAfterSweepMegabytes,8:F0} MB  retained once every request and the sweep have read the index");
         _output.WriteLine($"     compaction pause  {row.CompactMilliseconds,8:F0} ms");
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
@@ -684,6 +737,11 @@ public partial class ScalePerfTests
         if ( row.Lookups is not null )
         {
             WriteLookups(row.Lookups, row);
+        }
+
+        if ( row.Heavy is not null )
+        {
+            WriteHeavy(row.Heavy);
         }
 
         if ( row.DroppedWrites > 0 )
@@ -709,10 +767,25 @@ public partial class ScalePerfTests
         }
     }
 
-    /// <summary>A markdown table under <c>temp/</c>, ready to paste into PERF.md.</summary>
-    private void WriteReport(List<ScaleRow> rows)
+    /// <summary>
+    /// A markdown table under <c>temp/</c>, ready to paste into PERF.md. A single-source run writes
+    /// <c>gscode-scale-&lt;stem&gt;.md</c> instead, so the mixed baseline stays to compare against.
+    /// </summary>
+    private void WriteReport(List<ScaleRow> rows, string? suffix)
     {
         StringBuilder table = new();
+        if ( suffix is not null )
+        {
+            List<string> shapes = [];
+            foreach ( ScaleRow row in rows )
+            {
+                shapes.Add($"{row.Game} {row.Total:N0} = {row.Shape}");
+            }
+
+            table.AppendLine($"Shape: {string.Join("; ", shapes)}");
+            table.AppendLine();
+        }
+
         table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | field p99 ms | lens p99 ms | refs p99 ms | rename p99 ms | lint max ms | dropped | restored |");
         table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach ( ScaleRow row in rows )
@@ -778,10 +851,11 @@ public partial class ScalePerfTests
             ("ArgumentCountLint", "that one rule's time on one file"),
         ]);
         table.AppendLine("Every column here is p99 ms over the sampled requests: 99% took less.");
+        AppendHeavyTable(table, rows);
 
         string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
         Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, ReportPage.ScalePage);
+        string path = Path.Combine(directory, suffix is null ? ReportPage.ScalePage : $"gscode-scale-{suffix}.md");
         File.WriteAllText(path, table.ToString());
 
         _output.WriteLine("");

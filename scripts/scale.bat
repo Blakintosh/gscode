@@ -10,6 +10,13 @@ rem The copies are made from the BO3 corpus (GSCODE_SCALE_GAMES picks others) an
 rem %TEMP%\gscode-scale, or GSCODE_SCALE_ROOT. They are GIGABYTES at 50,000, kept between runs so
 rem the next one does not rebuild them, and never cleaned up: delete the folder when done.
 rem Release, for the same reason as perf.bat.
+rem
+rem GSCODE_SCALE_SOURCE=heaviest duplicates ONE script instead (bo3: scripts\zm\_zm.gsc, ~2,950
+rem calls) so every stock function it calls is referenced once per copy, and writes its own report,
+rem temp\gscode-scale-<stem>.md. GSCODE_SCALE_NAMESPACE=same leaves every copy in one namespace.
+rem The heavy shape retains several times what the mixed one does: ramp the sizes (2000 5000 10000)
+rem and read "KB a file" before asking for 50,000, and set DOTNET_GCHeapHardLimitPercent=0x46 so
+rem a size that does not fit fails with OutOfMemory rather than paging the machine.
 
 set "GSCODE_SCALE_SIZES="
 :args

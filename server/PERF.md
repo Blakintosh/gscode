@@ -2585,6 +2585,95 @@ In the sweep, literal completion p99 went 9.51 → 4.43 ms on cod4 and ~4.5 → 
 Before calling one flat, time it through its handler and serialize the result — the payload size is
 the number to watch, and it does not show up in any engine timing.
 
+### 2026-10-19: one file duplicated, and what the mixed shape could not see
+
+Every scale figure above comes from copies of the WHOLE stock tree, where a copy's references spread
+over hundreds of keys and each stock function is called once per copy at most a few times. A mod
+workspace can be shaped differently: a few very large files, each calling the same stock utilities
+hundreds of times. `GSCODE_SCALE_SOURCE=heaviest` builds that shape — bo3's largest script,
+`scripts\zm\_zm.gsc` (193 KB, ~2,950 calls, 75 `#using`, 9 `#insert`), duplicated until the total
+is reached, each copy's `#namespace` suffixed. `GSCODE_SCALE_NAMESPACE=same` leaves every copy in
+`zm`. `scripts\scale-workspace.bat` builds the same folder with a `.code-workspace` beside it, and
+`Run Extension (scale workspace)` opens it in the editor. Largest by BYTES, not by analysis time:
+the slowest file to analyse (`_zm_weapons.gsc`) is preprocessor-bound and stresses something else.
+
+One run each, 24 cores, uninstrumented. The 20K warm start overlapped another heavy process and is
+marked; nothing else in the table did.
+
+| bo3, `_zm.gsc` duplicated | 2,000 | 5,000 | 10,000 | 20,000 |
+|---|---:|---:|---:|---:|
+| copies | 1,020 | 4,020 | 9,020 | 19,020 |
+| cold index | 4.3 s | 10.9 s | 23.1 s | 81.0 s |
+| warm start | 0.8 s | 3.5 s | 7.4 s | 21.4 s * |
+| retained memory | 506 MB | 1,709 MB | 4,120 MB | **8,607 MB** |
+| retained per file | 259 KB | 350 KB | 422 KB | 441 KB |
+| references held | 4.8 M | 18.1 M | 40.2 M | 84.5 M |
+| compaction pause | 471 ms | 1,285 ms | 2,536 ms | 3,396 ms |
+| full-mode lint sweep | 4.0 s | 16.1 s | 48.6 s | **315.5 s** |
+| `ArgumentCountLint` p99 | 5.0 ms | 6.6 ms | 12.0 ms | 43.4 ms |
+| one file's lint pass p99 | 24.6 ms | 25.3 ms | 27.7 ms | 75.2 ms |
+| completion p99 | 2.2 ms | 2.2 ms | — | 4.5 ms |
+| CodeLens, one copy | 20.5 ms | 74.3 ms | 158.7 ms | **410.7 ms** |
+| CodeLens p99, sampled files | 34.6 ms | 95.8 ms | 215.7 ms | 808.6 ms |
+| workspace symbol, empty query | 42 ms | 186 ms | 478 ms | **2,065 ms** |
+| references to `system::ignore` | — | 284 ms / 152,799 | 720 ms / 342,799 | 1,898 ms / 722,799 |
+| …serialized | — | 565 ms, 27 M chars | 489 ms, 61 M chars | **3,102 ms, 128 M chars** |
+| rename of it | — | 302 ms | 857 ms | 2,025 ms |
+
+Completion, literal and field completion stay flat, as they do on the mixed shape. Everything a
+FILE does at startup grows linearly, at about four times a stock file's cost. Five things grow
+faster than the workspace, or with it where they should not:
+
+- **The lint sweep is quadratic, and the trace names one line.** 48.6 → 315.5 s for 2.1x the copies.
+  Sampled during the 20K sweep, 78% of lint time is `ArgumentCountLint` → `LookupFunctions` →
+  `PackedInvertedIndex.FilesFor`, which answers with `[.. many]`: a copy of the whole posting set,
+  taken under the shard lock. An unqualified call looks its name up by bare name, every copy declares
+  every name, so each lookup copies ~19,000 paths while 23 threads queue on one lock — even though
+  `LookupFunctions` stops at two. On the mixed shape a name's posting list is about 46 long, which is
+  why the scale table never saw it. A cap on the copy is not a fix: `LookupFunctions` skips records
+  for visibility, shadowing, namespace and privacy before counting, so how many paths it needs is not
+  known up front. Posting lists stored as immutable arrays (read returns the existing one), or a
+  visitor under the lock, would be.
+- **Find-references walks every reference of every file mentioning the key.** At 10K the query alone
+  is 917 ms of the handler's 1,167 ms — the walk, not the mapping to LSP `Location`s.
+  `FindReferencesReaching` narrows to the right files and then reads each one's whole `References`
+  array, ~4,450 entries per copy, to keep the 38 that match. A per-record key-to-entries index would
+  make it the size of the answer. The answer itself is the rest: 722,799 locations, 128 M characters
+  of JSON, three seconds to serialize at 20K.
+- **CodeLens on a copy is one macro.** Every function's lens costs 0.02–0.07 ms. `_zm.gsc`'s one
+  local `#define INTERMISSION_STREAMER_HINT_PRIORITY` costs 361 ms at 20K and reports 57,063
+  references: a macro key carries no file, so the lens collects every copy's own, unrelated macro of
+  that name. Likely the same conflation `MacroReferenceScopeTests` fixed across the two language
+  stores, here across files of one; that case has no test yet.
+- **Workspace symbol search builds every match, then keeps 256.** An empty or one-letter query matches
+  most of ~3.6 M functions; each one is collected, shadowed, then cut. Per keystroke in the symbol box.
+- **Memory is mostly references.** A `ReferenceEntry` is 56 bytes and the index holds 84.5 M of them
+  at 20K: 4.5 GB, about half of the 8.6 GB retained. Its `SymbolKey` is three references and an enum
+  per entry, repeated ~2,950 times per copy for a few hundred distinct keys.
+
+**One namespace (`GSCODE_SCALE_NAMESPACE=same`) is pathological, and fails at 1,020 copies.** The
+whole run took 16.5 minutes against about one for the suffixed 2K. `PrivateAccessLint` p99 is
+**776 ms per file** (one file's whole pass 880 ms, against a 100 ms budget); CodeLens on a copy 1.7 s,
+15 ms per function lens; completion p99 33.7 ms. The rule asks `visibleLookups.Lookup(ns, name)`
+with no limit only to test `> 0`, and the namespace-keyed posting list holds every copy, so each call
+walks all of them and all of their functions. These ran beside the other process, so read the
+magnitudes, not the digits. Nobody ships 1,000 files in one namespace, but `limit: 1` is free.
+
+**Observed, not performance:**
+
+- `ArgumentCountLint` resolves an unqualified call by bare name capped at two, and stands down on
+  two. Once ANY other file declares the same name, a file's calls to its own functions are never
+  checked — in this workspace, none of them are.
+- A lens on a stock function counts only stock callers: `system::ignore` reads "38 references" on
+  `system_shared.gsc` while find-references from a copy returns 342,799, because the raw context
+  cannot see the workspace.
+
+**50,000 was not run.** Projected from the per-copy slope: ~22 GB retained (on a 32 GB machine), a
+sweep of roughly half an hour, ~1.9 M locations and ~330 M characters for one find-references, a
+workspace-symbol keystroke around 5 s and a compaction pause near 9 s. `DOTNET_GCHeapHardLimitPercent`
+keeps an attempt from paging the machine. cod4's heavy shape is untested; it resolves every call by
+bare name, so the `FilesFor` path is likely worse there.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

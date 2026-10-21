@@ -125,6 +125,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
   ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
   one. The union never escapes the class.
+- The promoted set is a `PostingSet`: a `HashSet<string>` that also keeps the last array `FilesFor`
+  handed out, cleared by every write. A key read many times between writes is copied once, not once
+  per read — the per-read copy under the shard lock made the full-mode lint sweep quadratic when
+  thousands of files declare one name. The array is a cache, not the storage, so the cold index still
+  adds a file to a hot key in constant time. See `PERF.md`, the scale section.
 - Sharded 64 ways by key hash, each shard its own dictionary and lock, taking a shard lock per key
   rather than one lock per diff. Sound only because no invariant spans two keys. This took
   `commit.upsert` from 28.6% of CoD4's cold-index thread-time to 8.4%; see `PERF.md`.

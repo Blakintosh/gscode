@@ -33,11 +33,37 @@ internal sealed class PackedInvertedIndex<TKey>
 
     private const int ShardMask = ShardCount - 1;
 
+    /// <summary>
+    /// The files of a key two or more files carry, with the last array <see cref="FilesFor"/> handed
+    /// out for them. Every write clears it and the next read rebuilds it, so a key read many times
+    /// between writes is copied once rather than once per read.
+    ///
+    /// The copy per read was the cost. A bare-name lookup runs once per call site in four lints, and
+    /// when thousands of files declare the same name each one copied thousands of paths under the
+    /// shard lock while the sweep's other threads queued on it: 78% of lint time at 20,000 copies of
+    /// one script, and a full-mode sweep that grew quadratically (PERF.md, the scale section). The
+    /// snapshot is not kept as the storage itself — an immutable array rebuilt on every WRITE would
+    /// move the same quadratic cost to the cold index, where a hot key gains one file at a time.
+    ///
+    /// A subclass rather than a wrapper so a promoted key costs one field more than it did, not
+    /// another object.
+    /// </summary>
+    private sealed class PostingSet : HashSet<string>
+    {
+        public PostingSet()
+            : base(StringComparer.Ordinal)
+        {
+        }
+
+        /// <summary>The files as last handed out; default once a write has changed them.</summary>
+        public ImmutableArray<string> Snapshot;
+    }
+
     private sealed class Shard
     {
         /// <summary>
         /// key → the one file that mentions it, as a bare <c>string</c>, promoted to a
-        /// <c>HashSet&lt;string&gt;</c> only once a second appears.
+        /// <see cref="PostingSet"/> only once a second appears.
         ///
         /// The overwhelming majority of keys are mentioned by exactly one file, and a HashSet
         /// holding a single reference costs on the order of 150 bytes against the 8 of the
@@ -104,9 +130,12 @@ internal sealed class PackedInvertedIndex<TKey>
                     continue;
                 }
 
-                if ( existing is HashSet<string> many )
+                if ( existing is PostingSet many )
                 {
-                    many.Remove(path);
+                    if ( many.Remove(path) )
+                    {
+                        many.Snapshot = default;
+                    }
 
                     // Not demoted back to a bare string on the way down: a key that has had two
                     // files usually gets them back, and this path runs on edits rather than on the
@@ -134,9 +163,13 @@ internal sealed class PackedInvertedIndex<TKey>
                     continue;
                 }
 
-                if ( existing is HashSet<string> many )
+                if ( existing is PostingSet many )
                 {
-                    many.Add(path);
+                    if ( many.Add(path) )
+                    {
+                        many.Snapshot = default;
+                    }
+
                     continue;
                 }
 
@@ -146,12 +179,15 @@ internal sealed class PackedInvertedIndex<TKey>
                     continue;
                 }
 
-                shard.Entries[key] = new HashSet<string>(StringComparer.Ordinal) { only, path };
+                shard.Entries[key] = new PostingSet { only, path };
             }
         }
     }
 
-    /// <summary>Paths of the files carrying this key (a snapshot, safe to walk while indexing).</summary>
+    /// <summary>
+    /// Paths of the files carrying this key (a snapshot, safe to walk while indexing). Copied once
+    /// per change to the key, not once per call — see <see cref="PostingSet"/>.
+    /// </summary>
     public ImmutableArray<string> FilesFor(TKey key)
     {
         Shard shard = ShardFor(key);
@@ -162,7 +198,17 @@ internal sealed class PackedInvertedIndex<TKey>
                 return [];
             }
 
-            return existing is HashSet<string> many ? [.. many] : [(string)existing];
+            if ( existing is not PostingSet many )
+            {
+                return [(string)existing];
+            }
+
+            if ( many.Snapshot.IsDefault )
+            {
+                many.Snapshot = [.. many];
+            }
+
+            return many.Snapshot;
         }
     }
 
@@ -203,7 +249,7 @@ internal sealed class PackedInvertedIndex<TKey>
                         continue;
                     }
 
-                    if ( entry.Value is HashSet<string> many )
+                    if ( entry.Value is PostingSet many )
                     {
                         foreach ( string path in many )
                         {

@@ -2632,8 +2632,7 @@ faster than the workspace, or with it where they should not:
   `LookupFunctions` stops at two. On the mixed shape a name's posting list is about 46 long, which is
   why the scale table never saw it. A cap on the copy is not a fix: `LookupFunctions` skips records
   for visibility, shadowing, namespace and privacy before counting, so how many paths it needs is not
-  known up front. Posting lists stored as immutable arrays (read returns the existing one), or a
-  visitor under the lock, would be.
+  known up front. *Fixed the same day — see the next section.*
 - **Find-references walks every reference of every file mentioning the key.** At 10K the query alone
   is 917 ms of the handler's 1,167 ms — the walk, not the mapping to LSP `Location`s.
   `FindReferencesReaching` narrows to the right files and then reads each one's whole `References`
@@ -2673,6 +2672,36 @@ sweep of roughly half an hour, ~1.9 M locations and ~330 M characters for one fi
 workspace-symbol keystroke around 5 s and a compaction pause near 9 s. `DOTNET_GCHeapHardLimitPercent`
 keeps an attempt from paging the machine. cod4's heavy shape is untested; it resolves every call by
 bare name, so the `FilesFor` path is likely worse there.
+
+### 2026-10-19: `FilesFor` hands out one array per change, not one per call
+
+A promoted key's `HashSet` is now a `PostingSet` carrying the last array `FilesFor` returned; every
+write clears it and the next read rebuilds it. Nothing writes during a lint sweep, so a hot name is
+copied once instead of once per call site. The array was not made the storage: rebuilding it on
+every WRITE would move the same quadratic cost into the cold index, where a hot key gains one file
+at a time. Cost: one field per promoted key, plus an array for each key that has been read —
+measured as retained memory after every request and the sweep had read the index (the harness's
+new "after the sweep" line), with and without the change: 478 → 480 MB on the mixed 10K and
+4,129 → 4,139 MB on the duplicated 10K. The mixed sweep is unchanged at 2.6 s.
+
+Measured in a worktree at `2a19e9c8` with only the harness and this change, bo3, `_zm.gsc`
+duplicated. Every run below overlapped the same other heavy process, so compare across the row; the
+20K "before" is the earlier clean run, which makes that column's improvement an underestimate.
+
+| | 10K before | 10K after | 20K before | 20K after |
+|---|---:|---:|---:|---:|
+| `ArgumentCountLint` p99 | 16.4 ms | **4.9 ms** | 43.4 ms | **5.0 ms** |
+| one file's lint pass p99 | 40.9 ms | 30.0 ms | 75.2 ms | 30.0 ms |
+| full-mode lint sweep | 52.2 s | 44.0 s | 315.5 s | **121.8 s** |
+| cold index, for scale | 28.8 s | 27.1 s | 81.0 s | 108.0 s |
+
+`ArgumentCountLint` and the one-file pass are flat in the workspace again. The sweep now costs
+little more than a cold index, because re-analysing every file is most of what it does; what still
+grows faster than the workspace is the cold index itself (81–108 s for 2.1x the copies of a 23–29 s
+10K), which is the next thing to read on this shape. Proven identical rather than argued:
+`PackedInvertedIndexTests` pins that a read after a write sees it and an array already handed out
+never changes, `ReferenceScopeCorpusTests` and `IndexedQueryCorpusTests` report 0 differing on bo3
+and cod4, and the cod4 + bo3 corpus sweep is unchanged.
 
 ## Results
 

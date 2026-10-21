@@ -2725,6 +2725,93 @@ grows faster than the workspace is the cold index itself (81–108 s for 2.1x th
 never changes, `ReferenceScopeCorpusTests` and `IndexedQueryCorpusTests` report 0 differing on bo3
 and cod4, and the cod4 + bo3 corpus sweep is unchanged.
 
+### 2026-10-21: every component at 50,000 of the heaviest BO3 scripts
+
+The shape above duplicated one script. This pass took the 25 largest (`GSCODE_SCALE_SOURCE=heaviest:25`,
+98 KB and ~1,500 calls on average against 12 KB across the corpus; zm, mp, shared, AI and one `.csc`),
+with namespaces AND class names suffixed per copy — a BO3 class name is global, so unrenamed every
+copy of `scene_shared` declares `cScene` (`GSCODE_SCALE_CLASSES=same` keeps that shape; at 25K it
+took the sweep to 211 s). Everything is timed through handlers wired as `ServerServices` wires them:
+every request, the cost of one edit end to end, and the watched-file paths (`ScalePerfTests.EveryComponent`),
+with the heap sampled through the cold index and each record's bytes broken down by field
+(`ScalePerfTests.Memory`).
+
+Before and after, one run each, 24 cores, uninstrumented, all under a 15 GiB heap limit
+(`DOTNET_GCHeapHardLimit`, so a size that does not fit fails instead of paging). The baseline was
+pinned at that limit from 25K up, so its 50K column is a GC thrashing against it as much as the code:
+
+| 50,000 files | before | after | 10K / 25K / 50K after |
+|---|---:|---:|---|
+| cold index | 157.9 s | **68.6 s** | 15.8 / 38.6 / 68.6 s |
+| GC paused in the cold index | 63.6 s | **8.0 s** | 1.5 / 3.8 / 8.0 s |
+| peak working set | 15.2 GB (the limit) | **11.7 GB** | 3.6 / 7.4 / 11.7 GB |
+| retained memory | 12.2 GB | **9.8 GB** | 1.7 / 4.8 / 9.8 GB |
+| warm start | 40.9 s | **19.3 s** | 2.6 / 6.5 / 19.3 s |
+| cache populate | 148.9 s | **51.5 s** | 7.5 / 19.4 / 51.5 s |
+| full-mode lint sweep | 854.5 s | **87.1 s** | 10.7 / 28.3 / 87.1 s |
+| one file's lint pass, max | 2,458 ms | **24 ms** | 11.7 / 12.8 / 24.1 ms |
+| CodeLens p99, sampled files | 1,838 ms | **119 ms** | 18.5 / 71.6 / 118.8 ms |
+| CodeLens on one copy | 666 ms | **59 ms** | |
+| find-references / rename p99 | 179 / 207 ms | **44 / 53 ms** | |
+| workspace symbol, empty query | 1,483 ms | **1.3 ms** | |
+| saving `shared.gsh` (49,863 inserters) | serial, ~4 min projected | **39 s**, 12.4 GB peak | measured alone, see below |
+
+What each was, in the order it landed — every change proven against the walk it replaced (the
+reference-scope, indexed-query and record-format corpus suites at 0 differing, the corpus sweep's
+diagnostics identical) and A/B'd at 25K before it was committed:
+
+- **The class graph had one lock around every read** and copied the bucket it answered from. A trace
+  of the 25K sweep put `ClassGraph.PathsDeclaring` at 49% with 88% of thread time blocked — on
+  buckets of one path each. Reads are now lock-free with answers cached per bucket, and
+  `NamespaceUsageLint` stopped copying every class name in the workspace per file. Sweep 138.5 →
+  64.6 s, `ArgumentCountLint` p99 27.2 → 2.3 ms.
+- **Workspace symbol search** collected every match before keeping 256; it now stops at the cap.
+- **A script's own `#define`** was looked up workspace-wide — a macro key carries no file — so its
+  lens counted every other copy's macro of that name. Now scoped to the file (not for a `.gsh`, whose
+  own macros are the shared ones).
+- **`PrivateAccessLint`** asked for every visible declaration to test for one; capped at one.
+- **Bare calls in `ArgumentCountLint`** were looked up across every namespace and stood down on two
+  hits; now resolved in the governing namespace, as `FunctionResolutionLint` does.
+- **The include-graph audit**: `NavigationSupport.DeclaringFile` fetched every declaration of a name
+  and kept the reachable ones; it now walks the few dozen files the asking file reaches. Four lookups
+  that only tested for existence now stop at one. What stays global is global by meaning — class
+  names, symbol search, vocabulary, auto-import completion, and the quick fixes for a call already
+  reported — and is listed in that commit.
+- **The large-object threshold is 2 MB.** A heavy script's text, its tokens and its reference array
+  all crossed 85 KB, and the large-object heap — collected only by gen2 — swung to 3.3 GB during a
+  10K cold index (72 gen2 collections). At 2 MB, 10K cold went 19.0 → 7.5 s and its peak 6.6 → 4.2 GB
+  with retained memory unchanged; stock size is unaffected after the post-index compaction.
+- **References are a packed table grouped by key** (`ReferenceTable`): each distinct key once, 16-byte
+  entries, a by-key index. References had been 65% of a record. Retained 5,986 → 4,800 MB at 25K, and
+  "this key's entries in this file" became a slice instead of a walk of ~1,550.
+- **The reaching set** — every file importing the declaring file, rebuilt as a HashSet per reference
+  query — is now cached against the index's array for it. With the table: CodeLens p99 723 → 62 ms,
+  find-references 85 → 15 ms, rename 166 → 22 ms, at 25K.
+- **Saving a header re-indexes its inserters in parallel, collecting gen2 between chunks.** Serial, it
+  was ~45 s at 10K. Parallel alone it peaked at 15.2 GB at 50K, because every replaced record is gen2
+  garbage gen2 does not come for: a background collection between 4,096-file chunks ran 3 times of 11
+  asked; a blocking non-compacting one every 6,250 files holds the save at 12.4 GB against the cold
+  index's 12.25, in 39.3 s. It is measured with `GSCODE_SCALE_SAVE_ONLY=1` rather than inside the full
+  run, which needs the index gone for its cache and warm-start rows.
+
+**What is still over budget, and what it is:**
+
+- **Retained memory, 9.8 GB at 50K** against the ~3 GB soft ceiling, about 200 KB per heavy file. By
+  field: references (still mostly the keys' strings and the per-key tables), each function's
+  `Assignments` at ~23 KB a record — read on a CLOSED file only by the vocabulary index, which wants
+  the written field names — and `Doc`, whose size here is the copies duplicating stock doc text.
+- **The sweep, warm start and cache populate grow faster than linearly from 25K to 50K** (exponents
+  1.6, 1.6 and 1.4). The 50K sweep trace has no global walk left: per-file re-analysis (25%), the
+  lint pass (28%), flow typing (~7%), with 60% of thread time blocked — the shape of a heap working
+  near its 15 GiB limit, which shrinking retained memory addresses.
+- **Literal completion p99 17.5 ms** at 50K against its 10 ms budget, up from 4.7 ms at 10K.
+- **The answers themselves** at 50K: find-references on a stock function every copy calls returns
+  100,103 locations in 237 ms and 19 M characters of JSON, half a second to serialize. That is the
+  size of the answer, not a walk; streaming or capping it would be a protocol decision.
+- Not measured here: cod4's heavy shape (it resolves every call by bare name), and the real process
+  end to end over stdio with VS Code — DI, publishing and the client's own handling of a 50K-file
+  workspace.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

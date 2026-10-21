@@ -1004,6 +1004,32 @@ public static class DatabaseQueries
         return CanReach(record, RelativePathIndex.Normalize(declaringRelativePath));
     }
 
+    /// <summary>
+    /// Every relative path a file reaches, normalized: itself, what it imports, what it path-calls —
+    /// the set <see cref="Reaches"/> tests one path against. For a caller with many candidates to
+    /// test, which can instead walk these few paths and ask what each declares, rather than fetch
+    /// every declaration of a name in the workspace and keep the reachable ones.
+    /// </summary>
+    public static HashSet<string> ReachableRelativePaths(ScriptRecord record)
+    {
+        HashSet<string> reachable = new(StringComparer.Ordinal) { RelativePathIndex.Normalize(record.RelativePath) };
+
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert )
+            {
+                reachable.Add(RelativePathIndex.Normalize(edge.RawPath));
+            }
+        }
+
+        foreach ( PathCallReference pathCall in record.PathCallTargets )
+        {
+            reachable.Add(RelativePathIndex.Normalize(pathCall.Path));
+        }
+
+        return reachable;
+    }
+
     private static bool CanReach(ScriptRecord record, string declaring)
     {
         if ( RelativePathIndex.Normalize(record.RelativePath) == declaring )
@@ -1615,7 +1641,7 @@ public static class DatabaseQueries
         }
 
         return LookupFunctions(
-            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true).Length > 0;
+            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true, limit: 1).Length > 0;
     }
 
     /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>

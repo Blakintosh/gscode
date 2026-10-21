@@ -92,8 +92,9 @@ public static class MethodResolution
         // Written A::b(). Namespace first — see the Phalanx note above.
         if ( key.Namespace is not null )
         {
+            // Capped at one: only whether the namespace declares it is asked.
             ImmutableArray<ResolvedFunction> asNamespace = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true);
+                store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true, limit: 1);
 
             if ( asNamespace.Length > 0 )
             {
@@ -636,7 +637,7 @@ public static class MethodResolution
         {
             if ( DatabaseQueries.LookupFunctions(
                 store, askingContextId, askingPath: "", qualifier, canonical.Name,
-                includePrivate: true).Length > 0 )
+                includePrivate: true, limit: 1).Length > 0 )
             {
                 continue;
             }

@@ -503,7 +503,7 @@ public sealed class NavigationSupport
         }
 
         return DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true).Length == 0;
+            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true, limit: 1).Length == 0;
     }
 
     /// <summary>
@@ -559,23 +559,48 @@ public sealed class NavigationSupport
             }
         }
 
+        // The files this one REACHES, each asked what it declares — not every declaration of the name
+        // in the workspace, filtered down to the reachable ones. A file reaches a few dozen others;
+        // a name can be declared by thousands (every `main` on a merge dialect, every copy of a
+        // script at scale), and this runs once per lens on every CodeLens request. The filters are
+        // LookupFunctions' own — visibility, overlay shadowing, the name and the namespace — applied
+        // to each reachable file instead of each declaring one, so the candidates are the same.
         string only = "";
-        foreach ( ResolvedFunction candidate in DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true) )
+        foreach ( string relative in DatabaseQueries.ReachableRelativePaths(asking) )
         {
-            if ( !DatabaseQueries.Reaches(asking, candidate.Record.RelativePath) )
+            foreach ( string path in target.Store.FilesAt(relative) )
             {
-                continue;
-            }
+                if ( !target.Store.TryGet(path, out ScriptRecord candidate)
+                    || !ScriptDatabase.CanSee(target.ContextId, candidate.ContextId)
+                    || (candidate.ContextId == "raw" && target.Store.HasOverlayAt(candidate.RelativePath, target.ContextId))
+                    || !DeclaresFunction(candidate, key) )
+                {
+                    continue;
+                }
 
-            if ( only.Length > 0 && only != candidate.Record.RelativePath )
-            {
-                return "";
-            }
+                if ( only.Length > 0 && only != candidate.RelativePath )
+                {
+                    return "";
+                }
 
-            only = candidate.Record.RelativePath;
+                only = candidate.RelativePath;
+            }
         }
 
         return only;
+    }
+
+    /// <summary>LookupFunctions' match on one record: the key name, and the namespace when the key has one.</summary>
+    private static bool DeclaresFunction(ScriptRecord record, SymbolKey key)
+    {
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            if ( function.KeyName == key.Name && (key.Namespace is null || function.Namespace == key.Namespace) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

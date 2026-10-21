@@ -294,7 +294,27 @@ public sealed class NavigationSupport
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
     {
-        return FindAllReferences(ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key));
+        return FindAllReferences(
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
+            IsFileLocalMacro(target, key) ? target.Path : "");
+    }
+
+    /// <summary>
+    /// A macro this script <c>#define</c>s itself, which no other file can see: the preprocessor
+    /// runs per file, and only a header reaches another one, through <c>#insert</c>. A macro key
+    /// carries no file, so asked across the workspace it gathered every OTHER script's macro of the
+    /// same name — 57,063 references on one lens, 361 ms, when 20,000 copies of a heavy BO3 script
+    /// each defined their own (PERF.md, the scale section) — and counted them as this one's.
+    ///
+    /// Not for a header: a <c>.gsh</c>'s own definitions are exactly the ones every inserting file
+    /// uses, so its macros keep the workspace-wide question.
+    /// </summary>
+    private static bool IsFileLocalMacro(NavigationTarget target, SymbolKey key)
+    {
+        return key.Kind == SymbolKind.Macro
+            && target.Language != ScriptLanguage.Gsh
+            && target.Result.Preprocessed.Macros.TryGet(key.Name, out MacroDefinition definition)
+            && definition.SourceFile is null;
     }
 
     /// <summary>

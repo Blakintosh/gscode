@@ -20,12 +20,15 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
     private readonly NavigationSupport _support;
     private readonly ServerSettings _settings;
     private readonly TextDocumentSelector _selector;
+    private readonly LensCountCache _counts;
 
-    public CodeLensHandler(NavigationSupport support, ServerSettings settings, TextDocumentSelector selector)
+    public CodeLensHandler(
+        NavigationSupport support, ServerSettings settings, TextDocumentSelector selector, LensCountCache counts)
     {
         _support = support;
         _settings = settings;
         _selector = selector;
+        _counts = counts;
     }
 
     protected override CodeLensRegistrationOptions CreateRegistrationOptions(CodeLensCapability capability, ClientCapabilities clientCapabilities)
@@ -50,6 +53,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         }
 
         List<CodeLens> lenses = [];
+        LensCountCache.Snapshot? counts = _counts.For(target);
 
         // Checked per lens, not per request: every lens runs the shared workspace reference query,
         // so a file with a few hundred declarations is a few hundred workspace lookups. The client
@@ -63,7 +67,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             // name, but still reports a namespace (the file stem), so using it here looked up a
             // key nothing is stored under and every lens read "0 references".
             SymbolKey key = new(GSCode.Core.GameProfile.Active.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
-            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target, function.IsAutoexec));
+            lenses.Add(MakeLens(request.TextDocument.Uri, function.NameRange, key, target, counts, function.IsAutoexec));
         }
 
         foreach ( ClassSymbol classSymbol in target.Result.Extraction.Classes )
@@ -76,7 +80,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             // `ns::Throttle` — so KeyNamespace is the wrong question to ask here. Asking it made
             // every class lens read "0 references".
             SymbolKey key = new(null, classSymbol.KeyName, SymbolKind.Class);
-            lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, classSymbol.NameRange, key, target, counts));
 
             // METHODS. The loop above walks Extraction.Functions, which holds top-level functions
             // only — a method lives on its class — so without this a class body shows only the
@@ -89,7 +93,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
                 cancellationToken.ThrowIfCancellationRequested();
 
                 SymbolKey methodKey = new(null, method.KeyName, SymbolKind.Function, classSymbol.KeyName);
-                lenses.Add(MakeLens(request.TextDocument.Uri, method.NameRange, methodKey, target));
+                lenses.Add(MakeLens(request.TextDocument.Uri, method.NameRange, methodKey, target, counts));
             }
 
             // Constructors and destructors deliberately get none: neither is callable by name, so a
@@ -108,7 +112,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
             }
 
             SymbolKey key = new(null, macro.Name, SymbolKind.Macro);
-            lenses.Add(MakeLens(request.TextDocument.Uri, macro.NameRange, key, target));
+            lenses.Add(MakeLens(request.TextDocument.Uri, macro.NameRange, key, target, counts));
         }
 
         return Task.FromResult<CodeLensContainer?>(new CodeLensContainer(lenses));
@@ -119,19 +123,11 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         return Task.FromResult(request);
     }
 
-    private CodeLens MakeLens(DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target, bool isAutoexec = false)
+    private CodeLens MakeLens(
+        DocumentUri uri, GSCode.Core.Text.TextRange nameRange, SymbolKey key, NavigationTarget target,
+        LensCountCache.Snapshot? counts, bool isAutoexec = false)
     {
-        // The same query the peek list uses, so the number and the list cannot disagree. A
-        // single-store count under-reported a function called from CSC or a macro used from a
-        // header, while clicking the lens went through the client's reference provider.
-        int count = 0;
-        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, key) )
-        {
-            if ( reference.Entry.Kind != ReferenceKind.Definition )
-            {
-                count++;
-            }
-        }
+        int count = CountReferences(target, key, counts);
 
         string title = count == 1 ? "1 reference" : $"{count} references";
 
@@ -153,6 +149,46 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
                 Arguments = ShowReferencesArguments(uri, nameRange.Start),
             },
         };
+    }
+
+    /// <summary>
+    /// The same query the peek list uses, so the number and the list cannot disagree. A
+    /// single-store count under-reported a function called from CSC or a macro used from a header,
+    /// while clicking the lens went through the client's reference provider.
+    ///
+    /// The other files' part comes from <paramref name="counts"/> when it holds the key; this file's
+    /// own part is always counted again, by the same query narrowed to the file — see
+    /// <see cref="LensCountCache"/>.
+    /// </summary>
+    private int CountReferences(NavigationTarget target, SymbolKey key, LensCountCache.Snapshot? counts)
+    {
+        if ( counts is null )
+        {
+            return CountUses(_support.FindAllReferences(target, key));
+        }
+
+        int inFile = CountUses(_support.FindReferencesInFile(target, key));
+        if ( !counts.Outside.TryGetValue(key, out int outside) )
+        {
+            outside = CountUses(_support.FindAllReferences(target, key)) - inFile;
+            counts.Outside[key] = outside;
+        }
+
+        return outside + inFile;
+    }
+
+    private static int CountUses(System.Collections.Immutable.ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references)
+    {
+        int count = 0;
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
+        {
+            if ( reference.Entry.Kind != ReferenceKind.Definition )
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     /// <summary>

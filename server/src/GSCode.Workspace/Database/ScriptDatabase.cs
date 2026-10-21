@@ -67,10 +67,16 @@ public sealed class ScriptDatabase
         _hasCompletedLintSweep = true;
     }
 
-    public LanguageStore Gsc { get; } = new();
+    /// <summary>
+    /// Every record write in the database, from either script store or the header store — see
+    /// <see cref="CommitClock"/>.
+    /// </summary>
+    public CommitClock Clock { get; } = new();
+
+    public LanguageStore Gsc { get; }
 
     /// <summary>The CSC world.</summary>
-    public LanguageStore Csc { get; } = new();
+    public LanguageStore Csc { get; }
 
     /// <summary>GSH records (macros/dependencies), shared by both languages.</summary>
     private readonly ConcurrentDictionary<string, ScriptRecord> _gshRecords = new(StringComparer.Ordinal);
@@ -121,6 +127,8 @@ public sealed class ScriptDatabase
 
     public ScriptDatabase()
     {
+        Gsc = new LanguageStore(Clock);
+        Csc = new LanguageStore(Clock);
         BothLanguageStores = [Gsc, Csc];
     }
 
@@ -159,6 +167,7 @@ public sealed class ScriptDatabase
             _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
             _gshRecords[record.Path] = record;
             ApplyGshIndexes(record.Path, previous, record, newDirectives, newReferenceKeys);
+            Clock.Advance(record.Path);
         }
     }
 
@@ -207,6 +216,7 @@ public sealed class ScriptDatabase
             {
                 ApplyGshIndexes(
                     normalizedPath, previous, next: null, DirectiveIndex.Contribution.None, []);
+                Clock.Advance(normalizedPath);
             }
         }
     }

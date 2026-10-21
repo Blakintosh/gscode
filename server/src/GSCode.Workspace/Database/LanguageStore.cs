@@ -14,6 +14,20 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class LanguageStore
 {
+    public LanguageStore()
+        : this(new CommitClock())
+    {
+    }
+
+    /// <param name="clock">Ticked on every write; shared with the database's other stores.</param>
+    public LanguageStore(CommitClock clock)
+    {
+        Clock = clock;
+    }
+
+    /// <summary>Counts this store's writes, with its database's other stores — see <see cref="CommitClock"/>.</summary>
+    public CommitClock Clock { get; }
+
     private readonly ConcurrentDictionary<string, ScriptRecord> _records = new(StringComparer.Ordinal);
     private readonly ReferenceIndex _referenceIndex = new();
     private readonly DeclarationIndex _declarationIndex = new();
@@ -243,6 +257,7 @@ public sealed class LanguageStore
             AdjustContextPaths(previous, record);
 
             ApplyIndexes(record.Path, previous, record, contributions);
+            Clock.Advance(record.Path);
         }
     }
 
@@ -286,6 +301,7 @@ public sealed class LanguageStore
                 AdjustOverlayCount(previous, next: null);
                 AdjustContextPaths(previous, next: null);
                 ApplyIndexes(normalizedPath, previous, next: null, Contributions.None);
+                Clock.Advance(normalizedPath);
             }
         }
     }

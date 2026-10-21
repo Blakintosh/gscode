@@ -107,7 +107,7 @@ public partial class ScalePerfTests
         ReferencesHandler references = new(support, selector);
         RenameHandler rename = new(support, builtins, objectFields, selector);
         DefinitionHandler definition = new(support, selector);
-        CodeLensHandler lenses = new(support, settings, selector);
+        CodeLensHandler lenses = new(support, settings, selector, LensCountCache.Disabled);
 
         OpenDocument document = documents.Open(copy, File.ReadAllText(copy), version: 1);
         ParseResult parsed = documents.AnalyzeIfStale(document);

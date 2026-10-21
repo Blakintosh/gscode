@@ -105,7 +105,8 @@ public partial class ScalePerfTests
             Links = new DocumentLinkHandler(Support, selector);
             Format = new DocumentFormattingHandler(formatting, selector);
             Hints = new InlayHintHandler(Support, builtins, objectFields, Settings, selector);
-            Lenses = new CodeLensHandler(Support, Settings, selector);
+            LensCounts = new LensCountCache();
+            Lenses = new CodeLensHandler(Support, Settings, selector, LensCounts);
             Actions = new CodeActionHandler(Documents, Support, Linter, selector);
             Hover = new HoverHandler(Support, builtins, objectFields, selector);
             Definition = new DefinitionHandler(Support, selector);
@@ -133,6 +134,8 @@ public partial class ScalePerfTests
         public DocumentFormattingHandler Format { get; }
         public InlayHintHandler Hints { get; }
         public CodeLensHandler Lenses { get; }
+
+        public LensCountCache LensCounts { get; }
         public CodeActionHandler Actions { get; }
         public HoverHandler Hover { get; }
         public DefinitionHandler Definition { get; }
@@ -215,6 +218,10 @@ public partial class ScalePerfTests
                 continue;
             }
 
+            // Each file starts with no counts kept, so its first CodeLens request is what opening it
+            // costs and the one after its edit is what typing in it costs. The untimed pass must not
+            // leave the timed one counts to find.
+            server.LensCounts.Clear();
             OpenDocument document = server.Documents.Open(path, text, version: 1);
             ParseResult parsed = server.Documents.AnalyzeIfStale(document);
             TextDocumentIdentifier id = new() { Uri = DocumentUri.FromFileSystemPath(path) };

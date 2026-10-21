@@ -211,7 +211,7 @@ public class HandlerCostTests
         DocumentUri uri = DocumentUri.FromFileSystemPath(path);
         TextDocumentIdentifier identifier = new() { Uri = uri };
 
-        CodeLensHandler lenses = new(support, settings, selector);
+        CodeLensHandler lenses = new(support, settings, selector, LensCountCache.Disabled);
         InlayHintHandler hints = new(support, builtins, objectFields, settings, selector);
 
         // One untimed pass each, so the figures are steady-state rather than a measurement of the

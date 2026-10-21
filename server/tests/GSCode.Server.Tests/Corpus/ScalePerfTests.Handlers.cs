@@ -45,7 +45,7 @@ public partial class ScalePerfTests
         TextDocumentSelector selector = TextDocumentSelector.ForLanguage("gsc");
         ServerSettings settings = new() { CodeLensEnabled = true };
 
-        CodeLensHandler lenses = new(support, settings, selector);
+        CodeLensHandler lenses = new(support, settings, selector, LensCountCache.Disabled);
         ReferencesHandler references = new(support, selector);
         RenameHandler rename = new(support, builtins, objectFields, selector);
 

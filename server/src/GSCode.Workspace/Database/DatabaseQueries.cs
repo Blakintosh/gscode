@@ -841,19 +841,32 @@ public static class DatabaseQueries
 
         foreach ( LanguageStore store in stores )
         {
-            HashSet<string> reaching = new(StringComparer.Ordinal);
-            reaching.UnionWith(store.FilesAt(declaring));
-            reaching.UnionWith(store.FilesNaming(declaring));
+            ImmutableArray<string> atDeclaring = store.FilesAt(declaring);
+            ImmutableArray<string> naming = store.FilesNaming(declaring);
 
             // A file must both reach the declaring file AND mention the key, so walk whichever of
             // the two lists is shorter and test membership in the other. A merge dialect's `main`
             // is mentioned everywhere and reached from few files; a namespace dialect's shared
             // utility is reached (#using'd) from nearly every file and one of its functions is
             // mentioned by far fewer.
+            //
+            // The reaching side is never copied into a set per call: walked, it is read straight
+            // from the index's arrays; tested against, it is the set cached for the naming array
+            // the index handed out, which stays the same array until a file's imports change.
+            // Building it per call was a set of every dependent — 50,000 files importing a stock
+            // utility at scale — per lens, per CodeLens request.
             ImmutableArray<string> mentioning = store.FilesReferencing(key);
-            IEnumerable<string> walk = mentioning.Length < reaching.Count
-                ? mentioning.Where(reaching.Contains)
-                : reaching;
+            bool walkMentioning = mentioning.Length < atDeclaring.Length + naming.Length;
+            IEnumerable<string> walk;
+            if ( walkMentioning )
+            {
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = mentioning.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else
+            {
+                walk = atDeclaring.Concat(naming);
+            }
 
             HashSet<string> visited = new(StringComparer.Ordinal);
             foreach ( string path in walk )
@@ -892,6 +905,24 @@ public static class DatabaseQueries
         }
 
         return kept.ToImmutable();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string[], HashSet<string>> s_namingSets = new();
+
+    /// <summary>
+    /// The files naming a path, as a set to test against, built once per array the dependents index
+    /// hands out. The index returns the same array until a file naming that path is added, removed or
+    /// re-indexed, so the set lives exactly as long as the answer it was built from.
+    /// </summary>
+    private static HashSet<string> NamingSet(ImmutableArray<string> naming)
+    {
+        string[]? array = System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(naming);
+        if ( array is null || array.Length == 0 )
+        {
+            return [];
+        }
+
+        return s_namingSets.GetValue(array, static paths => new HashSet<string>(paths, StringComparer.Ordinal));
     }
 
     /// <summary>

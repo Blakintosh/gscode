@@ -427,25 +427,47 @@ public partial class ScalePerfTests
     /// </summary>
     private static void MeasureWatchedFiles(
         ScaleCorpus corpus, ScriptDatabase database, WorkspaceIndexer indexer, PathResolver resolver,
-        NameTable names, ComponentRow row, double sweepSeconds)
+        NameTable names, ComponentRow row, double sweepSeconds, bool saveHeader)
     {
         WatchedFileUpdater updater = new(database, indexer);
 
         // A header every BO3 script inserts. Saving it re-indexes every file that does —
         // WatchedFileUpdater.ReindexInserters — timed through the updater as the server runs it.
+        //
+        // Only in GSCODE_SCALE_SAVE_ONLY runs. It re-indexes the whole workspace, so in a full run it
+        // either has to come last — before the cache and warm-start measurements, which need the
+        // index gone — or risk the heap limit with everything the run has built up still around and
+        // lose every row after it. It is measured on its own, right after the cold index, instead.
         string header = PathUtil.NormalizeAbsolute(Path.Combine(corpus.RawRoot, @"scripts\shared\shared.gsh"));
-        if ( File.Exists(header) )
+        if ( saveHeader && File.Exists(header) )
         {
-            long started = Stopwatch.GetTimestamp();
-            List<ScriptRecord> inserters = DatabaseQueries.ScriptsInserting(database, header, @"scripts\shared\shared.gsh");
-            double findMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            // Counted in a call of its own, so the list of every inserting record is not in scope
+            // while the save replaces them — a precaution, so the harness holds no more than the
+            // server does.
+            int inserters = CountInserters(database, header, out double findMilliseconds);
 
-            started = Stopwatch.GetTimestamp();
-            int touched = updater.Apply(header, WatchedFileChange.Changed).Count;
+            using HeapSampler sampler = new();
+            int gen2Before = GC.CollectionCount(2);
+            long started = Stopwatch.GetTimestamp();
+            int touched;
+            try
+            {
+                touched = updater.Apply(header, WatchedFileChange.Changed).Count;
+            }
+            finally
+            {
+                // Kept even when the save throws: the heap through it is what explains a failure.
+                foreach ( string sample in sampler.Stop() )
+                {
+                    row.Watched.Add(("save shared.gsh, heap", sample));
+                }
+            }
+
             double saveSeconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
             row.Watched.Add((
                 "save shared.gsh",
-                $"{inserters.Count:N0} files insert it (found in {findMilliseconds:F1} ms); the save re-indexed {touched:N0} in {saveSeconds:F1} s"));
+                $"{inserters:N0} files insert it (found in {findMilliseconds:F1} ms); the save re-indexed {touched:N0} in {saveSeconds:F1} s, "
+                + $"{GC.CollectionCount(2) - gen2Before} gen2 collections"));
         }
 
         // A stock script every heavy BO3 file #using's. In full mode its closed dependents are
@@ -491,6 +513,16 @@ public partial class ScalePerfTests
                 }
             }
         }
+    }
+
+    /// <summary>How many records insert a header, and how long finding them took; the list itself is not kept.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static int CountInserters(ScriptDatabase database, string header, out double findMilliseconds)
+    {
+        long started = Stopwatch.GetTimestamp();
+        int count = DatabaseQueries.ScriptsInserting(database, header, @"scripts\shared\shared.gsh").Count;
+        findMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        return count;
     }
 
     private void WriteComponents(ComponentRow components)

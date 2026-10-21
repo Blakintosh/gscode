@@ -167,9 +167,22 @@ public partial class ScalePerfTests
                     reportSuffix = $"top{corpus.Sources.Length}";
                 }
 
-                ScaleRow row = await MeasureAsync(corpus);
-                rows.Add(row);
-                WriteRow(row);
+                ScaleRow row = new()
+                {
+                    Game = game.ShortName, Shape = corpus.Shape, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare,
+                };
+
+                // Written whatever happens: a size that fails late — out of memory under a heap limit,
+                // say — would otherwise lose every figure measured before the failure with it.
+                try
+                {
+                    await MeasureAsync(corpus, row);
+                }
+                finally
+                {
+                    rows.Add(row);
+                    WriteRow(row);
+                }
             }
         }
 
@@ -223,7 +236,7 @@ public partial class ScalePerfTests
         File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss} {Environment.ProcessId} {name}\n");
     }
 
-    private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus)
+    private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus, ScaleRow row)
     {
         GameProfile previous = GameProfile.Active;
         string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-scale-{Guid.NewGuid():N}.db");
@@ -231,10 +244,6 @@ public partial class ScalePerfTests
         try
         {
             GameProfile.Select(corpus.Profile.ShortName);
-            ScaleRow row = new()
-            {
-                Game = corpus.Profile.ShortName, Shape = corpus.Shape, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare,
-            };
 
             PerfReport.Memory baseline = PerfReport.Sample();
 
@@ -289,6 +298,15 @@ public partial class ScalePerfTests
                 return row;
             }
 
+            // GSCODE_SCALE_SAVE_ONLY: the cold index, then one save of the header every file inserts,
+            // with the heap sampled through it — the watched-file path whose memory is the question.
+            if ( Environment.GetEnvironmentVariable("GSCODE_SCALE_SAVE_ONLY") == "1" )
+            {
+                row.Components = new ComponentRow();
+                MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components, 0, saveHeader: true);
+                return row;
+            }
+
             string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
             BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
             ObjectFields objectFields = ObjectFields.Load(apiDirectory);
@@ -313,7 +331,7 @@ public partial class ScalePerfTests
             Phase("watched files");
 
             // Last on this index: the header save re-indexes files and the create/delete pair adds one.
-            MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components!, row.LintSweepSeconds);
+            MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components!, row.LintSweepSeconds, saveHeader: false);
 
             GC.KeepAlive(database);
             database = null!;

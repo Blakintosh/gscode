@@ -91,7 +91,16 @@ public partial class ScalePerfTests
         public double CompletionP50 { get; set; }
         public double CompletionP99 { get; set; }
         public double CompletionMax { get; set; }
+        public double LiteralP50 { get; set; }
         public double LiteralP99 { get; set; }
+
+        /// <summary>
+        /// The literal requests a garbage collection landed in, and the p99 of the rest, so a slow
+        /// tail can be told apart from a collection that happened to land in it. At 10,000 and 25,000
+        /// heavy files none did: the growth was the request's own walk (PERF.md).
+        /// </summary>
+        public int LiteralCollected { get; set; }
+        public double LiteralP99WithoutCollection { get; set; }
         public double LiteralMax { get; set; }
         public int LiteralRequests { get; set; }
         public double FieldP99 { get; set; }
@@ -425,9 +434,10 @@ public partial class ScalePerfTests
     /// lands inside whichever request is being timed. That put field completion's p99 at 8-11 ms on
     /// bo3 at 50K with the request itself at about 1 ms — 0.97 ms with tiered compilation switched
     /// off, which is what a server that has been running a while pays. Per-request warming alone
-    /// (<see cref="TimeCompletion"/>) cannot prevent it: the promotion is triggered by the OTHER
-    /// requests. <see cref="ScaleRow.TimedPassJitMethods"/> reports what the JIT still compiled
-    /// during the timed pass, so a run the warm-up did not settle says so.
+    /// (<see cref="TimeCompletion(CompletionEngine, ParseResult, string, Position, GameProfile)"/>)
+    /// cannot prevent it: the promotion is triggered by the OTHER requests.
+    /// <see cref="ScaleRow.TimedPassJitMethods"/> reports what the JIT still compiled during the
+    /// timed pass, so a run the warm-up did not settle says so.
     /// </remarks>
     private static void MeasureRequests(
         ScaleRow row, ScaleCorpus corpus, List<string> sample, ScriptDatabase database, PathResolver resolver,
@@ -488,7 +498,12 @@ public partial class ScalePerfTests
         row.CompletionP99 = Percentile(completions, 0.99);
         row.CompletionMax = completions.Count == 0 ? 0 : completions[^1];
         row.LiteralRequests = literals.Count;
+        row.LiteralP50 = Percentile(literals, 0.50);
         row.LiteralP99 = Percentile(literals, 0.99);
+        List<double> uncollected = timed.LiteralsWithoutCollection;
+        uncollected.Sort();
+        row.LiteralCollected = literals.Count - uncollected.Count;
+        row.LiteralP99WithoutCollection = Percentile(uncollected, 0.99);
         row.LiteralMax = literals.Count == 0 ? 0 : literals[^1];
         row.FieldRequests = fields.Count;
         row.FieldP99 = Percentile(fields, 0.99);
@@ -511,6 +526,9 @@ public partial class ScalePerfTests
         public List<double> Completions { get; } = [];
 
         public List<double> Literals { get; } = [];
+
+        /// <summary>The literal requests no garbage collection landed in.</summary>
+        public List<double> LiteralsWithoutCollection { get; } = [];
 
         public List<double> Fields { get; } = [];
 
@@ -537,7 +555,12 @@ public partial class ScalePerfTests
         Position? literal = LiteralPosition(parsed);
         if ( literal is not null )
         {
-            into.Literals.Add(TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile));
+            double milliseconds = TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile, out bool collected);
+            into.Literals.Add(milliseconds);
+            if ( !collected )
+            {
+                into.LiteralsWithoutCollection.Add(milliseconds);
+            }
         }
 
         Position? field = FieldPosition(parsed);
@@ -623,12 +646,22 @@ public partial class ScalePerfTests
     private static double TimeCompletion(
         CompletionEngine engine, ParseResult parsed, string contextId, Position position, GameProfile profile)
     {
+        return TimeCompletion(engine, parsed, contextId, position, profile, out _);
+    }
+
+    /// <param name="collected">Whether a garbage collection ran during the timed request.</param>
+    private static double TimeCompletion(
+        CompletionEngine engine, ParseResult parsed, string contextId, Position position, GameProfile profile,
+        out bool collected)
+    {
         // Warm first, as CorpusPerfTests does, so lazily built state is not charged to the request.
         Complete(engine, parsed, contextId, position, profile);
 
+        int collections = GC.CollectionCount(0);
         Stopwatch watch = Stopwatch.StartNew();
         Complete(engine, parsed, contextId, position, profile);
         watch.Stop();
+        collected = GC.CollectionCount(0) != collections;
         return watch.Elapsed.TotalMilliseconds;
     }
 
@@ -830,7 +863,7 @@ public partial class ScalePerfTests
         }
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
-        _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
+        _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, p50 {row.LiteralP50:F2}, max {row.LiteralMax:F1}; {row.LiteralCollected} hit a GC, p99 of the rest {row.LiteralP99WithoutCollection:F2})");
         _output.WriteLine($"     field compl p99   {row.FieldP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.FieldP99, CompletionBudgetMilliseconds)}  ({row.FieldRequests} requests, max {row.FieldMax:F1})");
         _output.WriteLine($"     codeLens p99      {row.LensP99,8:F1} ms  max {row.LensMax,7:F1} ms  ({row.HandlerFiles} files, whole file)");
         _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms  ({row.ReferenceResults:N0} locations returned in all)");

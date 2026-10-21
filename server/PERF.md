@@ -2863,16 +2863,46 @@ make it look worth it.
 
 **Still open:**
 
-- **CodeLens, about 90 ms of a 107 ms edit at p99.** Its slow files are the stock sources every copy
-  calls, where each of 25 lenses counts tens of thousands of references through the reaching walk. A
-  count does not need the entries, but it still needs every reaching file's slice; a cached count per
-  key, invalidated by the files mentioning it, is the shape a fix would take.
+- **CodeLens on opening a file, about 90 ms p99.** See below: after an edit it is now 1.4 ms, but
+  nothing is kept for a file until it has been asked once.
 - **Find-references and rename on a hot function**, 303 and 351 ms p99 with 52 MB and 30 MB of
   answer. The size of the answer, as before.
 - **Definition's p99 is 30 ms**, 14 at 25K — the slow cases are no longer the reference walk, and
   have not been traced.
 - **Retained memory** above, and the cold index's run-to-run spread.
 - cod4's heavy shape and the stdio process end to end, as before.
+
+### 2026-10-21, last: CodeLens after an edit
+
+Probed per file and then per lens before anything was built, since a cache cannot help the first
+request after a file opens. The slow lenses were two different things:
+
+- **The raw stock scripts**, asked from raw: small counts (139 references in 54 files for
+  `util::wait_network_frame` at 10K) at about 1.3 ms a lens, almost all of it testing and rejecting
+  workspace copies the raw scripts cannot see. `FindReferencesReaching` now walks the files the
+  asker sees when they are fewer than either list it would otherwise walk, and a one-file question
+  (document highlight) reads that file's record instead of walking the index's list.
+- **Method lenses on the copies**, which really do count every untyped `[[x]]->name()` of their name
+  in every copy: 1,820 references in 362 files at 10K. That is counting, not waste.
+
+So the counts are kept. `LensCountCache` holds each lens's references from OTHER files per open
+file, valid while `ScriptDatabase.Clock` says only that file has been written since and its shape —
+declarations, imports, path calls, macros — is unchanged; the open file's own part is counted again
+on every request. Not cached: a mod or workspace copy of a raw script, whose own references decide
+whether the raw copy's count. The first version also refused the raw script beside such a copy,
+which is every stock script in an install with mods, and at 50K helped nothing until a log of its
+decisions showed why.
+
+| 50,000 heavy BO3 files, p99 | before (`bf063b82`) | after |
+|---|---:|---:|
+| CodeLens after an edit | 90.4 ms | **1.4 ms** |
+| one edit, end to end | 107.0 ms | **24.8 ms** |
+| CodeLens on opening a file | 94.5 ms | 95.8 ms (43.8 without the 4 a collection landed in) |
+| highlight on a stock call | 2.77 ms | 0.19 ms |
+
+`LensCountCorpusTests` opens every bo3 and cod4 script and requires the same titles with the cache
+off, filling and read: 0 differing over 19,520 and 11,913 lenses. The corpora carry no mods folder,
+so the two overlay cases are pinned by `CodeLensCountCacheTests` instead.
 
 ## Results
 

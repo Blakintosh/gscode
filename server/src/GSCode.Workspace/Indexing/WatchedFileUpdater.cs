@@ -195,7 +195,7 @@ public sealed class WatchedFileUpdater
     private IReadOnlyList<string> ReindexInserters(
         string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
     {
-        List<string> touched = [];
+        List<string> toIndex = [];
         foreach ( ScriptRecord record in DatabaseQueries.ScriptsInserting(_database, normalizedGshPath, headerRelativePath) )
         {
             // The same test the changed file's own record gets, for the same reason: this reads
@@ -208,10 +208,17 @@ public sealed class WatchedFileUpdater
                 continue;
             }
 
-            _indexer.IndexFile(record.Path);
-            touched.Add(record.Path);
+            toIndex.Add(record.Path);
         }
 
-        return touched;
+        // In parallel, as the cold index analyses: IndexFile is the same per-file step it runs on
+        // every core. One after another, saving a header every script inserts — shared.gsh, on BO3 —
+        // re-indexed the whole workspace on one thread: 45 s projected at 10,000 heavy files.
+        Parallel.ForEach(
+            toIndex,
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) },
+            path => _indexer.IndexFile(path));
+
+        return toIndex;
     }
 }

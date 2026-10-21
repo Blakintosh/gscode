@@ -51,9 +51,6 @@ public partial class ScalePerfTests
     /// <summary>Copies sampled on the mixed shape, which has no sources.</summary>
     private const int ComponentMixedSample = 40;
 
-    /// <summary>Header-inserting files actually re-indexed to time one; the rest is projected from them.</summary>
-    private const int ReindexSample = 60;
-
     /// <summary>One request kind's distribution across the sampled files, and what it sent.</summary>
     private sealed class RequestStats
     {
@@ -434,8 +431,8 @@ public partial class ScalePerfTests
     {
         WatchedFileUpdater updater = new(database, indexer);
 
-        // A header every BO3 script inserts. Saving it re-indexes every file that does, one after
-        // another — WatchedFileUpdater.ReindexInserters — so a sample is timed and the rest projected.
+        // A header every BO3 script inserts. Saving it re-indexes every file that does —
+        // WatchedFileUpdater.ReindexInserters — timed through the updater as the server runs it.
         string header = PathUtil.NormalizeAbsolute(Path.Combine(corpus.RawRoot, @"scripts\shared\shared.gsh"));
         if ( File.Exists(header) )
         {
@@ -443,18 +440,12 @@ public partial class ScalePerfTests
             List<ScriptRecord> inserters = DatabaseQueries.ScriptsInserting(database, header, @"scripts\shared\shared.gsh");
             double findMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
-            int timedCount = Math.Min(ReindexSample, inserters.Count);
             started = Stopwatch.GetTimestamp();
-            for ( int index = 0; index < timedCount; index++ )
-            {
-                indexer.IndexFile(inserters[index * inserters.Count / Math.Max(1, timedCount)].Path);
-            }
-
-            double perFile = timedCount == 0 ? 0 : Stopwatch.GetElapsedTime(started).TotalMilliseconds / timedCount;
+            int touched = updater.Apply(header, WatchedFileChange.Changed).Count;
+            double saveSeconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
             row.Watched.Add((
                 "save shared.gsh",
-                $"{inserters.Count:N0} files insert it (found in {findMilliseconds:F1} ms); re-indexed one at a time at {perFile:F1} ms each "
-                + $"= {inserters.Count * perFile / 1000.0:F1} s projected"));
+                $"{inserters.Count:N0} files insert it (found in {findMilliseconds:F1} ms); the save re-indexed {touched:N0} in {saveSeconds:F1} s"));
         }
 
         // A stock script every heavy BO3 file #using's. In full mode its closed dependents are

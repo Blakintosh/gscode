@@ -2812,6 +2812,68 @@ diagnostics identical) and A/B'd at 25K before it was committed:
   end to end over stdio with VS Code — DI, publishing and the client's own handling of a 50K-file
   workspace.
 
+### 2026-10-21, later: the holes the first pass left, and three it had not looked at
+
+The same shape and harness, the same 15 GiB limit, one run each. "Before" is the table above; "after"
+is the branch at `bf063b82`. Two full 50K runs of the after state put the cold index at 52.5 and
+39.3 s, so read that row as a range; the rest agreed between them within a few percent.
+
+| 50,000 files | before | after |
+|---|---:|---:|
+| cold index | 68.6 s | 39.3–52.5 s |
+| warm start | 19.3 s | 13.5 s |
+| retained memory | 9,789 MB | **8,716 MB** (178 KB a file) |
+| full-mode lint sweep | 87.1 s | **66.3 s** |
+| literal completion p50 / p99 | — / 17.5 ms | **1.62 / 3.26 ms** |
+| definition on a stock call, p50 / p99 | 37.9 / 295.7 ms | **0.05 / 31.4 ms** |
+| definition on an own call, p99 | 193.1 ms | **30.5 ms** |
+| formatting a whole file, p50 / p99 | 17.8 / 477.6 ms | **10.3 / 21.8 ms** |
+| code actions p99 | 18.5 ms | 9.4 ms |
+| one edit end to end, p99 | 116.3 ms | 107.0 ms |
+
+- **A closed file's record drops its functions' assignments** and keeps `WrittenFields`, the distinct
+  field names its top-level functions write — all the vocabulary index read of them. Every other
+  reader takes the open document's extraction. 22.5 KB of a 133 KB heavy record; 4,800 → 4,271 MB
+  retained at 25K. The cache format is now 10.
+- **Literal completion was not the GC.** The harness now says which timed requests a collection ran
+  during, and at 10K and 25K none of the literal ones did, while the median grew with the
+  workspace's distinct literals (37,430 at 25K, 32,874 of them in one file). Two costs per name: the
+  visibility test probed the record map for every name (2.45 of a 2.86 ms walk), and every name was
+  ranked. The store now keeps each context's paths and tests names against the few files the asker
+  cannot see — the install's mods, 96 scripts here, or none — and the walk asks the 200-row cut first
+  whether a name used in that few files could still get in. 25K: 4.46 / 6.51 → 0.92 / 1.37 ms.
+- **Go-to-definition ran the full reference query** and kept the declaration entries: 100,103
+  references read to keep one for `flag::init`. `NavigationSupport.FindDefinitionSites` runs the same
+  query over only the files declaring the key (`FindReferencesReaching`'s `onlyPaths`); the
+  reference-scope corpus suite requires it to find exactly the same declarations, and it does for
+  all 17,497 bo3 and 11,913 cod4 ones.
+- **Formatting looked up a bare call's spelling across every namespace** to fix casing. Every copy of
+  `archetype_robot.gsc` declares the same private helpers in its own namespace, so each lookup read
+  and rejected 2,000 files. On a namespace dialect a bare call resolves in its governing namespace,
+  as two lints already looked it up, and `CallCasing` now asks the file's own namespaces. A bare call
+  that only ANOTHER namespace declares is now left as written rather than recased to it.
+
+Two censuses explain the memory that is left. A record (`ScalePerfTests.Memory`) is 116.7 KB here:
+the reference table's packed entries 36 KB, its keys 24 KB, the by-key index 9 KB, functions 15 KB,
+their docs 13.5 KB. The store BESIDE the records is 66 KB a file: the reference index 35.5 KB, the
+declaration index 11 KB, the vocabulary 8.8 KB. A table of reference keys shared across files was
+considered and not built: on the unduplicated corpora a file retains 45–47 KB, of which the keys are
+6.6 KB, and a shared table there would cost about what it saved. This shape's duplicated keys are what
+make it look worth it.
+
+**Still open:**
+
+- **CodeLens, about 90 ms of a 107 ms edit at p99.** Its slow files are the stock sources every copy
+  calls, where each of 25 lenses counts tens of thousands of references through the reaching walk. A
+  count does not need the entries, but it still needs every reaching file's slice; a cached count per
+  key, invalidated by the files mentioning it, is the shape a fix would take.
+- **Find-references and rename on a hot function**, 303 and 351 ms p99 with 52 MB and 30 MB of
+  answer. The size of the answer, as before.
+- **Definition's p99 is 30 ms**, 14 at 25K — the slow cases are no longer the reference walk, and
+  have not been traced.
+- **Retained memory** above, and the cold index's run-to-run spread.
+- cod4's heavy shape and the stdio process end to end, as before.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

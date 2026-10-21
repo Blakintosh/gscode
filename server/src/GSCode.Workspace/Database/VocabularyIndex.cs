@@ -80,9 +80,10 @@ public sealed class VocabularyIndex
     /// The distinct literals of one kind used by at least one file <paramref name="visible"/> accepts,
     /// each handed to <paramref name="found"/> — see <see cref="PackedInvertedIndex{TKey}.ForEachKey"/>.
     /// </summary>
-    public void Literals(SymbolKind kind, Func<string, bool> visible, Action<VocabularyName> found)
+    public void Literals(
+        SymbolKind kind, Func<string, bool> visible, Action<VocabularyName> found, Func<int, bool>? wanted = null)
     {
-        _literals.ForEachKey(key => key.Kind == kind, visible, (key, files) => found(new VocabularyName(key.Name, files)));
+        _literals.ForEachKey(key => key.Kind == kind, visible, (key, files) => found(new VocabularyName(key.Name, files)), wanted);
     }
 
     /// <summary>

@@ -197,6 +197,36 @@ public class CompletionEngineTests
     }
 
     [Fact]
+    public void InsideStringLiteral_AFullCut_StillTakesARarerNameTheTypedTextBegins()
+    {
+        // 4,000 literals containing `event`, each written in two files, fill the 200-row cut long
+        // before the walk, in hash order, is likely to reach the one written in a single file that
+        // BEGINS with it. The walk skips names too rare for a full cut, which must not include this
+        // one: beginning with the typed text outranks being widely used.
+        System.Text.StringBuilder many = new("#namespace ev;\nfunction fire()\n{\n");
+        for ( int index = 0; index < 4000; index++ )
+        {
+            many.Append($"    a{index} = \"x_event_{index:D4}\";\n");
+        }
+
+        many.Append("}\n");
+
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(TestPaths.Raw(@"scripts\events.gsc"), many.ToString())
+            .AddFile(TestPaths.Raw(@"scripts\copy.gsc"), many.ToString().Replace("#namespace ev;", "#namespace copy;"))
+            .AddFile(TestPaths.Raw(@"scripts\rare.gsc"), "#namespace rare;\nfunction f()\n{\n    r = \"event_rare\";\n}\n");
+        (CompletionEngine engine, _, _) = BuildWorld(files);
+
+        ParseResult result = Analyze(TestPaths.Raw(@"scripts\main.gsc"), "#namespace game;\nfunction run()\n{\n    x = \"event\n}\n");
+        ImmutableArray<CompletionEntry> entries = engine.Complete(result, "raw", new Position(3, 14));
+
+        // The literal being typed is this file's own, and comes first; the workspace's follow.
+        List<string> workspace = [.. entries.Select(static entry => entry.Label).Where(static label => label != "event")];
+        Assert.Equal("event_rare", workspace[0]);
+        Assert.Equal(200, workspace.Count);
+    }
+
+    [Fact]
     public void MemberAccess_IsCutToWhatHasBeenTyped()
     {
         // `level.rou` — the workspace's `round_number` matches, its `player_score` does not, and

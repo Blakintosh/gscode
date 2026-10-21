@@ -81,6 +81,31 @@ public class VocabularyIndexTests
     }
 
     [Fact]
+    public void ASiblingModsLiterals_StayHidden_AndAMovedFileTakesItsVisibilityWithIt()
+    {
+        // The store skips the per-file test while every context it holds is visible to the asker,
+        // so this is the case that must still test: a sibling mod, which mod:a never sees. A file
+        // replaced in place under another context, and one removed, have to move that decision too.
+        LanguageStore store = new();
+        store.Upsert(Record(@"c:\raw\a.gsc", "raw", [Literal("raw_event")]));
+        store.Upsert(Record(@"c:\mods\a\a.gsc", "mod:a", [Literal("a_event")]));
+        store.Upsert(Record(@"c:\mods\b\b.gsc", "mod:b", [Literal("b_event")]));
+
+        Assert.Equal(["a_event", "raw_event"], Names(Literals(store, SymbolKind.StringLiteral, "mod:a")).Order());
+
+        store.Remove(@"c:\mods\b\b.gsc");
+        store.Upsert(Record(@"c:\mods\b\c.gsc", "mod:b", [Literal("b_event")]));
+        Assert.Equal(["a_event", "raw_event"], Names(Literals(store, SymbolKind.StringLiteral, "mod:a")).Order());
+
+        store.Upsert(Record(@"c:\mods\b\c.gsc", "mod:a", [Literal("b_event")]));
+        Assert.Equal(["a_event", "b_event", "raw_event"], Names(Literals(store, SymbolKind.StringLiteral, "mod:a")).Order());
+
+        store.Upsert(Record(@"c:\mods\b\c.gsc", "mod:b", [Literal("b_event")]));
+        Assert.Equal(["a_event", "raw_event"], Names(Literals(store, SymbolKind.StringLiteral, "mod:a")).Order());
+        Assert.Equal(["b_event", "raw_event"], Names(Literals(store, SymbolKind.StringLiteral, "mod:b")).Order());
+    }
+
+    [Fact]
     public void Fields_AreOfferedOnEveryOwnerFromVisibleFiles_AndLocalsAreNeverFields()
     {
         LanguageStore store = new();

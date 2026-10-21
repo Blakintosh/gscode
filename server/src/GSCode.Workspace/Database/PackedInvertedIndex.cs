@@ -236,7 +236,12 @@ internal sealed class PackedInvertedIndex<TKey>
     /// thousands never holds them all. <paramref name="found"/> runs under the shard gate, the same
     /// constraint the file filter has.
     /// </summary>
-    public void ForEachKey(Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, Action<TKey, int> found)
+    /// <param name="countFilter">
+    /// Asked with how many files carry a key before any of them is tested, so a caller that can
+    /// already tell a key is too rare to want skips the file test, the costly part of the walk.
+    /// </param>
+    public void ForEachKey(
+        Func<TKey, bool> keyFilter, Func<string, bool> fileFilter, Action<TKey, int> found, Func<int, bool>? countFilter = null)
     {
         foreach ( Shard shard in _shards )
         {
@@ -245,6 +250,11 @@ internal sealed class PackedInvertedIndex<TKey>
                 foreach ( KeyValuePair<TKey, object> entry in shard.Entries )
                 {
                     if ( !keyFilter(entry.Key) )
+                    {
+                        continue;
+                    }
+
+                    if ( countFilter is not null && !countFilter(entry.Value is PostingSet counted ? counted.Count : 1) )
                     {
                         continue;
                     }

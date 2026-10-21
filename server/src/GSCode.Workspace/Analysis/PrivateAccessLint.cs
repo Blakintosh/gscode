@@ -91,7 +91,11 @@ public static class PrivateAccessLint
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> visible = visibleLookups.Lookup(entry.Key.Namespace, entry.Key.Name);
+            // Capped at one: all this asks is whether ANY declaration is visible. Uncapped it built
+            // every visible declaration first, and with a thousand files declaring into one namespace
+            // that was every one of them, for every call — 776 ms a file at 1,020 copies (PERF.md,
+            // the scale section).
+            ImmutableArray<ResolvedFunction> visible = visibleLookups.Lookup(entry.Key.Namespace, entry.Key.Name, limit: 1);
             if ( visible.Length > 0 )
             {
                 continue;

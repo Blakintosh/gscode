@@ -601,15 +601,20 @@ public sealed partial class CompletionEngine
             return entries.ToImmutable();
         }
 
-        // The store's classes plus this file's own, which may not be indexed yet.
-        HashSet<string> classNames = new(store.Classes.AllClassNames(), StringComparer.Ordinal);
+        // The store's classes plus this file's own, which may not be indexed yet. The store's set is
+        // walked in place rather than copied; only this file's names it lacks are added beside it.
+        IReadOnlySet<string> storeClassNames = store.Classes.ClassNameSet();
+        HashSet<string> ownClassNames = new(StringComparer.Ordinal);
         foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
         {
-            classNames.Add(classSymbol.KeyName);
+            if ( !storeClassNames.Contains(classSymbol.KeyName) )
+            {
+                ownClassNames.Add(classSymbol.KeyName);
+            }
         }
 
         HashSet<string> seen = new(StringComparer.Ordinal);
-        foreach ( string className in classNames )
+        foreach ( string className in storeClassNames.Concat(ownClassNames) )
         {
             foreach ( ClassMethod method in MethodResolution.MethodsOf(
                 store, contextId, className, result.Extraction.Classes) )

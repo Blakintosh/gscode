@@ -98,7 +98,7 @@ public static class NamespaceUsageLint
         // Report any qualified call whose namespace is neither the file's own nor imported.
         // Unqualified calls are keyed under the current namespace (always own), so they never
         // trip this; sys:: builtin calls have a null namespace and are skipped.
-        HashSet<string> classNames = ClassNames(store);
+        IReadOnlySet<string> classNames = ClassNames(store);
 
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
 
@@ -163,10 +163,12 @@ public static class NamespaceUsageLint
     /// a guaranteed-correct silence for a warning that might be wrong, which is the wrong
     /// direction for a lint whose whole premise is no false positives.
     /// </summary>
-    private static HashSet<string> ClassNames(LanguageStore store)
+    private static IReadOnlySet<string> ClassNames(LanguageStore store)
     {
-        // Straight off the class graph: this lint runs per file, so a store scan here would be paid
-        // once per file linted — a store scan squared.
-        return [.. store.Classes.AllClassNames()];
+        // Straight off the class graph, and the graph's own set rather than a copy of it: this lint
+        // runs per file, so a store scan here would be paid once per file linted — a store scan
+        // squared — and so would a copy of every class name, which in a workspace of 50,000 files
+        // is tens of thousands of names per file.
+        return store.Classes.ClassNameSet();
     }
 }

@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -24,20 +26,47 @@ namespace GSCode.Workspace.Database;
 /// <see cref="LanguageStore.TryGet"/> and apply <see cref="ScriptDatabase.CanSee"/> and overlay
 /// shadowing themselves, so visibility keeps exactly one implementation and the graph never becomes
 /// a second, subtly different, answer to "what can this file see".
+///
+/// READS TAKE NO LOCK. Every answer is cached on its bucket and cleared by the write that changes it;
+/// a read takes the gate only to rebuild a cleared answer. Method resolution asks this graph for
+/// every qualified call and every arrow call in every file, from every lint thread at once, and with
+/// one lock around every read the full-mode sweep of 25,000 heavy BO3 files spent half its time in
+/// <see cref="PathsDeclaring(string)"/> — 88% of sampled thread time blocked, on buckets holding one
+/// path each — and the per-read copy made it quadratic as soon as a name had many declarers (PERF.md,
+/// the scale section).
 /// </summary>
 public sealed class ClassGraph
 {
+    /// <summary>
+    /// The paths behind one key, and the answers last handed out for them. The set is written only
+    /// under <see cref="_gate"/>; <see cref="Paths"/> and <see cref="Names"/> are published whole and
+    /// cleared by every write to the set, so a reader sees either a complete answer or none.
+    /// </summary>
+    private sealed class Bucket
+    {
+        public readonly HashSet<string> Set = new(StringComparer.Ordinal);
+
+        public volatile string[]? Paths;
+
+        /// <summary>The class names a name-valued query derived from <see cref="Set"/>, where one does.</summary>
+        public volatile string[]? Names;
+    }
+
     private readonly Dictionary<string, ImmutableArray<ClassSymbol>> _classesByPath = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, HashSet<string>> _pathsByClassName = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Bucket> _pathsByClassName = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The same as <see cref="_pathsByClassName"/>, keyed by namespace as well. A qualified lookup
     /// read the bare-name list and dropped every other namespace's declarer; see
     /// <see cref="PathsDeclaring(string, string)"/>.
     /// </summary>
-    private readonly Dictionary<(string Namespace, string KeyName), HashSet<string>> _pathsByQualifiedName = new();
-    private readonly Dictionary<string, HashSet<string>> _pathsByParentName = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, HashSet<string>> _pathsByMethodName = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string Namespace, string KeyName), Bucket> _pathsByQualifiedName = new();
+    private readonly ConcurrentDictionary<string, Bucket> _pathsByParentName = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Bucket> _pathsByMethodName = new(StringComparer.Ordinal);
+
+    /// <summary>Every class name, published whole and cleared when a name appears or disappears.</summary>
+    private volatile HashSet<string>? _classNames;
+
     private readonly Lock _gate = new();
 
     /// <summary>
@@ -59,7 +88,11 @@ public sealed class ClassGraph
             {
                 foreach ( ClassSymbol classSymbol in previous )
                 {
-                    Detach(_pathsByClassName, classSymbol.KeyName, path);
+                    if ( Detach(_pathsByClassName, classSymbol.KeyName, path) )
+                    {
+                        _classNames = null;
+                    }
+
                     Detach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                     if ( classSymbol.ParentKeyName is not null )
@@ -84,7 +117,11 @@ public sealed class ClassGraph
 
             foreach ( ClassSymbol classSymbol in classes )
             {
-                Attach(_pathsByClassName, classSymbol.KeyName, path);
+                if ( Attach(_pathsByClassName, classSymbol.KeyName, path) )
+                {
+                    _classNames = null;
+                }
+
                 Attach(_pathsByQualifiedName, (classSymbol.Namespace, classSymbol.KeyName), path);
 
                 if ( classSymbol.ParentKeyName is not null )
@@ -103,15 +140,7 @@ public sealed class ClassGraph
     /// <summary>Paths of files declaring a class of this name (snapshot).</summary>
     public ImmutableArray<string> PathsDeclaring(string classKeyName)
     {
-        lock ( _gate )
-        {
-            if ( !_pathsByClassName.TryGetValue(classKeyName, out HashSet<string>? paths) )
-            {
-                return [];
-            }
-
-            return [.. paths];
-        }
+        return _pathsByClassName.TryGetValue(classKeyName, out Bucket? bucket) ? PathsOf(bucket) : [];
     }
 
     /// <summary>
@@ -122,15 +151,7 @@ public sealed class ClassGraph
     /// </summary>
     public ImmutableArray<string> PathsDeclaring(string namespaceName, string classKeyName)
     {
-        lock ( _gate )
-        {
-            if ( !_pathsByQualifiedName.TryGetValue((namespaceName, classKeyName), out HashSet<string>? paths) )
-            {
-                return [];
-            }
-
-            return [.. paths];
-        }
+        return _pathsByQualifiedName.TryGetValue((namespaceName, classKeyName), out Bucket? bucket) ? PathsOf(bucket) : [];
     }
 
     /// <summary>
@@ -139,16 +160,13 @@ public sealed class ClassGraph
     /// </summary>
     public ImmutableArray<string> DirectChildren(string classKeyName)
     {
-        lock ( _gate )
+        if ( !_pathsByParentName.TryGetValue(classKeyName, out Bucket? bucket) )
         {
-            if ( !_pathsByParentName.TryGetValue(classKeyName, out HashSet<string>? paths) )
-            {
-                return [];
-            }
-
-            return ClassNamesIn(paths, classKeyName, static (classSymbol, parent) =>
-                string.Equals(classSymbol.ParentKeyName, parent, StringComparison.Ordinal));
+            return [];
         }
+
+        return NamesOf(bucket, classKeyName, static (classSymbol, parent) =>
+            string.Equals(classSymbol.ParentKeyName, parent, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -159,24 +177,44 @@ public sealed class ClassGraph
     /// </summary>
     public ImmutableArray<string> ClassesDeclaringMethod(string methodKeyName)
     {
-        lock ( _gate )
+        if ( !_pathsByMethodName.TryGetValue(methodKeyName, out Bucket? bucket) )
         {
-            if ( !_pathsByMethodName.TryGetValue(methodKeyName, out HashSet<string>? paths) )
-            {
-                return [];
-            }
-
-            return ClassNamesIn(paths, methodKeyName, static (classSymbol, method) =>
-                DeclaresMethod(classSymbol, method));
+            return [];
         }
+
+        return NamesOf(bucket, methodKeyName, static (classSymbol, method) => DeclaresMethod(classSymbol, method));
     }
 
     /// <summary>Every class name in this language world (snapshot).</summary>
     public ImmutableArray<string> AllClassNames()
     {
+        return [.. ClassNameSet()];
+    }
+
+    /// <summary>
+    /// Every class name in this language world, as a set to test against — the same answer as
+    /// <see cref="AllClassNames"/> without a copy. Built once per change to the set of names, so a
+    /// caller asking once per file linted or per completion pays a lookup, not a pass over every
+    /// class in the workspace. Never modified once handed out.
+    /// </summary>
+    public IReadOnlySet<string> ClassNameSet()
+    {
+        HashSet<string>? names = _classNames;
+        if ( names is not null )
+        {
+            return names;
+        }
+
         lock ( _gate )
         {
-            return [.. _pathsByClassName.Keys];
+            names = _classNames;
+            if ( names is null )
+            {
+                names = new HashSet<string>(_pathsByClassName.Keys, StringComparer.Ordinal);
+                _classNames = names;
+            }
+
+            return names;
         }
     }
 
@@ -193,59 +231,107 @@ public sealed class ClassGraph
         }
     }
 
-    private static void Attach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
-        where TKey : notnull
+    private ImmutableArray<string> PathsOf(Bucket bucket)
     {
-        if ( !index.TryGetValue(key, out HashSet<string>? paths) )
+        string[]? paths = bucket.Paths;
+        if ( paths is null )
         {
-            paths = new HashSet<string>(StringComparer.Ordinal);
-            index[key] = paths;
-        }
-
-        paths.Add(path);
-    }
-
-    private static void Detach<TKey>(Dictionary<TKey, HashSet<string>> index, TKey key, string path)
-        where TKey : notnull
-    {
-        if ( !index.TryGetValue(key, out HashSet<string>? paths) )
-        {
-            return;
-        }
-
-        paths.Remove(path);
-        if ( paths.Count == 0 )
-        {
-            index.Remove(key);
-        }
-    }
-
-    /// <summary>
-    /// The distinct names of the classes in <paramref name="paths"/> that <paramref name="matches"/>
-    /// accepts. Deduplicated, because an overlay and the raw script it shadows declare the same
-    /// class. Called under <see cref="_gate"/>.
-    /// </summary>
-    private ImmutableArray<string> ClassNamesIn(
-        HashSet<string> paths, string key, Func<ClassSymbol, string, bool> matches)
-    {
-        HashSet<string> names = new(StringComparer.Ordinal);
-        foreach ( string path in paths )
-        {
-            if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
+            lock ( _gate )
             {
-                continue;
-            }
-
-            foreach ( ClassSymbol classSymbol in classes )
-            {
-                if ( matches(classSymbol, key) )
+                paths = bucket.Paths;
+                if ( paths is null )
                 {
-                    names.Add(classSymbol.KeyName);
+                    paths = [.. bucket.Set];
+                    bucket.Paths = paths;
                 }
             }
         }
 
-        return [.. names];
+        return ImmutableCollectionsMarshal.AsImmutableArray(paths);
+    }
+
+    /// <summary>
+    /// The distinct names of the classes in a bucket's paths that <paramref name="matches"/> accepts,
+    /// cached on the bucket. Deduplicated, because an overlay and the raw script it shadows declare
+    /// the same class. Every write that could change the answer changes this bucket's set — a file's
+    /// classes are detached from and attached to exactly the buckets they name — so clearing on a
+    /// set change is enough.
+    /// </summary>
+    private ImmutableArray<string> NamesOf(Bucket bucket, string key, Func<ClassSymbol, string, bool> matches)
+    {
+        string[]? names = bucket.Names;
+        if ( names is null )
+        {
+            lock ( _gate )
+            {
+                names = bucket.Names;
+                if ( names is null )
+                {
+                    HashSet<string> found = new(StringComparer.Ordinal);
+                    foreach ( string path in bucket.Set )
+                    {
+                        if ( !_classesByPath.TryGetValue(path, out ImmutableArray<ClassSymbol> classes) )
+                        {
+                            continue;
+                        }
+
+                        foreach ( ClassSymbol classSymbol in classes )
+                        {
+                            if ( matches(classSymbol, key) )
+                            {
+                                found.Add(classSymbol.KeyName);
+                            }
+                        }
+                    }
+
+                    names = [.. found];
+                    bucket.Names = names;
+                }
+            }
+        }
+
+        return ImmutableCollectionsMarshal.AsImmutableArray(names);
+    }
+
+    /// <summary>Adds a path under a key, under <see cref="_gate"/>. True when the key is new.</summary>
+    private static bool Attach<TKey>(ConcurrentDictionary<TKey, Bucket> index, TKey key, string path)
+        where TKey : notnull
+    {
+        bool created = false;
+        if ( !index.TryGetValue(key, out Bucket? bucket) )
+        {
+            bucket = new Bucket();
+            index[key] = bucket;
+            created = true;
+        }
+
+        if ( bucket.Set.Add(path) )
+        {
+            bucket.Paths = null;
+            bucket.Names = null;
+        }
+
+        return created;
+    }
+
+    /// <summary>Removes a path from a key, under <see cref="_gate"/>. True when the key is gone.</summary>
+    private static bool Detach<TKey>(ConcurrentDictionary<TKey, Bucket> index, TKey key, string path)
+        where TKey : notnull
+    {
+        if ( !index.TryGetValue(key, out Bucket? bucket) || !bucket.Set.Remove(path) )
+        {
+            return false;
+        }
+
+        bucket.Paths = null;
+        bucket.Names = null;
+        if ( bucket.Set.Count > 0 )
+        {
+            return false;
+        }
+
+        index.TryRemove(key, out _);
+        return true;
     }
 
     private static bool DeclaresMethod(ClassSymbol classSymbol, string methodKeyName)

@@ -300,6 +300,23 @@ public sealed class NavigationSupport
     }
 
     /// <summary>
+    /// The same query, for a caller that keeps only the <see cref="ReferenceKind.Definition"/>
+    /// entries: go-to-definition. It may also get back other entries, which it filters as before.
+    ///
+    /// A declaration entry is written only by a file that declares the key, so for a function whose
+    /// declaring file is known, only the files declaring it are read. Asked of a stock utility every
+    /// copy calls, the full query read every reaching file's references — 100,103 of them for
+    /// flag::init at 50,000 heavy BO3 files — to keep one.
+    /// </summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindDefinitionSites(
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+    {
+        return FindAllReferences(
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
+            IsFileLocalMacro(target, key) ? target.Path : "", definitionsOnly: true);
+    }
+
+    /// <summary>
     /// A macro this script <c>#define</c>s itself, which no other file can see: the preprocessor
     /// runs per file, and only a header reaches another one, through <c>#insert</c>. A macro key
     /// carries no file, so asked across the workspace it gathered every OTHER script's macro of the
@@ -387,10 +404,14 @@ public sealed class NavigationSupport
     /// See <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/>'s parameter of
     /// the same name, and <see cref="FindReferencesInFile"/> for the caller it exists for.
     /// </param>
+    /// <param name="definitionsOnly">
+    /// The caller keeps only declaration entries — see <see cref="FindDefinitionSites"/>.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
         bool macroSpansLanguages = true,
-        string onlyPath = "")
+        string onlyPath = "",
+        bool definitionsOnly = false)
     {
         // A class MEMBER has the same problem in both directions: the `var` is on one class and
         // the bare uses are keyed by whichever class's body each sits in, so the key canonicalizes
@@ -459,7 +480,8 @@ public sealed class NavigationSupport
         if ( declaring.Length > 0 )
         {
             return DatabaseQueries.FindReferencesReaching(
-                target.Stores, target.ContextId, key, declaring, onlyPath: onlyPath);
+                target.Stores, target.ContextId, key, declaring, onlyPath: onlyPath,
+                onlyPaths: definitionsOnly ? FilesDeclaring(target.Stores, key) : default);
         }
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
@@ -527,6 +549,22 @@ public sealed class NavigationSupport
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
     /// </summary>
+    /// <summary>Every file in these stores declaring a function key.</summary>
+    private static ImmutableArray<string> FilesDeclaring(ImmutableArray<LanguageStore> stores, SymbolKey key)
+    {
+        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
+        foreach ( LanguageStore store in stores )
+        {
+            // A merge dialect keys a function with no namespace, so its declarations are found by
+            // name alone: more files than declare this one, never fewer.
+            paths.AddRange(key.Namespace is null
+                ? store.FilesDeclaring(key.Name)
+                : store.FilesDeclaring(key.Namespace, key.Name));
+        }
+
+        return paths.ToImmutable();
+    }
+
     private string DeclaringFile(SymbolQueryContext target, SymbolKey key)
     {
         if ( key.Kind != SymbolKind.Function )

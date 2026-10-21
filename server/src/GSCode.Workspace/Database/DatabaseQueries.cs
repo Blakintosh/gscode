@@ -825,13 +825,20 @@ public static class DatabaseQueries
     /// other file's reference list — the part that costs, and the part a same-file question never
     /// wanted. See <see cref="FindAllReferences"/>'s parameter of the same name.
     /// </param>
+    /// <param name="onlyPaths">
+    /// When given, only these files are considered, each tested for reaching the declaring file
+    /// rather than the reaching files walked. For a question only a few files can answer — where a
+    /// key is DECLARED, which only the files declaring it can say — against a key every file in the
+    /// workspace reaches and mentions.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesReaching(
         ImmutableArray<LanguageStore> stores,
         string askingContextId,
         SymbolKey key,
         string declaringRelativePath,
         GameProfile? profile = null,
-        string onlyPath = "")
+        string onlyPath = "",
+        ImmutableArray<string> onlyPaths = default)
     {
         GameProfile game = profile ?? GameProfile.Active;
         string declaring = RelativePathIndex.Normalize(declaringRelativePath);
@@ -858,7 +865,12 @@ public static class DatabaseQueries
             ImmutableArray<string> mentioning = store.FilesReferencing(key);
             bool walkMentioning = mentioning.Length < atDeclaring.Length + naming.Length;
             IEnumerable<string> walk;
-            if ( walkMentioning )
+            if ( !onlyPaths.IsDefault )
+            {
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = onlyPaths.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else if ( walkMentioning )
             {
                 HashSet<string> namingSet = NamingSet(naming);
                 walk = mentioning.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));

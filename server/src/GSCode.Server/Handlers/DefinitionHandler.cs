@@ -162,7 +162,13 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(
         NavigationTarget target, SymbolKey key, ReferenceKind referenceKind)
     {
-        return _support.FindAllReferences(target, key, referenceKind);
+        // A field has no declaration; its writes are everywhere it is written.
+        if ( key.Kind == GSCode.Core.Symbols.SymbolKind.Field )
+        {
+            return _support.FindAllReferences(target, key, referenceKind);
+        }
+
+        return _support.FindDefinitionSites(target, key, referenceKind);
     }
 
     /// <summary>

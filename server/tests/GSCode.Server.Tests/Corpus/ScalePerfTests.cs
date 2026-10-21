@@ -81,6 +81,9 @@ public partial class ScalePerfTests
         /// <summary>A sampled record's bytes by field — see ScalePerfTests.Memory.</summary>
         public List<(string Field, double KilobytesPerRecord)> Census { get; set; } = [];
 
+        /// <summary>What the store holds beside its records, per file — see ScalePerfTests.Memory.</summary>
+        public List<(string Field, double KilobytesPerRecord)> IndexCensus { get; set; } = [];
+
         /// <summary>Every request, the keystroke bundle and the watched-file paths — see ScalePerfTests.EveryComponent.</summary>
         public ComponentRow? Components { get; set; }
         public double WorkingSetMegabytes { get; set; }
@@ -286,6 +289,7 @@ public partial class ScalePerfTests
             row.RetainedMegabytes = (afterIndex.ManagedLive - baseline.ManagedLive) / 1048576.0;
             row.WorkingSetMegabytes = afterIndex.WorkingSet / 1048576.0;
             row.Census = MeasureRecordCensus(database);
+            row.IndexCensus = MeasureIndexCensus(database);
             GCMemoryInfo heap = GC.GetGCMemoryInfo(GCKind.Any);
             row.HeapMegabytes = heap.HeapSizeBytes / 1048576.0;
             row.FragmentedMegabytes = heap.FragmentedBytes / 1048576.0;
@@ -817,6 +821,12 @@ public partial class ScalePerfTests
         foreach ( (string Field, double KilobytesPerRecord) field in row.Census.Take(12) )
         {
             _output.WriteLine($"       {field.Field,-30} {field.KilobytesPerRecord,8:F1} KB");
+        }
+
+        _output.WriteLine($"     index bytes       {row.IndexCensus.Sum(field => field.KilobytesPerRecord),8:F1} KB a file beside the records, by field:");
+        foreach ( (string Field, double KilobytesPerRecord) field in row.IndexCensus.Take(16) )
+        {
+            _output.WriteLine($"       {field.Field,-44} {field.KilobytesPerRecord,8:F1} KB");
         }
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");

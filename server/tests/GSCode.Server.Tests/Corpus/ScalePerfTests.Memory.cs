@@ -46,6 +46,51 @@ public partial class ScalePerfTests
     }
 
     /// <summary>
+    /// What the store holds BESIDE its records, by field, per indexed file: the reference,
+    /// declaration and vocabulary indexes, the dictionaries holding the records, and the rest.
+    ///
+    /// The record census accounts for only part of what a file retains, so this walks everything
+    /// the two language stores and the database reach with every record already marked seen,
+    /// which leaves exactly the structures built ON the records. Strings are counted apart: nearly
+    /// all of them are names interned once and shared with the records, so charging them to the
+    /// first index that reaches them would mislead.
+    /// </summary>
+    private static List<(string Field, double KilobytesPerRecord)> MeasureIndexCensus(ScriptDatabase database)
+    {
+        RecordCensus census = new() { StringsApart = true };
+        int files = 0;
+        foreach ( LanguageStore store in new[] { database.Gsc, database.Csc } )
+        {
+            foreach ( ScriptRecord record in store.AllRecords )
+            {
+                census.Skip(record);
+                files++;
+            }
+        }
+
+        FieldInfo? gshRecords = typeof(ScriptDatabase).GetField("_gshRecords", BindingFlags.Instance | BindingFlags.NonPublic);
+        if ( gshRecords?.GetValue(database) is ConcurrentDictionary<string, ScriptRecord> headers )
+        {
+            foreach ( ScriptRecord record in headers.Values )
+            {
+                census.Skip(record);
+            }
+        }
+
+        census.VisitObject(database.Gsc, "gsc");
+        census.VisitObject(database.Csc, "csc");
+        census.VisitObject(database, "database");
+
+        List<(string Field, double KilobytesPerRecord)> rows = [];
+        foreach ( KeyValuePair<string, long> field in census.BytesByField.OrderByDescending(pair => pair.Value) )
+        {
+            rows.Add((field.Key, field.Value / 1024.0 / Math.Max(1, files)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
     /// The heap through one phase, sampled every 250 ms on its own thread: working set, what the
     /// allocator has handed out, what the GC has committed, and — as of the last collection — each
     /// generation's size, the large-object heap included.
@@ -136,6 +181,29 @@ public partial class ScalePerfTests
 
         public Dictionary<string, long> BytesByField { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Counts every string under one heading instead of the field that reached it.</summary>
+        public bool StringsApart { get; init; }
+
+        /// <summary>Marks an object as already counted, so nothing reached through it is.</summary>
+        public void Skip(object value)
+        {
+            _seen.Add(value);
+        }
+
+        /// <summary>Each of an object's own fields, under <paramref name="prefix"/>.</summary>
+        public void VisitObject(object value, string prefix)
+        {
+            if ( !_seen.Add(value) )
+            {
+                return;
+            }
+
+            foreach ( FieldInfo field in FieldsOf(value.GetType()) )
+            {
+                Walk(field.GetValue(value), prefix + "." + CleanName(field.Name));
+            }
+        }
+
         public void Visit(ScriptRecord record)
         {
             _seen.Add(record);
@@ -183,7 +251,7 @@ public partial class ScalePerfTests
 
             if ( value is string text )
             {
-                Add(field, (22 + 2L * text.Length + 7) & ~7L);
+                Add(StringsApart ? "(strings, mostly shared with the records)" : field, (22 + 2L * text.Length + 7) & ~7L);
                 return;
             }
 

@@ -23,7 +23,7 @@ public sealed class CodeLensCountCacheTests
     /// <summary>The count on <c>helper</c>'s lens, from one handler whose cache lives across requests.</summary>
     private static async Task<int> HelperCountAsync(HandlerWorkspace workspace, CodeLensHandler handler)
     {
-        CodeLensContainer? lenses = await handler.Handle(
+        CodeLensContainer? lenses = await handler.HandleResolvedAsync(
             new CodeLensParams { TextDocument = HandlerWorkspace.Identify(@"scripts\lib.gsc") }, CancellationToken.None);
 
         Assert.NotNull(lenses);

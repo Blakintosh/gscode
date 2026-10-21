@@ -114,8 +114,8 @@ public partial class ScalePerfTests
         TextDocumentIdentifier copyIdentifier = new() { Uri = DocumentUri.FromFileSystemPath(copy) };
 
         CodeLensParams copyLensRequest = new() { TextDocument = copyIdentifier };
-        row.CopyLenses = (await lenses.Handle(copyLensRequest, CancellationToken.None))?.Count() ?? 0;
-        row.CopyLensMilliseconds = await TimeTwiceAsync(() => lenses.Handle(copyLensRequest, CancellationToken.None));
+        row.CopyLenses = (await lenses.HandleResolvedAsync(copyLensRequest, CancellationToken.None))?.Count() ?? 0;
+        row.CopyLensMilliseconds = await TimeTwiceAsync(() => lenses.HandleResolvedAsync(copyLensRequest, CancellationToken.None));
         SlowestLensKeys(row, support, copyIdentifier.Uri, parsed);
 
         ReferenceEntry? hot = HottestForeignCall(parsed, out int hotCount);
@@ -186,14 +186,14 @@ public partial class ScalePerfTests
         row.DeclaringFile = Path.GetRelativePath(corpus.RawRoot, declaringPath);
         documents.Open(declaringPath, File.ReadAllText(declaringPath), version: 1);
         CodeLensParams declaringLensRequest = new() { TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(declaringPath) } };
-        CodeLensContainer? declaringLenses = await lenses.Handle(declaringLensRequest, CancellationToken.None);
+        CodeLensContainer? declaringLenses = await lenses.HandleResolvedAsync(declaringLensRequest, CancellationToken.None);
         row.DeclaringLenses = declaringLenses?.Count() ?? 0;
         foreach ( CodeLens lens in declaringLenses ?? new CodeLensContainer() )
         {
             row.DeclaringLensTitles.Add($"line {lens.Range.Start.Line + 1}: {lens.Command?.Title}");
         }
 
-        row.DeclaringLensMilliseconds = await TimeTwiceAsync(() => lenses.Handle(declaringLensRequest, CancellationToken.None));
+        row.DeclaringLensMilliseconds = await TimeTwiceAsync(() => lenses.HandleResolvedAsync(declaringLensRequest, CancellationToken.None));
         documents.Close(declaringPath);
 
         return row;

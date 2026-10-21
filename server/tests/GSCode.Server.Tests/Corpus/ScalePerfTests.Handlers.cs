@@ -69,7 +69,7 @@ public partial class ScalePerfTests
             ParseResult parsed = documents.AnalyzeIfStale(document);
             TextDocumentIdentifier identifier = new() { Uri = DocumentUri.FromFileSystemPath(path) };
 
-            lensTimes.Add(await TimeTwiceAsync(() => lenses.Handle(new CodeLensParams { TextDocument = identifier }, CancellationToken.None)));
+            lensTimes.Add(await TimeTwiceAsync(() => lenses.HandleResolvedAsync(new CodeLensParams { TextDocument = identifier }, CancellationToken.None)));
 
             if ( parsed.Extraction.Functions.Length > 0 )
             {

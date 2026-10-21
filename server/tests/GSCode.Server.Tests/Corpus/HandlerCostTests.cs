@@ -216,12 +216,12 @@ public class HandlerCostTests
 
         // One untimed pass each, so the figures are steady-state rather than a measurement of the
         // first call's JIT.
-        await lenses.Handle(new CodeLensParams { TextDocument = identifier }, CancellationToken.None);
+        await lenses.HandleResolvedAsync(new CodeLensParams { TextDocument = identifier }, CancellationToken.None);
         await hints.Handle(HintParams(identifier, parsed), CancellationToken.None);
         GscFormatter.FormatMinimalEdits(parsed);
 
         long started = Stopwatch.GetTimestamp();
-        await lenses.Handle(new CodeLensParams { TextDocument = identifier }, CancellationToken.None);
+        await lenses.HandleResolvedAsync(new CodeLensParams { TextDocument = identifier }, CancellationToken.None);
         double lensMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
         started = Stopwatch.GetTimestamp();

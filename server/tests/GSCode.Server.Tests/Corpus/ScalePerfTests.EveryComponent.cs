@@ -238,7 +238,11 @@ public partial class ScalePerfTests
                 new DocumentFormattingParams { TextDocument = id, Options = new FormattingOptions { TabSize = 4, InsertSpaces = false } },
                 CancellationToken.None));
             await TimeAsync(into, "inlay hints, whole file", () => server.Hints.Handle(new InlayHintParams { TextDocument = id, Range = whole }, CancellationToken.None));
-            await TimeAsync(into, "codeLens", () => server.Lenses.Handle(new CodeLensParams { TextDocument = id }, CancellationToken.None));
+            await TimeAsync(into, "codeLens", () => FirstScreenLensesAsync(server, id));
+            server.LensCounts.Clear();
+            await TimeAsync(into, "codeLens, every lens resolved", () => server.Lenses.HandleResolvedAsync(
+                new CodeLensParams { TextDocument = id }, CancellationToken.None));
+            server.LensCounts.Clear();
 
             if ( at.StockCall is LspPosition call && at.StockCallRange is LspRange callRange )
             {
@@ -312,7 +316,7 @@ public partial class ScalePerfTests
         ParseResult parsed = Step(into, "1 re-analyse", () => server.Documents.AnalyzeIfStale(document));
         Step(into, "2 lint pass", () => server.Linter.Analyze(document, parsed));
         await TimeAsync(into, "3 semantic tokens", () => server.Tokens.Handle(new SemanticTokensParams { TextDocument = id }, CancellationToken.None));
-        await TimeAsync(into, "4 codeLens", () => server.Lenses.Handle(new CodeLensParams { TextDocument = id }, CancellationToken.None));
+        await TimeAsync(into, "4 codeLens", () => FirstScreenLensesAsync(server, id));
         await TimeAsync(into, "5 inlay hints", () => server.Hints.Handle(
             new InlayHintParams { TextDocument = id, Range = new LspRange(new LspPosition(0, 0), new LspPosition(CountLines(text) + 2, 0)) },
             CancellationToken.None));
@@ -374,6 +378,30 @@ public partial class ScalePerfTests
         string payload = JsonConvert.SerializeObject(result);
         stats.SerializeMilliseconds.Add(Stopwatch.GetElapsedTime(serializeStarted).TotalMilliseconds);
         stats.PayloadChars.Add(payload.Length);
+    }
+
+    /// <summary>Lines an editor shows at once, whose lenses it resolves on opening a file.</summary>
+    private const int ScreenLines = 60;
+
+    /// <summary>
+    /// What an editor asks for CodeLens on showing a file: the list, then a resolve for each lens on
+    /// the screen. The list carries no counts; each resolve counts one.
+    /// </summary>
+    private static async Task<CodeLensContainer?> FirstScreenLensesAsync(ScaleServer server, TextDocumentIdentifier id)
+    {
+        CodeLensContainer? listed = await server.Lenses.Handle(new CodeLensParams { TextDocument = id }, CancellationToken.None);
+        if ( listed is null )
+        {
+            return null;
+        }
+
+        List<CodeLens> shown = [];
+        foreach ( CodeLens lens in listed )
+        {
+            shown.Add(lens.Range.Start.Line < ScreenLines ? await server.Lenses.Handle(lens, CancellationToken.None) : lens);
+        }
+
+        return new CodeLensContainer(shown);
     }
 
     private static int CountLines(string text)

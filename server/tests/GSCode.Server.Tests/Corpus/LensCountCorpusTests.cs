@@ -100,9 +100,9 @@ public class LensCountCorpusTests
                     documents.AnalyzeIfStale(document);
                     CodeLensParams request = new() { TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(record.Path) } };
 
-                    List<string> expected = Titles(await uncached.Handle(request, CancellationToken.None));
-                    List<string> filled = Titles(await cached.Handle(request, CancellationToken.None));
-                    List<string> read = Titles(await cached.Handle(request, CancellationToken.None));
+                    List<string> expected = Titles(await uncached.HandleResolvedAsync(request, CancellationToken.None));
+                    List<string> filled = Titles(await cached.HandleResolvedAsync(request, CancellationToken.None));
+                    List<string> read = Titles(await cached.HandleResolvedAsync(request, CancellationToken.None));
                     documents.Close(record.Path);
 
                     files++;

@@ -33,7 +33,7 @@ public class SameFileReferenceTests
             references.Add(new ReferenceEntry(s_main, At(line), ReferenceKind.Call));
         }
 
-        return TestRecords.At(path, contextId, relativePath) with { References = references.ToImmutable() };
+        return TestRecords.At(path, contextId, relativePath) with { References = ReferenceTable.From(references.ToImmutable()) };
     }
 
     /// <summary>A raw file and a mod overlay at the same relative path, both calling the key.</summary>

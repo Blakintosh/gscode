@@ -336,7 +336,7 @@ public static class RecordSerializer
             Dependencies = dependencies.MoveToImmutable(),
             PathCallTargets = targets.MoveToImmutable(),
             FieldBindings = bindings.MoveToImmutable(),
-            References = references.MoveToImmutable(),
+            References = ReferenceTable.From(references.MoveToImmutable()),
             Diagnostics = diagnostics.MoveToImmutable(),
             IsDirty = isDirty,
         };

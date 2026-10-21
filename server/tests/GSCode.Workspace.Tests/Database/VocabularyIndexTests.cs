@@ -23,7 +23,7 @@ public class VocabularyIndexTests
     {
         return TestRecords.At(path, contextId) with
         {
-            References = references.IsDefault ? [] : references,
+            References = references.IsDefault ? ReferenceTable.Empty : ReferenceTable.From(references),
             Functions = [TestRecords.Function("f", "ns") with { Assignments = assignments.IsDefault ? [] : assignments }],
         };
     }

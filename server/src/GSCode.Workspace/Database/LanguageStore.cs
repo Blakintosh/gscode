@@ -179,7 +179,7 @@ public sealed class LanguageStore
     private void ApplyIndexes(string path, ScriptRecord? previous, ScriptRecord? next, Contributions contributions)
     {
         PerfTracker.Begin("upsert.reference");
-        _referenceIndex.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), contributions.ReferenceKeys);
+        _referenceIndex.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? ReferenceTable.Empty), contributions.ReferenceKeys);
         PerfTracker.End();
 
         PerfTracker.Begin("upsert.declaration");

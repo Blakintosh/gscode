@@ -39,7 +39,7 @@ public static class SymbolAtPosition
     /// and a live parse hold the same reference list, so the rule for reading it — including the
     /// macro guard — is one rule, and writing it twice gave it two places to change.
     /// </summary>
-    private static PositionHit ResolveReference(ImmutableArray<ReferenceEntry> references, Position position)
+    private static PositionHit ResolveReference(IEnumerable<ReferenceEntry> references, Position position)
     {
         foreach ( ReferenceEntry entry in references )
         {

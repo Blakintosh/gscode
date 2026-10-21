@@ -84,7 +84,11 @@ public sealed record ScriptRecord
     /// functions, so reference scoping has to see them.
     /// </summary>
     public ImmutableArray<GSCode.Parser.Extraction.PathCallReference> PathCallTargets { get; init; } = [];
-    public ImmutableArray<ReferenceEntry> References { get; init; } = [];
+    /// <summary>
+    /// Every reference the file makes, compactly and grouped by key — see <see cref="ReferenceTable"/>.
+    /// Iterating it yields the entries in source order.
+    /// </summary>
+    public ReferenceTable References { get; init; } = ReferenceTable.Empty;
 
     /// <summary>
     /// What this file's writes PUT in a field — <c>level.callback = &amp;on_damage</c> — where

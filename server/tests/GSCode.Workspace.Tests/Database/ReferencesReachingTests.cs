@@ -62,7 +62,7 @@ public class ReferencesReachingTests
         return TestRecords.At(path, contextId, relativePath) with
         {
             Functions = functions.ToImmutable(),
-            References = references.ToImmutable(),
+            References = ReferenceTable.From(references.ToImmutable()),
             Dependencies = edges.ToImmutable(),
             PathCallTargets = targets.ToImmutable(),
         };

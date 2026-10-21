@@ -177,7 +177,7 @@ public sealed class ScriptDatabase
     {
         _gshDirectives.Apply(path, DirectiveIndex.Of(previous), directives);
         _gshPathTree.Apply(previous, next);
-        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), referenceKeys);
+        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? ReferenceTable.Empty), referenceKeys);
     }
 
     /// <summary>
@@ -380,7 +380,7 @@ public sealed class ScriptDatabase
             // lost — reference scoping on the merge dialects needs them: a path call reaches
             // another file's function without importing it.
             PathCallTargets = result.Extraction.PathCalls,
-            References = result.Extraction.References,
+            References = ReferenceTable.From(result.Extraction.References),
             FieldBindings = result.Extraction.FieldBindings,
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,

@@ -878,9 +878,12 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                foreach ( ReferenceEntry entry in record.References )
+                // This key's entries only: a heavy script carries ~1,550 references, and reading
+                // them all per mentioning file to keep a handful was most of what find-references
+                // and CodeLens cost at scale.
+                foreach ( ReferenceEntry entry in record.References.EntriesFor(key) )
                 {
-                    if ( entry.Key == key && MeansDeclaringFile(game, record, entry, declaring) )
+                    if ( MeansDeclaringFile(game, record, entry, declaring) )
                     {
                         kept.Add((record, entry));
                     }
@@ -916,12 +919,9 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                foreach ( ReferenceEntry entry in overlay.References )
+                if ( overlay.References.Contains(key) )
                 {
-                    if ( entry.Key == key )
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -1684,12 +1684,9 @@ public static class DatabaseQueries
                 continue;
             }
 
-            foreach ( ReferenceEntry entry in record.References )
+            foreach ( ReferenceEntry entry in record.References.EntriesFor(key) )
             {
-                if ( entry.Key == key )
-                {
-                    results.Add((record, entry));
-                }
+                results.Add((record, entry));
             }
         }
 

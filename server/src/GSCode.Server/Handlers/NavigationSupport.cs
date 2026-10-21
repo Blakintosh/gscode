@@ -484,9 +484,15 @@ public sealed class NavigationSupport
                 onlyPaths: definitionsOnly ? FilesDeclaring(target.Stores, key) : default);
         }
 
+        // With no declaring file known — a copy calling a stock function its own imports do not
+        // reach — the query is workspace-wide, and only the files declaring a function can hold
+        // its declaration entries.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(
-                _database, target.Stores, target.ContextId, key, macroSpansLanguages, onlyPath);
+            definitionsOnly && onlyPath.Length == 0 && key.Kind == SymbolKind.Function
+                ? DatabaseQueries.FindAllReferencesIn(
+                    _database, target.Stores, target.ContextId, key, FilesDeclaring(target.Stores, key), macroSpansLanguages)
+                : DatabaseQueries.FindAllReferences(
+                    _database, target.Stores, target.ContextId, key, macroSpansLanguages, onlyPath);
 
         return DatabaseQueries.ScopeToIncludeGraph(all, declaring);
     }

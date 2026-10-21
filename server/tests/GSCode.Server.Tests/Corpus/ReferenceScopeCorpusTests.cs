@@ -21,8 +21,9 @@ namespace GSCode.Server.Tests.Corpus;
 /// entries filtering the wide answer would have kept — over every declaration a real workspace has,
 /// rather than over the handful a fixture can spell.
 ///
-/// And the narrowing go-to-definition uses: the same query limited to the files DECLARING the key
-/// must find every declaration entry the full query finds.
+/// And the narrowing go-to-definition uses: the same queries limited to the files DECLARING the
+/// key — the reaching one, and the workspace-wide one for a call whose file reaches no declaration —
+/// must find every declaration entry the full queries find.
 /// </summary>
 [Trait("Category", "Corpus")]
 [Collection(GameProfileCollection.Name)]
@@ -139,6 +140,19 @@ public class ReferenceScopeCorpusTests
                         {
                             differingDeclarations.Add(
                                 $"{record.RelativePath} {function.Name}: {expectedDeclarations.Count} vs {declarations.Count}");
+                        }
+
+                        List<string> expectedWide = Describe(
+                            [.. DatabaseQueries.FindAllReferences(database, stores, record.ContextId, key)
+                                .Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+                        List<string> wide = Describe(
+                            [.. DatabaseQueries.FindAllReferencesIn(database, stores, record.ContextId, key, declaring)
+                                .Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+
+                        if ( !expectedWide.SequenceEqual(wide) )
+                        {
+                            differingDeclarations.Add(
+                                $"{record.RelativePath} {function.Name} (workspace-wide): {expectedWide.Count} vs {wide.Count}");
                         }
                     }
                 }

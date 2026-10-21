@@ -1629,6 +1629,35 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// <see cref="FindAllReferences"/>'s answer for only these files: each asked with its own
+    /// <c>onlyPath</c>, which that parameter's own comment shows is the full answer filtered to the
+    /// file. For a question only a few files can answer — where a key is DECLARED, which only the
+    /// files declaring it can say — about a key the whole workspace mentions.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferencesIn(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key,
+        IEnumerable<string> paths,
+        bool macroSpansLanguages = true)
+    {
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        HashSet<string> asked = new(StringComparer.Ordinal);
+        foreach ( string path in paths )
+        {
+            if ( asked.Add(path) )
+            {
+                results.AddRange(FindAllReferences(database, stores, askingContextId, key, macroSpansLanguages, path));
+            }
+        }
+
+        return results.ToImmutable();
+    }
+
+    /// <summary>
     /// Every call site of an ENGINE BUILTIN, which is not reachable under one key the way a script
     /// function is.
     ///

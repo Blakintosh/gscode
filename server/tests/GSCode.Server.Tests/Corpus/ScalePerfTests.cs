@@ -68,6 +68,15 @@ public partial class ScalePerfTests
         public double Parallelism { get; set; }
         public double RetainedMegabytes { get; set; }
         public double RetainedAfterSweepMegabytes { get; set; }
+        public double HeapMegabytes { get; set; }
+        public double FragmentedMegabytes { get; set; }
+        public double PeakAfterColdMegabytes { get; set; }
+        public double PeakMegabytes { get; set; }
+        public double ColdGcPauseSeconds { get; set; }
+        public string ColdCollections { get; set; } = "";
+
+        /// <summary>Every request, the keystroke bundle and the watched-file paths — see ScalePerfTests.EveryComponent.</summary>
+        public ComponentRow? Components { get; set; }
         public double WorkingSetMegabytes { get; set; }
         public double CompactMilliseconds { get; set; }
         public double CompletionP50 { get; set; }
@@ -143,9 +152,13 @@ public partial class ScalePerfTests
                     + $"{corpus.ComplexShare * 100:F0}% above-median size; {corpus.Shape}) — workspace ready in {generate.Elapsed.TotalSeconds:F1} s");
                 _output.WriteLine($"     editor workspace  {corpus.CodeWorkspace}");
 
-                if ( corpus.SingleSource is not null )
+                if ( corpus.Sources.Length == 1 )
                 {
-                    reportSuffix = Path.GetFileNameWithoutExtension(corpus.SingleSource).TrimStart('_');
+                    reportSuffix = Path.GetFileNameWithoutExtension(corpus.Sources[0]).TrimStart('_');
+                }
+                else if ( corpus.Sources.Length > 1 )
+                {
+                    reportSuffix = $"top{corpus.Sources.Length}";
                 }
 
                 ScaleRow row = await MeasureAsync(corpus);
@@ -188,6 +201,22 @@ public partial class ScalePerfTests
         }
     }
 
+    /// <summary>
+    /// Appends the phase about to start to <c>GSCODE_SCALE_PHASE_FILE</c> when it is set, so a profiler
+    /// outside the test process can attach for one phase rather than sampling a whole run blind — the
+    /// test's own output is not seen until it ends.
+    /// </summary>
+    private static void Phase(string name)
+    {
+        string? file = Environment.GetEnvironmentVariable("GSCODE_SCALE_PHASE_FILE");
+        if ( string.IsNullOrEmpty(file) )
+        {
+            return;
+        }
+
+        File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss} {Environment.ProcessId} {name}\n");
+    }
+
     private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus)
     {
         GameProfile previous = GameProfile.Active;
@@ -210,11 +239,22 @@ public partial class ScalePerfTests
             InsertCache inserts = new();
             WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names, inserts);
 
+            // What the collector did DURING the cold index: PERF.md found the GC was three quarters of
+            // it at stock size, and a heap ten times larger is where that would show again.
+            TimeSpan pauseBefore = GC.GetTotalPauseDuration();
+            int gen0Before = GC.CollectionCount(0);
+            int gen1Before = GC.CollectionCount(1);
+            int gen2Before = GC.CollectionCount(2);
+
+            Phase("cold index");
             Stopwatch cold = Stopwatch.StartNew();
             IndexOutcome coldOutcome = await indexer.IndexAsync(
                 IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
             cold.Stop();
             row.ColdSeconds = cold.Elapsed.TotalSeconds;
+            row.ColdGcPauseSeconds = (GC.GetTotalPauseDuration() - pauseBefore).TotalSeconds;
+            row.ColdCollections = $"{GC.CollectionCount(0) - gen0Before}/{GC.CollectionCount(1) - gen1Before}/{GC.CollectionCount(2) - gen2Before}";
+            row.PeakAfterColdMegabytes = Process.GetCurrentProcess().PeakWorkingSet64 / 1048576.0;
             row.EnumerateSeconds = coldOutcome.Enumerate.TotalSeconds;
             row.Parallelism = coldOutcome.Parallelism;
 
@@ -228,23 +268,35 @@ public partial class ScalePerfTests
             PerfReport.Memory afterIndex = PerfReport.Sample();
             row.RetainedMegabytes = (afterIndex.ManagedLive - baseline.ManagedLive) / 1048576.0;
             row.WorkingSetMegabytes = afterIndex.WorkingSet / 1048576.0;
+            GCMemoryInfo heap = GC.GetGCMemoryInfo(GCKind.Any);
+            row.HeapMegabytes = heap.HeapSizeBytes / 1048576.0;
+            row.FragmentedMegabytes = heap.FragmentedBytes / 1048576.0;
 
             string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
             BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
             ObjectFields objectFields = ObjectFields.Load(apiDirectory);
 
             List<string> sample = Sample(ScaleCorpusFixture.CopiedScripts(corpus), RequestSampleFiles);
+            Phase("requests");
             MeasureRequests(row, corpus, sample, database, resolver, names, inserts, builtins, objectFields);
             await MeasureHandlersAsync(row, corpus, database, resolver, names, builtins, objectFields);
             row.Lookups = MeasureLookups(corpus, database, resolver, names, inserts, new CompletionEngine(database, builtins, objectFields));
             row.Heavy = await MeasureHeavyAsync(corpus, database, resolver, names, builtins, objectFields);
+            Phase("every component");
+            row.Components = await MeasureEveryComponentAsync(corpus, database, resolver, names, builtins, objectFields);
 
+            Phase("lint sweep");
             row.LintSweepSeconds = await MeasureLintSweepAsync(database, indexer, resolver, builtins, objectFields);
 
             // Again after every request and the sweep have READ the index: anything the index
             // caches on a read, which the figure taken after the cold index cannot see.
             Compact();
             row.RetainedAfterSweepMegabytes = (PerfReport.Sample().ManagedLive - baseline.ManagedLive) / 1048576.0;
+
+            Phase("watched files");
+
+            // Last on this index: the header save re-indexes files and the create/delete pair adds one.
+            MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components!, row.LintSweepSeconds);
 
             GC.KeepAlive(database);
             database = null!;
@@ -312,6 +364,7 @@ public partial class ScalePerfTests
             }
 
             row.DatabaseMegabytes = DatabaseBytes(databasePath) / 1048576.0;
+            row.PeakMegabytes = Process.GetCurrentProcess().PeakWorkingSet64 / 1048576.0;
             return row;
         }
         finally
@@ -718,6 +771,8 @@ public partial class ScalePerfTests
         _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; {row.RetainedMegabytes * 1024 / Math.Max(1, row.Total):F0} KB a file; working set {row.WorkingSetMegabytes:F0} MB)");
         _output.WriteLine($"     after the sweep   {row.RetainedAfterSweepMegabytes,8:F0} MB  retained once every request and the sweep have read the index");
         _output.WriteLine($"     compaction pause  {row.CompactMilliseconds,8:F0} ms");
+        _output.WriteLine($"     GC in cold index  {row.ColdGcPauseSeconds,8:F1} s paused  (collections gen0/1/2 {row.ColdCollections}); heap {row.HeapMegabytes:F0} MB, fragmented {row.FragmentedMegabytes:F0} MB");
+        _output.WriteLine($"     peak working set  {row.PeakAfterColdMegabytes,8:F0} MB after the cold index, {row.PeakMegabytes:F0} MB over the whole run");
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
         _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
@@ -742,6 +797,11 @@ public partial class ScalePerfTests
         if ( row.Heavy is not null )
         {
             WriteHeavy(row.Heavy);
+        }
+
+        if ( row.Components is not null )
+        {
+            WriteComponents(row.Components);
         }
 
         if ( row.DroppedWrites > 0 )
@@ -852,6 +912,7 @@ public partial class ScalePerfTests
         ]);
         table.AppendLine("Every column here is p99 ms over the sampled requests: 99% took less.");
         AppendHeavyTable(table, rows);
+        AppendComponentTable(table, rows);
 
         string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
         Directory.CreateDirectory(directory);

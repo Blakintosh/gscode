@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using GSCode.Core;
@@ -10,11 +11,11 @@ namespace GSCode.Server.Tests.Corpus;
 /// One generated scale workspace: the real game's raw folder as raw, plus a generated workspace
 /// folder holding copies of its scripts, so the index sees <see cref="TotalFiles"/> files in all.
 /// <see cref="Shape"/> names how the copies were made — <c>mixed</c>, or the one file duplicated —
-/// and <see cref="SingleSource"/> is that file when there is one.
+/// and <see cref="Sources"/> are the scripts duplicated, empty for the mixed shape.
 /// </summary>
 internal sealed record ScaleCorpus(
     GameProfile Profile, string RawRoot, string WorkspaceRoot, int TotalFiles, int CopiedFiles, double ComplexShare,
-    string Shape, string? SingleSource, string CodeWorkspace);
+    string Shape, ImmutableArray<string> Sources, string CodeWorkspace);
 
 /// <summary>
 /// Builds workspaces far larger than any real game ships, to find what breaks between the ~3,000
@@ -37,9 +38,10 @@ internal sealed record ScaleCorpus(
 /// the copies go (default the system temp folder). A finished workspace is marked and reused, since
 /// writing 50,000 files is minutes the measurement should not pay twice.
 ///
-/// <c>GSCODE_SCALE_SOURCE</c> switches to a second shape: ONE stock script duplicated until the
+/// <c>GSCODE_SCALE_SOURCE</c> switches to a second shape: a few stock scripts duplicated until the
 /// total is reached, rather than the whole tree. <c>heaviest</c> picks the largest GSC/CSC by bytes
-/// (bo3 <c>scripts\zm\_zm.gsc</c>: ~2,950 calls, 75 imports), or name a raw-relative path. Where the
+/// (bo3 <c>scripts\zm\_zm.gsc</c>: ~2,950 calls, 75 imports), <c>heaviest:N</c> the N largest
+/// round-robin, or name a raw-relative path. Where the
 /// mixed shape spreads references across the tree, this one piles them onto the keys a single
 /// file calls, so every reference bucket and every hot stock function holds one entry per copy.
 /// <c>GSCODE_SCALE_NAMESPACE=same</c> also leaves each copy's <c>#namespace</c> as written — every
@@ -58,6 +60,29 @@ internal static class ScaleCorpusFixture
 
     private static readonly Regex s_namespaceDirective = new(
         @"^(\s*#namespace\s+)(\w+)(\s*;)", RegexOptions.Multiline | RegexOptions.CultureInvariant);
+
+    private static readonly Regex s_classDeclaration = new(
+        @"^\s*class\s+(\w+)", RegexOptions.Multiline | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Every class a source declares, as one whole-word pattern, or null when it declares none. A BO3
+    /// class name is global — it has no namespace to suffix — so without renaming each copy's classes
+    /// too, two thousand copies of <c>scene_shared</c> all declare <c>cScene</c>, and every class lookup
+    /// walks every one of them. No real workspace does that; <c>GSCODE_SCALE_CLASSES=same</c> keeps it
+    /// for measuring exactly that.
+    /// </summary>
+    private static Regex? ClassNamesIn(string text)
+    {
+        List<string> names = [];
+        foreach ( Match match in s_classDeclaration.Matches(text) )
+        {
+            names.Add(Regex.Escape(match.Groups[1].Value));
+        }
+
+        return names.Count == 0
+            ? null
+            : new Regex(@"\b(" + string.Join('|', names) + @")\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
 
     public static IReadOnlyList<int> Sizes()
     {
@@ -123,10 +148,10 @@ internal static class ScaleCorpusFixture
             ? configured
             : Path.Combine(Path.GetTempPath(), "gscode-scale");
 
-        string? source = SingleSource(profile, rawRoot, stock);
-        if ( source is not null )
+        List<string> sources = Sources(profile, rawRoot, stock);
+        if ( sources.Count > 0 )
         {
-            return EnsureSingleSource(profile, rawRoot, scaleRoot, stock.Count, source, copiesWanted);
+            return EnsureSources(profile, rawRoot, scaleRoot, stock.Count, sources, copiesWanted);
         }
 
         string workspaceRoot = Path.Combine(scaleRoot, $"{profile.ShortName}-{totalFiles}");
@@ -147,7 +172,7 @@ internal static class ScaleCorpusFixture
 
         string codeWorkspace = WriteCodeWorkspace(profile, rawRoot, workspaceRoot);
         ScaleCorpus corpus = new(
-            profile, rawRoot, workspaceRoot, stock.Count + plan.Count, plan.Count, complexShare, "mixed", null, codeWorkspace);
+            profile, rawRoot, workspaceRoot, stock.Count + plan.Count, plan.Count, complexShare, "mixed", [], codeWorkspace);
 
         string expectedMarker = $"{GeneratorVersion}|{plan.Count}";
         if ( File.Exists(marker) && File.ReadAllText(marker) == expectedMarker )
@@ -181,79 +206,114 @@ internal static class ScaleCorpusFixture
     }
 
     /// <summary>
-    /// The stock script <c>GSCODE_SCALE_SOURCE</c> names, or null for the mixed shape. <c>heaviest</c>
-    /// is the largest GSC/CSC by bytes — the one with the most calls and imports to pile up, not the
-    /// slowest to analyse, which is preprocessing-bound and stresses a different thing.
+    /// The stock scripts <c>GSCODE_SCALE_SOURCE</c> names, or none for the mixed shape.
+    /// <c>heaviest</c> is the largest GSC/CSC by bytes — the one with the most calls and imports to
+    /// pile up, not the slowest to analyse, which is preprocessing-bound and stresses a different
+    /// thing. <c>heaviest:N</c> is the N largest, so one run covers reference-heavy files and the
+    /// preprocessor-bound ones among them (bo3's top 25 average 98 KB and ~1,500 calls, against
+    /// 12 KB across the corpus). Anything else is one raw-relative path.
     /// </summary>
-    private static string? SingleSource(GameProfile profile, string rawRoot, List<string> stock)
+    private static List<string> Sources(GameProfile profile, string rawRoot, List<string> stock)
     {
         string? configured = Environment.GetEnvironmentVariable("GSCODE_SCALE_SOURCE");
         if ( string.IsNullOrWhiteSpace(configured) )
         {
-            return null;
+            return [];
         }
 
-        if ( !configured.Equals("heaviest", StringComparison.OrdinalIgnoreCase) )
+        configured = configured.Trim();
+        int count = 0;
+        if ( configured.Equals("heaviest", StringComparison.OrdinalIgnoreCase) )
         {
-            string named = Path.GetFullPath(Path.Combine(rawRoot, configured.Trim()));
+            count = 1;
+        }
+        else if ( configured.StartsWith("heaviest:", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(configured["heaviest:".Length..], out int parsed) && parsed > 0 )
+        {
+            count = parsed;
+        }
+
+        if ( count == 0 )
+        {
+            string named = Path.GetFullPath(Path.Combine(rawRoot, configured));
             if ( !File.Exists(named) )
             {
                 throw new InvalidOperationException($"GSCODE_SCALE_SOURCE names {named}, which does not exist.");
             }
 
-            return named;
+            return [named];
         }
 
-        string? heaviest = null;
-        long heaviestLength = -1;
+        List<(long Length, string Path)> scripts = [];
         foreach ( string path in stock )
         {
-            if ( profile.LanguageFromPath(path) is not (ScriptLanguage.Gsc or ScriptLanguage.Csc) )
+            if ( profile.LanguageFromPath(path) is ScriptLanguage.Gsc or ScriptLanguage.Csc )
             {
-                continue;
-            }
-
-            long length = new FileInfo(path).Length;
-            if ( length > heaviestLength )
-            {
-                heaviest = path;
-                heaviestLength = length;
+                scripts.Add((new FileInfo(path).Length, path));
             }
         }
 
-        return heaviest;
+        // Largest first, the path breaking a tie, so the same N always names the same files.
+        scripts.Sort(static (left, right) =>
+        {
+            int byLength = right.Length.CompareTo(left.Length);
+            return byLength != 0 ? byLength : string.CompareOrdinal(left.Path, right.Path);
+        });
+
+        List<string> sources = [];
+        for ( int index = 0; index < count && index < scripts.Count; index++ )
+        {
+            sources.Add(scripts[index].Path);
+        }
+
+        return sources;
     }
 
     /// <summary>
-    /// <paramref name="copies"/> copies of one script, a thousand to a folder so the editor's explorer
-    /// stays usable: <c>b00\scripts\zm\_zm_00001.gsc</c>. The raw-relative folder is kept so a copy
-    /// sits where a mod's override of the file would.
+    /// <paramref name="copies"/> copies of the source scripts, handed out round-robin, a thousand to
+    /// a folder so the editor's explorer stays usable: <c>b00\scripts\zm\_zm_00001.gsc</c>. The
+    /// raw-relative folder is kept so a copy sits where a mod's override of the file would.
+    ///
+    /// The copy number is ONE counter across every source, and it is what suffixes both the file
+    /// name and the namespace. Numbered per source, the two <c>_globallogic</c> scripts — one under
+    /// <c>mp\gametypes</c>, one under <c>zm\gametypes</c> — would hand two copies the same suffixed
+    /// namespace, which is the one-namespace shape this is not.
     /// </summary>
-    private static ScaleCorpus EnsureSingleSource(
-        GameProfile profile, string rawRoot, string scaleRoot, int stockCount, string source, int copies)
+    private static ScaleCorpus EnsureSources(
+        GameProfile profile, string rawRoot, string scaleRoot, int stockCount, List<string> sources, int copies)
     {
         bool sameNamespace = string.Equals(
             Environment.GetEnvironmentVariable("GSCODE_SCALE_NAMESPACE"), "same", StringComparison.OrdinalIgnoreCase);
-        string relative = Path.GetRelativePath(rawRoot, source);
-        string stem = Path.GetFileNameWithoutExtension(source);
-        string extension = Path.GetExtension(source);
-        string relativeFolder = Path.GetDirectoryName(relative) ?? "";
+        bool sameClasses = sameNamespace || string.Equals(
+            Environment.GetEnvironmentVariable("GSCODE_SCALE_CLASSES"), "same", StringComparison.OrdinalIgnoreCase);
+        string firstRelative = Path.GetRelativePath(rawRoot, sources[0]);
 
-        string folderName = $"{profile.ShortName}-{stockCount + copies}-{stem.TrimStart('_')}";
+        string folderName = sources.Count == 1
+            ? $"{profile.ShortName}-{stockCount + copies}-{Path.GetFileNameWithoutExtension(sources[0]).TrimStart('_')}"
+            : $"{profile.ShortName}-{stockCount + copies}-top{sources.Count}";
         if ( sameNamespace )
         {
             folderName += "-samens";
         }
+        else if ( sameClasses && sources.Count > 1 )
+        {
+            folderName += "-sameclasses";
+        }
 
         string workspaceRoot = Path.Combine(scaleRoot, folderName);
         string marker = Path.Combine(workspaceRoot, MarkerFileName);
-        string shape = $"{relative} x{copies:N0}" + (sameNamespace ? ", one namespace" : "");
+        string shape = (sources.Count == 1 ? firstRelative : $"the {sources.Count} largest scripts")
+            + $" x{copies:N0}" + (sameNamespace ? ", one namespace" : sameClasses && sources.Count > 1 ? ", classes not renamed" : "");
 
         string codeWorkspace = WriteCodeWorkspace(profile, rawRoot, workspaceRoot);
         ScaleCorpus corpus = new(
-            profile, rawRoot, workspaceRoot, stockCount + copies, copies, 1.0, shape, source, codeWorkspace);
+            profile, rawRoot, workspaceRoot, stockCount + copies, copies, 1.0, shape, [.. sources], codeWorkspace);
 
-        string expectedMarker = $"{GeneratorVersion}|single|{relative}|{(sameNamespace ? "same" : "suffix")}|{copies}";
+        string namespaces = sameNamespace ? "same" : "suffix";
+        string expectedMarker = sources.Count == 1
+            ? $"{GeneratorVersion}|single|{firstRelative}|{namespaces}|{copies}"
+            : $"{GeneratorVersion}|top|{string.Join(';', sources.Select(source => Path.GetRelativePath(rawRoot, source)))}|{namespaces}|"
+                + $"{(sameClasses ? "same" : "renamed")} classes|{copies}";
         if ( File.Exists(marker) && File.ReadAllText(marker) == expectedMarker )
         {
             return corpus;
@@ -265,22 +325,39 @@ internal static class ScaleCorpusFixture
         }
 
         Directory.CreateDirectory(workspaceRoot);
-        string text = File.ReadAllText(source);
+
+        List<string> texts = [];
+        List<Regex?> classNames = [];
+        foreach ( string source in sources )
+        {
+            string text = File.ReadAllText(source);
+            texts.Add(text);
+            classNames.Add(sameClasses ? null : ClassNamesIn(text));
+        }
 
         Parallel.For(1, copies + 1, copy =>
         {
-            string copyName = $"{stem}_{copy:D5}";
+            int which = (copy - 1) % sources.Count;
+            string source = sources[which];
+            string relativeFolder = Path.GetDirectoryName(Path.GetRelativePath(rawRoot, source)) ?? "";
+            string copyName = $"{Path.GetFileNameWithoutExtension(source)}_{copy:D5}";
             string folder = Path.Combine(workspaceRoot, $"b{(copy - 1) / 1000:D2}", relativeFolder);
             Directory.CreateDirectory(folder);
 
-            string copyText = text;
+            string copyText = texts[which];
             if ( profile.ShortName == "bo3" && !sameNamespace )
             {
                 string suffix = $"_{copy:D5}";
-                copyText = s_namespaceDirective.Replace(text, match => match.Groups[1].Value + match.Groups[2].Value + suffix + match.Groups[3].Value);
+                copyText = s_namespaceDirective.Replace(
+                    copyText, match => match.Groups[1].Value + match.Groups[2].Value + suffix + match.Groups[3].Value);
+
+                if ( classNames[which] is Regex classes )
+                {
+                    copyText = classes.Replace(copyText, match => match.Value + suffix);
+                }
             }
 
-            File.WriteAllText(Path.Combine(folder, copyName + extension), copyText);
+            File.WriteAllText(Path.Combine(folder, copyName + Path.GetExtension(source)), copyText);
         });
 
         File.WriteAllText(marker, expectedMarker);

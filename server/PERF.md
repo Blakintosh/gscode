@@ -2863,14 +2863,15 @@ make it look worth it.
 
 **Still open:**
 
-- **CodeLens on opening a file, about 90 ms p99.** See below: after an edit it is now 1.4 ms, but
-  nothing is kept for a file until it has been asked once.
 - **Find-references and rename on a hot function**, 303 and 351 ms p99 with 52 MB and 30 MB of
   answer. The size of the answer, as before.
-- **Definition's p99 is 30 ms**, 14 at 25K — the slow cases are no longer the reference walk, and
-  have not been traced.
-- **Retained memory** above, and the cold index's run-to-run spread.
-- cod4's heavy shape and the stdio process end to end, as before.
+- **Retained memory** above, and the cold index's run-to-run spread: 35.1, 39.3, 52.5, 68.0 and
+  75.9 s across five 50K runs of nearly the same code, with the rest of each run within a few
+  percent. Not yet explained.
+- cod4's heavy shape, and the stdio process end to end — which is also where the CodeLens resolve
+  split below has yet to be seen working in a live editor.
+
+CodeLens on opening a file and definition's 30 ms tail were on this list; see the last section.
 
 ### 2026-10-21, last: CodeLens after an edit
 
@@ -2903,6 +2904,33 @@ decisions showed why.
 `LensCountCorpusTests` opens every bo3 and cod4 script and requires the same titles with the cache
 off, filling and read: 0 differing over 19,520 and 11,913 lenses. The corpora carry no mods folder,
 so the two overlay cases are pinned by `CodeLensCountCacheTests` instead.
+
+### 2026-10-21, closing: definition's tail, and CodeLens on opening a file
+
+**Definition.** A probe per request at 10K put all of the remaining tail in one case: a copy of
+`util_shared.gsc`, suffixed into its own namespace, calls the stock `util::wait_network_frame` without
+importing the file that declares it, so no declaring file is reached and the query went
+workspace-wide — reading every reference to keep one declaration. `FindAllReferencesIn` asks the
+workspace-wide query of each declaring file instead (the query narrowed to one file is the full
+answer filtered to it), and the reference-scope corpus suite requires the same declarations from
+both.
+
+**CodeLens on opening a file.** The count cache only helps after a file's first request, and that
+request counted every lens. Lenses are now listed with their key in `data` and no command, and
+counted on `codeLens/resolve`, which an editor sends for the lenses it is showing. The harness's
+`codeLens` row is now what an editor asks on opening a file — the list, then a resolve per lens in
+its first 60 lines — with a separate row for every lens resolved. That one costs more than the
+one-step list did, since each resolve looks the file up and builds the cache's signature again; no
+editor asks for it.
+
+| 50,000 heavy BO3 files, p99 | before (`3ffc2782`) | after (`d20174b5`) |
+|---|---:|---:|
+| CodeLens on opening a file | 95.8 ms | **1.25 ms** |
+| CodeLens after an edit | 1.4 ms | 0.82 ms |
+| one edit, end to end | 24.8 ms | 23.6 ms |
+| definition, stock call | 30.5 ms | **0.11 ms** |
+| definition, own call | 30.4 ms | 9.9 ms |
+| every lens of a file resolved | — | 103.9 ms (52.7 without the 14 a collection landed in) |
 
 ## Results
 

@@ -103,6 +103,19 @@ public sealed record ScriptRecord
     /// <see cref="FieldBinding"/>) are rare next to the field writes themselves.
     /// </summary>
     public ImmutableArray<FieldBinding> FieldBindings { get; init; } = [];
+
+    /// <summary>
+    /// The distinct field names this file's top-level functions assign on any owner
+    /// (<c>owner.name = ...</c>), as written — all field completion needs from a file it has not
+    /// opened.
+    ///
+    /// Held here INSTEAD of on the functions: a record's <see cref="Functions"/> and class methods
+    /// carry no <see cref="FunctionSymbol.Assignments"/>. Every other reader of those takes the open
+    /// document's own extraction, and on a heavy BO3 file they were 22.5 KB of a 133 KB record:
+    /// dropping them took 25,000 such files from 4,800 to 4,271 MB retained (PERF.md).
+    /// </summary>
+    public ImmutableArray<string> WrittenFields { get; init; } = [];
+
     public ImmutableArray<Diagnostic> Diagnostics { get; init; } = [];
 
     /// <summary>True while the record reflects unsaved editor text (never persisted).</summary>

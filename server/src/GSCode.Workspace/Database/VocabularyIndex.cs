@@ -59,18 +59,7 @@ public sealed class VocabularyIndex
             }
         }
 
-        HashSet<string> fields = new(StringComparer.Ordinal);
-        foreach ( FunctionSymbol function in record.Functions )
-        {
-            foreach ( AssignmentSymbol assignment in function.Assignments )
-            {
-                // An empty owner marks a plain local, which is not a field at all.
-                if ( assignment.OwnerName.Length > 0 )
-                {
-                    fields.Add(assignment.Name);
-                }
-            }
-        }
+        HashSet<string> fields = new(record.WrittenFields, StringComparer.Ordinal);
 
         if ( literals.Count == 0 && fields.Count == 0 )
         {

@@ -21,10 +21,14 @@ public class VocabularyIndexTests
         ImmutableArray<ReferenceEntry> references = default,
         ImmutableArray<AssignmentSymbol> assignments = default)
     {
+        // Built the way the database builds a record: the fields lifted out of the assignments,
+        // which the stored function then no longer carries.
+        FunctionSymbol function = TestRecords.Function("f", "ns") with { Assignments = assignments.IsDefault ? [] : assignments };
         return TestRecords.At(path, contextId) with
         {
             References = references.IsDefault ? ReferenceTable.Empty : ReferenceTable.From(references),
-            Functions = [TestRecords.Function("f", "ns") with { Assignments = assignments.IsDefault ? [] : assignments }],
+            Functions = [TestRecords.Function("f", "ns")],
+            WrittenFields = ScriptDatabase.WrittenFieldsOf([function]),
         };
     }
 
@@ -97,6 +101,28 @@ public class VocabularyIndexTests
 
         Assert.Equal(["health", "round"], Names(store.VisibleFieldNames("raw")).Order());
         Assert.Equal(["health", "mod_only", "round"], Names(store.VisibleFieldNames("mod:m")).Order());
+    }
+
+    [Fact]
+    public void AnIndexedRecord_KeepsTheFieldsItWrites_ButNoAssignments()
+    {
+        // A closed file's assignments are held only as field names: every other reader of them
+        // takes the open document's own extraction, and on heavy scripts they were a sixth of the
+        // record. Methods drop theirs too; only top-level functions ever fed the field list.
+        const string Source = "#namespace ns;\nfunction f()\n{\n    self.health = 1;\n    level.Round = 2;\n    local = 3;\n}\n"
+            + "class c\n{\n    constructor()\n    {\n        self.made = 1;\n    }\n\n    function m()\n    {\n        self.moved = 1;\n    }\n}\n";
+        using TestWorkspace workspace = TestWorkspace.Build([new TestFile(@"scripts\a.gsc", Source)]);
+
+        Assert.True(workspace.Database.TryGetAnyRecord(TestPaths.Raw(@"scripts\a.gsc"), out ScriptRecord record));
+        Assert.Equal(["health", "Round"], record.WrittenFields.AsEnumerable());
+        Assert.All(record.Functions, static function => Assert.Empty(function.Assignments));
+        ClassSymbol symbol = Assert.Single(record.Classes);
+        Assert.All(symbol.Methods, static method => Assert.Empty(method.Assignments));
+        Assert.NotNull(symbol.Constructor);
+        Assert.Empty(symbol.Constructor.Assignments);
+
+        // The open document's extraction still has them all, which is what reads them.
+        Assert.Equal(3, workspace.Analyze(@"scripts\a.gsc").Extraction.Functions.Single().Assignments.Length);
     }
 
     [Fact]

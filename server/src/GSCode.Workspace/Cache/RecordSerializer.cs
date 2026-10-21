@@ -203,6 +203,8 @@ public static class RecordSerializer
             writer.WriteRange(binding.Range);
         }
 
+        writer.WriteStrings(record.WrittenFields);
+
         writer.WriteVarUInt((uint)record.Diagnostics.Length);
         foreach ( Diagnostic diagnostic in record.Diagnostics )
         {
@@ -312,6 +314,8 @@ public static class RecordSerializer
                 bindingRange));
         }
 
+        ImmutableArray<string> writtenFields = reader.ReadStrings();
+
         int diagnosticCount = reader.ReadCount();
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>(diagnosticCount);
         for ( int index = 0; index < diagnosticCount; index++ )
@@ -336,6 +340,7 @@ public static class RecordSerializer
             Dependencies = dependencies.MoveToImmutable(),
             PathCallTargets = targets.MoveToImmutable(),
             FieldBindings = bindings.MoveToImmutable(),
+            WrittenFields = writtenFields,
             References = ReferenceTable.From(references.MoveToImmutable()),
             Diagnostics = diagnostics.MoveToImmutable(),
             IsDirty = isDirty,
@@ -368,15 +373,8 @@ public static class RecordSerializer
         writer.WriteString(function.SourceFile);
         WriteDoc(writer, function.Doc);
 
-        writer.WriteVarUInt((uint)function.Assignments.Length);
-        foreach ( AssignmentSymbol assignment in function.Assignments )
-        {
-            writer.WriteString(assignment.OwnerName);
-            writer.WriteString(assignment.Name);
-            writer.WriteString(assignment.KeyName);
-            writer.WriteRange(assignment.Range);
-            writer.WriteBool(assignment.IsLoopVariable);
-        }
+        // Assignments are not written: a record's functions carry none — see
+        // ScriptRecord.WrittenFields, which is.
     }
 
     private static FunctionSymbol ReadFunction(ref RecordReader reader)
@@ -405,18 +403,6 @@ public static class RecordSerializer
         string sourceFile = reader.ReadRequiredString();
         ScriptDocComment doc = ReadDoc(ref reader);
 
-        int assignmentCount = reader.ReadCount();
-        ImmutableArray<AssignmentSymbol>.Builder assignments = ImmutableArray.CreateBuilder<AssignmentSymbol>(assignmentCount);
-        for ( int index = 0; index < assignmentCount; index++ )
-        {
-            string ownerName = reader.ReadRequiredString();
-            string assignmentName = reader.ReadRequiredString();
-            string assignmentKeyName = reader.ReadRequiredString();
-            TextRange range = reader.ReadRange();
-            bool isLoopVariable = reader.ReadBool();
-            assignments.Add(new AssignmentSymbol(ownerName, assignmentName, assignmentKeyName, range, isLoopVariable));
-        }
-
         return new FunctionSymbol
         {
             Name = name,
@@ -432,7 +418,6 @@ public static class RecordSerializer
             FullRange = fullRange,
             SourceFile = sourceFile,
             Doc = doc,
-            Assignments = assignments.MoveToImmutable(),
         };
     }
 

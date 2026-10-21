@@ -372,8 +372,8 @@ public sealed class ScriptDatabase
             ContentHash = ComputeContentHash(result.Text.Text),
             Namespaces = result.Extraction.Namespaces,
             DeclaredNamespaces = result.Extraction.DeclaredNamespaces,
-            Functions = result.Extraction.Functions,
-            Classes = result.Extraction.Classes,
+            Functions = WithoutAssignments(result.Extraction.Functions),
+            Classes = WithoutAssignments(result.Extraction.Classes),
             Macros = macros.ToImmutable(),
             Dependencies = dependencies.ToImmutable(),
             // Records do not keep the ParseResult, so these are lifted out here or they are
@@ -382,9 +382,70 @@ public sealed class ScriptDatabase
             PathCallTargets = result.Extraction.PathCalls,
             References = ReferenceTable.From(result.Extraction.References),
             FieldBindings = result.Extraction.FieldBindings,
+            WrittenFields = WrittenFieldsOf(result.Extraction.Functions),
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,
         };
+    }
+
+    /// <summary>
+    /// The distinct field names the functions assign on any owner, in first-written order — what
+    /// <see cref="ScriptRecord.WrittenFields"/> keeps of the assignments the record drops.
+    /// </summary>
+    internal static ImmutableArray<string> WrittenFieldsOf(ImmutableArray<FunctionSymbol> functions)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        ImmutableArray<string>.Builder fields = ImmutableArray.CreateBuilder<string>();
+        foreach ( FunctionSymbol function in functions )
+        {
+            foreach ( AssignmentSymbol assignment in function.Assignments )
+            {
+                // An empty owner marks a plain local, which is not a field at all.
+                if ( assignment.OwnerName.Length > 0 && seen.Add(assignment.Name) )
+                {
+                    fields.Add(assignment.Name);
+                }
+            }
+        }
+
+        return fields.ToImmutable();
+    }
+
+    private static ImmutableArray<FunctionSymbol> WithoutAssignments(ImmutableArray<FunctionSymbol> functions)
+    {
+        ImmutableArray<FunctionSymbol>.Builder stored = ImmutableArray.CreateBuilder<FunctionSymbol>(functions.Length);
+        foreach ( FunctionSymbol function in functions )
+        {
+            stored.Add(WithoutAssignments(function));
+        }
+
+        return stored.MoveToImmutable();
+    }
+
+    private static ImmutableArray<ClassSymbol> WithoutAssignments(ImmutableArray<ClassSymbol> classes)
+    {
+        ImmutableArray<ClassSymbol>.Builder stored = ImmutableArray.CreateBuilder<ClassSymbol>(classes.Length);
+        foreach ( ClassSymbol symbol in classes )
+        {
+            stored.Add(symbol with
+            {
+                Methods = WithoutAssignments(symbol.Methods),
+                Constructor = symbol.Constructor is null ? null : WithoutAssignments(symbol.Constructor),
+                Destructor = symbol.Destructor is null ? null : WithoutAssignments(symbol.Destructor),
+            });
+        }
+
+        return stored.MoveToImmutable();
+    }
+
+    private static FunctionSymbol WithoutAssignments(FunctionSymbol function)
+    {
+        if ( function.Assignments.IsEmpty )
+        {
+            return function;
+        }
+
+        return function with { Assignments = [] };
     }
 
     /// <summary>The content-hash function used for cache invalidation (xxHash64 of the UTF-8 text).</summary>

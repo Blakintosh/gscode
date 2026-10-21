@@ -26,11 +26,10 @@ public class RecordSerializerTests
     /// CacheSchema.RecordFormatVersion, and then update this list.
     /// </summary>
     [Theory]
-    [InlineData(typeof(ScriptRecord), "ClassesContentHashContextIdDeclaredNamespacesDependenciesDiagnosticsFieldBindingsFunctionsIsDirtyLanguageMacrosNamespacesPathPathCallTargetsReferencesRelativePath")]
+    [InlineData(typeof(ScriptRecord), "ClassesContentHashContextIdDeclaredNamespacesDependenciesDiagnosticsFieldBindingsFunctionsIsDirtyLanguageMacrosNamespacesPathPathCallTargetsReferencesRelativePathWrittenFields")]
     [InlineData(typeof(FunctionSymbol), "AssignmentsDocFullRangeHasVarargsIsAutoexecIsDevOnlyIsPrivateKeyNameNameNameRangeNamespaceOwnerClassKeyNameParametersSourceFile")]
     [InlineData(typeof(ClassSymbol), "ConstructorDestructorFullRangeHasConstructorHasDestructorKeyNameMembersMethodsNameNameRangeNamespaceParentKeyNameSourceFile")]
     [InlineData(typeof(ParameterSymbol), "ByRefDefaultValueTextName")]
-    [InlineData(typeof(AssignmentSymbol), "IsLoopVariableKeyNameNameOwnerNameRange")]
     [InlineData(typeof(MemberSymbol), "KeyNameNameRange")]
     [InlineData(typeof(NamespaceSpan), "GovernedRangeKeyNameNameNameRange")]
     [InlineData(typeof(MacroRecord), "DocumentationIsFunctionLikeNameNameRangeParameters")]
@@ -199,7 +198,6 @@ public class RecordSerializerTests
             FullRange = Range(2),
             SourceFile = @"c:\ws\scripts\thing.gsc",
             Doc = doc,
-            Assignments = [new AssignmentSymbol("self", "Field", "field", Range(3), IsLoopVariable: true)],
         };
 
         ClassSymbol symbol = new()

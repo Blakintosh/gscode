@@ -58,6 +58,13 @@ public partial class ScalePerfTests
         public List<double> SerializeMilliseconds { get; } = [];
         public List<long> PayloadChars { get; } = [];
         public int Empty { get; set; }
+
+        /// <summary>
+        /// The times of the requests no garbage collection ran during. A slow tail of a request
+        /// that does not read the workspace at all, such as formatting, is a collection landing in
+        /// it until this says otherwise.
+        /// </summary>
+        public List<double> Uncollected { get; } = [];
     }
 
     private sealed class ComponentRow
@@ -293,6 +300,7 @@ public partial class ScalePerfTests
         // A comment appended at the end: every position the requests above used stays where it was.
         server.Documents.ApplyChange(document, null, text + "\n// edited\n", document.Version + 1);
 
+        int collections = GC.CollectionCount(0);
         long started = Stopwatch.GetTimestamp();
         ParseResult parsed = Step(into, "1 re-analyse", () => server.Documents.AnalyzeIfStale(document));
         Step(into, "2 lint pass", () => server.Linter.Analyze(document, parsed));
@@ -303,7 +311,9 @@ public partial class ScalePerfTests
             CancellationToken.None));
         await TimeAsync(into, "6 document symbols", () => server.Symbols.Handle(new DocumentSymbolParams { TextDocument = id }, CancellationToken.None));
         await TimeAsync(into, "7 folding ranges", () => server.Folding.Handle(new FoldingRangeRequestParam { TextDocument = id }, CancellationToken.None));
-        Record(into, "= one edit, all of the above", Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        Record(
+            into, "= one edit, all of the above", Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            GC.CollectionCount(0) != collections);
     }
 
     private static RequestStats StatsFor(IDictionary<string, RequestStats> into, string name)
@@ -317,28 +327,35 @@ public partial class ScalePerfTests
         return stats;
     }
 
-    private static void Record(IDictionary<string, RequestStats> into, string name, double milliseconds)
+    private static void Record(IDictionary<string, RequestStats> into, string name, double milliseconds, bool collected)
     {
-        StatsFor(into, name).Milliseconds.Add(milliseconds);
+        RequestStats stats = StatsFor(into, name);
+        stats.Milliseconds.Add(milliseconds);
+        if ( !collected )
+        {
+            stats.Uncollected.Add(milliseconds);
+        }
     }
 
     private static T Step<T>(IDictionary<string, RequestStats> into, string name, Func<T> step)
     {
+        int collections = GC.CollectionCount(0);
         long started = Stopwatch.GetTimestamp();
         T result = step();
-        Record(into, name, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        Record(into, name, Stopwatch.GetElapsedTime(started).TotalMilliseconds, GC.CollectionCount(0) != collections);
         return result;
     }
 
     /// <summary>Times one request, then serializes its answer apart from the timing.</summary>
     private static async Task TimeAsync<T>(IDictionary<string, RequestStats> into, string name, Func<Task<T>> request)
     {
+        int collections = GC.CollectionCount(0);
         long started = Stopwatch.GetTimestamp();
         T result = await request();
         double elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
 
+        Record(into, name, elapsed, GC.CollectionCount(0) != collections);
         RequestStats stats = StatsFor(into, name);
-        stats.Milliseconds.Add(elapsed);
 
         if ( result is null )
         {
@@ -552,8 +569,12 @@ public partial class ScalePerfTests
         long payload = stats.PayloadChars.Count == 0 ? 0 : stats.PayloadChars.Max();
         double serialize = stats.SerializeMilliseconds.Count == 0 ? 0 : stats.SerializeMilliseconds.Max();
         string empty = stats.Empty > 0 ? $", {stats.Empty} empty" : "";
+        int collected = stats.Milliseconds.Count - stats.Uncollected.Count;
+        string collections = collected > 0
+            ? $", {collected} hit a GC, max of the rest {(stats.Uncollected.Count == 0 ? 0 : stats.Uncollected.Max()):F2}"
+            : "";
         return $"{name,-32} {Percentile(times, 0.5),8:F2} {Percentile(times, 0.99),8:F2} {(times.Count == 0 ? 0 : times[^1]),8:F2}"
-            + $"   {payload / 1024.0,8:F1} KB, serialize max {serialize:F1} ms ({times.Count} requests{empty})";
+            + $"   {payload / 1024.0,8:F1} KB, serialize max {serialize:F1} ms ({times.Count} requests{empty}{collections})";
     }
 
     /// <summary>The every-request table for the report, one column per size, p99.</summary>

@@ -46,62 +46,107 @@ public sealed class WorkspaceSymbolHandler : WorkspaceSymbolsHandlerBase
     public override Task<Container<WorkspaceSymbol>?> Handle(WorkspaceSymbolParams request, CancellationToken cancellationToken)
     {
         string query = request.Query ?? "";
+        List<WorkspaceSymbol> results = [];
 
-        ImmutableArray<(ScriptRecord Record, FunctionSymbol Function)>.Builder functionMatches =
-            ImmutableArray.CreateBuilder<(ScriptRecord, FunctionSymbol)>();
-        ImmutableArray<(ScriptRecord Record, ClassSymbol Class)>.Builder classMatches =
-            ImmutableArray.CreateBuilder<(ScriptRecord, ClassSymbol)>();
-
+        // Functions first, then classes, in record order, stopping at the cap — the answer the
+        // collect-then-shadow-then-cut version gave, without collecting. That version gathered
+        // every match before keeping 256: an empty or one-letter query matches nearly every
+        // function, 2.1 s per keystroke at 20,000 heavy BO3 files (PERF.md, the scale section).
         foreach ( ScriptRecord record in _database.AllRecords )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             foreach ( FunctionSymbol function in record.Functions )
             {
-                if ( Matches(function.Name, query) )
+                if ( Matches(function.Name, query) && !ShadowedOut(record, function.KeyName, declaresClass: false) )
                 {
-                    functionMatches.Add((record, function));
+                    results.Add(Make(function.Name, SymbolKind.Function, record, function.NameRange));
+                    if ( results.Count >= MaxResults )
+                    {
+                        return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));
+                    }
                 }
             }
+        }
+
+        foreach ( ScriptRecord record in _database.AllRecords )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
             foreach ( ClassSymbol classSymbol in record.Classes )
             {
-                if ( Matches(classSymbol.Name, query) )
+                if ( Matches(classSymbol.Name, query) && !ShadowedOut(record, classSymbol.KeyName, declaresClass: true) )
                 {
-                    classMatches.Add((record, classSymbol));
+                    results.Add(Make(classSymbol.Name, SymbolKind.Class, record, classSymbol.NameRange));
+                    if ( results.Count >= MaxResults )
+                    {
+                        return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));
+                    }
                 }
             }
         }
 
-        // Overlay shadowing: a raw file and the mod overlay replacing it can both match the query,
-        // and without this a raw copy the engine never loads showed up as a second, dead result.
-        ImmutableArray<(ScriptRecord Record, FunctionSymbol Function)> functions = DatabaseQueries.ApplyShadowing(
-            functionMatches.ToImmutable(), static m => m.Record, static m => m.Function.KeyName);
-        ImmutableArray<(ScriptRecord Record, ClassSymbol Class)> classes = DatabaseQueries.ApplyShadowing(
-            classMatches.ToImmutable(), static m => m.Record, static m => m.Class.KeyName);
-
-        List<WorkspaceSymbol> results = [];
-        foreach ( (ScriptRecord Record, FunctionSymbol Function) match in functions )
-        {
-            if ( results.Count >= MaxResults )
-            {
-                break;
-            }
-
-            results.Add(Make(match.Function.Name, SymbolKind.Function, match.Record, match.Function.NameRange));
-        }
-
-        foreach ( (ScriptRecord Record, ClassSymbol Class) match in classes )
-        {
-            if ( results.Count >= MaxResults )
-            {
-                break;
-            }
-
-            results.Add(Make(match.Class.Name, SymbolKind.Class, match.Record, match.Class.NameRange));
-        }
-
         return Task.FromResult<Container<WorkspaceSymbol>?>(new Container<WorkspaceSymbol>(results));
+    }
+
+    /// <summary>
+    /// Overlay shadowing, decided per match: a raw file and the mod overlay replacing it can both
+    /// match the query, and without this a raw copy the engine never loads showed up as a second,
+    /// dead result. The rule <c>DatabaseQueries.ApplyShadowing</c> applied over the finished list —
+    /// a raw match is dropped when a non-raw record at its relative path declares the same name —
+    /// asked of the store's path index instead, since an overlay declaring the name matches the
+    /// query exactly when the raw one does.
+    /// </summary>
+    private bool ShadowedOut(ScriptRecord record, string keyName, bool declaresClass)
+    {
+        if ( record.ContextId != "raw" || record.RelativePath.Length == 0 )
+        {
+            return false;
+        }
+
+        LanguageStore store = _database.StoreFor(record.Language);
+        foreach ( string path in store.FilesAt(RelativePathIndex.Normalize(record.RelativePath)) )
+        {
+            if ( !store.TryGet(path, out ScriptRecord other)
+                || other.ContextId == "raw"
+                || !string.Equals(other.RelativePath, record.RelativePath, StringComparison.Ordinal) )
+            {
+                continue;
+            }
+
+            if ( declaresClass ? Declares(other.Classes, keyName) : Declares(other.Functions, keyName) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Declares(ImmutableArray<FunctionSymbol> functions, string keyName)
+    {
+        foreach ( FunctionSymbol function in functions )
+        {
+            if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Declares(ImmutableArray<ClassSymbol> classes, string keyName)
+    {
+        foreach ( ClassSymbol classSymbol in classes )
+        {
+            if ( string.Equals(classSymbol.KeyName, keyName, StringComparison.Ordinal) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool Matches(string name, string query)

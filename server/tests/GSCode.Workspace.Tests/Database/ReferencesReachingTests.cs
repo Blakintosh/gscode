@@ -123,6 +123,38 @@ public class ReferencesReachingTests
         Assert.DoesNotContain(@"c:\raw\maps\other.gsc", paths);
     }
 
+    [Theory]
+    [InlineData("raw")]
+    [InlineData("mod:many")]
+    [InlineData("mod:m")]
+    public void AnAskerSeeingFewerFilesThanReachTheDeclaration_GetsTheSameAnswer(string askingContextId)
+    {
+        // Thirty files of a mod the raw scripts cannot see include maps\a and call main, so from raw
+        // the files it CAN see are fewer than either list the walk would otherwise take, and the
+        // walk goes through those instead. From the mod it sees everything, and walks as before.
+        LanguageStore store = Workspace();
+        for ( int index = 0; index < 30; index++ )
+        {
+            store.Upsert(Record(
+                $@"c:\mods\many\maps\copy{index}.gsc", "mod:many", $@"maps\copy{index}.gsc",
+                callsMainOn: [4], includes: [@"maps\a"]));
+        }
+
+        ImmutableArray<LanguageStore> stores = [store];
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> old = DatabaseQueries.ScopeToIncludeGraph(
+            DatabaseQueries.FindAllReferences(new ScriptDatabase(), stores, askingContextId, s_main), @"maps\a.gsc", GameProfile.Cod4);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> scoped =
+            DatabaseQueries.FindReferencesReaching(stores, askingContextId, s_main, @"maps\a.gsc", GameProfile.Cod4);
+
+        Assert.Equal(Describe(old), Describe(scoped));
+        Assert.NotEmpty(scoped);
+        if ( askingContextId == "raw" )
+        {
+            Assert.DoesNotContain(scoped, static item => item.Record.ContextId != "raw");
+            Assert.DoesNotContain(scoped, static item => item.Record.Path == @"c:\raw\maps\other.gsc");
+        }
+    }
+
     [Fact]
     public void AnEditThatDropsTheInclude_TakesTheFileOutOfTheDependents()
     {

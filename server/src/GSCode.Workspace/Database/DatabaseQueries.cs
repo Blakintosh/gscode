@@ -865,10 +865,26 @@ public static class DatabaseQueries
             ImmutableArray<string> mentioning = store.FilesReferencing(key);
             bool walkMentioning = mentioning.Length < atDeclaring.Length + naming.Length;
             IEnumerable<string> walk;
-            if ( !onlyPaths.IsDefault )
+            List<string>? visible = null;
+            if ( onlyPath.Length > 0 )
+            {
+                // One file: whether it reaches the declaring file is a membership test, not a walk
+                // of every file that does. Document highlight asks this on every cursor move.
+                walk = atDeclaring.Contains(onlyPath) || NamingSet(naming).Contains(onlyPath) ? [onlyPath] : [];
+            }
+            else if ( !onlyPaths.IsDefault )
             {
                 HashSet<string> namingSet = NamingSet(naming);
                 walk = onlyPaths.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else if ( (visible = store.VisiblePathsIfFewer(
+                askingContextId, Math.Min(mentioning.Length, atDeclaring.Length + naming.Length))) is not null )
+            {
+                // The asker sees fewer files than either list holds — the raw scripts, asking about a
+                // stock function every workspace copy calls — so walking either would mostly test
+                // and reject files it cannot see. The shorter list is still the rule; this is it.
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = visible.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
             }
             else if ( walkMentioning )
             {
@@ -1710,13 +1726,15 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
+        // One file: its own record answers whether it mentions the key, so the index's list of every
+        // file that does — tens of thousands for a stock function at scale — is never walked.
+        if ( onlyPath.Length > 0 )
+        {
+            paths = [onlyPath];
+        }
+
         foreach ( string path in paths )
         {
-            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
-            {
-                continue;
-            }
-
             if ( !tryGet(path, out ScriptRecord record) )
             {
                 continue;

@@ -37,11 +37,22 @@ public sealed class LanguageStore
         new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The paths each context holds — see <see cref="FileFilterFor"/>. A handful of contexts exist
-    /// at most: raw, the workspace folders and the mods.
+    /// The paths each context holds — see <see cref="FileFilterFor"/> and
+    /// <see cref="VisiblePathsIfFewer"/>. A handful of contexts exist at most: raw, the workspace
+    /// folders and the mods.
     /// </summary>
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _pathsByContext =
-        new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ContextPaths> _pathsByContext = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// One context's paths, with their count kept beside them: a concurrent dictionary's own count
+    /// takes every one of its locks, and <see cref="VisiblePathsIfFewer"/> asks on every query.
+    /// </summary>
+    private sealed class ContextPaths
+    {
+        public ConcurrentDictionary<string, byte> Paths { get; } = new(StringComparer.Ordinal);
+
+        public int Count;
+    }
 
     /// <summary>
     /// The most hidden paths <see cref="FileFilterFor"/> gathers into a set per request. Past it,
@@ -297,16 +308,19 @@ public sealed class LanguageStore
     private void AdjustContextPaths(ScriptRecord? previous, ScriptRecord? next)
     {
         if ( previous is not null && previous.ContextId != next?.ContextId
-            && _pathsByContext.TryGetValue(previous.ContextId, out ConcurrentDictionary<string, byte>? before) )
+            && _pathsByContext.TryGetValue(previous.ContextId, out ContextPaths? before)
+            && before.Paths.TryRemove(previous.Path, out _) )
         {
-            before.TryRemove(previous.Path, out _);
+            Interlocked.Decrement(ref before.Count);
         }
 
         if ( next is not null )
         {
-            _pathsByContext
-                .GetOrAdd(next.ContextId, static _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal))
-                .TryAdd(next.Path, 0);
+            ContextPaths after = _pathsByContext.GetOrAdd(next.ContextId, static _ => new ContextPaths());
+            if ( after.Paths.TryAdd(next.Path, 0) )
+            {
+                Interlocked.Increment(ref after.Count);
+            }
         }
     }
 
@@ -469,15 +483,15 @@ public sealed class LanguageStore
     private Func<string, bool> FileFilterFor(string askingContextId)
     {
         HashSet<string>? hidden = null;
-        foreach ( KeyValuePair<string, ConcurrentDictionary<string, byte>> context in _pathsByContext )
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
         {
-            if ( context.Value.IsEmpty || ScriptDatabase.CanSee(askingContextId, context.Key) )
+            if ( context.Value.Count == 0 || ScriptDatabase.CanSee(askingContextId, context.Key) )
             {
                 continue;
             }
 
             hidden ??= new HashSet<string>(StringComparer.Ordinal);
-            foreach ( KeyValuePair<string, byte> path in context.Value )
+            foreach ( KeyValuePair<string, byte> path in context.Value.Paths )
             {
                 hidden.Add(path.Key);
             }
@@ -494,6 +508,43 @@ public sealed class LanguageStore
         }
 
         return path => !hidden.Contains(path);
+    }
+
+    /// <summary>
+    /// Every path the asking context can see, when there are fewer than
+    /// <paramref name="fewerThan"/> of them; null when there are not. For a walk that would
+    /// otherwise test more files than this for visibility and reject most of them: the raw scripts
+    /// asking about a stock function sees 546 files, while the workspace copies that reach it
+    /// number in the tens of thousands.
+    /// </summary>
+    public List<string>? VisiblePathsIfFewer(string askingContextId, int fewerThan)
+    {
+        int visible = 0;
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
+        {
+            if ( ScriptDatabase.CanSee(askingContextId, context.Key) )
+            {
+                visible += Volatile.Read(ref context.Value.Count);
+                if ( visible >= fewerThan )
+                {
+                    return null;
+                }
+            }
+        }
+
+        List<string> paths = new(visible);
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
+        {
+            if ( ScriptDatabase.CanSee(askingContextId, context.Key) )
+            {
+                foreach ( KeyValuePair<string, byte> path in context.Value.Paths )
+                {
+                    paths.Add(path.Key);
+                }
+            }
+        }
+
+        return paths;
     }
 
     private bool IsVisibleTo(string path, string askingContextId)

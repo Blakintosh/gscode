@@ -207,7 +207,7 @@ public partial class ScalePerfTests
 
             // A function is most of what a record declares, so its own fields are split out:
             // "Functions" alone would say nothing about which part of a function to shrink.
-            bool split = type == typeof(GSCode.Core.Symbols.FunctionSymbol) && !field.Contains('.');
+            bool split = (type == typeof(GSCode.Core.Symbols.FunctionSymbol) || type == typeof(ReferenceTable)) && !field.Contains('.');
             foreach ( FieldInfo inner in FieldsOf(type) )
             {
                 Walk(inner.GetValue(value), split ? field + "." + CleanName(inner.Name) : field);

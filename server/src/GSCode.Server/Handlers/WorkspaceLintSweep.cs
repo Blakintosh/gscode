@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.ExceptionServices;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
@@ -100,33 +101,76 @@ public sealed class WorkspaceLintSweep
         return _database.SetDiagnostics(committed.Path, committed.Language, committed.ContentHash, diagnostics);
     }
 
+    /// <summary>
+    /// Lints the targets on threads of their own at below-normal priority, one per core but one.
+    ///
+    /// Not the thread pool. The sweep is background work that takes every core it is given, and on
+    /// the pool it ran at the priority every request handler runs at: at 10,000 heavy BO3 files a
+    /// cold start's sweep took 28 s, and a document-symbol request made during it waited 416 ms at
+    /// p99 against 446 ms at most once it was done and 22 ms typically. Below normal, the scheduler
+    /// runs a request's thread whenever it is ready and gives the sweep what is left.
+    /// </summary>
     private async Task<LintSweepOutcome> SweepAsync(List<ScriptRecord> targets, CancellationToken cancellationToken)
     {
         int linted = 0;
         int skipped = 0;
+        int next = -1;
+        ExceptionDispatchInfo? failure = null;
 
-        ParallelOptions options = new()
+        int workers = Math.Clamp(targets.Count, 1, Math.Max(1, Environment.ProcessorCount - 1));
+        int running = workers;
+        TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void Work()
         {
-            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
-            CancellationToken = cancellationToken,
-        };
+            try
+            {
+                while ( !cancellationToken.IsCancellationRequested && Volatile.Read(ref failure) is null )
+                {
+                    int index = Interlocked.Increment(ref next);
+                    if ( index >= targets.Count )
+                    {
+                        break;
+                    }
 
-        await Parallel.ForEachAsync(targets, options, (record, token) =>
+                    if ( RelintOne(targets[index]) )
+                    {
+                        Interlocked.Increment(ref linted);
+                    }
+                    else
+                    {
+                        Interlocked.Increment(ref skipped);
+                    }
+                }
+            }
+            catch ( Exception exception )
+            {
+                Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(exception), null);
+            }
+            finally
+            {
+                if ( Interlocked.Decrement(ref running) == 0 )
+                {
+                    finished.SetResult();
+                }
+            }
+        }
+
+        for ( int worker = 0; worker < workers; worker++ )
         {
-            token.ThrowIfCancellationRequested();
-
-            if ( RelintOne(record) )
+            Thread thread = new(Work)
             {
-                Interlocked.Increment(ref linted);
-            }
-            else
-            {
-                Interlocked.Increment(ref skipped);
-            }
+                IsBackground = true,
+                Priority = ThreadPriority.BelowNormal,
+                Name = "GSCode lint sweep",
+            };
+            thread.Start();
+        }
 
-            return ValueTask.CompletedTask;
-        }).ConfigureAwait(false);
+        await finished.Task.ConfigureAwait(false);
 
+        failure?.Throw();
+        cancellationToken.ThrowIfCancellationRequested();
         return new LintSweepOutcome(linted, skipped, targets.Count);
     }
 

@@ -2868,8 +2868,9 @@ make it look worth it.
 - **Retained memory** above, and the cold index's run-to-run spread: 35.1, 39.3, 52.5, 68.0 and
   75.9 s across five 50K runs of nearly the same code, with the rest of each run within a few
   percent. Not yet explained.
-- cod4's heavy shape. The stdio process end to end is now measured — see the last section — and
-  found what the harness could not: a cold start's diagnostics flood, and gen0 pauses on a 12 GB heap.
+- cod4's heavy shape. The stdio process end to end is now measured — see the last two sections:
+  the cold start's minute is fixed, and a gen0 collection on a 12 GB heap still costs ~15–20 ms when
+  one lands in a request.
 
 CodeLens on opening a file and definition's 30 ms tail were on this list; see the last section.
 
@@ -2972,6 +2973,51 @@ What the harness never showed:
   With `DOTNET_GCConserveMemory=0` the second pass stayed under 24 ms, though the first still had a
   2.5 s one. The probe's session had none, so these are unattributed; full collections are the
   likely cause, not counting.
+
+### 2026-10-21: the cold start's minute, and an edit's diagnostics
+
+Measured over stdio with a client that asks `documentSymbol` (no workspace read) and a CodeLens
+resolve (a workspace query) every 200 ms from Ready until the diagnostics push has been quiet for
+5 s, each sample tagged with the phase the server's own log puts it in.
+
+| cold start, over stdio | 10K before | 10K after | 50K after |
+|---|---:|---:|---:|
+| during the sweep: documentSymbol p99 | 416 ms | 39–49 ms | 34 ms (max 63) |
+| during the sweep: CodeLens resolve p99 | 94 ms | 18 ms | 19 ms (max 26) |
+| during the push: slowest request | 7,085 ms | 18 ms | 125 ms |
+| diagnostics pushed | 9,124 / 68 MB | 6,511 / 16 MB | 35,311 / 86 MB, over 16 s |
+| working set at rest | — | — | 12.2 GB (10.7 GB with the compaction) |
+
+Four causes, four commits:
+
+- **The sweep ran at request priority** on the thread pool (`8dba8f67`). Its workers are now
+  threads of their own at below-normal priority.
+- **The push was mostly Hints, sent twice, all at once** (`2dbb6f9e`). 85% of a closed file's
+  diagnostics were Hints — unused bindings and locals — which VS Code shows only in an open editor;
+  a file opened during the sweep triggered a refresh that pushed every record's parse-only set
+  before the sweep replaced it; and the whole set went into the output channel ahead of every
+  response. Closed files now go without Hints, full mode refreshes only once the sweep is done, and
+  more than 256 sends are paced 100 at a time, 25 ms apart, in order, with a file's queued send
+  dropped when it opens.
+- **The post-index compaction stopped the process for seconds** (`4f1a6ae7`): 626 ms at 10K,
+  2,539 at 25K, 4,095 at 50K, landing just after the sweep. Past 1 GB live a background gen2 runs
+  instead. The trade is the last row: about 1.5 GB more resident at 50K.
+
+**An edit's diagnostics.** On `_globallogic.gsc` at 50K, an edit published 280–307 ms after the last
+change: a fixed 250 ms debounce, then 30–33 ms of analysis (`Analysed … in` at verbose). The wait is
+now three times the document's last analysis, between 125 and 250 ms (`e1931400`): 160–210 ms after
+a single edit, 166–183 ms after the last key of a burst.
+
+What the analysis itself is, from a CPU profile of 69 edits: lints 54% (flow typing 12%, argument
+count 9%, then ten rules of 2–5%), parse 21%, committing the record to the index 10%. Three rules
+walked each function body's local uses separately; they now share one walk (`ff8b76f8`, about 6%).
+A probe around each analysis put its allocation at 8.0 MB parse, 4.2 MB lints and 0.9 MB commit,
+and a gen0 collection landed in 6 of 16 edits, adding 12–21 ms each time.
+
+Every one of the 25 heavy scripts analyses in 7–36 ms (fastest of six edits), so all of them sit
+under the 125 ms floor's threshold of ~42 ms: running the rules in parallel would save at most ~15 ms
+on the slowest, and was not done. Below ~160 ms the floor is the lever, and lowering it trades
+against a half-typed name being reported as unknown on its way to being typed.
 
 ## Results
 

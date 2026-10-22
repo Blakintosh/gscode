@@ -2988,7 +2988,7 @@ resolve (a workspace query) every 200 ms from Ready until the diagnostics push h
 | diagnostics pushed | 9,124 / 68 MB | 6,511 / 16 MB | 35,311 / 86 MB, over 16 s |
 | working set at rest | — | — | 12.2 GB (10.7 GB with the compaction) |
 
-Four causes, four commits:
+Three causes, three commits:
 
 - **The sweep ran at request priority** on the thread pool (`8dba8f67`). Its workers are now
   threads of their own at below-normal priority.

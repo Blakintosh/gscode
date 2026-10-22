@@ -68,7 +68,9 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities)
     {
-        _labelDetailsSupported = capability.CompletionItem?.LabelDetailsSupport ?? false;
+        // Null when the client sends textDocument capabilities without a completion one; reading through
+        // it threw inside initialize, which then never answered.
+        _labelDetailsSupported = capability?.CompletionItem?.LabelDetailsSupport ?? false;
 
         return new CompletionRegistrationOptions
         {

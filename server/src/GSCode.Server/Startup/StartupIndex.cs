@@ -312,7 +312,7 @@ internal sealed class StartupIndexRunner
         return Task.CompletedTask;
     }
 
-    // One compacting collection at the indexing -> serving transition, UNCONDITIONALLY.
+    // One compacting collection at the indexing -> serving transition, while the heap is small.
     //
     // Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off phase
     // change after which the allocation profile is completely different. Analysing a file allocates
@@ -337,8 +337,28 @@ internal sealed class StartupIndexRunner
     //
     // It earns its place — it returned 446 MB on bo1. Deferring it to the first idle moment is a
     // separate decision that needs its own measurement, and is not made here.
+    //
+    // Only up to CompactionLiveLimit, though. The pause grows with the live heap — 626 ms at 10,000
+    // heavy BO3 files (1.7 GB live), 2,539 ms at 25,000 (4.8 GB) and 4,095 ms at 50,000 (9.8 GB), from
+    // the scale run — and it lands just after Ready, when an editor is opening files: driving the
+    // real server over stdio at 10,000 files, a document-symbol request made then waited 521 ms
+    // against 10 ms around it. Past the limit a background gen2 collects what indexing left without
+    // stopping the process; what it does not give back is a small part of a heap that large.
     private static void Compact()
     {
+        long live = GC.GetTotalMemory(forceFullCollection: false);
+        Stopwatch pause = Stopwatch.StartNew();
+
+        if ( live > CompactionLiveLimit )
+        {
+            GC.Collect(2, GCCollectionMode.Default, blocking: false, compacting: false);
+            Log.Information(
+                "Post-index compaction skipped: {LiveMegabytes:N0} MB live is past the {LimitMegabytes:N0} MB its pause is affordable for; "
+                + "a background collection was requested instead",
+                live / 1048576, CompactionLiveLimit / 1048576);
+            return;
+        }
+
         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
@@ -346,5 +366,12 @@ internal sealed class StartupIndexRunner
         // The second pass collects what the finalizers just released; the LOH mode is one-shot and has
         // already been consumed, so this one is an ordinary compacting gen2.
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        Log.Information("Post-index compaction: {Milliseconds:N0} ms", pause.ElapsedMilliseconds);
     }
+
+    /// <summary>
+    /// The live heap past which the post-index compaction is not run — see <see cref="Compact"/>. A
+    /// stock-sized workspace is a few hundred MB; 1 GB keeps the pause to a few hundred ms.
+    /// </summary>
+    private const long CompactionLiveLimit = 1L << 30;
 }

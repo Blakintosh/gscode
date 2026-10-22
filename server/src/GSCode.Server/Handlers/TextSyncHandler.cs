@@ -54,6 +54,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ServerSettings _settings;
     private readonly StockScripts _stockScripts;
     private readonly DocumentLinter _linter;
+
+    /// <summary>
+    /// How long each open document's last analysis took, which sets how long its next edit waits —
+    /// see <see cref="AnalysisTiming.DebounceFor"/>. Weak, so a closed document takes its entry with it.
+    /// </summary>
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<OpenDocument, System.Runtime.CompilerServices.StrongBox<double>> _lastAnalysis = new();
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
@@ -332,7 +338,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     {
         try
         {
-            await Task.Delay(AnalysisTiming.DebounceMilliseconds, cancellationToken);
+            double last = _lastAnalysis.TryGetValue(document, out System.Runtime.CompilerServices.StrongBox<double>? measured)
+                ? measured.Value
+                : 0;
+            await Task.Delay(AnalysisTiming.DebounceFor(last), cancellationToken);
         }
         catch ( OperationCanceledException )
         {
@@ -372,6 +381,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         CommitAndScheduleDependents(document, result, diagnostics);
 
         double elapsedMilliseconds = Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
+        _lastAnalysis.AddOrUpdate(document, new System.Runtime.CompilerServices.StrongBox<double>(elapsedMilliseconds));
 
         // The single most useful verbose line there is: it says whether the server reacted to a
         // keystroke at all, how long it took, and what it decided — which is most of what anyone

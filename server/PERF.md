@@ -2868,8 +2868,8 @@ make it look worth it.
 - **Retained memory** above, and the cold index's run-to-run spread: 35.1, 39.3, 52.5, 68.0 and
   75.9 s across five 50K runs of nearly the same code, with the rest of each run within a few
   percent. Not yet explained.
-- cod4's heavy shape, and the stdio process end to end — which is also where the CodeLens resolve
-  split below has yet to be seen working in a live editor.
+- cod4's heavy shape. The stdio process end to end is now measured — see the last section — and
+  found what the harness could not: a cold start's diagnostics flood, and gen0 pauses on a 12 GB heap.
 
 CodeLens on opening a file and definition's 30 ms tail were on this list; see the last section.
 
@@ -2931,6 +2931,47 @@ editor asks for it.
 | definition, stock call | 30.5 ms | **0.11 ms** |
 | definition, own call | 30.4 ms | 9.9 ms |
 | every lens of a file resolved | — | 103.9 ms (52.7 without the 14 a collection landed in) |
+
+### 2026-10-21: the real server over stdio, 50,000 files
+
+The published Release server, started as an editor starts it but over `--stdio`, against the
+generated `bo3-50000-top25` workspace with that workspace's own settings (full indexing, cache on,
+workspace diagnostics, CodeLens on). A Python client answers `workspace/configuration` and the
+registrations, then opens four heavy files and, for each: lists CodeLens, resolves the lenses in its
+first 60 lines, appends a comment, lists and resolves again, and finally resolves every lens.
+
+**It works on the wire.** Lenses arrive with no command; every resolved one carries a title; the
+titles are the same after the edit. The first session also found a hang the harness cannot see: a
+client that sends `textDocument` capabilities without `completion` had `CompletionHandler` read off
+a null capability inside initialize, which was then never answered (`f3f27393`). VS Code always
+sends completion.
+
+| 50,000 heavy BO3 files, one session each | cold (no cache) | warm (cache) |
+|---|---:|---:|
+| ready | 40.9 s | 17.7 s |
+| lint sweep | 57.7 s, ending 98.5 s after start | not run |
+| diagnostics pushed to the client | 49,134 notifications, 366 MB, 43–116 s after start | 15 |
+| working set at ready | 11.3 GB | 12.5 GB |
+| scene_shared copy: first screen resolved, slowest | 1,908 ms | 32–81 ms |
+| same, after an edit, slowest | 4,426 ms | 1.6–1.9 ms |
+| util_shared (raw): first screen resolved | 5.7 ms | 32.5 ms |
+
+What the harness never showed:
+
+- **A cold start is busy for a minute after Ready.** The sweep takes every core until 98.5 s, and
+  the publisher then writes 366 MB of diagnostics — 49,122 of the copies have some — until 116 s.
+  Requests in that window waited seconds. The copies' diagnostics are this shape's, but pushing every
+  file's to an editor at once is the design, and VS Code would have its own minute of work on the
+  far end.
+- **A gen0 collection costs about 15 ms on this heap, and a method lens's count triggers one.** A
+  probe around each resolve in a warm session: a typical method lens took 21–37 ms, and nearly every
+  one saw exactly one gen0 collection pausing 12–21 ms. Counting materialises every reference
+  (thousands of tuples and a site dictionary per method union) only to count them.
+- **Occasional pauses of seconds.** Two warm sessions each had one or two resolves of 1–5 s, on
+  different lenses each time, and a second pass over counts already kept still hit 1.35 s once.
+  With `DOTNET_GCConserveMemory=0` the second pass stayed under 24 ms, though the first still had a
+  2.5 s one. The probe's session had none, so these are unattributed; full collections are the
+  likely cause, not counting.
 
 ## Results
 

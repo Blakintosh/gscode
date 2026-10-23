@@ -207,16 +207,21 @@ internal sealed class StartupIndexRunner
                     if ( mode == IndexingMode.Full )
                     {
                         Stopwatch lintStopwatch = Stopwatch.StartNew();
+                        TimeSpan pausedBefore = GC.GetTotalPauseDuration();
                         LintSweepOutcome lintOutcome = await services
                             .GetRequiredService<WorkspaceLintSweep>()
                             .RunFullSweepAsync(_indexingLifetime.Token);
                         lintStopwatch.Stop();
 
+                        // The pause total says how much of a long sweep was the collector, not the
+                        // lints: at 50,000 heavy files the per-file lint time stayed flat while the
+                        // sweep grew faster than the file count.
                         Log.Information(
-                            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped)",
+                            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped, GC paused {Paused:F1}s)",
                             lintOutcome.Linted,
                             lintStopwatch.Elapsed.TotalSeconds,
-                            lintOutcome.Skipped);
+                            lintOutcome.Skipped,
+                            (GC.GetTotalPauseDuration() - pausedBefore).TotalSeconds);
                     }
 
                     // Guarded: the breakdown walks every record in both stores plus every GSH,

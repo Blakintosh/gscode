@@ -35,10 +35,15 @@ Log.Information("GSCode {Version} language server starting", IndexReporting.Serv
 // PUBLISH time, so an extension running a bundle from before a template change runs the old
 // settings however recently the server project itself was rebuilt — and the difference between
 // Workstation and four-heap Server GC is a cold index of 2.2 s against 0.8 on bo3.
+// The conserve-memory level is read from the runtime rather than the config file, since the
+// DOTNET_GCConserveMemory environment variable overrides it: on a heap of several GB a compacting
+// gen2 takes seconds, and this says which level a measured pause ran under.
+IReadOnlyDictionary<string, object> gcVariables = GC.GetConfigurationVariables();
 Log.Information(
-    "GC: {Mode}, {Heaps} heap(s), {Processors} processors",
+    "GC: {Mode}, {Heaps} heap(s), conserve memory {Conserve}, {Processors} processors",
     GCSettings.IsServerGC ? "server" : "workstation",
     AppContext.GetData("System.GC.HeapCount") ?? "one per core",
+    gcVariables.TryGetValue("GCConserveMem", out object? conserve) ? conserve : 0,
     Environment.ProcessorCount);
 
 // HelpWriter is silenced because the default one writes to STDOUT, and stdout is the stdio

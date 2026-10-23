@@ -66,7 +66,13 @@ public partial class ScalePerfTests
         /// it until this says otherwise.
         /// </summary>
         public List<double> Uncollected { get; } = [];
+
+        /// <summary>The file the slowest request was asked of, so a tail has a name to trace.</summary>
+        public string SlowestFile { get; set; } = "";
     }
+
+    /// <summary>The sampled file the requests being timed are asked of. The pass is sequential.</summary>
+    private static string s_currentFile = "";
 
     private sealed class ComponentRow
     {
@@ -223,6 +229,7 @@ public partial class ScalePerfTests
     {
         foreach ( string path in sample )
         {
+            s_currentFile = Path.GetFileName(path);
             string text;
             try
             {
@@ -383,6 +390,11 @@ public partial class ScalePerfTests
     private static void Record(IDictionary<string, RequestStats> into, string name, double milliseconds, bool collected)
     {
         RequestStats stats = StatsFor(into, name);
+        if ( stats.Milliseconds.Count == 0 || milliseconds > stats.Milliseconds.Max() )
+        {
+            stats.SlowestFile = s_currentFile;
+        }
+
         stats.Milliseconds.Add(milliseconds);
         if ( !collected )
         {
@@ -662,7 +674,7 @@ public partial class ScalePerfTests
             ? $", {collected} hit a GC, max of the rest {(stats.Uncollected.Count == 0 ? 0 : stats.Uncollected.Max()):F2}"
             : "";
         return $"{name,-32} {Percentile(times, 0.5),8:F2} {Percentile(times, 0.99),8:F2} {(times.Count == 0 ? 0 : times[^1]),8:F2}"
-            + $"   {payload / 1024.0,8:F1} KB, serialize max {serialize:F1} ms ({times.Count} requests{empty}{collections})";
+            + $"   {payload / 1024.0,8:F1} KB, serialize max {serialize:F1} ms ({times.Count} requests{empty}{collections}; slowest {stats.SlowestFile})";
     }
 
     /// <summary>The every-request table for the report, one column per size, p99.</summary>

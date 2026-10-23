@@ -3227,10 +3227,26 @@ every 200 ms:
 The change now runs in the background, one change at a time and in order. The re-index (about 15 s)
 and the sweep still run; the editor no longer waits on them.
 
+**Running in the background opened a window, and it was closed** (`5ad2415b`, `9884aa4b`). A
+folder change restores every unchanged file from the cache, and a cached record carries its parse
+diagnostics only, so for the sweep's minute every closed file held less than it had published. A
+save in that minute ends in a refresh. The driver added the folder, then saved one closed file once
+the re-index had finished:
+
+| folder added, then a save, BO3 50K | before | after |
+|---|---:|---:|
+| closed files whose problems were withdrawn and sent back | **34,705** | **0** |
+| pushes | 69,412 | 2 |
+
+A restore now keeps a live record of the same content, context and relative path. The watched-file
+pump holds what its batch's files last published until their relint, so a refresh from elsewhere
+cannot send the parse-only sets in between.
+
 **The branch switch's republish** (`c0969529`). A comment-only switch of 5,000 files sent 3,561
 closed files whose diagnostics had not changed. `Refresh` compared each set by reference, and a
-re-index builds new arrays. It now compares by value: the same switch sends nothing but the open
-file's own diagnostics.
+re-index builds new arrays. It now compares by value and holds files awaiting their relint: across
+four batches in two runs, each switch sent one notification, the open file's own, with no file sent
+twice and none withdrawn.
 
 **Two correctness fixes the async pump made worth doing:**
 - A document opened between a re-index's first "is it open?" and its commit had its buffer

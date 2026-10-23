@@ -632,7 +632,20 @@ public sealed class WorkspaceIndexer
                     // restore, is what keeps this call from winning a last-write race against a
                     // fresher commit the corresponding watched-file event already made (or is
                     // about to make) for this exact path.
-                    if ( !OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) && DiskStillMatches(normalized, content) )
+                    // A live record of the same content, in the same place, is kept rather than replaced:
+                    // it is the same analysis, and it may carry more than the cached one — the full-mode
+                    // sweep's diagnostics, which the cache never holds. Replacing it on a workspace-folder
+                    // change left every closed file reporting its parse diagnostics alone until the
+                    // folder's sweep finished, and a refresh in that minute emptied the Problems panel.
+                    if ( _database.TryGetAnyRecord(normalized, out ScriptRecord live)
+                        && !live.IsDirty
+                        && live.ContentHash == restored.ContentHash
+                        && live.ContextId == restored.ContextId
+                        && live.RelativePath == restored.RelativePath )
+                    {
+                        restored = live;
+                    }
+                    else if ( !OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) && DiskStillMatches(normalized, content) )
                     {
                         _database.CommitRecord(restored);
                     }

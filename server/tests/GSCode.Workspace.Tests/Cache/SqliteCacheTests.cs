@@ -433,6 +433,42 @@ public class ColdRestoreTests : IDisposable
     }
 
     /// <summary>
+    /// A workspace-folder change re-indexes every file, restoring the unchanged ones from the cache —
+    /// whose records carry only their parse diagnostics. Restoring over a live record of the same
+    /// content threw away what the full-mode sweep had put there, and every closed file reported less
+    /// until the folder's own sweep finished, a minute at 50,000 files: any refresh in that window
+    /// took the cross-file problems out of the Problems panel and the sweep put them back.
+    /// </summary>
+    [Fact]
+    public async Task AReindexOfAnUnchangedFile_KeepsTheLiveRecordsDiagnostics()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function alpha()\n{\n}\n");
+        (ScriptDatabase Db, WorkspaceIndexer Indexer, FakeFileSystem Files) built = Build(files);
+        string path = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\a.gsc");
+
+        await using SqliteCache cache = SqliteCache.Open(_dbPath, "id");
+        built.Indexer.UseCache(cache, cache.LoadAll());
+        await built.Indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+        await cache.WaitForIdleAsync(CancellationToken.None);
+
+        // What the sweep leaves on the record, and the cache never holds.
+        Assert.True(built.Db.TryGetAnyRecord(path, out ScriptRecord indexed));
+        ImmutableArray<Diagnostic> swept =
+        [
+            new Diagnostic(TextRange.FromCoordinates(0, 0, 0, 1), DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedUsing, "swept"),
+        ];
+        Assert.True(built.Db.SetDiagnostics(path, ScriptLanguage.Gsc, indexed.ContentHash, swept));
+
+        IndexOutcome again = await built.Indexer.IndexAsync(
+            IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None, reloadSnapshot: true);
+
+        Assert.Equal(1, again.Restored);
+        Assert.True(built.Db.TryGetAnyRecord(path, out ScriptRecord after));
+        Assert.Contains(after.Diagnostics, diagnostic => diagnostic.Message == "swept");
+    }
+
+    /// <summary>
     /// The restore snapshot is released when a pass finishes, and re-read by the one caller that
     /// indexes twice.
     ///

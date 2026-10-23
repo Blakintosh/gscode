@@ -83,6 +83,7 @@ internal sealed class StartupIndexRunner
         // (serially deserializing every record here once cost 1,509 ms on BO3, in front of a cold
         // index that does the whole job in 390).
         TimeSpan restoreElapsed = TimeSpan.Zero;
+        StoredSweep? storedSweep = null;
         if ( _settings.EnableWorkspaceCache )
         {
             Stopwatch restoreWatch = Stopwatch.StartNew();
@@ -110,6 +111,7 @@ internal sealed class StartupIndexRunner
                 // held state nobody reads — and simpler than threading "should I bother"
                 // through this block for what is already a rare (cache disabled) path.
                 indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+                storedSweep = workspaceCache.LoadSweep();
             }
             catch ( Exception exception )
             {
@@ -206,22 +208,7 @@ internal sealed class StartupIndexRunner
                     // PERF.md's 2026-09-15 entry for why this is affordable.
                     if ( mode == IndexingMode.Full )
                     {
-                        Stopwatch lintStopwatch = Stopwatch.StartNew();
-                        TimeSpan pausedBefore = GC.GetTotalPauseDuration();
-                        LintSweepOutcome lintOutcome = await services
-                            .GetRequiredService<WorkspaceLintSweep>()
-                            .RunFullSweepAsync(_indexingLifetime.Token);
-                        lintStopwatch.Stop();
-
-                        // The pause total says how much of a long sweep was the collector, not the
-                        // lints: at 50,000 heavy files the per-file lint time stayed flat while the
-                        // sweep grew faster than the file count.
-                        Log.Information(
-                            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped, GC paused {Paused:F1}s)",
-                            lintOutcome.Linted,
-                            lintStopwatch.Elapsed.TotalSeconds,
-                            lintOutcome.Skipped,
-                            (GC.GetTotalPauseDuration() - pausedBefore).TotalSeconds);
+                        await SweepOrRestoreAsync(services, storedSweep).ConfigureAwait(false);
                     }
 
                     // Guarded: the breakdown walks every record in both stores plus every GSH,
@@ -319,6 +306,60 @@ internal sealed class StartupIndexRunner
 
     // One compacting collection at the indexing -> serving transition, while the heap is small.
     //
+    /// <summary>
+    /// The full-mode lint sweep, or — when the workspace is the one the last stored sweep was computed
+    /// against — its stored results, with only the files they do not cover linted. See
+    /// <see cref="LintSweepCache"/>. A completed sweep is stored for the next start.
+    /// </summary>
+    private async Task SweepOrRestoreAsync(IServiceProvider services, StoredSweep? storedSweep)
+    {
+        ScriptDatabase database = services.GetRequiredService<ScriptDatabase>();
+        WorkspaceLintSweep sweep = services.GetRequiredService<WorkspaceLintSweep>();
+        Stopwatch lintStopwatch = Stopwatch.StartNew();
+        TimeSpan pausedBefore = GC.GetTotalPauseDuration();
+
+        int restored = 0;
+        List<string>? unrestored = null;
+        if ( storedSweep is not null )
+        {
+            unrestored = LintSweepCache.TryRestore(database, storedSweep, services.GetRequiredService<NameTable>(), out restored);
+        }
+
+        if ( unrestored is not null )
+        {
+            if ( unrestored.Count > 0 )
+            {
+                await sweep.RelintClosedFilesAsync(unrestored, _indexingLifetime.Token).ConfigureAwait(false);
+            }
+
+            database.MarkLintSweepComplete();
+            Log.Information(
+                "Workspace lint sweep restored from the cache: {Restored} file(s), {Linted} linted again, in {Seconds:F1}s",
+                restored,
+                unrestored.Count,
+                lintStopwatch.Elapsed.TotalSeconds);
+            return;
+        }
+
+        LintSweepOutcome lintOutcome = await sweep.RunFullSweepAsync(_indexingLifetime.Token).ConfigureAwait(false);
+        lintStopwatch.Stop();
+
+        // The pause total says how much of a long sweep was the collector, not the lints: at 50,000
+        // heavy files the per-file lint time stayed flat while the sweep grew faster than the file
+        // count.
+        Log.Information(
+            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped, GC paused {Paused:F1}s)",
+            lintOutcome.Linted,
+            lintStopwatch.Elapsed.TotalSeconds,
+            lintOutcome.Skipped,
+            (GC.GetTotalPauseDuration() - pausedBefore).TotalSeconds);
+
+        if ( _cacheHolder.Current is SqliteCache cache && LintSweepCache.Capture(database) is SweepCapture capture )
+        {
+            cache.SaveSweep(capture.Fingerprint, capture.Entries);
+        }
+    }
+
     // Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off phase
     // change after which the allocation profile is completely different. Analysing a file allocates
     // token and PToken arrays that clear the 85 KB large-object threshold, so most scripts put theirs

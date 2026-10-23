@@ -121,6 +121,54 @@ public static class RecordSerializer
         }
     }
 
+    /// <summary>
+    /// A set of diagnostics on its own, for the lint sweep's stored results: the record format's
+    /// encoding of each one, after a count. Not compressed — most files have none, and the rest a
+    /// handful.
+    /// </summary>
+    public static byte[] SerializeDiagnostics(ImmutableArray<Diagnostic> diagnostics)
+    {
+        RecordWriter writer = t_writer ??= new RecordWriter();
+        writer.Reset();
+        writer.WriteVarUInt((uint)diagnostics.Length);
+        foreach ( Diagnostic diagnostic in diagnostics )
+        {
+            WriteDiagnostic(writer, diagnostic);
+        }
+
+        byte[] blob = new byte[writer.Length + 1];
+        blob[0] = FormatMarker;
+        writer.Written.CopyTo(blob.AsSpan(1));
+        return blob;
+    }
+
+    /// <summary>What <see cref="SerializeDiagnostics"/> wrote, or null when the blob is unreadable.</summary>
+    public static ImmutableArray<Diagnostic>? DeserializeDiagnostics(byte[] blob, NameTable names)
+    {
+        if ( blob.Length < 2 || blob[0] != FormatMarker )
+        {
+            return null;
+        }
+
+        try
+        {
+            RecordReader reader = new(blob.AsSpan(1), names);
+            int count = reader.ReadCount();
+            ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>(count);
+            for ( int index = 0; index < count; index++ )
+            {
+                diagnostics.Add(ReadDiagnostic(ref reader));
+            }
+
+            return diagnostics.MoveToImmutable();
+        }
+        catch ( Exception exception ) when ( exception is InvalidDataException or EndOfStreamException
+            or ArgumentOutOfRangeException or IndexOutOfRangeException or OverflowException )
+        {
+            return null;
+        }
+    }
+
     // ---- ScriptRecord ------------------------------------------------------------------------
 
     private static void WriteRecord(RecordWriter writer, ScriptRecord record)

@@ -587,8 +587,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   a kind goes on the wire as its ordinal, so an older blob reads every kind after the insertion
   shifted by one - a format-6 blob would read each of its macro uses as a literal.
 - `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
-  the meta keys, and the `meta`/`files` table DDL. Either version mismatch (or a
-  build-identity mismatch) wipes the cache; there are no migrations.
+  the meta keys, and the `meta`/`files`/`swept` table DDL. Either version mismatch (or a
+  build-identity mismatch) wipes the cache; there are no migrations. `swept` holds the full-mode
+  lint sweep's results, `meta.sweep_fingerprint` the workspace they describe (schema 3).
 
 ## Cache/ServerBuildIdentity.cs
 
@@ -642,6 +643,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   before paying for it), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing), and
   `WaitForIdleAsync` (returns once every enqueued command has COMMITTED, not merely left the queue).
+  `LoadSweep`/`SaveSweep` read and replace the stored lint sweep (`StoredSweep`, `SweptEntry`); the
+  rows and their fingerprint go in one transaction.
+- A mismatch DELETES THE FILE (with `-wal`/`-shm`) and creates a fresh one; only a file another
+  server holds open has its rows deleted instead. A row delete visits every page — 1.6 s over the
+  1.8 GB cache of 50,000 heavy BO3 files with it already in the OS cache — and left the file its
+  full size, since SQLite returns freed pages only on a VACUUM.
 - The channel is unbounded, so a backlog costs memory (the compressed blobs, until written) rather
   than data: bounded at 4,096 with the writer serializing, it refused 82% of writes at 50,000 files
   and the next "warm" start re-analysed four files in five. `DroppedWrites` counts only writes after

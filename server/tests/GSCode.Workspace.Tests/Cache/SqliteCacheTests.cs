@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using GSCode.Core;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -211,6 +213,44 @@ public class SqliteCacheTests : IDisposable
 
         await using SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b");
         Assert.Empty(reopened.LoadAll());
+    }
+
+    [Fact]
+    public async Task AStoredSweep_RoundTrips()
+    {
+        ImmutableArray<Diagnostic> diagnostics =
+        [
+            new Diagnostic(TextRange.FromCoordinates(4, 1, 4, 12), DiagnosticSeverity.Warning, GscDiagnosticCode.TooManyArguments, "too many"),
+        ];
+
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            Assert.Null(cache.LoadSweep());
+            cache.SaveSweep("fingerprint", [new SweptEntry(@"c:\ws\scripts\caller.gsc", 7, RecordSerializer.SerializeDiagnostics(diagnostics))]);
+            await cache.WaitForIdleAsync(CancellationToken.None);
+        }
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            StoredSweep? stored = reopened.LoadSweep();
+            Assert.NotNull(stored);
+            Assert.Equal("fingerprint", stored!.Fingerprint);
+            SweptEntry entry = Assert.Single(stored.Entries.Values);
+            Assert.Equal(7UL, entry.ContentHash);
+            ImmutableArray<Diagnostic>? read = RecordSerializer.DeserializeDiagnostics(entry.Diagnostics, NameTable.Shared);
+            Assert.NotNull(read);
+            Diagnostic only = Assert.Single(read!.Value);
+            Assert.Equal(diagnostics[0].Range, only.Range);
+            Assert.Equal(diagnostics[0].Severity, only.Severity);
+            Assert.Equal(diagnostics[0].Code, only.Code);
+            Assert.Equal(diagnostics[0].Message, only.Message);
+        }
+
+        // A new server build describes the workspace differently: the stored sweep goes with the rest.
+        await using ( SqliteCache rebuilt = SqliteCache.Open(_dbPath, "identity-b") )
+        {
+            Assert.Null(rebuilt.LoadSweep());
+        }
     }
 
     [Fact]

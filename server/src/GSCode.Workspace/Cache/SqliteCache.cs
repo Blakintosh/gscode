@@ -21,6 +21,7 @@ public sealed class SqliteCache : IAsyncDisposable
     private sealed record UpsertCommand(
         string Path, int Language, string ContextId, string RelativePath, ulong ContentHash, byte[] Blob) : WriteCommand;
     private sealed record DeleteCommand(string Path) : WriteCommand;
+    private sealed record SweepCommand(string Fingerprint, IReadOnlyList<SweptEntry> Entries) : WriteCommand;
 
     private readonly SqliteConnection _connection;
     private readonly Channel<WriteCommand> _writes;
@@ -134,7 +135,7 @@ public sealed class SqliteCache : IAsyncDisposable
             connection = Connect(databasePath);
             if ( !deleted )
             {
-                Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM meta;");
+                Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM swept; DELETE FROM meta;");
             }
 
             WriteMeta(connection, serverBuildIdentity);
@@ -206,6 +207,47 @@ public sealed class SqliteCache : IAsyncDisposable
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// The lint sweep's stored results and the workspace fingerprint they describe, or null when no
+    /// sweep has been stored. Read up front, as <see cref="LoadAll"/> is, before the writer has
+    /// anything to do: the connection is not shared with it safely.
+    /// </summary>
+    public StoredSweep? LoadSweep()
+    {
+        string? fingerprint = ReadMeta(_connection, CacheSchema.MetaSweepFingerprint);
+        if ( fingerprint is null )
+        {
+            return null;
+        }
+
+        Dictionary<string, SweptEntry> entries = new(StringComparer.Ordinal);
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "SELECT path, content_hash, diagnostics FROM swept;";
+        using SqliteDataReader reader = command.ExecuteReader();
+        while ( reader.Read() )
+        {
+            if ( !ulong.TryParse(reader.GetString(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong contentHash) )
+            {
+                continue;
+            }
+
+            string path = reader.GetString(0);
+            entries[path] = new SweptEntry(path, contentHash, (byte[])reader[2]);
+        }
+
+        return new StoredSweep(fingerprint, entries);
+    }
+
+    /// <summary>
+    /// Replaces the stored sweep with <paramref name="entries"/>, described by
+    /// <paramref name="fingerprint"/>. The rows and the fingerprint are written in one transaction,
+    /// so a start never reads one without the other.
+    /// </summary>
+    public void SaveSweep(string fingerprint, IReadOnlyList<SweptEntry> entries)
+    {
+        Submit(new SweepCommand(fingerprint, entries));
     }
 
     /// <summary>
@@ -377,6 +419,9 @@ public sealed class SqliteCache : IAsyncDisposable
                 case DeleteCommand deleteCommand:
                     ApplyDelete(deleteCommand.Path, delete);
                     break;
+                case SweepCommand sweepCommand:
+                    ApplySweep(sweepCommand, transaction);
+                    break;
                 default:
                     break;
             }
@@ -431,6 +476,39 @@ public sealed class SqliteCache : IAsyncDisposable
         upsert.Parameters["$at"].Value = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         upsert.Parameters["$record"].Value = command.Blob;
         upsert.ExecuteNonQuery();
+    }
+
+    private void ApplySweep(SweepCommand command, SqliteTransaction transaction)
+    {
+        using ( SqliteCommand clear = _connection.CreateCommand() )
+        {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM swept;";
+            clear.ExecuteNonQuery();
+        }
+
+        using ( SqliteCommand insert = _connection.CreateCommand() )
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO swept (path, content_hash, diagnostics) VALUES ($path, $hash, $diagnostics);";
+            insert.Parameters.AddWithValue("$path", "");
+            insert.Parameters.AddWithValue("$hash", "");
+            insert.Parameters.AddWithValue("$diagnostics", Array.Empty<byte>());
+            foreach ( SweptEntry entry in command.Entries )
+            {
+                insert.Parameters["$path"].Value = entry.Path;
+                insert.Parameters["$hash"].Value = entry.ContentHash.ToString(CultureInfo.InvariantCulture);
+                insert.Parameters["$diagnostics"].Value = entry.Diagnostics;
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        using SqliteCommand meta = _connection.CreateCommand();
+        meta.Transaction = transaction;
+        meta.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ($key, $value);";
+        meta.Parameters.AddWithValue("$key", CacheSchema.MetaSweepFingerprint);
+        meta.Parameters.AddWithValue("$value", command.Fingerprint);
+        meta.ExecuteNonQuery();
     }
 
     private static void ApplyDelete(string path, SqliteCommand command)

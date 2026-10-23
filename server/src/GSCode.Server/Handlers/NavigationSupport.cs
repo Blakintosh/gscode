@@ -593,14 +593,9 @@ public sealed class NavigationSupport
         // Matched on the KEY, namespace included, not on the name: on BO3 a file routinely declares
         // a name that some other namespace also declares, and claiming those would hand every such
         // lens its own file's declaration instead of the one it names.
-        foreach ( FunctionSymbol declared in asking.Functions )
+        if ( DatabaseQueries.DeclaresKey(GameProfile.Active, asking, key) )
         {
-            if ( string.Equals(declared.KeyName, key.Name, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(
-                    GameProfile.Active.KeyNamespace(declared.Namespace), key.Namespace, StringComparison.Ordinal) )
-            {
-                return asking.RelativePath;
-            }
+            return asking.RelativePath;
         }
 
         // The files this one REACHES, each asked what it declares — not every declaration of the name
@@ -615,8 +610,7 @@ public sealed class NavigationSupport
             foreach ( string path in target.Store.FilesAt(relative) )
             {
                 if ( !target.Store.TryGet(path, out ScriptRecord candidate)
-                    || !ScriptDatabase.CanSee(target.ContextId, candidate.ContextId)
-                    || (candidate.ContextId == "raw" && target.Store.HasOverlayAt(candidate.RelativePath, target.ContextId))
+                    || !DatabaseQueries.IsLoadedFor(target.Store, target.ContextId, candidate)
                     || !DeclaresFunction(candidate, key) )
                 {
                     continue;
@@ -634,7 +628,12 @@ public sealed class NavigationSupport
         return only;
     }
 
-    /// <summary>LookupFunctions' match on one record: the key name, and the namespace when the key has one.</summary>
+    /// <summary>
+    /// LookupFunctions' match on one record: the key name, and the namespace when the key has one.
+    /// Not <see cref="DatabaseQueries.DeclaresKey(GameProfile, ScriptRecord, SymbolKey)"/>: a key with
+    /// no namespace means ANY namespace here, as it does to LookupFunctions, and on BO3 the two
+    /// disagree for every such key (an untyped arrow call's <c>::play</c>, say).
+    /// </summary>
     private static bool DeclaresFunction(ScriptRecord record, SymbolKey key)
     {
         foreach ( FunctionSymbol function in record.Functions )

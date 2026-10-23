@@ -30,10 +30,23 @@ public sealed class PathResolver
     /// </summary>
     private readonly ConcurrentDictionary<(ResolutionContext Context, string Relative), string?> _resolveCache = new();
 
+    /// <summary>The configured raw roots, raw then devraw: the engine's order, see <see cref="RootConfig.DevRawRoot"/>.</summary>
+    private readonly List<string> _rawRoots = [];
+
     public PathResolver(RootConfig config, IFileSystem fileSystem)
     {
         _config = config;
         _fileSystem = fileSystem;
+
+        if ( config.RawRoot is not null )
+        {
+            _rawRoots.Add(config.RawRoot);
+        }
+
+        if ( config.DevRawRoot is not null )
+        {
+            _rawRoots.Add(config.DevRawRoot);
+        }
     }
 
     /// <summary>The configuration this resolver was built from.</summary>
@@ -155,14 +168,12 @@ public sealed class PathResolver
         {
             case ResolutionContextKind.Raw:
             {
-                if ( _config.RawRoot is not null && PathUtil.IsUnder(normalizedAbsolutePath, _config.RawRoot) )
+                foreach ( string rawRoot in _rawRoots )
                 {
-                    return normalizedAbsolutePath[(_config.RawRoot.Length + 1)..];
-                }
-
-                if ( _config.DevRawRoot is not null && PathUtil.IsUnder(normalizedAbsolutePath, _config.DevRawRoot) )
-                {
-                    return normalizedAbsolutePath[(_config.DevRawRoot.Length + 1)..];
+                    if ( PathUtil.IsUnder(normalizedAbsolutePath, rawRoot) )
+                    {
+                        return normalizedAbsolutePath[(rawRoot.Length + 1)..];
+                    }
                 }
 
                 return "";
@@ -290,13 +301,8 @@ public sealed class PathResolver
         string scriptsFolder = _config.RawScriptsSubfolder;
 
         List<string> rootFolders = [];
-        foreach ( string? rawRoot in new[] { _config.RawRoot, _config.DevRawRoot } )
+        foreach ( string rawRoot in _rawRoots )
         {
-            if ( rawRoot is null )
-            {
-                continue;
-            }
-
             // All of raw when it has no script folder: a rawPath set to a loose folder of BO3 scripts
             // (server/samples/bo3 is one) would otherwise index nothing, silently.
             string scripts = PathUtil.NormalizeAbsolute(Path.Combine(rawRoot, scriptsFolder));
@@ -329,10 +335,9 @@ public sealed class PathResolver
     private bool HoldsGameRaw(string folder)
     {
         string normalized = PathUtil.NormalizeAbsolute(folder);
-        foreach ( string? rawRoot in new[] { _config.RawRoot, _config.DevRawRoot } )
+        foreach ( string rawRoot in _rawRoots )
         {
-            if ( rawRoot is not null
-                && (string.Equals(rawRoot, normalized, StringComparison.Ordinal) || PathUtil.IsUnder(rawRoot, normalized)) )
+            if ( string.Equals(rawRoot, normalized, StringComparison.Ordinal) || PathUtil.IsUnder(rawRoot, normalized) )
             {
                 return true;
             }
@@ -343,8 +348,15 @@ public sealed class PathResolver
 
     private bool IsUnderRaw(string normalized)
     {
-        return (_config.RawRoot is not null && PathUtil.IsUnder(normalized, _config.RawRoot))
-            || (_config.DevRawRoot is not null && PathUtil.IsUnder(normalized, _config.DevRawRoot));
+        foreach ( string rawRoot in _rawRoots )
+        {
+            if ( PathUtil.IsUnder(normalized, rawRoot) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -443,13 +455,13 @@ public sealed class PathResolver
                 roots.Add(Path.Combine(_config.ModsRoot, context.ModName));
             }
 
-            AddRawRoots(roots);
+            roots.AddRange(_rawRoots);
             return roots;
         }
 
         if ( context.Kind == ResolutionContextKind.Raw )
         {
-            AddRawRoots(roots);
+            roots.AddRange(_rawRoots);
             return roots;
         }
 
@@ -467,22 +479,8 @@ public sealed class PathResolver
             }
         }
 
-        AddRawRoots(roots);
+        roots.AddRange(_rawRoots);
         return roots;
-    }
-
-    /// <summary>Raw, then devraw: the engine's order, see <see cref="RootConfig.DevRawRoot"/>.</summary>
-    private void AddRawRoots(List<string> roots)
-    {
-        if ( _config.RawRoot is not null )
-        {
-            roots.Add(_config.RawRoot);
-        }
-
-        if ( _config.DevRawRoot is not null )
-        {
-            roots.Add(_config.DevRawRoot);
-        }
     }
 
     private static bool IsIllegalScriptPath(string relative)

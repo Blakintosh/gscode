@@ -160,7 +160,7 @@ public sealed class PhysicalFileSystem : IFileSystem
 
         Parallel.ForEach(
             subdirectories.Where(subdirectory => !IsToolOutput(subdirectory)),
-            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) },
+            new ParallelOptions { MaxDegreeOfParallelism = Indexing.WorkspaceIndexer.BackgroundParallelism },
             subdirectory =>
             {
                 List<string> found = [.. WalkOne(subdirectory, extensions)];

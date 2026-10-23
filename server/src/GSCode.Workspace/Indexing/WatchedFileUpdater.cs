@@ -256,7 +256,7 @@ public sealed class WatchedFileUpdater
         //   12,500 a chunk, blocking gen2 between    37.5 s, 12.7 GB
         //   6,250 a chunk, blocking gen2 between     39.3 s, 12.4 GB, against the cold index's 12.2
         // A save then needs no more memory than indexing the workspace did in the first place.
-        ParallelOptions options = new() { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
+        ParallelOptions options = new() { MaxDegreeOfParallelism = WorkspaceIndexer.BackgroundParallelism };
         for ( int start = 0; start < toIndex.Count; start += ReindexChunk )
         {
             int end = Math.Min(start + ReindexChunk, toIndex.Count);

@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using GSCode.Workspace.Indexing;
 
 namespace GSCode.Server.Handlers;
 
@@ -26,7 +27,7 @@ internal static class BelowNormalWorkers
 
         int next = -1;
         ExceptionDispatchInfo? failure = null;
-        int workers = Math.Min(count, Math.Max(1, Environment.ProcessorCount - 1));
+        int workers = Math.Min(count, WorkspaceIndexer.BackgroundParallelism);
         int running = workers;
         TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

@@ -187,6 +187,9 @@ public sealed class LensCountCache
     /// those are the stock scripts every workspace calls into, where the counts cost most: the
     /// scale run found every one refused, because the installed mods carry copies of them. A raw
     /// asker sees no overlay, so its body never decides another file's count.
+    ///
+    /// Not the same walk as <c>WorkspaceSymbolHandler.ShadowedOut</c>, which asks the opposite
+    /// direction: whether an overlay beside a raw match declares the same name.
     /// </summary>
     private static bool ShadowsRaw(LanguageStore store, ScriptRecord record)
     {

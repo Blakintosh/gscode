@@ -122,18 +122,9 @@ public static class DatabaseQueries
                 continue;
             }
 
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
             // Overlay shadowing, decided per RECORD rather than in a second pass over the finished
-            // list, so the walk can stop early. It is ApplyShadowing's rule with a store: a raw
-            // record is dropped when an overlay visible to the asker sits at its relative path. The
-            // rule's other half - an overlay among the matches declaring the same name - adds
-            // nothing, since such an overlay is visible, non-raw and at that path, which is exactly
-            // what HasOverlayAt counts.
-            if ( record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            // list, so the walk can stop early.
+            if ( !IsLoadedFor(store, askingContextId, record) )
             {
                 continue;
             }
@@ -311,8 +302,7 @@ public static class DatabaseQueries
         foreach ( string path in store.FilesAt(relative) )
         {
             if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record)
-                || !ScriptDatabase.CanSee(askingContextId, record.ContextId)
-                || (record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId)) )
+                || !IsLoadedFor(store, askingContextId, record) )
             {
                 continue;
             }
@@ -332,6 +322,23 @@ public static class DatabaseQueries
                 matches.Add(new ResolvedFunction(function, record));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the asker sees <paramref name="record"/> and the engine loads it: visible to the asking
+    /// context, and not a raw file that an overlay visible to that context replaces.
+    /// <see cref="ApplyShadowing"/>'s rule decided per record with a store. Its other half, an overlay
+    /// among the matches declaring the same name, adds nothing here, since that overlay sits at the
+    /// same path and <see cref="LanguageStore.HasOverlayAt"/> already counts it.
+    /// </summary>
+    public static bool IsLoadedFor(LanguageStore store, string askingContextId, ScriptRecord record)
+    {
+        if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+        {
+            return false;
+        }
+
+        return record.ContextId != "raw" || !store.HasOverlayAt(record.RelativePath, askingContextId);
     }
 
     /// <summary>
@@ -1231,22 +1238,26 @@ public static class DatabaseQueries
 
         // A bare name in a file that declares it means THAT file's function, wherever else the name
         // also lives. This is the rule that keeps cover_prone's own main() out of combat's list.
-        bool declaresItself = false;
-        foreach ( FunctionSymbol function in record.Functions )
-        {
-            if ( DeclaresKey(game, function, entry.Key) )
-            {
-                declaresItself = true;
-                break;
-            }
-        }
-
-        if ( declaresItself )
+        if ( DeclaresKey(game, record, entry.Key) )
         {
             return RelativePathIndex.Normalize(record.RelativePath) == declaring;
         }
 
         return CanReach(record, declaring);
+    }
+
+    /// <summary>Whether any top-level function <paramref name="record"/> declares IS the symbol <paramref name="key"/> names — see the overload below.</summary>
+    public static bool DeclaresKey(GameProfile game, ScriptRecord record, SymbolKey key)
+    {
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            if ( DeclaresKey(game, function, key) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1407,16 +1418,9 @@ public static class DatabaseQueries
         HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
         foreach ( ScriptRecord record in inScope )
         {
-            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
             // The engine never loads a raw file an overlay replaces, so its declarations are not in
-            // scope however early they are reached. This is the per-record half of ApplyShadowing.
-            if ( record.ContextId == "raw"
-                && record.RelativePath.Length > 0
-                && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            // scope however early they are reached.
+            if ( !visited.Add(record.Path) || !IsLoadedFor(store, askingContextId, record) )
             {
                 continue;
             }

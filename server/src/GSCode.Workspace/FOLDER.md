@@ -484,8 +484,9 @@ lints, `Completion/` and `Typing/` the information surfaces.
   function.
 - `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
   record — the `(namespace, name)` list when a namespace is given. It applies overlay shadowing PER
-  RECORD inside the walk (a raw record is skipped when `HasOverlayAt` its path — `ApplyShadowing`'s
-  rule with a store, whose other half is implied), which is what lets `limit` stop the walk early: a
+  RECORD inside the walk (`IsLoadedFor`: visible to the asker, and not a raw record an overlay
+  replaces — `ApplyShadowing`'s rule with a store, whose other half is implied; the include-chain
+  walks and `NavigationSupport.DeclaringFile` ask the same), which is what lets `limit` stop the walk early: a
   caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
   passes 2. A bare name on a merge dialect has thousands of declarations at scale, and building all
   of them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the two-pass rule as
@@ -535,7 +536,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   declarations and still has to be narrowed by the `#using` graph. `CanReach` answers both families
   unchanged, a `#using` edge being a non-insert dependency edge exactly as an `#include` is.
   Attribution matches on the whole KEY via `GameProfile.KeyNamespace`, so the "declares it itself"
-  shortcut cannot claim a same-named function from an unrelated namespace.
+  shortcut cannot claim a same-named function from an unrelated namespace. `DeclaresKey(game,
+  record, key)` is that match for a whole record, public for `NavigationSupport`'s own-file test.
+  Its reachable-file test keeps LookupFunctions' looser match, where a key with no namespace means
+  any namespace; on BO3 the two disagree for every such key.
 
 ## Database/MethodResolution.cs
 
@@ -549,6 +553,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Indexing/WorkspaceIndexer.cs
 
+- `BackgroundParallelism` — one thread per core but one, so a request always has a core. The cold
+  index, the directory walk, a header's re-index and the server's `BelowNormalWorkers` all use it.
 - `IndexingMode` (Off/Partial/Full) + `IIndexProgressListener` (+Null impl) —
   the server maps listener events onto gscode/indexing* notifications.
 - `sealed class WorkspaceIndexer` — cold start: enumerate targets → bounded

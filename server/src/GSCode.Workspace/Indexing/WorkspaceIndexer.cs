@@ -108,6 +108,16 @@ public sealed class NullIndexProgressListener : IIndexProgressListener
 /// </summary>
 public sealed class WorkspaceIndexer
 {
+    /// <summary>
+    /// How many threads background work runs on: one per core but one, so a request the editor is
+    /// waiting on always has a core to run on. The cold index, the directory walk, a header's
+    /// re-index and the server's below-normal workers all use it.
+    /// </summary>
+    public static int BackgroundParallelism
+    {
+        get { return Math.Max(1, Environment.ProcessorCount - 1); }
+    }
+
     private readonly ScriptDatabase _database;
     private readonly Func<PathResolver> _resolverProvider;
     private readonly IFileSystem _fileSystem;
@@ -298,7 +308,7 @@ public sealed class WorkspaceIndexer
         _skippedOversized = 0;
         ParallelOptions options = new()
         {
-            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+            MaxDegreeOfParallelism = BackgroundParallelism,
             CancellationToken = cancellationToken,
         };
 

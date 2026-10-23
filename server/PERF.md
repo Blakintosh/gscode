@@ -3062,6 +3062,108 @@ Three things decided it:
 The first answer was also never sent at all. OmniSharp's serializer throws `NotImplementedException`
 while writing every 3.17 report type, and swallows the exception. Pull handlers need their own request and report types.
 
+### 2026-10-22: a branch switch, cod4 at scale, and every start re-linting
+
+This pass worked through what the 50,000-file work had left open: cod4's shape at scale, the GC and
+memory questions, the cold index's spread, a bulk change on disk, and the editor's own cost. Every
+number here comes over stdio from the Release server unless it says it comes from the harness.
+
+**A branch switch froze the editor** (`8fe1c173`). VS Code sends every file event until 250 ms of
+quiet as one `didChangeWatchedFiles`. The handler re-indexed the batch inside `Handle`, one file
+at a time, so the editor waited for all of it. The driver rewrote 5,000 copies on disk, sent them
+as one batch, typed in an open file two seconds later, and asked `documentSymbol` every 200 ms:
+
+| 5,000 files changed, bo3 50K | before | after |
+|---|---:|---:|
+| batch applied | 32.5 s | **10.2 s** |
+| an edit typed during it, to its diagnostics | **30,785 ms** | **328 ms** |
+| `documentSymbol` max during it | 25,526 ms | 68–114 ms |
+
+The handler now queues the batch and returns. A pump applies the queue:
+- deletions first;
+- then the changed scripts in parallel, on threads below normal priority;
+- headers last.
+
+There is no forced collection between chunks.
+
+**cod4 at 50,000 heavy files** was never measured before. The harness's hot-call probe looked only
+at namespace-qualified calls, which cod4 does not have, so it measured nothing (`740d5fee`). At 10K
+cod4 behaved like BO3. At 50K, a request that resolves a bare call grew with the workspace, because
+each function name is declared by about 2,000 copies. `LookupFunctions` returned every one of them,
+and hover took the first, which was sometimes the wrong function (`29186c93`). Calls now resolve
+through the asking file, then the files it includes and path-calls:
+
+| cod4 50K | before | after |
+|---|---:|---:|
+| hover, own call (stdio, median) | 40.3 ms | **0.36 ms** |
+| outgoing call hierarchy (stdio, median) | 104 ms | **1.6 ms** |
+| hover / implementation, stock call (harness, p99) | 10.1 / 9.4 ms | 0.12 / 0.06 ms |
+| completion, stock call (harness, p99) | 9.3 ms | 3.6 ms |
+
+Unchanged:
+- formatting the heaviest file, about 106 ms p99;
+- definition on a stock call, 12.5 ms p99;
+- an edit's lint pass, 7.9 ms median but 43 ms at p99, against 16 ms p99 at 10K.
+
+A trace of the lint pass found no single rule growing, and per-rule p99 in the sweep is flat from
+10K to 50K. That tail is not explained.
+
+The lens count on the stock file declaring `anim_pos` says 53, while find-references from a copy
+returns 45,228. That is visibility, not a bug: raw files cannot see workspace files.
+
+**Every full-mode start re-ran the whole lint sweep** (`3e5aba15`), warm or cold, to reach the
+diagnostics the previous session already had. The sweep's results are now stored with a
+fingerprint of the whole workspace and put back only when the fingerprint matches. One changed
+file anywhere and the start sweeps as before. Each pair below is a cold start and then an unchanged
+restart, with the pushed diagnostics digested and compared:
+
+| | sweep | settled | files with problems | digest |
+|---|---:|---:|---:|---|
+| cod4 50K, cold | 103.1 s | 181.8 s | 35,366 | `9d6c1766…` |
+| cod4 50K, restart | **0.7 s** | **47.0 s** | 35,366 | `9d6c1766…` |
+| bo3 50K, cold | 56.3 s | 117.7 s | 35,310 | `4c0c6d65…` |
+| bo3 50K, restart | **0.6 s** | **37.8 s** | 35,310 | `4c0c6d65…` |
+
+**GC.** The question was whether aggressive GC settings help at this size. The shipped
+`ConserveMemory: 5` was compared with 0 on the same cold BO3 50K session. The run included CodeLens
+resolves throughout and every lens of four heavy files. The server now logs the level it got
+(`56467749`), which confirmed the environment override:
+
+| | conserve 5 (shipped) | conserve 0 |
+|---|---:|---:|
+| GC paused during the sweep | 12.2 s of 61 s | 11.4 s of 59 s |
+| `documentSymbol` / CodeLens resolve max, startup | 377 / 52 ms | 195 / 172 ms |
+| every lens of four heavy files, max | 21 ms | 38 ms |
+| resolves over 1 s | 0 | 0 |
+| working set after | 12,475 MB | 12,492 MB |
+
+The setting changes nothing measurable in either direction, so it stays. No run reproduced the
+earlier 1–5 s pauses. More aggressive collection is not the lever at this size, because every
+collection's cost grows with the live heap. The sweep line now reports its GC pause: 12.2 s of 61 s
+on BO3, 37.7 s of 103 s on cod4. The collector is a fifth to a third of a cold sweep.
+
+**The cold index's spread.** Ten cache-off cold starts at BO3 50K today ran 34.2–40.0 s. The 17.8 s
+"cache" phase of one earlier start was the stale cache being emptied: `DELETE FROM files` over a
+1.8 GB table, most likely read from disk. The same delete took 1.6 s with the file in the OS cache.
+A stale cache's file is now deleted instead, in 0.1 s, which also gives back the 1.7 GB the row
+delete left on disk (`bfe3fa2b`). The harness's own cold figure still varies run to run, 51.0 s
+then 76.4 s on cod4 50K with no indexing change between them. That is not explained.
+
+**Memory: reported, not changed.** At cod4 50K the harness puts a record at 162 KB:
+- the reference table: 64 KB packed, 27 KB keys, 16 KB by-key index;
+- functions: 18.8 KB, docs 16.2 KB.
+
+The index beside the records adds 56.6 KB a file. The docs and the duplicated keys are artifacts of
+copying 25 scripts 2,000 times; on the unduplicated stock trees a file retains 45–47 KB, of which
+the keys are 6.6 KB. As before, nothing that only wins on the copy shape was built.
+
+**Left as decisions or unmeasured:**
+- *Reference answer size.* `anim_pos` from a cod4 copy is 45,228 locations, 8.4 M characters of
+  JSON. VS Code's references API takes the whole answer at once, so streaming would not help the
+  client. Capping it is a product decision.
+- *The editor's own cost.* What VS Code does with 35,000 files' problems on a cold start is not
+  measured; the client has no editor-test harness to drive it.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

@@ -49,9 +49,14 @@ public sealed class WatchedFileUpdater
     /// is a fact about the header, and it is what makes the skip safe — the next analysis of an
     /// open dependent's buffer reads the new header.
     /// </param>
-    public IReadOnlyList<string> Apply(string path, WatchedFileChange change, Func<string, bool>? ownedByEditor = null)
+    /// <param name="invalidateResolution">
+    /// False when the caller applying a batch has already called <see cref="NoteFilesAppearedOrVanished"/>
+    /// once for all of it, rather than once per file that appeared or vanished.
+    /// </param>
+    public IReadOnlyList<string> Apply(
+        string path, WatchedFileChange change, Func<string, bool>? ownedByEditor = null, bool invalidateResolution = true)
     {
-        List<string> touched = [.. ApplyToFile(path, change, ownedByEditor)];
+        List<string> touched = [.. ApplyToFile(path, change, ownedByEditor, invalidateResolution)];
 
         // Raw shadows devraw at the same relative path, so a raw file appearing retires the devraw
         // copy the index held in its place, and one vanishing brings that copy back. Without this
@@ -93,7 +98,17 @@ public sealed class WatchedFileUpdater
         return _indexer.IsIndexTarget(normalizedPath) || _database.TryGetAnyRecord(normalizedPath, out _);
     }
 
-    private IReadOnlyList<string> ApplyToFile(string path, WatchedFileChange change, Func<string, bool>? ownedByEditor)
+    /// <summary>
+    /// Drops every cached "does this exist" answer the resolver has given out, for a batch of changes
+    /// in which some file appeared or vanished — what <see cref="Apply"/> does per such file otherwise.
+    /// </summary>
+    public void NoteFilesAppearedOrVanished()
+    {
+        _indexer.InvalidateResolutionCache();
+    }
+
+    private IReadOnlyList<string> ApplyToFile(
+        string path, WatchedFileChange change, Func<string, bool>? ownedByEditor, bool invalidateResolution)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
@@ -104,7 +119,7 @@ public sealed class WatchedFileUpdater
         // #using/#include resolve through the same PathResolver.Resolve the GSH-only
         // NoteHeaderSetChanged below cannot speak for. A plain content change cannot: nothing
         // about whether a target EXISTS moved. See PathResolver.InvalidateResolutionCache.
-        if ( change != WatchedFileChange.Changed )
+        if ( change != WatchedFileChange.Changed && invalidateResolution )
         {
             _indexer.InvalidateResolutionCache();
         }

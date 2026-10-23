@@ -182,6 +182,18 @@ public static class MethodResolution
             }
         }
 
+        // A bare call on an include dialect: the declaration this file reaches, before every
+        // same-named one in the workspace. See DatabaseQueries.ReachableFunctions.
+        if ( canonical.Namespace is null && referenceKind != ReferenceKind.MethodCall && !GameProfile.Active.ResolvesByNamespace )
+        {
+            ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.ReachableFunctions(
+                store, askingContextId, askingPath, canonical.Name);
+            if ( reachable.Length > 0 )
+            {
+                return reachable;
+            }
+        }
+
         // No class declares the name at all. For an arrow call that means the field-holding-a
         // -function-pointer idiom — `[[self.classObj]]->onBeginUse( player )` in
         // gameobjects_shared.gsc — which really does reach a top-level function.

@@ -167,6 +167,75 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// The functions a BARE call to <paramref name="keyName"/> reaches from the asking file on an
+    /// include dialect: the asking file's own declarations if it has any, else those of the files it
+    /// names — its <c>#include</c>s and path calls, as <see cref="ReachableRelativePaths"/> lists them.
+    /// Empty when neither declares it, for the caller to fall back to <see cref="LookupFunctions"/>.
+    ///
+    /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers a
+    /// call with every declaration of the name in the workspace, in index order: hover showed whichever
+    /// came first rather than the one the call reaches, and building the list was the cost — about
+    /// 2,000 declarations a name at 50,000 heavy cod4 files, 40 ms a hover. The files a script names
+    /// are a handful. The filters are LookupFunctions' own: visibility, overlay shadowing, privacy.
+    /// </summary>
+    public static ImmutableArray<ResolvedFunction> ReachableFunctions(
+        LanguageStore store, string askingContextId, string askingPath, string keyName)
+    {
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        if ( normalizedAskingPath.Length == 0 || !store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
+        {
+            return [];
+        }
+
+        ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
+        foreach ( FunctionSymbol function in asking.Functions )
+        {
+            if ( function.KeyName == keyName )
+            {
+                matches.Add(new ResolvedFunction(function, asking));
+            }
+        }
+
+        // A file's own declaration wins outright: a bare main() inside a script means its own main,
+        // whatever the scripts it includes declare.
+        if ( matches.Count > 0 )
+        {
+            return matches.ToImmutable();
+        }
+
+        HashSet<string> visited = new(StringComparer.Ordinal) { asking.Path };
+        foreach ( string relative in ReachableRelativePaths(asking) )
+        {
+            foreach ( string path in store.FilesAt(relative) )
+            {
+                if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record)
+                    || !ScriptDatabase.CanSee(askingContextId, record.ContextId)
+                    || (record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId)) )
+                {
+                    continue;
+                }
+
+                foreach ( FunctionSymbol function in record.Functions )
+                {
+                    if ( function.KeyName != keyName )
+                    {
+                        continue;
+                    }
+
+                    if ( function.IsPrivate && !CanSeePrivate(function, record, normalizedAskingPath, default) )
+                    {
+                        continue;
+                    }
+
+                    matches.Add(new ResolvedFunction(function, record));
+                }
+            }
+        }
+
+        return matches.ToImmutable();
+    }
+
+    /// <summary>
     /// Overlay shadowing: when a mod/workspace copy exists at the SAME script-relative path as a
     /// raw record, the engine loads ONLY the overlay — replacing the raw file WHOLESALE, whatever
     /// each copy individually declares — so every raw-context match at that path drops out, not

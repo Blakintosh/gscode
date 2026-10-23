@@ -221,6 +221,19 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         if ( key.OwnerClass is null && kind != ReferenceKind.MethodCall )
         {
             canonical = key;
+
+            // A bare call on an include dialect means the declaration the calling file reaches, not
+            // every same-named one in the workspace. See DatabaseQueries.ReachableFunctions.
+            if ( key.Namespace is null && !GameProfile.Active.ResolvesByNamespace )
+            {
+                ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.ReachableFunctions(
+                    target.Store, target.ContextId, target.Path, key.Name);
+                if ( reachable.Length > 0 )
+                {
+                    return reachable;
+                }
+            }
+
             return DatabaseQueries.LookupFunctions(
                 target.Store, target.ContextId, target.Path, key.Namespace, key.Name, askingNamespaces: target.Namespaces);
         }

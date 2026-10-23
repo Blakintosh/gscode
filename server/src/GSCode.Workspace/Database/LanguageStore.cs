@@ -321,8 +321,26 @@ public sealed class LanguageStore
     }
 
     /// <summary>Keeps <see cref="_pathsByContext"/> correct across an upsert or removal.</summary>
+    /// <summary>
+    /// Bumped whenever a path that stays in the store moves to another context — a workspace folder
+    /// added or removed, a raw script becoming a mod's. Every other answer about visibility is
+    /// computed per call; this is for the one cached against an index array, which does not change
+    /// when only a file's context does. See <c>DatabaseQueries.VisibleDeclaring</c>.
+    /// </summary>
+    public long ContextEpoch
+    {
+        get { return Volatile.Read(ref _contextEpoch); }
+    }
+
+    private long _contextEpoch;
+
     private void AdjustContextPaths(ScriptRecord? previous, ScriptRecord? next)
     {
+        if ( previous is not null && next is not null && previous.ContextId != next.ContextId )
+        {
+            Interlocked.Increment(ref _contextEpoch);
+        }
+
         if ( previous is not null && previous.ContextId != next?.ContextId
             && _pathsByContext.TryGetValue(previous.ContextId, out ContextPaths? before)
             && before.Paths.TryRemove(previous.Path, out _) )

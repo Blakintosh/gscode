@@ -110,9 +110,10 @@ public static class DatabaseQueries
         //
         // With a namespace, the files declaring the name INTO it — the subset the namespace filter
         // below would keep anyway. See DeclarationIndex for what the bare-name list costs at scale.
-        ImmutableArray<string> declaringPaths = namespaceName is null
-            ? store.FilesDeclaring(keyName)
-            : store.FilesDeclaring(namespaceName, keyName);
+        ImmutableArray<string> declaringPaths = VisibleDeclaring(
+            store,
+            askingContextId,
+            namespaceName is null ? store.FilesDeclaring(keyName) : store.FilesDeclaring(namespaceName, keyName));
 
         foreach ( string declaringPath in declaringPaths )
         {
@@ -1080,6 +1081,61 @@ public static class DatabaseQueries
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string[], HashSet<string>> s_namingSets = new();
+
+    /// <summary>Names declared by fewer files than this are walked as they are; filtering them first saves nothing.</summary>
+    private const int VisibleDeclaringThreshold = 64;
+
+    /// <summary>One asking context's share of a declaring list, and the context epoch it was taken at.</summary>
+    private sealed record VisibleShare(long Epoch, ImmutableArray<string> Paths);
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string[], System.Collections.Concurrent.ConcurrentDictionary<string, VisibleShare>>
+        s_visibleDeclaring = new();
+
+    /// <summary>
+    /// The files in <paramref name="declaring"/> that <paramref name="askingContextId"/> can see, taken
+    /// once per array the declaration index hands out — the same array until a file declaring the
+    /// name is added, removed or re-indexed — and per context epoch, which moves when a file changes
+    /// context without changing what it declares.
+    ///
+    /// Without it, an asker that sees few of a name's declarations paid a record lookup for each of
+    /// the rest on every question: a stock script at 50,000 heavy cod4 files sees none of the 2,000
+    /// workspace copies declaring each of its names, and formatting it took 155 ms, most of it
+    /// hashing paths of files it could never resolve to.
+    /// </summary>
+    private static ImmutableArray<string> VisibleDeclaring(LanguageStore store, string askingContextId, ImmutableArray<string> declaring)
+    {
+        if ( declaring.Length < VisibleDeclaringThreshold )
+        {
+            return declaring;
+        }
+
+        string[]? array = System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(declaring);
+        if ( array is null )
+        {
+            return declaring;
+        }
+
+        System.Collections.Concurrent.ConcurrentDictionary<string, VisibleShare> byContext =
+            s_visibleDeclaring.GetValue(array, static _ => new(StringComparer.Ordinal));
+        long epoch = store.ContextEpoch;
+        if ( byContext.TryGetValue(askingContextId, out VisibleShare? cached) && cached.Epoch == epoch )
+        {
+            return cached.Paths;
+        }
+
+        ImmutableArray<string>.Builder visible = ImmutableArray.CreateBuilder<string>();
+        foreach ( string path in array )
+        {
+            if ( store.TryGet(path, out ScriptRecord record) && ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                visible.Add(path);
+            }
+        }
+
+        ImmutableArray<string> paths = visible.ToImmutable();
+        byContext[askingContextId] = new VisibleShare(epoch, paths);
+        return paths;
+    }
 
     /// <summary>
     /// The files naming a path, as a set to test against, built once per array the dependents index

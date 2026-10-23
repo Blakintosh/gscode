@@ -29,9 +29,8 @@ namespace GSCode.Server.Handlers;
 /// path pays to keep the other case free.
 ///
 /// All of it runs after the handler has returned, one change at a time and in the order they
-/// arrived. It ran inside the handler, and at 50,000 heavy BO3 files adding a ten-file folder held
-/// the editor for 86 s — the warm re-index, then the full sweep — during which an edit typed into an
-/// open file waited the whole time for its diagnostics.
+/// arrived: a notification handler blocks every editor message behind it, and the re-index and the
+/// full sweep are long at scale.
 /// </summary>
 public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBase
 {

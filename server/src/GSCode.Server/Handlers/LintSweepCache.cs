@@ -15,23 +15,14 @@ namespace GSCode.Server.Handlers;
 public sealed record SweepCapture(string Fingerprint, List<SweptEntry> Entries);
 
 /// <summary>
-/// The full-mode lint sweep's results kept in the workspace cache, for a start whose workspace has
-/// not changed since they were computed.
+/// The full-mode lint sweep's results kept in the workspace cache, so a start whose workspace has not
+/// changed restores them instead of sweeping again (PERF.md has the cost).
 ///
-/// Every <c>workspaceIndexingMode: full</c> start ran the whole sweep, warm or cold: a minute on every
-/// core at 50,000 heavy BO3 files and two at 50,000 heavy cod4 files, to arrive at the diagnostics the
-/// previous session already had. A cross-file lint result depends on every file it can see, so the
-/// rule is all or nothing: the stored results are used only when the fingerprint of the whole
-/// workspace — every record's path, language and content hash, headers included — is the one they
-/// were computed against. Anything else, one changed signature in one file included, sweeps as before.
-///
-/// The lints read one thing besides the records: whether a directive's or a path call's target
-/// EXISTS, which the resolver answers from disk — <c>gscode-5009</c>, and the completeness of an
-/// include scope. A target can exist without being a record (an oversized file the index skips, a
-/// script outside the folders it walks), so the resolver's answer for every directive and path call
-/// is part of the fingerprint too. Everything else is already in the cache's identity, which empties
-/// the cache when it changes: the server build, the bundled data and the game. The lints read no
-/// settings.
+/// All or nothing, because a cross-file result depends on every file it can see: the results are used
+/// only when the fingerprint of the whole workspace matches the one they were computed against.
+/// Besides the records, the lints read whether a directive's or path call's target EXISTS, and a
+/// target can exist without being a record, so the resolver's answers are in the fingerprint too. The
+/// server build, bundled data and game are in the cache's identity; the lints read no settings.
 /// </summary>
 public static class LintSweepCache
 {

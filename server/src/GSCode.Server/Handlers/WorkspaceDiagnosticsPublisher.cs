@@ -134,16 +134,10 @@ public sealed class WorkspaceDiagnosticsPublisher
     }
 
     /// <summary>
-    /// Brings the client up to date with the whole workspace: sends every in-scope file whose
-    /// diagnostics differ from what was last sent, and takes back every file no longer reported.
-    /// Called once indexing finishes, whenever the scope setting changes, and after closed
-    /// dependents are re-linted.
-    /// </summary>
-    /// <summary>
     /// Closed files re-indexed and not yet linted again, by how many holders are waiting on them. A
-    /// re-index stores the parse diagnostics alone; in full mode the cross-file ones come back only
-    /// with the relint, so a refresh in between would take them out of the Problems panel and the
-    /// next one put them back. Their last-published set stands until <see cref="Release"/>.
+    /// re-index stores the parse diagnostics alone, so a refresh before the relint would take the
+    /// cross-file ones out of the Problems panel. Their last-published set stands until
+    /// <see cref="Release"/>.
     /// </summary>
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _awaitingRelint = new(StringComparer.Ordinal);
 
@@ -178,6 +172,12 @@ public sealed class WorkspaceDiagnosticsPublisher
         }
     }
 
+    /// <summary>
+    /// Brings the client up to date with the whole workspace: sends every in-scope file whose
+    /// diagnostics differ from what was last sent, and takes back every file no longer reported.
+    /// Called once indexing finishes, whenever the scope setting changes, and after closed
+    /// dependents are re-linted.
+    /// </summary>
     public void Refresh()
     {
         DiagnosticsScope scope = ScopeFromSetting(_settings.DiagnosticsScope);
@@ -229,8 +229,7 @@ public sealed class WorkspaceDiagnosticsPublisher
 
                 // Unchanged since it was last sent: the client already shows exactly this. The same
                 // array is the cheap test; a recomputed one is compared by value, since a re-index
-                // builds new arrays whether or not anything in them moved — a branch switch that
-                // rewrote 5,000 bodies at 50,000 heavy BO3 files sent 3,561 files' unchanged sets.
+                // builds new arrays whether or not anything in them moved.
                 if ( _published.TryGetValue(record.Path, out ImmutableArray<Diagnostic> sent)
                     && (sent == record.Diagnostics || SameDiagnostics(sent, record.Diagnostics)) )
                 {

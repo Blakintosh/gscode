@@ -116,11 +116,8 @@ public sealed class SqliteCache : IAsyncDisposable
     /// Opens (or creates) the cache. On any version or build-identity mismatch the cache starts
     /// empty so cold start re-indexes from scratch.
     ///
-    /// Empty by deleting the file rather than its rows. Every server update and every rebuild is a
-    /// mismatch, and <c>DELETE FROM files</c> visits every page of the table to free it: 1.8 GB of
-    /// record blobs at 50,000 heavy BO3 files, 1.6 s with the file already in the OS cache, and a
-    /// start's whole 17.8 s "cache" phase once with it not. Then it left the file at its full size,
-    /// since SQLite only returns freed pages to the disk on a VACUUM. Deleting the file takes 0.1 s.
+    /// Empty by deleting the file rather than its rows: every update is a mismatch, and deleting the
+    /// rows visits every page and leaves the file at full size until a VACUUM (PERF.md has the cost).
     /// The rows are deleted only when the file cannot be: another server holding it open on the same
     /// workspace.
     /// </summary>

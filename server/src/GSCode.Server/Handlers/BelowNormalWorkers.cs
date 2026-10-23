@@ -5,10 +5,9 @@ namespace GSCode.Server.Handlers;
 /// <summary>
 /// Background work on threads of its own at below-normal priority, one per core but one.
 ///
-/// Not the thread pool. The lint sweep takes every core it is given, and on the pool it ran at the
-/// priority every request handler runs at: at 10,000 heavy BO3 files a document-symbol request made
-/// during a cold start's sweep waited 416 ms at p99 against 22 ms typically. Below normal, the
-/// scheduler runs a request's thread whenever it is ready and gives this work what is left.
+/// Not the thread pool: on it the lint sweep ran at the priority every request handler runs at, and
+/// requests made during it waited (PERF.md). Below normal, the scheduler runs a request's thread
+/// whenever it is ready and gives this work what is left.
 /// </summary>
 internal static class BelowNormalWorkers
 {

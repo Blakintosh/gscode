@@ -174,11 +174,10 @@ public static class DatabaseQueries
     /// — and then of what those include, nearest first, since the compiler flattens an include chain.
     /// Empty when none of them declares it, for the caller to fall back to <see cref="LookupFunctions"/>.
     ///
-    /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers a
-    /// call with every declaration of the name in the workspace, in index order: hover showed whichever
-    /// came first rather than the one the call reaches, and building the list was the cost — about
-    /// 2,000 declarations a name at 50,000 heavy cod4 files, 40 ms a hover. The files a script names
-    /// are a handful. The filters are LookupFunctions' own: visibility, overlay shadowing, privacy.
+    /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers with
+    /// every declaration of the name in the workspace, in index order, and is slow at scale. The files
+    /// a script names are a handful. The filters are LookupFunctions' own: visibility, overlay
+    /// shadowing, privacy.
     /// </summary>
     private static ImmutableArray<ResolvedFunction> ReachableFunctions(
         LanguageStore store, string askingContextId, string askingPath, string keyName)
@@ -1119,12 +1118,8 @@ public static class DatabaseQueries
     /// The files in <paramref name="declaring"/> that <paramref name="askingContextId"/> can see, taken
     /// once per array the declaration index hands out — the same array until a file declaring the
     /// name is added, removed or re-indexed — and per context epoch, which moves when a file changes
-    /// context without changing what it declares.
-    ///
-    /// Without it, an asker that sees few of a name's declarations paid a record lookup for each of
-    /// the rest on every question: a stock script at 50,000 heavy cod4 files sees none of the 2,000
-    /// workspace copies declaring each of its names, and formatting it took 155 ms, most of it
-    /// hashing paths of files it could never resolve to.
+    /// context without changing what it declares. Without it, an asker that sees few of a name's
+    /// declarations paid a record lookup for each of the rest on every question.
     /// </summary>
     private static ImmutableArray<string> VisibleDeclaring(LanguageStore store, string askingContextId, ImmutableArray<string> declaring)
     {

@@ -21,12 +21,10 @@ namespace GSCode.Server.Handlers;
 /// Applies workspace file create/change/delete events to the database. Editor buffers are the
 /// source of truth for open files, so this skips them.
 ///
-/// A branch switch sends thousands of events in one notification — VS Code's client batches every
-/// event until 250 ms of quiet — and applying them used to happen inside the handler, one file at a
-/// time: 5,000 changed files at 50,000 heavy BO3 files took 38 s, and a request asked meanwhile waited
-/// up to 28.7 s for it. So the handler only queues a batch and returns. One pump at a time applies the
-/// queue in arrival order, each path's last event standing for all of its earlier ones, and re-indexes
-/// the changed scripts in parallel on threads below normal priority, as the lint sweep runs.
+/// A branch switch sends thousands of events in one notification, and a notification handler blocks
+/// every editor message behind it. So the handler only queues a batch and returns. One pump at a time
+/// applies the queue in arrival order, each path's last event standing for all of its earlier ones,
+/// and re-indexes the changed scripts on <see cref="BelowNormalWorkers"/>.
 /// </summary>
 public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
 {

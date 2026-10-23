@@ -3177,6 +3177,77 @@ the keys are 6.6 KB. As before, nothing that only wins on the copy shape was bui
 - *The editor's own cost.* What VS Code does with 35,000 files' problems on a cold start is not
   measured; the client has no editor-test harness to drive it.
 
+### 2026-10-23: the tails, the features never timed at scale, and what the harness was measuring
+
+The rest of the open list, at 50,000 copies of the 25 heaviest scripts, cod4 and BO3. The harness now
+names the file behind each request's slowest time (`c668c66b`), and that answered the cod4 tails at
+once. Every slow file was a STOCK script (`maps\_utility`, `cargoship`, `airlift`, `_globallogic`,
+`sniperescape_code`). Stock scripts see none of the ~2,000 workspace copies that declare each of
+their names, and `LookupFunctions` paid a record lookup for every one of them on every question.
+The visible share of a name's declaring files is now taken once per asking context and kept against
+the index's array (`f9c5c14c`). A context epoch notices a file that moves context without changing
+what it declares.
+
+| cod4 50K, p99 (harness) | before | after |
+|---|---:|---:|
+| code actions | 57.0 ms | **16.1 ms** |
+| formatting, whole file | 121.4 ms | **33.4 ms** |
+| formatting, one function's range | 123.0 ms | **31.9 ms** |
+| formatting, on typing `}` | 119.8 ms | **39.0 ms** |
+| an edit's lint pass | 53.7 ms | **15.5 ms** |
+| one edit, end to end | 65.4 ms | **34.1 ms** |
+| definition, stock call | 14.7 ms | 14.2 ms |
+
+Over stdio, on stock `maps\_utility.gsc`: formatting went from 155 to 50.6 ms median and code actions
+from 34.0 to 15.5. What formatting has left is the formatter's own work on a very large file.
+Definition's 14 ms p99 is one copy's call and is left.
+
+**Features never timed at scale**, added to the per-request table (`b16c1b50`). At BO3 50K, p99:
+
+| request | p99 |
+|---|---:|
+| type hierarchy: prepare / supertypes / subtypes | 0.01 / 0.02 / 0.01 ms |
+| formatting, one function's range | 18.3 ms |
+| formatting, on typing `}` | 26.1 ms |
+
+On-type formatting formats the whole file and keeps the edits around the cursor. That is why it
+costs about as much as whole-file formatting even when it returns nothing. Formatting only a
+fragment would need a formatter that can, which is a redesign; it is in budget as it is.
+
+**The branch switch's republish** (`c0969529`). A comment-only switch of 5,000 files sent 3,561
+closed files whose diagnostics had not changed. `Refresh` compared each set by reference, and a
+re-index builds new arrays. It now compares by value: the same switch sends nothing but the open
+file's own diagnostics.
+
+**Two correctness fixes the async pump made worth doing:**
+- A document opened between a re-index's first "is it open?" and its commit had its buffer
+  overwritten by the disk record. The indexer now asks again right before it writes (`21c3e130`).
+- A bare call to a function reached only through a nested `#include` fell back to the wide lookup.
+  The reachable lookup now walks the include chain, nearest first (`29f43da8`).
+
+**The cold index's run-to-run spread was the OS file cache.** This machine has 32 GB, the two 50K
+workspaces hold 11 GB of source, and the server keeps a 12 GB heap, so the cache rarely holds both
+workspaces. Reading the cod4 workspace took 39.2 s from disk and 3.3 s from the cache. The same BO3
+cold index measured 75.0 s in a full run that started cold, then 34.1 and 34.2 s back to back. The
+harness now reads every script first, on a row of its own, and times the index from the cache
+(`daecb047`): cod4 40.0 s to read, then 49.3 s to index; BO3 45.6 s to read, then 35.6 s to index.
+A first start after a reboot does pay the read.
+
+**gen0 on a large heap: measured, not changed.** A gen0 costs 15–20 ms when it lands in a request
+on this heap. Raising the gen0 budget from the default 200 MB to 1 GB (`DOTNET_GCgen0MaxBudget`) on
+the same cold BO3 50K session:
+
+| | 200 MB (default) | 1 GB |
+|---|---:|---:|
+| every lens of four heavy files, p99 / max | 4.5 / 15.3 ms | 0.5 / 7.5 ms |
+| GC paused during the sweep | 11.6 s | 7.6 s |
+| CodeLens resolve / `documentSymbol` max, startup | 163.7 / 68.3 ms | 74.0 / 101.0 ms |
+| edit to diagnostics | 214–392 ms | 217–333 ms |
+| working set after | 12,446 MB | **13,775 MB** |
+
+Fewer collections land in requests, at 1.3 GB more resident. The default stays: trading memory
+for pauses is the same trade as skipping the post-index compaction, made the other way.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

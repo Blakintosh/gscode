@@ -341,12 +341,14 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            // A function reference cannot name a builtin, so an unqualified one that matched no script
-            // function is a script miss. Stands down when an import failed to resolve, since in a
-            // merge dialect the missing file may have declared it.
+            // An unqualified function reference that matched no script function. It may name an
+            // engine function — BO3's util_shared.gsc stores `&UseButtonPressed` and four more button
+            // tests in level._button_funcs — so one the library knows is clean. Anything else is a
+            // script miss. Stands down when an import failed to resolve, since in a merge dialect the
+            // missing file may have declared it.
             if ( entry.Kind == ReferenceKind.AddressOf )
             {
-                if ( !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
+                if ( builtins.Find(entry.Key.Name) is null && !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
                 {
                     diagnostics.Add(Diagnostic.Create(
                         entry.Range,

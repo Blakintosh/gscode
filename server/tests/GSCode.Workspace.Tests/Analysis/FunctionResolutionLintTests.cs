@@ -93,6 +93,16 @@ public class FunctionResolutionLintTests
     }
 
     [Fact]
+    public void AFunctionReferenceToAnEngineFunction_IsClean()
+    {
+        // An engine function can be referenced: BO3's own util_shared.gsc stores
+        // `&UseButtonPressed` and four more button tests in level._button_funcs.
+        string source = "#namespace vibing3;\nfunction main()\n{\n    x = &UseButtonPressed;\n}\n";
+
+        Assert.Empty(Lint(source));
+    }
+
+    [Fact]
     public void BothKindsAreReportedTogether()
     {
         // The reported repro: one of each in the same function.

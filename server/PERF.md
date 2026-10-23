@@ -3172,7 +3172,8 @@ the keys are 6.6 KB. As before, nothing that only wins on the copy shape was bui
 **Left as decisions or unmeasured:**
 - *Reference answer size.* `anim_pos` from a cod4 copy is 45,228 locations, 8.4 M characters of
   JSON. VS Code's references API takes the whole answer at once, so streaming would not help the
-  client. Capping it is a product decision.
+  client. Left uncapped, by decision: an answer that size comes from the synthetic shape, about
+  2,000 copies of each script, and a real workspace calls nothing from that many sites.
 - *The editor's own cost.* What VS Code does with 35,000 files' problems on a cold start is not
   measured; the client has no editor-test harness to drive it.
 

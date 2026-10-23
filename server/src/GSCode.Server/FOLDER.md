@@ -878,8 +878,10 @@ that chose it. These are the pieces that implement it:
   set it just published on the record its analysis committed, because a commit stores the parse
   diagnostics alone and the record is what the file reports once it closes.
 - `LintSweepCache` — the sweep's results kept in the workspace cache. `Capture` takes every GSC/CSC
-  record's set and a `Fingerprint` of the whole workspace (each record's path, context, language and
-  content hash, headers included) after a startup sweep; `TryRestore` puts them back on the next start
+  record's set and a `Fingerprint` of the whole workspace after a startup sweep: each record's path,
+  context, language and content hash, headers included, and what each of its directives and path
+  calls resolves to on disk now — `gscode-5009` and an include scope's completeness ask the resolver,
+  not the index, and a target can exist without being a record; `TryRestore` puts them back on the next start
   only when the fingerprint is the same, and names the files they do not cover for a relint. All or
   nothing, because a cross-file result depends on files other than its own: one changed signature
   anywhere and the start sweeps as before. Everything else a lint reads is in the cache's build

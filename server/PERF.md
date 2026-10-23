@@ -3084,7 +3084,9 @@ The handler now queues the batch and returns. A pump applies the queue:
 - then the changed scripts in parallel, on threads below normal priority;
 - headers last.
 
-There is no forced collection between chunks.
+There is no forced collection between chunks. Still open: the comment-only switch republished
+3,561 closed files whose diagnostics had not changed. `Refresh` compares each set by reference, and
+a re-index replaces every array.
 
 **cod4 at 50,000 heavy files** was never measured before. The harness's hot-call probe looked only
 at namespace-qualified calls, which cod4 does not have, so it measured nothing (`740d5fee`). At 10K
@@ -3099,6 +3101,11 @@ through the asking file, then the files it includes and path-calls:
 | outgoing call hierarchy (stdio, median) | 104 ms | **1.6 ms** |
 | hover / implementation, stock call (harness, p99) | 10.1 / 9.4 ms | 0.12 / 0.06 ms |
 | completion, stock call (harness, p99) | 9.3 ms | 3.6 ms |
+
+A path call is keyed the same way as a bare call on these dialects, so `maps\other::main()` resolved
+like a bare `main()`. That was true before this pass as well. It now resolves in the file it names,
+then that file's include chain (`f7a64ce4`). `PathCallResolutionCorpusTests` checks all 12,483 path
+calls in cod4's stock scripts, and 2,104 of them land elsewhere without the written path.
 
 Unchanged:
 - formatting the heaviest file, about 106 ms p99;
@@ -3123,6 +3130,11 @@ restart, with the pushed diagnostics digested and compared:
 | cod4 50K, restart | **0.7 s** | **47.0 s** | 35,366 | `9d6c1766…` |
 | bo3 50K, cold | 56.3 s | 117.7 s | 35,310 | `4c0c6d65…` |
 | bo3 50K, restart | **0.6 s** | **37.8 s** | 35,310 | `4c0c6d65…` |
+
+Every directive's and path call's resolution is part of the fingerprint too (`687b7ca3`). A lint
+asks the resolver whether a target exists, and a target can exist without being a record. With two
+files opened at Ready, as VS Code restores tabs, a BO3 50K restart restored 49,985 files and linted
+the 2 open ones again, in 1.2 s.
 
 **GC.** The question was whether aggressive GC settings help at this size. The shipped
 `ConserveMemory: 5` was compared with 0 on the same cold BO3 50K session. The run included CodeLens

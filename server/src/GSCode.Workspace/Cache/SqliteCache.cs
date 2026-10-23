@@ -112,10 +112,39 @@ public sealed class SqliteCache : IAsyncDisposable
     }
 
     /// <summary>
-    /// Opens (or creates) the cache. On any version or build-identity mismatch the file
-    /// table is wiped so cold start re-indexes from scratch.
+    /// Opens (or creates) the cache. On any version or build-identity mismatch the cache starts
+    /// empty so cold start re-indexes from scratch.
+    ///
+    /// Empty by deleting the file rather than its rows. Every server update and every rebuild is a
+    /// mismatch, and <c>DELETE FROM files</c> visits every page of the table to free it: 1.8 GB of
+    /// record blobs at 50,000 heavy BO3 files, 1.6 s with the file already in the OS cache, and a
+    /// start's whole 17.8 s "cache" phase once with it not. Then it left the file at its full size,
+    /// since SQLite only returns freed pages to the disk on a VACUUM. Deleting the file takes 0.1 s.
+    /// The rows are deleted only when the file cannot be: another server holding it open on the same
+    /// workspace.
     /// </summary>
     public static SqliteCache Open(string databasePath, string serverBuildIdentity)
+    {
+        SqliteConnection connection = Connect(databasePath);
+
+        if ( !IsCurrent(connection, serverBuildIdentity) )
+        {
+            connection.Dispose();
+            bool deleted = DeleteDatabase(databasePath);
+            connection = Connect(databasePath);
+            if ( !deleted )
+            {
+                Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM meta;");
+            }
+
+            WriteMeta(connection, serverBuildIdentity);
+        }
+
+        return new SqliteCache(connection);
+    }
+
+    /// <summary>Opens the database, creating it and its tables when they are missing.</summary>
+    private static SqliteConnection Connect(string databasePath)
     {
         SqliteConnection connection = new(new SqliteConnectionStringBuilder
         {
@@ -134,14 +163,7 @@ public sealed class SqliteCache : IAsyncDisposable
         Execute(connection, "PRAGMA journal_mode=WAL;");
         Execute(connection, "PRAGMA busy_timeout=5000;");
         Execute(connection, CacheSchema.CreateTables);
-
-        if ( !IsCurrent(connection, serverBuildIdentity) )
-        {
-            Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM meta;");
-            WriteMeta(connection, serverBuildIdentity);
-        }
-
-        return new SqliteCache(connection);
+        return connection;
     }
 
     /// <summary>

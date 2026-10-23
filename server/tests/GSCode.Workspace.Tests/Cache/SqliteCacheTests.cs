@@ -177,6 +177,43 @@ public class SqliteCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task IdentityMismatch_GivesTheSpaceBack()
+    {
+        // Deleting the rows left the file at its full size — 1.8 GB at 50,000 heavy files, carried
+        // from one server update to the next. A fresh file is the size of an empty schema.
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            for ( int index = 0; index < 2000; index++ )
+            {
+                cache.Enqueue(SampleRecord($@"c:\ws\scripts\sample{index}.gsc", (ulong)index));
+            }
+
+            await cache.WaitForIdleAsync(CancellationToken.None);
+        }
+
+        long filled = new FileInfo(_dbPath).Length;
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b") )
+        {
+            Assert.Empty(reopened.LoadAll());
+        }
+
+        Assert.True(new FileInfo(_dbPath).Length < filled / 4, $"{new FileInfo(_dbPath).Length} bytes left of {filled}");
+    }
+
+    [Fact]
+    public async Task IdentityMismatch_WhileAnotherServerHoldsTheFile_StillWipesIt()
+    {
+        // Two editor windows on one workspace: the file cannot be deleted, so its rows are.
+        await using SqliteCache holder = SqliteCache.Open(_dbPath, "identity-a");
+        holder.Enqueue(SampleRecord(@"c:\ws\scripts\sample.gsc", 1));
+        await holder.WaitForIdleAsync(CancellationToken.None);
+
+        await using SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b");
+        Assert.Empty(reopened.LoadAll());
+    }
+
+    [Fact]
     public async Task DirtyRecords_AreNotPersisted()
     {
         ScriptRecord dirty = SampleRecord(@"c:\ws\scripts\sample.gsc", 1) with { IsDirty = true };

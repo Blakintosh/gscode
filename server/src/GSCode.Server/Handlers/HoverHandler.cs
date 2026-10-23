@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Parser.Lexing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -123,6 +124,24 @@ public sealed class HoverHandler : HoverHandlerBase
         return $"[`{label}:{start.Line + 1}`]({uri}#L{start.Line + 1},{start.Character + 1})";
     }
 
+    /// <summary>
+    /// The file a path call at <paramref name="range"/> names — <c>maps\_utility</c> in
+    /// <c>maps\_utility::foo()</c> — or "" when the name there is not one. Only the merge dialects
+    /// write them.
+    /// </summary>
+    private static string PathCallAt(NavigationTarget target, TextRange range)
+    {
+        foreach ( PathCallReference pathCall in target.Result.Extraction.PathCalls )
+        {
+            if ( pathCall.NameRange == range )
+            {
+                return pathCall.Path;
+            }
+        }
+
+        return "";
+    }
+
     private string? RenderHover(
         NavigationTarget target, SymbolKey key, TextRange hitRange, ReferenceKind referenceKind)
     {
@@ -134,7 +153,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 // name when the receiver's class is unknown. LookupFunctions alone never sees one.
                 ImmutableArray<ResolvedFunction> functions = MethodResolution.ResolveCall(
                     target.Store, target.ContextId, target.Path, key, referenceKind,
-                    askingNamespaces: target.Namespaces);
+                    askingNamespaces: target.Namespaces, pathCallTarget: PathCallAt(target, hitRange));
 
                 if ( functions.Length > 0 )
                 {

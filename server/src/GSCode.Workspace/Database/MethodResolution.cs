@@ -143,7 +143,8 @@ public static class MethodResolution
         SymbolKey key,
         ReferenceKind referenceKind,
         ImmutableArray<string> askingNamespaces = default,
-        string fileNamespace = "")
+        string fileNamespace = "",
+        string pathCallTarget = "")
     {
         // The explicit `sys::` form names the engine's function, so no script declaration answers it
         // and the caller falls back to the builtin library. Asked of the key as WRITTEN, because
@@ -182,12 +183,14 @@ public static class MethodResolution
             }
         }
 
-        // A bare call on an include dialect: the declaration this file reaches, before every
-        // same-named one in the workspace. See DatabaseQueries.ReachableFunctions.
+        // A call on an include dialect: the declaration this file reaches, before every same-named
+        // one in the workspace — in the file a path call names, else the file's own or one it
+        // includes. See DatabaseQueries.ReachableFunctions.
         if ( canonical.Namespace is null && referenceKind != ReferenceKind.MethodCall && !GameProfile.Active.ResolvesByNamespace )
         {
-            ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.ReachableFunctions(
-                store, askingContextId, askingPath, canonical.Name);
+            ImmutableArray<ResolvedFunction> reachable = pathCallTarget.Length > 0
+                ? DatabaseQueries.FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, canonical.Name)
+                : DatabaseQueries.ReachableFunctions(store, askingContextId, askingPath, canonical.Name);
             if ( reachable.Length > 0 )
             {
                 return reachable;

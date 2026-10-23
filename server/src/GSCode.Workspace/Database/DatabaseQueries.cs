@@ -206,33 +206,100 @@ public static class DatabaseQueries
         HashSet<string> visited = new(StringComparer.Ordinal) { asking.Path };
         foreach ( string relative in ReachableRelativePaths(asking) )
         {
-            foreach ( string path in store.FilesAt(relative) )
+            AddDeclaredAt(store, askingContextId, normalizedAskingPath, relative, keyName, visited, matches);
+        }
+
+        return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The functions named <paramref name="keyName"/> that a PATH CALL — <c>maps\_utility::foo()</c> —
+    /// reaches on an include dialect: those the named file declares, else those its <c>#include</c>
+    /// chain brings in, nearest first. The path names the file outright, so the asking file's own
+    /// declaration of the name does not come into it: <c>combat.gsc</c> declares <c>main</c> and
+    /// path-calls <c>cover_prone::main</c>, which means cover_prone's.
+    ///
+    /// The include chain is the corpus's answer, not a guess: cod4 ships
+    /// <c>maps\_utility::trigger_off</c> and <c>maps\_utility::array_thread</c> calls, and both
+    /// functions live in <c>common_scripts\utility</c>, which <c>maps\_utility</c> includes.
+    /// </summary>
+    public static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
+        LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
+    {
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
+        HashSet<string> visitedFiles = new(StringComparer.Ordinal);
+        HashSet<string> visitedPaths = new(StringComparer.Ordinal);
+
+        List<string> level = [RelativePathIndex.Normalize(writtenPath)];
+        while ( level.Count > 0 && matches.Count == 0 )
+        {
+            List<string> next = [];
+            foreach ( string relative in level )
             {
-                if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record)
-                    || !ScriptDatabase.CanSee(askingContextId, record.ContextId)
-                    || (record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId)) )
+                if ( !visitedPaths.Add(relative) )
                 {
                     continue;
                 }
 
-                foreach ( FunctionSymbol function in record.Functions )
+                AddDeclaredAt(store, askingContextId, normalizedAskingPath, relative, keyName, visitedFiles, matches);
+
+                foreach ( string path in store.FilesAt(relative) )
                 {
-                    if ( function.KeyName != keyName )
+                    if ( !store.TryGet(path, out ScriptRecord record) )
                     {
                         continue;
                     }
 
-                    if ( function.IsPrivate && !CanSeePrivate(function, record, normalizedAskingPath, default) )
+                    foreach ( DependencyEdge edge in record.Dependencies )
                     {
-                        continue;
+                        if ( !edge.IsInsert )
+                        {
+                            next.Add(RelativePathIndex.Normalize(edge.RawPath));
+                        }
                     }
-
-                    matches.Add(new ResolvedFunction(function, record));
                 }
             }
+
+            level = next;
         }
 
         return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The visible, unshadowed declarations of <paramref name="keyName"/> in the records at one
+    /// normalized relative path — LookupFunctions' filters, applied to one file instead of every file
+    /// declaring the name.
+    /// </summary>
+    private static void AddDeclaredAt(
+        LanguageStore store, string askingContextId, string normalizedAskingPath, string relative, string keyName,
+        HashSet<string> visited, ImmutableArray<ResolvedFunction>.Builder matches)
+    {
+        foreach ( string path in store.FilesAt(relative) )
+        {
+            if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record)
+                || !ScriptDatabase.CanSee(askingContextId, record.ContextId)
+                || (record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId)) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( function.KeyName != keyName )
+                {
+                    continue;
+                }
+
+                if ( function.IsPrivate && !CanSeePrivate(function, record, normalizedAskingPath, default) )
+                {
+                    continue;
+                }
+
+                matches.Add(new ResolvedFunction(function, record));
+            }
+        }
     }
 
     /// <summary>

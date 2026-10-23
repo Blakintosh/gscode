@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Symbols;
+using GSCode.Parser.Extraction;
 using GSCode.Workspace.Database;
 using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -145,6 +146,15 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         ResolvedFunction self = functions[0];
+
+        // The file each path call names, by the range of the name it is written with: the same key,
+        // `main`, means a different function at `maps::main()` than at `maps::main()`.
+        Dictionary<TextRange, string> pathCalls = [];
+        foreach ( PathCallReference pathCall in self.Record.PathCallTargets )
+        {
+            pathCalls[pathCall.NameRange] = pathCall.Path;
+        }
+
         Dictionary<OutgoingSite, List<LspRange>> calls = new();
         foreach ( ReferenceEntry entry in self.Record.References )
         {
@@ -157,7 +167,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             if ( isCall && !entry.FromMacro && entry.Key.Kind == SymbolKind.Function
                 && self.Function.FullRange.Contains(entry.Range.Start) )
             {
-                OutgoingSite site = new(entry.Key, entry.Kind);
+                OutgoingSite site = new(entry.Key, entry.Kind, pathCalls.GetValueOrDefault(entry.Range, ""));
                 if ( !calls.TryGetValue(site, out List<LspRange>? ranges) )
                 {
                     ranges = [];
@@ -171,7 +181,8 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         List<CallHierarchyOutgoingCall> outgoing = [];
         foreach ( KeyValuePair<OutgoingSite, List<LspRange>> call in calls )
         {
-            ImmutableArray<ResolvedFunction> resolved = Declarations(target, call.Key.Key, call.Key.Kind, out SymbolKey callee);
+            ImmutableArray<ResolvedFunction> resolved = Declarations(
+                target, call.Key.Key, call.Key.Kind, out SymbolKey callee, call.Key.PathCallTarget);
             if ( resolved.Length == 0 )
             {
                 continue;
@@ -201,8 +212,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         return new SymbolKey(GameProfile.Active.KeyNamespace(caller.Namespace), caller.KeyName, SymbolKind.Function);
     }
 
-    /// <summary>One distinct callee inside a body: the key as written, and how it was called.</summary>
-    private readonly record struct OutgoingSite(SymbolKey Key, ReferenceKind Kind);
+    /// <summary>
+    /// One distinct callee inside a body: the key as written, how it was called, and the file a path
+    /// call names ("" for any other call).
+    /// </summary>
+    private readonly record struct OutgoingSite(SymbolKey Key, ReferenceKind Kind, string PathCallTarget);
 
     /// <summary>
     /// The declarations a function or method key names, and the key an item for them should carry.
@@ -216,18 +230,20 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
     /// the callee's own item names the declaring class and expands like any other.
     /// </summary>
     private static ImmutableArray<ResolvedFunction> Declarations(
-        SymbolQueryContext target, SymbolKey key, ReferenceKind kind, out SymbolKey canonical)
+        SymbolQueryContext target, SymbolKey key, ReferenceKind kind, out SymbolKey canonical, string pathCallTarget = "")
     {
         if ( key.OwnerClass is null && kind != ReferenceKind.MethodCall )
         {
             canonical = key;
 
-            // A bare call on an include dialect means the declaration the calling file reaches, not
-            // every same-named one in the workspace. See DatabaseQueries.ReachableFunctions.
+            // A call on an include dialect means the declaration the calling file reaches — in the
+            // file a path call names, else its own or one it includes — not every same-named one in
+            // the workspace. See DatabaseQueries.ReachableFunctions.
             if ( key.Namespace is null && !GameProfile.Active.ResolvesByNamespace )
             {
-                ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.ReachableFunctions(
-                    target.Store, target.ContextId, target.Path, key.Name);
+                ImmutableArray<ResolvedFunction> reachable = pathCallTarget.Length > 0
+                    ? DatabaseQueries.FunctionsDeclaredAt(target.Store, target.ContextId, target.Path, pathCallTarget, key.Name)
+                    : DatabaseQueries.ReachableFunctions(target.Store, target.ContextId, target.Path, key.Name);
                 if ( reachable.Length > 0 )
                 {
                     return reachable;

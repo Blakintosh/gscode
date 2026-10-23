@@ -81,6 +81,49 @@ public sealed class IncludeDialectCallResolutionTests
         Assert.DoesNotContain("decoy", markdown!, StringComparison.Ordinal);
     }
 
+    // A file declaring main that path-calls another file's main — combat.gsc and cover_prone::main in
+    // the shipped animscripts. "maps\pathed::main();" is line 3, column 13.
+    private const string PathCallerSource = "main()\n{\n\tif ( 1 )\n\t\tmaps\\pathed::main();\n}\n";
+
+    private const string PathedSource = "main( pathedparam )\n{\n}\n";
+
+    [Fact]
+    public async Task HoverOnAPathCallShowsTheNamedFilesFunctionNotTheCallersOwn()
+    {
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [new TestFile(@"maps\pathcaller.gsc", PathCallerSource), new TestFile(@"maps\pathed.gsc", PathedSource)],
+            s_cod4);
+        workspace.Open(@"maps\pathcaller.gsc");
+        HoverHandler handler = new(workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
+
+        Hover? hover = await handler.Handle(
+            new HoverParams { TextDocument = HandlerWorkspace.Identify(@"maps\pathcaller.gsc"), Position = new Position(3, 15) },
+            CancellationToken.None);
+
+        string? markdown = hover?.Contents.MarkupContent?.Value;
+        Assert.NotNull(markdown);
+        Assert.Contains("pathedparam", markdown!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OutgoingCallsFollowAPathCallToTheNamedFile()
+    {
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [new TestFile(@"maps\pathcaller.gsc", PathCallerSource), new TestFile(@"maps\pathed.gsc", PathedSource)],
+            s_cod4);
+        workspace.Open(@"maps\pathcaller.gsc");
+        CallHierarchyHandler handler = new(workspace.Navigation, HandlerWorkspace.Selector);
+
+        Container<CallHierarchyItem>? prepared = await handler.Handle(
+            new CallHierarchyPrepareParams { TextDocument = HandlerWorkspace.Identify(@"maps\pathcaller.gsc"), Position = new Position(0, 0) },
+            CancellationToken.None);
+        Container<CallHierarchyOutgoingCall>? outgoing = await handler.Handle(
+            new CallHierarchyOutgoingCallsParams { Item = Assert.Single(prepared!) }, CancellationToken.None);
+
+        CallHierarchyOutgoingCall call = Assert.Single(outgoing!);
+        Assert.EndsWith("pathed.gsc", call.To.Uri.GetFileSystemPath(), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task OutgoingCallsNameOnlyTheFunctionTheCallReaches()
     {

@@ -221,6 +221,7 @@ public sealed class FullModeDiagnosticsTests
                 },
             },
             CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.True(
             workspace.Database.TryGetAnyRecord(added, out ScriptRecord _),

@@ -27,6 +27,11 @@ namespace GSCode.Server.Handlers;
 /// pass finishes rather than kept for the run — a bo3 workspace's blobs are 21 MB and a bo1 one's
 /// 64, against a 400 MB steady-state budget. So it is re-read here, which is the 13–54 ms this
 /// path pays to keep the other case free.
+///
+/// All of it runs after the handler has returned, one change at a time and in the order they
+/// arrived. It ran inside the handler, and at 50,000 heavy BO3 files adding a ten-file folder held
+/// the editor for 86 s — the warm re-index, then the full sweep — during which an edit typed into an
+/// open file waited the whole time for its diagnostics.
 /// </summary>
 public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBase
 {
@@ -39,6 +44,11 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
     private readonly WorkspaceLintSweep _lintSweep;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
+
+    private readonly Lock _gate = new();
+
+    /// <summary>The last change queued, which the next one waits for; completed when nothing is queued.</summary>
+    private Task _tail = Task.CompletedTask;
 
     public WorkspaceFoldersHandler(
         ResolverHolder resolver,
@@ -67,8 +77,42 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         return new DidChangeWorkspaceFolderRegistrationOptions();
     }
 
-    public override async Task<Unit> Handle(DidChangeWorkspaceFoldersParams request, CancellationToken cancellationToken)
+    public override Task<Unit> Handle(DidChangeWorkspaceFoldersParams request, CancellationToken cancellationToken)
     {
+        lock ( _gate )
+        {
+            _tail = _tail.ContinueWith(_ => ApplyAsync(request), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default)
+                .Unwrap();
+        }
+
+        return Unit.Task;
+    }
+
+    /// <summary>Completes once every change queued so far has been applied, for a caller that must see them.</summary>
+    public Task WhenIdleAsync()
+    {
+        lock ( _gate )
+        {
+            return _tail.WaitAsync(CancellationToken.None);
+        }
+    }
+
+    private async Task ApplyAsync(DidChangeWorkspaceFoldersParams request)
+    {
+        try
+        {
+            await ApplyCoreAsync(request).ConfigureAwait(false);
+        }
+        catch ( Exception exception )
+        {
+            Log.Error(exception, "Failed to apply a workspace folder change");
+        }
+    }
+
+    private async Task ApplyCoreAsync(DidChangeWorkspaceFoldersParams request)
+    {
+        long startedTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        CancellationToken cancellationToken = CancellationToken.None;
         ImmutableArray<string> updated = NextFolderSet(request);
 
         RootConfig rebuilt = BuildConfig(_settings, updated, _fileSystem);
@@ -115,7 +159,9 @@ public sealed class WorkspaceFoldersHandler : DidChangeWorkspaceFoldersHandlerBa
         _workspaceDiagnostics.Refresh();
         _dependents.Schedule();
 
-        return Unit.Value;
+        Log.Information(
+            "Workspace folders: change applied in {Seconds:F1}s",
+            System.Diagnostics.Stopwatch.GetElapsedTime(startedTicks).TotalSeconds);
     }
 
     private ImmutableArray<string> NextFolderSet(DidChangeWorkspaceFoldersParams request)

@@ -64,6 +64,11 @@ public partial class ScalePerfTests
         public int Total { get; set; }
         public double ComplexShare { get; set; }
         public double ColdSeconds { get; set; }
+
+        /// <summary>Reading every script once before the cold index — see <see cref="ReadEveryScript"/>.</summary>
+        public double DiskReadSeconds { get; set; }
+
+        public long DiskReadBytes { get; set; }
         public double EnumerateSeconds { get; set; }
         public double Parallelism { get; set; }
         public double RetainedMegabytes { get; set; }
@@ -248,6 +253,25 @@ public partial class ScalePerfTests
         File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss} {Environment.ProcessId} {name}\n");
     }
 
+    /// <summary>
+    /// Reads every script the cold index will, in parallel, so the cold index is timed from the OS
+    /// file cache. Whether the files are already there is the state of the machine, not the code:
+    /// on a 32 GB machine running two 50,000-file workspaces and a 12 GB server, the cache rarely
+    /// holds both, and the same cold index measured 34.1 s with the files cached and 75.0 s without.
+    /// Reading the cod4 workspace alone took 39.2 s from disk and 3.3 s from the cache. Reported on a
+    /// row of its own, since a first start after a reboot does pay it.
+    /// </summary>
+    private static long ReadEveryScript(ScaleCorpus corpus)
+    {
+        List<string> scripts = [.. ScaleCorpusFixture.StockScripts(corpus), .. ScaleCorpusFixture.CopiedScripts(corpus)];
+        long total = 0;
+        Parallel.ForEach(
+            scripts,
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) },
+            path => Interlocked.Add(ref total, File.ReadAllBytes(path).LongLength));
+        return total;
+    }
+
     private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus, ScaleRow row)
     {
         GameProfile previous = GameProfile.Active;
@@ -272,6 +296,10 @@ public partial class ScalePerfTests
             int gen0Before = GC.CollectionCount(0);
             int gen1Before = GC.CollectionCount(1);
             int gen2Before = GC.CollectionCount(2);
+
+            Stopwatch disk = Stopwatch.StartNew();
+            row.DiskReadBytes = ReadEveryScript(corpus);
+            row.DiskReadSeconds = disk.Elapsed.TotalSeconds;
 
             Phase("cold index");
             using HeapSampler sampler = new();
@@ -838,6 +866,7 @@ public partial class ScalePerfTests
         double sweepBudget = BudgetAt(s_sweepBudget, row.Total);
         double memoryBudget = BudgetAt(s_memoryBudget, row.Total);
 
+        _output.WriteLine($"     disk read first   {row.DiskReadSeconds,8:F1} s   {row.DiskReadBytes / 1e9:F1} GB, so the cold index below is timed from the OS file cache");
         _output.WriteLine($"     cold index        {row.ColdSeconds,8:F1} s   budget {coldBudget,6:F1} s   {Verdict(row.ColdSeconds, coldBudget)}  (find {row.EnumerateSeconds:F1} s, {row.Parallelism:F1}x parallel)");
         _output.WriteLine($"     warm start        {row.WarmSeconds,8:F1} s   budget {warmBudget,6:F1} s   {Verdict(row.WarmSeconds, warmBudget)}  (LoadAll {row.LoadAllMilliseconds:F0} ms / {row.LoadAllMegabytes:F0} MB, index {row.WarmIndexSeconds:F1} s)");
         _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; {row.RetainedMegabytes * 1024 / Math.Max(1, row.Total):F0} KB a file; working set {row.WorkingSetMegabytes:F0} MB)");

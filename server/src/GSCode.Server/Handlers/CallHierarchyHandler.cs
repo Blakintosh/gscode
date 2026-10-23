@@ -236,15 +236,9 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         {
             canonical = key;
 
-            ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.IncludeCallTargets(
-                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, pathCallTarget);
-            if ( reachable.Length > 0 )
-            {
-                return reachable;
-            }
-
-            return DatabaseQueries.LookupFunctions(
-                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, askingNamespaces: target.Namespaces);
+            return DatabaseQueries.FunctionsTheCallReaches(
+                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, pathCallTarget, target.Namespaces,
+                fallBackToAny: true);
         }
 
         canonical = MethodResolution.Canonicalize(target.Store, target.ContextId, key, kind);

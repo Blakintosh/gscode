@@ -1,14 +1,17 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Workspace.Database;
 using Xunit;
 
 namespace GSCode.Workspace.Tests.Database;
 
 /// <summary>
-/// `FunctionInIncludeScope` answers for ONE name what `FunctionsInIncludeScope` answers for every
-/// name, and must not differ from it anywhere. Signature help asks it per keystroke inside an
-/// argument list on a merge dialect, where building the whole scope to read one entry was the cost.
+/// On a merge dialect, `FunctionsTheCallReaches` answers for ONE bare name what
+/// `FunctionsInIncludeScope` answers for every name — what completion offers — and must not differ
+/// from it anywhere the include scope is one level deep. Signature help and the parameter hints ask
+/// it per call site, where building the whole scope to read one entry was the cost.
 ///
 /// The full list is held here as the reference implementation, the way `BoundedLookupTests` holds
 /// the old two-pass shadowing, and the two are compared across the shapes the shadowing rule
@@ -35,7 +38,14 @@ public class IncludeScopeLookupTests
     private static LanguageStore Workspace()
     {
         LanguageStore store = new();
-        store.Upsert(Record(AskingPath, "raw", @"maps\caller.gsc", "own", "shared"));
+        store.Upsert(Record(AskingPath, "raw", @"maps\caller.gsc", "own", "shared") with
+        {
+            Dependencies =
+            [
+                new DependencyEdge(@"maps\a", "", IsInsert: false, TextRange.FromCoordinates(0, 0, 0, 1)),
+                new DependencyEdge(@"maps\b", "", IsInsert: false, TextRange.FromCoordinates(1, 0, 1, 1)),
+            ],
+        });
         store.Upsert(Record(@"c:\raw\maps\a.gsc", "raw", @"maps\a.gsc", "helper", "shared"));
         store.Upsert(Record(@"c:\raw\maps\b.gsc", "raw", @"maps\b.gsc", "dropped", "helper"));
         store.Upsert(Record(@"c:\mods\m\maps\@a.gsc", "mod:m", @"maps\a.gsc", "helper"));
@@ -46,6 +56,15 @@ public class IncludeScopeLookupTests
 
     private static readonly ImmutableArray<string> s_included =
         [RelativePathIndex.Normalize(@"maps\a.gsc"), RelativePathIndex.Normalize(@"maps\b.gsc")];
+
+    /// <summary>The single-name answer, as signature help and the hints ask it.</summary>
+    private static FunctionSymbol? Bounded(LanguageStore store, string askingContextId, string keyName)
+    {
+        using ProfileScope scope = ProfileScope.Use(GameProfile.Cod4);
+        ImmutableArray<ResolvedFunction> found = DatabaseQueries.FunctionsTheCallReaches(
+            store, askingContextId, AskingPath, null, keyName);
+        return found.Length > 0 ? found[0].Function : null;
+    }
 
     /// <summary>What the full list would have answered for one name.</summary>
     private static FunctionSymbol? FromTheFullList(LanguageStore store, string askingContextId, string keyName)
@@ -81,8 +100,7 @@ public class IncludeScopeLookupTests
         LanguageStore store = Workspace();
 
         FunctionSymbol? expected = FromTheFullList(store, askingContextId, keyName);
-        FunctionSymbol? actual = DatabaseQueries.FunctionInIncludeScope(
-            store, askingContextId, AskingPath, s_included, keyName);
+        FunctionSymbol? actual = Bounded(store, askingContextId, keyName);
 
         Assert.Equal(expected, actual);
     }
@@ -94,8 +112,8 @@ public class IncludeScopeLookupTests
         // `dropped` is not in scope for anyone asking as mod m.
         LanguageStore store = Workspace();
 
-        Assert.NotNull(DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, s_included, "dropped"));
-        Assert.Null(DatabaseQueries.FunctionInIncludeScope(store, "mod:m", AskingPath, s_included, "dropped"));
+        Assert.NotNull(Bounded(store, "raw", "dropped"));
+        Assert.Null(Bounded(store, "mod:m", "dropped"));
     }
 
     [Fact]
@@ -105,7 +123,7 @@ public class IncludeScopeLookupTests
         // them — the case ApplyShadowing's own doc says HasOverlayAt exists to get right.
         LanguageStore store = Workspace();
 
-        FunctionSymbol? asRaw = DatabaseQueries.FunctionInIncludeScope(store, "raw", AskingPath, s_included, "helper");
+        FunctionSymbol? asRaw = Bounded(store, "raw", "helper");
 
         Assert.NotNull(asRaw);
         Assert.Equal(FromTheFullList(store, "raw", "helper"), asRaw);

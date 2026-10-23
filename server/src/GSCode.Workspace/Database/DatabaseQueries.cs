@@ -179,6 +179,13 @@ public static class DatabaseQueries
             return [];
         }
 
+        // A name no script declares — every builtin call — would otherwise walk the whole include
+        // chain to find nothing, once per call site the parameter hints ask about.
+        if ( store.FilesDeclaring(keyName).Length == 0 )
+        {
+            return [];
+        }
+
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
         foreach ( FunctionSymbol function in asking.Functions )
         {
@@ -223,27 +230,66 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The declarations a function call reaches on an include dialect — in the file a path call names
-    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own or one it includes
-    /// (<see cref="ReachableFunctions"/>) — before every same-named one in the workspace. Empty on a
-    /// namespace dialect, for a qualified key, or when nothing reachable declares the name; the caller
-    /// then falls back to <see cref="LookupFunctions"/>.
+    /// The declarations a function call reaches, the one it means first: what hover, signature help
+    /// and the parameter hints describe, and what go-to-definition lands on.
+    ///
+    /// On an include dialect, those in the file a path call names, through that file's include chain
+    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own, else its include chain
+    /// (<see cref="ReachableFunctions"/>). Empty when nothing the file reaches declares the name,
+    /// unless <paramref name="fallBackToAny"/>: hover would rather show some declaration than none.
+    ///
+    /// On a namespace dialect, <see cref="LookupFunctions"/>' answer with the copies the asking file
+    /// reaches listed first. A namespace does not pin a file: an mp and a zm copy both declare
+    /// <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
     /// </summary>
-    public static ImmutableArray<ResolvedFunction> IncludeCallTargets(
+    public static ImmutableArray<ResolvedFunction> FunctionsTheCallReaches(
         LanguageStore store, string askingContextId, string askingPath, string? keyNamespace, string keyName,
-        string pathCallTarget)
+        string pathCallTarget = "", ImmutableArray<string> askingNamespaces = default, bool fallBackToAny = false)
     {
-        if ( keyNamespace is not null || GameProfile.Active.ResolvesByNamespace )
+        if ( keyNamespace is null && !GameProfile.Active.ResolvesByNamespace )
         {
-            return [];
+            ImmutableArray<ResolvedFunction> reached = pathCallTarget.Length > 0
+                ? FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, keyName)
+                : ReachableFunctions(store, askingContextId, askingPath, keyName);
+            if ( reached.Length > 0 || !fallBackToAny )
+            {
+                return reached;
+            }
         }
 
-        if ( pathCallTarget.Length > 0 )
+        ImmutableArray<ResolvedFunction> found = LookupFunctions(
+            store, askingContextId, askingPath, keyNamespace, keyName, askingNamespaces: askingNamespaces);
+        return ReachedFirst(store, askingPath, found);
+    }
+
+    /// <summary>
+    /// <paramref name="found"/> with the declarations in files the asker reaches — itself, an import,
+    /// a path call — first, each group in its original order.
+    /// </summary>
+    private static ImmutableArray<ResolvedFunction> ReachedFirst(
+        LanguageStore store, string askingPath, ImmutableArray<ResolvedFunction> found)
+    {
+        if ( found.Length < 2 || !store.TryGet(NormalizeAskingPath(askingPath), out ScriptRecord asking) )
         {
-            return FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, keyName);
+            return found;
         }
 
-        return ReachableFunctions(store, askingContextId, askingPath, keyName);
+        ImmutableArray<ResolvedFunction>.Builder ordered = ImmutableArray.CreateBuilder<ResolvedFunction>(found.Length);
+        List<ResolvedFunction> unreached = [];
+        foreach ( ResolvedFunction function in found )
+        {
+            if ( Reaches(asking, function.Record.RelativePath) )
+            {
+                ordered.Add(function);
+            }
+            else
+            {
+                unreached.Add(function);
+            }
+        }
+
+        ordered.AddRange(unreached);
+        return ordered.MoveToImmutable();
     }
 
     /// <summary>
@@ -1385,58 +1431,6 @@ public static class DatabaseQueries
         }
 
         return scoped.Count == 0 ? definitions : scoped.ToImmutable();
-    }
-
-    /// <summary>
-    /// The ONE function an <c>#include</c> scope gives a bare name, or null when it gives none.
-    ///
-    /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
-    /// answer for every other name first. Signature help asks this on a merge dialect for every
-    /// keystroke inside an argument list — <c>,</c> is both a trigger and a retrigger character —
-    /// and building the full list to read one entry costs every function of the asking file and each
-    /// file it includes, shadowed and put in a dictionary: 465 of them on a CoD4 file that includes
-    /// <c>maps\_utility</c> alone.
-    ///
-    /// It must agree with the full list exactly, and does so by making the same decision per record
-    /// rather than over the set. Shadowing can be decided that way HERE, though not in
-    /// <see cref="ApplyShadowing"/>'s general case, because this scope has already dropped every
-    /// record the asker cannot see: what is left of the set rule — a non-raw record at the same
-    /// relative path — is then exactly what <see cref="LanguageStore.HasOverlayAt"/> answers on its
-    /// own. <c>IncludeScopeLookupTests</c> holds the full list as the reference implementation and
-    /// requires the two to agree across overlays, sibling mods and the same name declared twice.
-    /// </summary>
-    public static FunctionSymbol? FunctionInIncludeScope(
-        LanguageStore store,
-        string askingContextId,
-        string askingPath,
-        ImmutableArray<string> includedPaths,
-        string keyName)
-    {
-        string normalizedAskingPath = NormalizeAskingPath(askingPath);
-        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
-
-        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( ScriptRecord record in inScope )
-        {
-            // The engine never loads a raw file an overlay replaces, so its declarations are not in
-            // scope however early they are reached.
-            if ( !visited.Add(record.Path) || !IsLoadedFor(store, askingContextId, record) )
-            {
-                continue;
-            }
-
-            foreach ( FunctionSymbol function in record.Functions )
-            {
-                // FIRST wins, which is what the full list's dictionary does with TryAdd over the
-                // same records in the same order.
-                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
-                {
-                    return function;
-                }
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

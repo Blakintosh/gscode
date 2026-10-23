@@ -182,11 +182,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/CallResolution.cs
 
 - `static CallResolution` — which function a WRITTEN call names, shared by signature help and the
-  parameter-name inlay hints. `EnclosingClassAt`, `UnqualifiedFunction` (the
-  `ResolvesByNamespace` split: `FunctionInIncludeScope` on the merge dialects, the declared-namespace
-  loop on BO3) and `PathQualifiedFunction` (`maps\_utility::name`, scoped to the file the path names
-  by asking with an empty asking path). Builtins are NOT consulted here: the two callers present an
-  engine function differently enough that each keeps its own fallback.
+  parameter-name inlay hints. `EnclosingClassAt`, then one member per written form, each the first
+  of `DatabaseQueries.FunctionsTheCallReaches`: `UnqualifiedFunction` (the asking file's own, then
+  its include chain, on the merge dialects; each declared namespace in turn on BO3),
+  `QualifiedFunction` (`ns::name`) and `PathQualifiedFunction` (`maps\_utility::name`). So both
+  describe the declaration hover shows and go-to-definition lands on. Builtins are NOT consulted
+  here: the two callers present an engine function differently enough that each keeps its own
+  fallback. Signature help reads a path call's written path from the tokens, so it works before the
+  argument list is closed.
 - It exists because the two had a resolver each and one of them never got the merge-dialect rule, so
   inlay hints answered only for the asking file's own functions on four of the five games. What stays
   separate is what genuinely differs: signature help is token-driven and works before there is a
@@ -494,18 +497,17 @@ lints, `Completion/` and `Typing/` the information surfaces.
   compiler flattens the chain, which the corpus settled — and reports whether the walk saw
   everything, since a rule may only assert a name is out of scope against a complete one. The
   direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
-  completion offering too little is harmless where an Error is not. `FunctionInIncludeScope` is that
-  scope's answer for ONE name, for signature help, which asks per keystroke inside an argument list
-  and would otherwise build every function the scope offers to read one. It decides shadowing per
-  record rather than over the set, which is sound HERE and not in `ApplyShadowing`'s general case
-  because the scope has already dropped every record the asker cannot see — what is left of the set
-  rule is then exactly what `HasOverlayAt` answers alone. `IncludeScopeLookupTests` keeps the full
-  list as the reference implementation.
-- Before `LookupFunctions`, a function call on an include dialect asks `IncludeCallTargets`: the
-  declarations in the file a path call names, through that file's `#include` chain, else the asking
-  file's own, else its include chain nearest level first (the private `FunctionsDeclaredAt` and
-  `ReachableFunctions`). `MethodResolution.ResolveCall` and the call hierarchy both ask it, so hover,
-  definition and the call tree agree on which `main()` a call means. Empty on a namespace dialect.
+  completion offering too little is harmless where an Error is not.
+- `FunctionsTheCallReaches` is the one answer to "which declaration does this call mean", the
+  intended one first. On an include dialect: the file a path call names, through that file's
+  `#include` chain, else the asking file's own, else its include chain nearest level first (the
+  private `FunctionsDeclaredAt` and `ReachableFunctions`); empty when nothing reachable declares it,
+  unless the caller asks to fall back to `LookupFunctions`, which hover does. On a namespace dialect:
+  `LookupFunctions` with the copies the file reaches first (`ReachedFirst`), since an mp and a zm copy
+  both declare `#namespace util`. `MethodResolution.ResolveCall` (hover), the call hierarchy and
+  `CallResolution` (signature help, parameter hints) all ask it. `IncludeScopeLookupTests` holds
+  `FunctionsInIncludeScope` as the reference for its single-name answer; `CallTargetAgreementTests`
+  pins the path, chain and namespace-copy cases.
 - The private `VisibleDeclaring` caches, for a name declared by 64 files or more, which of them an
   asking context can see — per index array (`ConditionalWeakTable`) and per `ContextEpoch`. An asker
   that sees few of 2,000 same-named copies otherwise paid a record lookup for each on every question.

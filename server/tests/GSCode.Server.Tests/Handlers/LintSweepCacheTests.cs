@@ -47,7 +47,7 @@ public sealed class LintSweepCacheTests
     {
         using HandlerWorkspace first = await StartAsync(libSource);
         await SweepAsync(first);
-        SweepCapture? capture = LintSweepCache.Capture(first.Database);
+        SweepCapture? capture = LintSweepCache.Capture(first.Database, first.Resolver);
         Assert.NotNull(capture);
         return new StoredSweep(capture!.Fingerprint, capture.Entries.ToDictionary(entry => entry.Path, StringComparer.Ordinal));
     }
@@ -66,7 +66,7 @@ public sealed class LintSweepCacheTests
         using HandlerWorkspace second = await StartAsync(OneParameter);
         Assert.DoesNotContain(GscDiagnosticCode.TooManyArguments, CodesAt(second, CallerPath));
 
-        List<string>? unrestored = LintSweepCache.TryRestore(second.Database, stored, second.Names, out int restored);
+        List<string>? unrestored = LintSweepCache.TryRestore(second.Database, second.Resolver, stored, second.Names, out int restored);
 
         Assert.NotNull(unrestored);
         Assert.Empty(unrestored!);
@@ -82,7 +82,7 @@ public sealed class LintSweepCacheTests
         StoredSweep stored = await FirstSessionAsync(OneParameter);
 
         using HandlerWorkspace second = await StartAsync(TwoParameters);
-        Assert.Null(LintSweepCache.TryRestore(second.Database, stored, second.Names, out _));
+        Assert.Null(LintSweepCache.TryRestore(second.Database, second.Resolver, stored, second.Names, out _));
 
         await SweepAsync(second);
         Assert.DoesNotContain(GscDiagnosticCode.TooManyArguments, CodesAt(second, CallerPath));
@@ -95,7 +95,7 @@ public sealed class LintSweepCacheTests
         StoredSweep stored = await FirstSessionAsync(TwoParameters);
 
         using HandlerWorkspace second = await StartAsync(OneParameter);
-        Assert.Null(LintSweepCache.TryRestore(second.Database, stored, second.Names, out _));
+        Assert.Null(LintSweepCache.TryRestore(second.Database, second.Resolver, stored, second.Names, out _));
 
         await SweepAsync(second);
         Assert.Contains(GscDiagnosticCode.TooManyArguments, CodesAt(second, CallerPath));
@@ -110,10 +110,25 @@ public sealed class LintSweepCacheTests
 
         using HandlerWorkspace second = await StartAsync(OneParameter);
         List<string>? unrestored = LintSweepCache.TryRestore(
-            second.Database, new StoredSweep(stored.Fingerprint, partial), second.Names, out int restored);
+            second.Database, second.Resolver, new StoredSweep(stored.Fingerprint, partial), second.Names, out int restored);
 
         Assert.Equal([PathUtilNormalized(CallerPath)], unrestored);
         Assert.Equal(1, restored);
+    }
+
+    [Fact]
+    public async Task AnImportTargetThatVanishesWithoutARecordChangeIsSweptAgain()
+    {
+        // UsingNotFound asks the resolver whether the target exists on disk, not the index: a file
+        // the index skips (oversized, or outside the folders it walks) can vanish between sessions
+        // and change no record at all. The records here are the same; only the disk answer moves.
+        using HandlerWorkspace workspace = await StartAsync(OneParameter);
+        string before = LintSweepCache.Fingerprint(workspace.Database, workspace.Resolver);
+
+        workspace.Files.RemoveFile(TestPaths.Raw(@"scripts\lib.gsc"));
+        workspace.Resolver.InvalidateResolutionCache();
+
+        Assert.NotEqual(before, LintSweepCache.Fingerprint(workspace.Database, workspace.Resolver));
     }
 
     private static string PathUtilNormalized(string path)

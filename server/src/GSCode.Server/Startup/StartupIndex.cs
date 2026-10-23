@@ -322,7 +322,8 @@ internal sealed class StartupIndexRunner
         List<string>? unrestored = null;
         if ( storedSweep is not null )
         {
-            unrestored = LintSweepCache.TryRestore(database, storedSweep, services.GetRequiredService<NameTable>(), out restored);
+            unrestored = LintSweepCache.TryRestore(
+                database, _resolverHolder.Current, storedSweep, services.GetRequiredService<NameTable>(), out restored);
         }
 
         if ( unrestored is not null )
@@ -354,7 +355,7 @@ internal sealed class StartupIndexRunner
             lintOutcome.Skipped,
             (GC.GetTotalPauseDuration() - pausedBefore).TotalSeconds);
 
-        if ( _cacheHolder.Current is SqliteCache cache && LintSweepCache.Capture(database) is SweepCapture capture )
+        if ( _cacheHolder.Current is SqliteCache cache && LintSweepCache.Capture(database, _resolverHolder.Current) is SweepCapture capture )
         {
             cache.SaveSweep(capture.Fingerprint, capture.Entries);
         }

@@ -169,8 +169,9 @@ public static class DatabaseQueries
     /// <summary>
     /// The functions a BARE call to <paramref name="keyName"/> reaches from the asking file on an
     /// include dialect: the asking file's own declarations if it has any, else those of the files it
-    /// names — its <c>#include</c>s and path calls, as <see cref="ReachableRelativePaths"/> lists them.
-    /// Empty when neither declares it, for the caller to fall back to <see cref="LookupFunctions"/>.
+    /// names — its <c>#include</c>s and path calls, as <see cref="ReachableRelativePaths"/> lists them
+    /// — and then of what those include, nearest first, since the compiler flattens an include chain.
+    /// Empty when none of them declares it, for the caller to fall back to <see cref="LookupFunctions"/>.
     ///
     /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers a
     /// call with every declaration of the name in the workspace, in index order: hover showed whichever
@@ -203,12 +204,9 @@ public static class DatabaseQueries
             return matches.ToImmutable();
         }
 
-        HashSet<string> visited = new(StringComparer.Ordinal) { asking.Path };
-        foreach ( string relative in ReachableRelativePaths(asking) )
-        {
-            AddDeclaredAt(store, askingContextId, normalizedAskingPath, relative, keyName, visited, matches);
-        }
-
+        HashSet<string> visitedFiles = new(StringComparer.Ordinal) { asking.Path };
+        AddDeclaredInIncludeChain(
+            store, askingContextId, normalizedAskingPath, [.. ReachableRelativePaths(asking)], keyName, visitedFiles, matches);
         return matches.ToImmutable();
     }
 
@@ -226,12 +224,24 @@ public static class DatabaseQueries
     public static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
         LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
     {
-        string normalizedAskingPath = NormalizeAskingPath(askingPath);
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
-        HashSet<string> visitedFiles = new(StringComparer.Ordinal);
-        HashSet<string> visitedPaths = new(StringComparer.Ordinal);
+        AddDeclaredInIncludeChain(
+            store, askingContextId, NormalizeAskingPath(askingPath), [RelativePathIndex.Normalize(writtenPath)], keyName,
+            new HashSet<string>(StringComparer.Ordinal), matches);
+        return matches.ToImmutable();
+    }
 
-        List<string> level = [RelativePathIndex.Normalize(writtenPath)];
+    /// <summary>
+    /// The declarations of <paramref name="keyName"/> in the files at <paramref name="start"/>, else
+    /// in what those files <c>#include</c>, a level at a time, stopping at the first level that has
+    /// any — the nearest declarations an include chain reaches.
+    /// </summary>
+    private static void AddDeclaredInIncludeChain(
+        LanguageStore store, string askingContextId, string normalizedAskingPath, List<string> start, string keyName,
+        HashSet<string> visitedFiles, ImmutableArray<ResolvedFunction>.Builder matches)
+    {
+        HashSet<string> visitedPaths = new(StringComparer.Ordinal);
+        List<string> level = start;
         while ( level.Count > 0 && matches.Count == 0 )
         {
             List<string> next = [];
@@ -263,8 +273,6 @@ public static class DatabaseQueries
 
             level = next;
         }
-
-        return matches.ToImmutable();
     }
 
     /// <summary>

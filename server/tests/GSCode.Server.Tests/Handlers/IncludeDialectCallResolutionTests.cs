@@ -125,6 +125,32 @@ public sealed class IncludeDialectCallResolutionTests
     }
 
     [Fact]
+    public async Task HoverOnACallReachedThroughANestedIncludeShowsTheIncludedOne()
+    {
+        // The compiler flattens an include chain: maps\_createpath includes maps\_utility and calls
+        // flag_init, which lives in common_scripts\utility, which maps\_utility includes.
+        // "deepfn( 1 );" is line 4, column 1.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [
+                new TestFile(@"maps\top.gsc", "#include maps\\mid;\n\nmain()\n{\n\tdeepfn( 1 );\n}\n"),
+                new TestFile(@"maps\mid.gsc", "#include maps\\deep;\n\nmidfn()\n{\n}\n"),
+                new TestFile(@"maps\deep.gsc", "deepfn( deepparam )\n{\n}\n"),
+                new TestFile(@"maps\adecoy.gsc", "deepfn( decoyparam )\n{\n}\n"),
+            ],
+            s_cod4);
+        workspace.Open(@"maps\top.gsc");
+        HoverHandler handler = new(workspace.Navigation, workspace.Builtins, workspace.ObjectFields, HandlerWorkspace.Selector);
+
+        Hover? hover = await handler.Handle(
+            new HoverParams { TextDocument = HandlerWorkspace.Identify(@"maps\top.gsc"), Position = new Position(4, 1) },
+            CancellationToken.None);
+
+        string? markdown = hover?.Contents.MarkupContent?.Value;
+        Assert.NotNull(markdown);
+        Assert.Contains("deepparam", markdown!, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OutgoingCallsNameOnlyTheFunctionTheCallReaches()
     {
         using HandlerWorkspace workspace = await BuildAsync();

@@ -75,6 +75,27 @@ public class WorkspaceDiagnosticsRefreshTests
     }
 
     [Fact]
+    public void AFileReindexedWithTheSameDiagnostics_IsNotSentAgain()
+    {
+        // A re-index builds new arrays whether or not anything in them moved: a branch switch that
+        // rewrote 5,000 bodies sent 3,561 files' unchanged sets until they were compared by value.
+        Fixture fixture = new();
+        fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "a"));
+        fixture.Publisher.Refresh();
+        Assert.Single(fixture.Sink.Sent);
+
+        fixture.Sink.Sent.Clear();
+        fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "a"));
+        fixture.Publisher.Refresh();
+        Assert.Empty(fixture.Sink.Sent);
+
+        // And a real change after it still goes out.
+        fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "changed"));
+        fixture.Publisher.Refresh();
+        Assert.Single(fixture.Sink.Sent);
+    }
+
+    [Fact]
     public void AFileWhoseDiagnosticsChanged_IsTheOnlyOneSentAgain()
     {
         Fixture fixture = new();

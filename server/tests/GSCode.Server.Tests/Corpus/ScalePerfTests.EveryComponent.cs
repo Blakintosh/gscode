@@ -106,6 +106,8 @@ public partial class ScalePerfTests
             Selection = new SelectionRangeHandler(Documents, selector);
             Links = new DocumentLinkHandler(Support, selector);
             Format = new DocumentFormattingHandler(formatting, selector);
+            RangeFormat = new DocumentRangeFormattingHandler(formatting, selector);
+            OnTypeFormat = new DocumentOnTypeFormattingHandler(formatting, selector);
             Hints = new InlayHintHandler(Support, builtins, objectFields, Settings, selector);
             LensCounts = new LensCountCache();
             Lenses = new CodeLensHandler(Support, Settings, selector, LensCounts);
@@ -121,6 +123,7 @@ public partial class ScalePerfTests
             References = new ReferencesHandler(Support, selector);
             Highlight = new DocumentHighlightHandler(Support, selector);
             Calls = new CallHierarchyHandler(Support, selector);
+            Types = new TypeHierarchyHandler(Support, selector);
         }
 
         public ResolverHolder Holder { get; }
@@ -137,6 +140,8 @@ public partial class ScalePerfTests
         public SelectionRangeHandler Selection { get; }
         public DocumentLinkHandler Links { get; }
         public DocumentFormattingHandler Format { get; }
+        public DocumentRangeFormattingHandler RangeFormat { get; }
+        public DocumentOnTypeFormattingHandler OnTypeFormat { get; }
         public InlayHintHandler Hints { get; }
         public CodeLensHandler Lenses { get; }
 
@@ -153,11 +158,16 @@ public partial class ScalePerfTests
         public ReferencesHandler References { get; }
         public DocumentHighlightHandler Highlight { get; }
         public CallHierarchyHandler Calls { get; }
+        public TypeHierarchyHandler Types { get; }
     }
 
     /// <summary>The positions one file's requests are asked at, found from its own parse.</summary>
+    /// <param name="DeclarationBody">The first function's whole range, for range formatting.</param>
+    /// <param name="DeclarationEnd">Just past the first function's closing brace, where typing <c>}</c> asks for on-type formatting.</param>
+    /// <param name="Class">The first class's name, for the type hierarchy; null on a dialect without classes.</param>
     private sealed record Positions(
-        LspPosition? StockCall, LspPosition? InsideStockCall, LspPosition? LocalCall, LspPosition? Declaration, LspRange? StockCallRange);
+        LspPosition? StockCall, LspPosition? InsideStockCall, LspPosition? LocalCall, LspPosition? Declaration, LspRange? StockCallRange,
+        LspRange? DeclarationBody, LspPosition? DeclarationEnd, LspPosition? Class);
 
     private async Task<ComponentRow> MeasureEveryComponentAsync(
         ScaleCorpus corpus, ScriptDatabase database, PathResolver resolver, NameTable names,
@@ -279,6 +289,33 @@ public partial class ScalePerfTests
                     CancellationToken.None));
                 await TimeAsync(into, "rename, own call", () => server.Rename.Handle(
                     new RenameParams { TextDocument = id, Position = local, NewName = "scale_renamed" }, CancellationToken.None));
+            }
+
+            if ( at.DeclarationBody is LspRange body && at.DeclarationEnd is LspPosition end )
+            {
+                FormattingOptions options = new() { TabSize = 4, InsertSpaces = false };
+                await TimeAsync(into, "formatting, one function's range", () => server.RangeFormat.Handle(
+                    new DocumentRangeFormattingParams { TextDocument = id, Range = body, Options = options }, CancellationToken.None));
+                await TimeAsync(into, "formatting, on typing }", () => server.OnTypeFormat.Handle(
+                    new DocumentOnTypeFormattingParams { TextDocument = id, Position = end, Character = "}", Options = options },
+                    CancellationToken.None));
+            }
+
+            if ( at.Class is LspPosition classAt )
+            {
+                Container<TypeHierarchyItem>? types = await server.Types.Handle(
+                    new TypeHierarchyPrepareParams { TextDocument = id, Position = classAt }, CancellationToken.None);
+                await TimeAsync(into, "type hierarchy, prepare", () => server.Types.Handle(
+                    new TypeHierarchyPrepareParams { TextDocument = id, Position = classAt }, CancellationToken.None));
+
+                TypeHierarchyItem? type = types?.FirstOrDefault();
+                if ( type is not null )
+                {
+                    await TimeAsync(into, "type hierarchy, supertypes", () => server.Types.Handle(
+                        new TypeHierarchySupertypesParams { Item = type }, CancellationToken.None));
+                    await TimeAsync(into, "type hierarchy, subtypes", () => server.Types.Handle(
+                        new TypeHierarchySubtypesParams { Item = type }, CancellationToken.None));
+                }
             }
 
             if ( at.Declaration is LspPosition declaration )
@@ -469,13 +506,24 @@ public partial class ScalePerfTests
         }
 
         LspPosition? declaration = null;
+        LspRange? body = null;
+        LspPosition? bodyEnd = null;
         if ( parsed.Extraction.Functions.Length > 0 )
         {
             FunctionSymbol first = parsed.Extraction.Functions[0];
             declaration = new LspPosition(first.NameRange.Start.Line, first.NameRange.Start.Character);
+            bodyEnd = new LspPosition(first.FullRange.End.Line, first.FullRange.End.Character);
+            body = new LspRange(new LspPosition(first.FullRange.Start.Line, 0), bodyEnd);
         }
 
-        return new Positions(stockAt, inside, local, declaration, stockRange);
+        LspPosition? classAt = null;
+        if ( parsed.Extraction.Classes.Length > 0 )
+        {
+            ClassSymbol firstClass = parsed.Extraction.Classes[0];
+            classAt = new LspPosition(firstClass.NameRange.Start.Line, firstClass.NameRange.Start.Character);
+        }
+
+        return new Positions(stockAt, inside, local, declaration, stockRange, body, bodyEnd, classAt);
     }
 
     /// <summary>

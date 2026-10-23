@@ -3214,6 +3214,19 @@ On-type formatting formats the whole file and keeps the edits around the cursor.
 costs about as much as whole-file formatting even when it returns nothing. Formatting only a
 fragment would need a formatter that can, which is a redesign; it is in budget as it is.
 
+**A workspace folder added mid-session froze the editor** (`c539cb91`). The handler ran the resolver
+swap, a warm re-index and, in full mode, the whole sweep inside the notification. The driver added a
+ten-file folder at BO3 50K, typed in an open file two seconds later, and asked `documentSymbol`
+every 200 ms:
+
+| folder added, BO3 50K | before | after |
+|---|---:|---:|
+| an edit typed during it, to its diagnostics | **86,725 ms** | **430 ms** |
+| `documentSymbol` max during it | 86,268 ms | 208 ms |
+
+The change now runs in the background, one change at a time and in order. The re-index (about 15 s)
+and the sweep still run; the editor no longer waits on them.
+
 **The branch switch's republish** (`c0969529`). A comment-only switch of 5,000 files sent 3,561
 closed files whose diagnostics had not changed. `Refresh` compared each set by reference, and a
 re-index builds new arrays. It now compares by value: the same switch sends nothing but the open

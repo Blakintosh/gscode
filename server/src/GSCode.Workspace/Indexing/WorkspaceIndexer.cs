@@ -456,9 +456,9 @@ public sealed class WorkspaceIndexer
     private readonly record struct FileOutcome(bool Restored, ScriptRecord? Record);
 
     /// <summary>Analyses one file from disk and commits its record (also used by the watcher).</summary>
-    public ScriptRecord? IndexFile(string path)
+    public ScriptRecord? IndexFile(string path, Func<string, bool>? ownedByEditor = null)
     {
-        return ProcessFile(path, allowRestore: false).Record;
+        return ProcessFile(path, allowRestore: false, ownedByEditor).Record;
     }
 
     /// <summary>
@@ -538,6 +538,18 @@ public sealed class WorkspaceIndexer
             _names,
             profile: _profile,
             headerCache: _inserts);
+    }
+
+    /// <summary>
+    /// Whether the editor owns the file now: it did when this call began, or it has opened it since.
+    /// Asked again right before the store write, because the read and the analysis sit between that
+    /// first test and the write — and a document opened in that window has had its buffer committed,
+    /// which a disk record landing after it would overwrite. The watched-file pump runs in the
+    /// background, so an editor opening a file in the middle of a branch switch is not a corner case.
+    /// </summary>
+    private static bool OpenedSince(bool ownedAtStart, Func<string, bool>? ownedByEditor, string normalized)
+    {
+        return ownedAtStart || (ownedByEditor is not null && ownedByEditor(normalized));
     }
 
     private FileOutcome ProcessFile(string path, bool allowRestore, Func<string, bool>? ownedByEditor = null)
@@ -620,7 +632,7 @@ public sealed class WorkspaceIndexer
                     // restore, is what keeps this call from winning a last-write race against a
                     // fresher commit the corresponding watched-file event already made (or is
                     // about to make) for this exact path.
-                    if ( !ownedByOpenDocument && DiskStillMatches(normalized, content) )
+                    if ( !OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) && DiskStillMatches(normalized, content) )
                     {
                         _database.CommitRecord(restored);
                     }
@@ -667,7 +679,7 @@ public sealed class WorkspaceIndexer
         // now-stale analysis must not win a last-write race against it. Building rather than
         // committing keeps the record usable by this call's own caller without touching the
         // store the fresher event owns.
-        ScriptRecord record = ownedByOpenDocument || !DiskStillMatches(normalized, content)
+        ScriptRecord record = OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) || !DiskStillMatches(normalized, content)
             ? ScriptDatabase.BuildRecord(result, context, isDirty: false, relativePath)
             : _database.Commit(result, context, isDirty: false, relativePath);
         PerfTracker.End();

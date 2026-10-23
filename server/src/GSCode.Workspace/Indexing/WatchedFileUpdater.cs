@@ -81,7 +81,7 @@ public sealed class WatchedFileUpdater
         }
         else if ( ownedByEditor is null || !ownedByEditor(devRaw) )
         {
-            _indexer.IndexFile(devRaw);
+            _indexer.IndexFile(devRaw, ownedByEditor);
             touched.Add(devRaw);
         }
 
@@ -165,7 +165,7 @@ public sealed class WatchedFileUpdater
             _indexer.InvalidateGsh(normalized);
             if ( !ownsChangedFile && ShouldIndex(normalized) )
             {
-                _indexer.IndexFile(normalized);
+                _indexer.IndexFile(normalized, ownedByEditor);
             }
 
             // A header that did not exist a moment ago holds nothing to invalidate, so the drop
@@ -187,7 +187,7 @@ public sealed class WatchedFileUpdater
             return [];
         }
 
-        _indexer.IndexFile(normalized);
+        _indexer.IndexFile(normalized, ownedByEditor);
         return [normalized];
     }
 
@@ -260,7 +260,7 @@ public sealed class WatchedFileUpdater
         for ( int start = 0; start < toIndex.Count; start += ReindexChunk )
         {
             int end = Math.Min(start + ReindexChunk, toIndex.Count);
-            Parallel.For(start, end, options, index => _indexer.IndexFile(toIndex[index]));
+            Parallel.For(start, end, options, index => _indexer.IndexFile(toIndex[index], ownedByEditor));
 
             if ( end < toIndex.Count )
             {

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Text;
 using GSCode.Core;
@@ -118,7 +119,7 @@ public partial class ScalePerfTests
         row.CopyLensMilliseconds = await TimeTwiceAsync(() => lenses.HandleResolvedAsync(copyLensRequest, CancellationToken.None));
         SlowestLensKeys(row, support, copyIdentifier.Uri, parsed);
 
-        ReferenceEntry? hot = HottestForeignCall(parsed, out int hotCount);
+        ReferenceEntry? hot = HottestForeignCall(parsed, builtins.EngineNamesFor(ScriptLanguage.Gsc), out int hotCount);
         if ( hot is null )
         {
             documents.Close(copy);
@@ -243,23 +244,38 @@ public partial class ScalePerfTests
     }
 
     /// <summary>
-    /// The qualified call this file makes most often to a function it does not declare itself — the
+    /// The call this file makes most often to a script function it does not declare itself — the
     /// stock function every copy of it calls, so the one whose reference list grows fastest.
+    ///
+    /// On a namespace dialect that is a qualified call into another namespace. On an include dialect
+    /// every call is keyed by bare name with no namespace, so it is a name the file does not declare
+    /// and the engine does not provide: one an <c>#include</c> or a path call brings in.
     /// </summary>
-    private static ReferenceEntry? HottestForeignCall(ParseResult parsed, out int count)
+    private static ReferenceEntry? HottestForeignCall(ParseResult parsed, FrozenSet<string> engineNames, out int count)
     {
         // An unqualified call is keyed under the file's own namespace, builtins included, so a call
         // into the file's own namespaces is not a call to a stock function.
         HashSet<string> ownNamespaces = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> ownNames = new(StringComparer.OrdinalIgnoreCase);
         foreach ( FunctionSymbol function in parsed.Extraction.Functions )
         {
             ownNamespaces.Add(function.Namespace);
+            ownNames.Add(function.KeyName);
         }
 
+        bool byNamespace = GameProfile.Active.ResolvesByNamespace;
         Dictionary<SymbolKey, (ReferenceEntry First, int Count)> calls = [];
         foreach ( ReferenceEntry entry in parsed.Extraction.References )
         {
-            if ( entry.Kind != ReferenceKind.Call || entry.FromMacro || entry.Key.Namespace is null || ownNamespaces.Contains(entry.Key.Namespace) )
+            if ( entry.Kind != ReferenceKind.Call || entry.FromMacro )
+            {
+                continue;
+            }
+
+            bool foreign = byNamespace
+                ? entry.Key.Namespace is not null && !ownNamespaces.Contains(entry.Key.Namespace)
+                : !ownNames.Contains(entry.Key.Name) && !engineNames.Contains(entry.Key.Name);
+            if ( !foreign )
             {
                 continue;
             }
@@ -346,7 +362,7 @@ public partial class ScalePerfTests
         [
             ("KB/file", "retained managed memory divided by the files indexed"),
             ("refs held / diagnostics", "references every record stores, and the diagnostics full mode would publish"),
-            ("hot key", "the qualified call a sampled copy makes most often to a function declared elsewhere"),
+            ("hot key", "the call a sampled copy makes most often to a script function declared elsewhere"),
             ("locations / refs ms / serialize ms / payload", "find-references on it through the handler, then the answer serialized as JSON"),
             ("lens on declaring / copy", "CodeLens for the whole file declaring the hot key, and for one copy"),
             ("symbol", "workspace symbol search for an empty query and for one letter, each capped at 256 results"),

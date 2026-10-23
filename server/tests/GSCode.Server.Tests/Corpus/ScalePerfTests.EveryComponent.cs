@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
@@ -93,6 +94,7 @@ public partial class ScalePerfTests
                 names,
                 inserts);
             Support = new NavigationSupport(Documents, database, Holder, builtins);
+            EngineNames = builtins.EngineNamesFor(ScriptLanguage.Gsc);
             Settings = new ServerSettings { CodeLensEnabled = true, InlayParameterNames = true, InlayInferredTypes = true };
             Linter = new DocumentLinter(database, Holder, builtins, objectFields);
             TextDocumentSelector selector = TextDocumentSelector.ForLanguage("gsc");
@@ -124,6 +126,9 @@ public partial class ScalePerfTests
         public ResolverHolder Holder { get; }
         public DocumentStore Documents { get; }
         public NavigationSupport Support { get; }
+
+        /// <summary>The engine's function names, which an include dialect's foreign call must not be.</summary>
+        public FrozenSet<string> EngineNames { get; }
         public ServerSettings Settings { get; }
         public DocumentLinter Linter { get; }
         public DocumentSymbolHandler Symbols { get; }
@@ -225,7 +230,7 @@ public partial class ScalePerfTests
             OpenDocument document = server.Documents.Open(path, text, version: 1);
             ParseResult parsed = server.Documents.AnalyzeIfStale(document);
             TextDocumentIdentifier id = new() { Uri = DocumentUri.FromFileSystemPath(path) };
-            Positions at = PositionsIn(parsed, text);
+            Positions at = PositionsIn(parsed, text, server.EngineNames);
             LspRange whole = new(new LspPosition(0, 0), new LspPosition(CountLines(text), 0));
 
             IDictionary<string, RequestStats> into = timed ? row.Requests : new SortedDictionary<string, RequestStats>();
@@ -419,13 +424,13 @@ public partial class ScalePerfTests
     }
 
     /// <summary>
-    /// A qualified call into another namespace (the stock call every copy makes most), the inside of
+    /// A call to a script function declared elsewhere (the stock call every copy makes most), the inside of
     /// its argument list, an unqualified call to a function this file declares, and the first
     /// declaration's name.
     /// </summary>
-    private static Positions PositionsIn(ParseResult parsed, string text)
+    private static Positions PositionsIn(ParseResult parsed, string text, FrozenSet<string> engineNames)
     {
-        ReferenceEntry? stock = HottestForeignCall(parsed, out _);
+        ReferenceEntry? stock = HottestForeignCall(parsed, engineNames, out _);
         LspPosition? stockAt = null;
         LspPosition? inside = null;
         LspRange? stockRange = null;

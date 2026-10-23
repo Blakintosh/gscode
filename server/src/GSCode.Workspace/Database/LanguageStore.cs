@@ -320,7 +320,6 @@ public sealed class LanguageStore
         }
     }
 
-    /// <summary>Keeps <see cref="_pathsByContext"/> correct across an upsert or removal.</summary>
     /// <summary>
     /// Bumped whenever a path that stays in the store moves to another context — a workspace folder
     /// added or removed, a raw script becoming a mod's. Every other answer about visibility is
@@ -334,6 +333,7 @@ public sealed class LanguageStore
 
     private long _contextEpoch;
 
+    /// <summary>Keeps <see cref="_pathsByContext"/> correct across an upsert or removal.</summary>
     private void AdjustContextPaths(ScriptRecord? previous, ScriptRecord? next)
     {
         if ( previous is not null && next is not null && previous.ContextId != next.ContextId )

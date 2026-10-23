@@ -534,6 +534,22 @@ public sealed class NavigationSupport
             target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true, limit: 1).Length == 0;
     }
 
+    /// <summary>Every file in these stores declaring a function key.</summary>
+    private static ImmutableArray<string> FilesDeclaring(ImmutableArray<LanguageStore> stores, SymbolKey key)
+    {
+        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
+        foreach ( LanguageStore store in stores )
+        {
+            // A merge dialect keys a function with no namespace, so its declarations are found by
+            // name alone: more files than declare this one, never fewer.
+            paths.AddRange(key.Namespace is null
+                ? store.FilesDeclaring(key.Name)
+                : store.FilesDeclaring(key.Namespace, key.Name));
+        }
+
+        return paths.ToImmutable();
+    }
+
     /// <summary>
     /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
     /// specific file.
@@ -555,22 +571,6 @@ public sealed class NavigationSupport
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
     /// </summary>
-    /// <summary>Every file in these stores declaring a function key.</summary>
-    private static ImmutableArray<string> FilesDeclaring(ImmutableArray<LanguageStore> stores, SymbolKey key)
-    {
-        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
-        foreach ( LanguageStore store in stores )
-        {
-            // A merge dialect keys a function with no namespace, so its declarations are found by
-            // name alone: more files than declare this one, never fewer.
-            paths.AddRange(key.Namespace is null
-                ? store.FilesDeclaring(key.Name)
-                : store.FilesDeclaring(key.Namespace, key.Name));
-        }
-
-        return paths.ToImmutable();
-    }
-
     private string DeclaringFile(SymbolQueryContext target, SymbolKey key)
     {
         if ( key.Kind != SymbolKind.Function )

@@ -3019,6 +3019,49 @@ under the 125 ms floor's threshold of ~42 ms: running the rules in parallel woul
 on the slowest, and was not done. Below ~160 ms the floor is the lever, and lowering it trades
 against a half-typed name being reported as unknown on its way to being typed.
 
+### 2026-10-22: pull diagnostics, and why push stays the default
+
+LSP 3.17 pull diagnostics were built behind a `gscode.diagnostics.pull` setting, measured, and
+dropped before merging. They were measured with one stdio driver in both modes. The driver behaves like vscode-languageclient 9:
+- it keeps one workspace pull going, sent again 2 s after each answer with every result id it holds;
+- it pulls the open document on open and after each change;
+- it takes ContentModified as an empty answer.
+
+Each run was cold (cache off) on `bo3-50000-top25` with workspace diagnostics and CodeLens off.
+Between Ready and the end of delivery the driver asked `documentSymbol` and, under pull, a document pull every 200 ms. It
+then made ten edits to `_globallogic_15006.gsc`, 0.5 s apart.
+
+| 50,000 heavy BO3 files, cold, same driver | push | pull |
+|---|---:|---:|
+| first delivery | 35,321 files, 86 MB | 35,305 files, 92 MB, in 16.6 s |
+| `documentSymbol` during the sweep, p99 (max) | 68 ms (77) | 63–64 ms (65–185), three runs |
+| `documentSymbol` during delivery, p99 (max) | 23 ms (53) | 15 ms (94) |
+| edit to diagnostics, after the first | 139–165 ms | 141–155 ms (one 352) |
+| after every pause in editing | nothing | 5.5 MB request: all 35,310 held ids |
+
+Same-driver push matches pull on edits, about 142 ms. The 160–210 ms in the previous section was
+measured with a different client and clock, so it is not this table's baseline.
+
+Three things decided it:
+
+- **A pull session starts from nothing.** The client keeps result ids in memory only, so the
+  first workspace pull of every session is the whole workspace. That is the same flood the push
+  was, and arrives in the same time.
+- **The held workspace pull does not stay held.** OmniSharp 0.19.9 schedules requests in batches
+  and races each parallel request against a content-modified signal. That signal fires whenever a
+  serial message arrives: `didOpen`, `didChange`, `didSave` or `executeCommand`. So every edit
+  answers the held pull with ContentModified. The client reads that as empty, and two seconds later
+  sends every id it holds again. There is no per-handler opt-out. Turning the signal off globally
+  would make every serial message wait behind any long parallel request.
+- **The same race clears a document's problems.** A document pull still waiting for its analysis
+  when another document's `didChange` arrives is answered ContentModified. VS Code reads that as
+  "no problems" and does not ask again until the next edit. The prototype answered with
+  `workspace/diagnostic/refresh` when a cancelled pull was not retried within 100 ms. That was
+  unit-tested only: no stdio run had a pull in flight when a serial message arrived.
+
+The first answer was also never sent at all. OmniSharp's serializer throws `NotImplementedException`
+while writing every 3.17 report type, and swallows the exception. Pull handlers need their own request and report types.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

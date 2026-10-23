@@ -75,8 +75,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   late publish put diagnostics back on a closed file under the normalized URI, where nothing takes
   them away again. A close is remembered only until the document is reopened, and a path the
   publisher was never told about still publishes: only a close is evidence, silence is not.
-  Push because closed files have no puller; open documents are a migration candidate to LSP 3.17
-  `textDocument/diagnostic`.
+  Push only. LSP 3.17 pull diagnostics were built, measured no better at 50,000 files, and removed:
+  PERF.md, "pull diagnostics, and why push stays the default".
 
 ## Handlers/DocumentSymbolHandler.cs
 

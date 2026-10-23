@@ -199,12 +199,10 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     {
         // A path call names its target file explicitly — pin to it (as its own single-file scope).
         // Empty on BO3, which has no inline path calls, so the loop costs nothing there.
-        foreach ( PathCallReference pathCall in target.Result.Extraction.PathCalls )
+        string pathCallTarget = PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range);
+        if ( pathCallTarget.Length > 0 )
         {
-            if ( pathCall.NameRange == hit.Range )
-            {
-                return DatabaseQueries.PreferIncludeScope(definitions, pathCall.Path, includedPaths: []);
-            }
+            return DatabaseQueries.PreferIncludeScope(definitions, pathCallTarget, includedPaths: []);
         }
 
         ResolutionContext context = _support.Resolver.GetContext(target.Path);

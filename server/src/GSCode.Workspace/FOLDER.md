@@ -94,6 +94,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `FilesWriting(writtenKey)`, `FilesInserting(headerPath)`, `PathChildren(folder, context)`,
   `MayBeDevOnly(name)`, `VisibleLiterals(kind, context)`, `VisibleFieldNames(owner, context)`,
   `HasOverlayAt(path, context)`.
+- `ContextEpoch` moves whenever a path that stays in the store changes context (a folder added or
+  removed, a raw script becoming a mod's). It invalidates the one visibility answer cached against
+  an index array, `DatabaseQueries.VisibleDeclaring`, since that array does not change when only a
+  file's context does.
 - The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
   between two writers of the SAME file — read-previous and swap are separate steps — and two writers
   of different files share nothing here, because each index below serialises its own dictionary. One
@@ -496,6 +500,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
   because the scope has already dropped every record the asker cannot see — what is left of the set
   rule is then exactly what `HasOverlayAt` answers alone. `IncludeScopeLookupTests` keeps the full
   list as the reference implementation.
+- Before `LookupFunctions`, a function call on an include dialect asks `IncludeCallTargets`: the
+  declarations in the file a path call names, through that file's `#include` chain, else the asking
+  file's own, else its include chain nearest level first (the private `FunctionsDeclaredAt` and
+  `ReachableFunctions`). `MethodResolution.ResolveCall` and the call hierarchy both ask it, so hover,
+  definition and the call tree agree on which `main()` a call means. Empty on a namespace dialect.
+- The private `VisibleDeclaring` caches, for a name declared by 64 files or more, which of them an
+  asking context can see — per index array (`ConditionalWeakTable`) and per `ContextEpoch`. An asker
+  that sees few of 2,000 same-named copies otherwise paid a record lookup for each on every question.
 - `LinkedScriptPaths(result, profile)` — the paths a file links against in whichever directive its
   dialect uses (`#using` where namespace-driven, `#include` where merging), and the ONE place that
   fork lives. Scoping callers want this rather than `ImportedScriptPaths`/`IncludedScriptPaths`,
@@ -573,7 +585,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   whether that commit landed before or after its own disk read — so for an owned path it builds
   the record (`ScriptDatabase.BuildRecord`, still enqueued to the cache) without calling `Commit`,
   the same "skip the store write, keep everything else" rule `WatchedFileUpdater.Apply` already
-  applied to an on-disk change behind the editor's back.
+  applied to an on-disk change behind the editor's back. `OpenedSince` asks again right before the
+  store write, since a document opened between the read and the write has had its buffer committed.
+- A restore keeps the live record instead when its content hash, context and relative path match
+  and it has no unsaved edits: a cached record carries parse diagnostics only, and the live one may
+  carry the full-mode sweep's.
 - `AnalyzeForLintSweep(path)` — read + analyse with NO commit, NO cache write, NO header seeding:
   purely a `ParseResult` for the `workspaceIndexingMode: full` lint sweep (`WorkspaceLintSweep`,
   server-side), which needs one because records do not retain theirs. Reads and analyses through
@@ -673,7 +689,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `WorkspaceIndexer.InvalidateResolutionCache()` — a file appearing or vanishing can falsify any
   cached "does this exist" answer `PathResolver.Resolve` has given out, for a `.gsc`/`.csc` target
   as much as a header. A plain content change does not: nothing about whether a target EXISTS
-  moved.
+  moved. A caller applying a batch passes `invalidateResolution: false` and calls
+  `NoteFilesAppearedOrVanished` once for the batch instead.
 
 ## Documents/DocumentStore.cs
 

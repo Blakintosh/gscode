@@ -12,7 +12,26 @@ namespace GSCode.Parser.Extraction;
 /// whole include scope. <see cref="NameRange"/> matches the reference's range, which is how the two
 /// are paired. The leading <c>::foo</c> local form has an empty path and is not recorded.
 /// </summary>
-public readonly record struct PathCallReference(string Path, TextRange NameRange);
+public readonly record struct PathCallReference(string Path, TextRange NameRange)
+{
+    /// <summary>
+    /// The file the path call at <paramref name="nameRange"/> names — <c>maps\_utility</c> in
+    /// <c>maps\_utility::foo()</c> — or "" when the name there is not one. Never "" for a recorded
+    /// call, since the local <c>::foo</c> form is not recorded.
+    /// </summary>
+    public static string At(ImmutableArray<PathCallReference> pathCalls, TextRange nameRange)
+    {
+        foreach ( PathCallReference pathCall in pathCalls )
+        {
+            if ( pathCall.NameRange == nameRange )
+            {
+                return pathCall.Path;
+            }
+        }
+
+        return "";
+    }
+}
 
 /// <summary>
 /// The extracted symbol surface of one file: namespaces, declarations with their

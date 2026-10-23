@@ -121,9 +121,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/WatchedFilesHandler.cs
 
-- didChangeWatchedFiles → applies each create/change/delete via WatchedFileUpdater
-  (registers **/*.gsc|csc|gsh watchers). A branch switch's whole batch applies before
-  returning.
+- didChangeWatchedFiles → queues each create/change/delete and returns; a background pump merges
+  queued events per path and applies them via WatchedFileUpdater (registers **/*.gsc|csc|gsh
+  watchers). Deletions first, scripts in parallel on `BelowNormalWorkers`, headers last.
+  `WhenIdleAsync` is for tests.
+- In `full` mode the batch's closed files keep what they last published
+  (`WorkspaceDiagnosticsPublisher.HoldUntilRelinted`) until the relint below has run.
 - In `full` mode it re-lints every record the batch rewrote (`RelintClosedFilesAsync` over the
   paths `Apply` returns), since a re-index stores the parse diagnostics alone and a branch switch
   otherwise emptied the Problems panel of every closed file it touched. Then it republishes, and
@@ -382,6 +385,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   objects — the latter drops ONLY workspace-context records, since raw and mod files stay
   reachable regardless of which folders are open. `BuildConfig` is shared with `Program.cs`, so
   a rebuild cannot drift from what initialize constructed.
+- The handler returns at once; each change runs in the background, one at a time and in arrival
+  order, on a `ContinueWith` chain. Not merged with the watched-file pump: that one folds events per
+  path, and folder changes must not be reordered or folded. `WhenIdleAsync` is for tests.
 - After the change it does what startup does after its index: in `full` mode sweeps again (the
   whole set, since an added file can resolve a call another reported missing), then republishes
   closed-file problems — taking back a removed folder's — and re-lints the open tabs.
@@ -892,10 +898,13 @@ that chose it. These are the pieces that implement it:
   those and publishes a richer set for them — which is why every caller of its `Refresh()` has to
   pair it with `DependentDiagnosticsRefresher.Schedule()` to cover the other half.
 - `Refresh()` sends a file only when its diagnostics differ from what was last sent — it remembers
-  the array per path and compares by reference, since a record's diagnostics are replaced wholesale
-  whenever they are recomputed (erring toward resending, never toward staleness). It runs after
-  every re-lint of an edit's closed dependents, where resending every file with a problem would
-  flood the client. Files no longer reported are still taken back.
+  the array per path and compares by value, since a re-index builds new arrays whether or not
+  anything in them moved. It runs after every re-lint of an edit's closed dependents, where
+  resending every file with a problem would flood the client. Files no longer reported are still
+  taken back. A file under `HoldUntilRelinted` keeps its last-published set until `Release`.
+- `BelowNormalWorkers` — runs an index range on threads of its own at below-normal priority, one per
+  core but one, stopping on cancellation or the first exception. The lint sweep and the watched-file
+  pump both use it, so a request the editor is waiting on wins every core it wants.
 
 ## .editorconfig
 

@@ -310,7 +310,9 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
             }
         }
 
-        await RunBelowNormalAsync(scripts.Count, index => applyOne(scripts[index])).ConfigureAwait(false);
+        // ApplyOne catches its own failures, so nothing reaches the workers to stop them.
+        await BelowNormalWorkers.RunAsync(
+            "GSCode watched files", scripts.Count, index => applyOne(scripts[index]), CancellationToken.None).ConfigureAwait(false);
 
         foreach ( PendingChange change in headers )
         {
@@ -339,56 +341,6 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
                 // The next change, or the next start, lints these again.
             }
         }
-    }
-
-    /// <summary>
-    /// Runs <paramref name="body"/> for every index below <paramref name="count"/> across threads of
-    /// their own at below-normal priority — the lint sweep's arrangement, for the same reason: this is
-    /// background work, and the requests the editor is waiting on should win every core it wants.
-    /// </summary>
-    private static Task RunBelowNormalAsync(int count, Action<int> body)
-    {
-        if ( count == 0 )
-        {
-            return Task.CompletedTask;
-        }
-
-        int workers = Math.Min(count, Math.Max(1, Environment.ProcessorCount - 1));
-        int next = -1;
-        int running = workers;
-        TaskCompletionSource finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        void Work()
-        {
-            try
-            {
-                int index;
-                while ( (index = Interlocked.Increment(ref next)) < count )
-                {
-                    body(index);
-                }
-            }
-            finally
-            {
-                if ( Interlocked.Decrement(ref running) == 0 )
-                {
-                    finished.SetResult();
-                }
-            }
-        }
-
-        for ( int worker = 0; worker < workers; worker++ )
-        {
-            Thread thread = new(Work)
-            {
-                IsBackground = true,
-                Priority = ThreadPriority.BelowNormal,
-                Name = "GSCode watched files",
-            };
-            thread.Start();
-        }
-
-        return finished.Task;
     }
 
     /// <summary>The file's export signature, or 0 when it is not (or no longer) indexed.</summary>

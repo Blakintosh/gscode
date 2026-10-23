@@ -180,7 +180,7 @@ public static class DatabaseQueries
     /// 2,000 declarations a name at 50,000 heavy cod4 files, 40 ms a hover. The files a script names
     /// are a handful. The filters are LookupFunctions' own: visibility, overlay shadowing, privacy.
     /// </summary>
-    public static ImmutableArray<ResolvedFunction> ReachableFunctions(
+    private static ImmutableArray<ResolvedFunction> ReachableFunctions(
         LanguageStore store, string askingContextId, string askingPath, string keyName)
     {
         string normalizedAskingPath = NormalizeAskingPath(askingPath);
@@ -222,7 +222,7 @@ public static class DatabaseQueries
     /// <c>maps\_utility::trigger_off</c> and <c>maps\_utility::array_thread</c> calls, and both
     /// functions live in <c>common_scripts\utility</c>, which <c>maps\_utility</c> includes.
     /// </summary>
-    public static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
+    private static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
         LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
@@ -230,6 +230,30 @@ public static class DatabaseQueries
             store, askingContextId, NormalizeAskingPath(askingPath), [RelativePathIndex.Normalize(writtenPath)], keyName,
             new HashSet<string>(StringComparer.Ordinal), matches);
         return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The declarations a function call reaches on an include dialect — in the file a path call names
+    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own or one it includes
+    /// (<see cref="ReachableFunctions"/>) — before every same-named one in the workspace. Empty on a
+    /// namespace dialect, for a qualified key, or when nothing reachable declares the name; the caller
+    /// then falls back to <see cref="LookupFunctions"/>.
+    /// </summary>
+    public static ImmutableArray<ResolvedFunction> IncludeCallTargets(
+        LanguageStore store, string askingContextId, string askingPath, string? keyNamespace, string keyName,
+        string pathCallTarget)
+    {
+        if ( keyNamespace is not null || GameProfile.Active.ResolvesByNamespace )
+        {
+            return [];
+        }
+
+        if ( pathCallTarget.Length > 0 )
+        {
+            return FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, keyName);
+        }
+
+        return ReachableFunctions(store, askingContextId, askingPath, keyName);
     }
 
     /// <summary>
@@ -1204,12 +1228,10 @@ public static class DatabaseQueries
     private static bool MeansDeclaringFile(
         GameProfile game, ScriptRecord record, ReferenceEntry entry, string declaring)
     {
-        foreach ( PathCallReference pathCall in record.PathCallTargets )
+        string pathCallTarget = PathCallReference.At(record.PathCallTargets, entry.Range);
+        if ( pathCallTarget.Length > 0 )
         {
-            if ( pathCall.NameRange == entry.Range )
-            {
-                return RelativePathIndex.Normalize(pathCall.Path) == declaring;
-            }
+            return RelativePathIndex.Normalize(pathCallTarget) == declaring;
         }
 
         // A bare name in a file that declares it means THAT file's function, wherever else the name

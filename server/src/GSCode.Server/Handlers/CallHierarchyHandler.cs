@@ -236,18 +236,11 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         {
             canonical = key;
 
-            // A call on an include dialect means the declaration the calling file reaches — in the
-            // file a path call names, else its own or one it includes — not every same-named one in
-            // the workspace. See DatabaseQueries.ReachableFunctions.
-            if ( key.Namespace is null && !GameProfile.Active.ResolvesByNamespace )
+            ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.IncludeCallTargets(
+                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, pathCallTarget);
+            if ( reachable.Length > 0 )
             {
-                ImmutableArray<ResolvedFunction> reachable = pathCallTarget.Length > 0
-                    ? DatabaseQueries.FunctionsDeclaredAt(target.Store, target.ContextId, target.Path, pathCallTarget, key.Name)
-                    : DatabaseQueries.ReachableFunctions(target.Store, target.ContextId, target.Path, key.Name);
-                if ( reachable.Length > 0 )
-                {
-                    return reachable;
-                }
+                return reachable;
             }
 
             return DatabaseQueries.LookupFunctions(

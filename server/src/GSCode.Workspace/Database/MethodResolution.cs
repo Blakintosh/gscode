@@ -183,14 +183,10 @@ public static class MethodResolution
             }
         }
 
-        // A call on an include dialect: the declaration this file reaches, before every same-named
-        // one in the workspace — in the file a path call names, else the file's own or one it
-        // includes. See DatabaseQueries.ReachableFunctions.
-        if ( canonical.Namespace is null && referenceKind != ReferenceKind.MethodCall && !GameProfile.Active.ResolvesByNamespace )
+        if ( referenceKind != ReferenceKind.MethodCall )
         {
-            ImmutableArray<ResolvedFunction> reachable = pathCallTarget.Length > 0
-                ? DatabaseQueries.FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, canonical.Name)
-                : DatabaseQueries.ReachableFunctions(store, askingContextId, askingPath, canonical.Name);
+            ImmutableArray<ResolvedFunction> reachable = DatabaseQueries.IncludeCallTargets(
+                store, askingContextId, askingPath, canonical.Namespace, canonical.Name, pathCallTarget);
             if ( reachable.Length > 0 )
             {
                 return reachable;

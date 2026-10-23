@@ -503,12 +503,7 @@ public sealed class SqliteCache : IAsyncDisposable
             }
         }
 
-        using SqliteCommand meta = _connection.CreateCommand();
-        meta.Transaction = transaction;
-        meta.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ($key, $value);";
-        meta.Parameters.AddWithValue("$key", CacheSchema.MetaSweepFingerprint);
-        meta.Parameters.AddWithValue("$value", command.Fingerprint);
-        meta.ExecuteNonQuery();
+        SetMeta(_connection, CacheSchema.MetaSweepFingerprint, command.Fingerprint, transaction);
     }
 
     private static void ApplyDelete(string path, SqliteCommand command)
@@ -543,9 +538,10 @@ public sealed class SqliteCache : IAsyncDisposable
         return command.ExecuteScalar() as string;
     }
 
-    private static void SetMeta(SqliteConnection connection, string key, string value)
+    private static void SetMeta(SqliteConnection connection, string key, string value, SqliteTransaction? transaction = null)
     {
         using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ($key, $value);";
         command.Parameters.AddWithValue("$key", key);
         command.Parameters.AddWithValue("$value", value);

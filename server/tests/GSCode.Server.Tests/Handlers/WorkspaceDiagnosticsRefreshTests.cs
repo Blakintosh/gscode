@@ -1,4 +1,5 @@
 using GSCode.Core.Diagnostics;
+using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
 using GSCode.Server.Configuration;
@@ -93,6 +94,30 @@ public class WorkspaceDiagnosticsRefreshTests
         fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "changed"));
         fixture.Publisher.Refresh();
         Assert.Single(fixture.Sink.Sent);
+    }
+
+    [Fact]
+    public void AFileAwaitingItsRelint_KeepsWhatItLastPublished()
+    {
+        // A branch switch re-indexes a closed file — parse diagnostics only — and relints it after.
+        // A refresh in between must not take its cross-file problems out of the Problems panel.
+        Fixture fixture = new();
+        string path = PathUtil.NormalizeAbsolute(@"c:\ws\a.gsc");
+        fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "cross-file"));
+        fixture.Publisher.Refresh();
+        Assert.Single(fixture.Sink.Sent);
+
+        fixture.Sink.Sent.Clear();
+        fixture.Publisher.HoldUntilRelinted([path]);
+        fixture.Database.CommitRecord(TestRecords.At(@"c:\ws\a.gsc", @"workspace:c:\ws") with { ContentHash = 8 });
+        fixture.Publisher.Refresh();
+        Assert.Empty(fixture.Sink.Sent);
+
+        // Relinted and released: now the record's set is the one to show.
+        fixture.Database.CommitRecord(WithProblem(@"c:\ws\a.gsc", "relinted"));
+        fixture.Publisher.Release([path]);
+        fixture.Publisher.Refresh();
+        Assert.Equal("relinted", Assert.Single(Assert.Single(fixture.Sink.Sent).Diagnostics).Message);
     }
 
     [Fact]

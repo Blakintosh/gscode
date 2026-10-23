@@ -217,54 +217,32 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
             }
         }
 
-        // Once for the batch rather than once per event: whether a file EXISTS is what a resolution
-        // answer can be falsified by, and that is settled before anything below re-indexes.
-        if ( batch.Any(change => change.Change != WatchedFileChange.Changed) )
+        // In full mode a re-index stores the parse diagnostics alone until the relint below puts the
+        // cross-file ones back, and anything else refreshing the Problems panel in between — another
+        // batch, a dependents' re-lint — would publish the lesser set. So what these files last
+        // published stands until then. The inserters a changed header pulls in are held once the
+        // re-index has named them.
+        bool relinting = _settings.IndexingMode == IndexingMode.Full && _database.HasCompletedIndex;
+        List<string> held = [];
+        if ( relinting )
         {
-            _updater.NoteFilesAppearedOrVanished();
+            foreach ( PendingChange change in batch )
+            {
+                held.Add(PathUtil.NormalizeAbsolute(change.Path));
+            }
+
+            _workspaceDiagnostics.HoldUntilRelinted(held);
         }
 
-        // Deletions first and headers last, one at a time; the scripts between them in parallel.
-        // A header re-indexes every file inserting it — in parallel itself — from disk, so it reads
-        // whatever this batch has already written; and a deletion is cheap and may retire a record
-        // another change in the batch would otherwise resolve against.
-        List<PendingChange> scripts = [];
-        List<PendingChange> headers = [];
-        foreach ( PendingChange change in batch )
+        try
         {
-            if ( ScriptAnalysis.LanguageFromPath(change.Path) == ScriptLanguage.Gsh )
-            {
-                headers.Add(change);
-            }
-            else if ( change.Change == WatchedFileChange.Deleted )
-            {
-                ApplyOne(change);
-            }
-            else
-            {
-                scripts.Add(change);
-            }
+            await ApplyHeldAsync(batch, touched, exportsMoved, ApplyOne, relinting, held).ConfigureAwait(false);
         }
-
-        await RunBelowNormalAsync(scripts.Count, index => ApplyOne(scripts[index])).ConfigureAwait(false);
-
-        foreach ( PendingChange change in headers )
+        finally
         {
-            ApplyOne(change);
-        }
-
-        // A re-index stores the parse diagnostics alone. In full mode a closed file reports its
-        // cross-file problems too, so every record the update rewrote is linted again before it is
-        // published — a branch switch otherwise emptied the Problems panel of every file it touched.
-        if ( !touched.IsEmpty && _settings.IndexingMode == IndexingMode.Full && _database.HasCompletedIndex )
-        {
-            try
+            if ( relinting )
             {
-                await _lintSweep.RelintClosedFilesAsync([.. touched.Keys], CancellationToken.None).ConfigureAwait(false);
-            }
-            catch ( OperationCanceledException )
-            {
-                // The next change, or the next start, lints these again.
+                _workspaceDiagnostics.Release(held);
             }
         }
 
@@ -289,6 +267,78 @@ public sealed class WatchedFilesHandler : DidChangeWatchedFilesHandlerBase
         Log.Debug(
             "Watched files: {Changes} change(s) applied in {Seconds:F1}s, {Touched} record(s) rewritten, {Moved} with moved exports",
             batch.Count, Stopwatch.GetElapsedTime(startedTicks).TotalSeconds, touched.Count, exportsMoved.Count);
+    }
+
+    /// <summary>
+    /// The batch's re-index and, in full mode, the relint of every record it rewrote — what a hold
+    /// around them waits for. See <see cref="ApplyAsync"/>.
+    /// </summary>
+    private async Task ApplyHeldAsync(
+        List<PendingChange> batch,
+        ConcurrentDictionary<string, byte> touched,
+        ConcurrentBag<string> exportsMoved,
+        Action<PendingChange> applyOne,
+        bool relinting,
+        List<string> held)
+    {
+        // Once for the batch rather than once per event: whether a file EXISTS is what a resolution
+        // answer can be falsified by, and that is settled before anything below re-indexes.
+        if ( batch.Any(change => change.Change != WatchedFileChange.Changed) )
+        {
+            _updater.NoteFilesAppearedOrVanished();
+        }
+
+        // Deletions first and headers last, one at a time; the scripts between them in parallel.
+        // A header re-indexes every file inserting it — in parallel itself — from disk, so it reads
+        // whatever this batch has already written; and a deletion is cheap and may retire a record
+        // another change in the batch would otherwise resolve against.
+        List<PendingChange> scripts = [];
+        List<PendingChange> headers = [];
+        foreach ( PendingChange change in batch )
+        {
+            if ( ScriptAnalysis.LanguageFromPath(change.Path) == ScriptLanguage.Gsh )
+            {
+                headers.Add(change);
+            }
+            else if ( change.Change == WatchedFileChange.Deleted )
+            {
+                applyOne(change);
+            }
+            else
+            {
+                scripts.Add(change);
+            }
+        }
+
+        await RunBelowNormalAsync(scripts.Count, index => applyOne(scripts[index])).ConfigureAwait(false);
+
+        foreach ( PendingChange change in headers )
+        {
+            applyOne(change);
+        }
+
+        if ( relinting )
+        {
+            HashSet<string> already = new(held, StringComparer.Ordinal);
+            List<string> inserters = [.. touched.Keys.Where(path => !already.Contains(path))];
+            _workspaceDiagnostics.HoldUntilRelinted(inserters);
+            held.AddRange(inserters);
+        }
+
+        // A re-index stores the parse diagnostics alone. In full mode a closed file reports its
+        // cross-file problems too, so every record the update rewrote is linted again before it is
+        // published — a branch switch otherwise emptied the Problems panel of every file it touched.
+        if ( !touched.IsEmpty && relinting )
+        {
+            try
+            {
+                await _lintSweep.RelintClosedFilesAsync([.. touched.Keys], CancellationToken.None).ConfigureAwait(false);
+            }
+            catch ( OperationCanceledException )
+            {
+                // The next change, or the next start, lints these again.
+            }
+        }
     }
 
     /// <summary>

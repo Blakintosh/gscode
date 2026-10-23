@@ -139,6 +139,45 @@ public sealed class WorkspaceDiagnosticsPublisher
     /// Called once indexing finishes, whenever the scope setting changes, and after closed
     /// dependents are re-linted.
     /// </summary>
+    /// <summary>
+    /// Closed files re-indexed and not yet linted again, by how many holders are waiting on them. A
+    /// re-index stores the parse diagnostics alone; in full mode the cross-file ones come back only
+    /// with the relint, so a refresh in between would take them out of the Problems panel and the
+    /// next one put them back. Their last-published set stands until <see cref="Release"/>.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _awaitingRelint = new(StringComparer.Ordinal);
+
+    /// <summary>Holds what these closed files last published until <see cref="Release"/> — see <see cref="_awaitingRelint"/>.</summary>
+    public void HoldUntilRelinted(IEnumerable<string> normalizedPaths)
+    {
+        foreach ( string path in normalizedPaths )
+        {
+            _awaitingRelint.AddOrUpdate(path, 1, static (_, count) => count + 1);
+        }
+    }
+
+    /// <summary>Ends a <see cref="HoldUntilRelinted"/> for these paths; the next refresh sends what they hold now.</summary>
+    public void Release(IEnumerable<string> normalizedPaths)
+    {
+        foreach ( string path in normalizedPaths )
+        {
+            while ( _awaitingRelint.TryGetValue(path, out int count) )
+            {
+                if ( count <= 1 )
+                {
+                    if ( _awaitingRelint.TryRemove(new KeyValuePair<string, int>(path, count)) )
+                    {
+                        break;
+                    }
+                }
+                else if ( _awaitingRelint.TryUpdate(path, count - 1, count) )
+                {
+                    break;
+                }
+            }
+        }
+    }
+
     public void Refresh()
     {
         DiagnosticsScope scope = ScopeFromSetting(_settings.DiagnosticsScope);
@@ -160,13 +199,30 @@ public sealed class WorkspaceDiagnosticsPublisher
 
             foreach ( ScriptRecord record in _database.AllRecords )
             {
-                if ( !IsInScope(scope, record.ContextId) || record.Diagnostics.IsEmpty )
+                if ( !IsInScope(scope, record.ContextId) )
                 {
                     continue;
                 }
 
                 // The sync handler owns open documents, and publishes a richer set for them.
                 if ( _documents.IsOpen(record.Path) )
+                {
+                    continue;
+                }
+
+                // Re-indexed and not linted again yet: what the client shows is still the better set.
+                // Asked before the empty test, since a parse-only set is often empty.
+                if ( _awaitingRelint.ContainsKey(record.Path) )
+                {
+                    if ( _published.ContainsKey(record.Path) )
+                    {
+                        stillPublished.Add(record.Path);
+                    }
+
+                    continue;
+                }
+
+                if ( record.Diagnostics.IsEmpty )
                 {
                     continue;
                 }

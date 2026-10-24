@@ -172,11 +172,11 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     }
 
     /// <summary>
-    /// Narrows definitions to the file the call actually reaches. A path call
-    /// (<c>maps\x::foo()</c>) names ONE file, so it pins to that; anything else prefers the asking
-    /// file's import scope — itself plus the files it links against. Either way it is a
-    /// PREFERENCE — the full set comes back when nothing matches, so a missing import still
-    /// resolves.
+    /// Narrows definitions to the file the call actually reaches. A function call on an include
+    /// dialect is strict: the declarations <see cref="DatabaseQueries.FunctionsTheCallReaches"/>
+    /// names, through the include chain, and none when it names none. Anything else — a namespace
+    /// dialect, a class, a macro's fallback — prefers the asking file's import scope, itself plus the
+    /// files it links against, and gets the full set back when nothing matches.
     ///
     /// Both dialect families need this, for the same reason arrived at differently. A merge
     /// dialect drops the namespace from the key outright, so every same-named function in the
@@ -188,11 +188,8 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// see <see cref="GSCode.Workspace.Analysis.AmbiguousFunctionLint"/>, which counts them —
     /// almost all of them one game mode's copy against another's.
     ///
-    /// Which directive spells the scope is the only difference, and
-    /// <see cref="DatabaseQueries.LinkedScriptPaths"/> owns that choice so it is made once. Both
-    /// are DIRECT-only. BO3 does not re-export what an imported file itself imports, and a merge
-    /// dialect's transitive reach is deliberately not used here (preferring too little only costs
-    /// a wider answer, which the fallback already allows).
+    /// <see cref="DatabaseQueries.LinkedScriptPaths"/> spells the preference scope, DIRECT-only:
+    /// BO3 does not re-export what an imported file itself imports.
     /// </summary>
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludes(
         NavigationTarget target, PositionHit hit, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
@@ -200,6 +197,17 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         // A path call names its target file explicitly — pin to it (as its own single-file scope).
         // Empty on BO3, which has no inline path calls, so the loop costs nothing there.
         string pathCallTarget = PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range);
+
+        // On an include dialect a function call reaches only what the file a path call names, or
+        // the file itself and its include chain, provide: the engine never looks a name up across
+        // the install. So that set, and nothing wider when it is empty.
+        HashSet<string>? reached = DatabaseQueries.FilesTheIncludeScopedCallReaches(
+            target.Store, target.ContextId, target.Path, hit.Key, pathCallTarget);
+        if ( reached is not null )
+        {
+            return [.. definitions.Where(definition => reached.Contains(definition.Record.Path))];
+        }
+
         if ( pathCallTarget.Length > 0 )
         {
             return DatabaseQueries.PreferIncludeScope(definitions, pathCallTarget, includedPaths: []);

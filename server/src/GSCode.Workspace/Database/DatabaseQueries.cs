@@ -161,9 +161,9 @@ public static class DatabaseQueries
     /// <summary>
     /// The functions a BARE call to <paramref name="keyName"/> reaches from the asking file on an
     /// include dialect: the asking file's own declarations if it has any, else those of the files it
-    /// names — its <c>#include</c>s and path calls, as <see cref="ReachableRelativePaths"/> lists them
-    /// — and then of what those include, nearest first, since the compiler flattens an include chain.
-    /// Empty when none of them declares it, for the caller to fall back to <see cref="LookupFunctions"/>.
+    /// <c>#include</c>s, then of what those include, nearest first, since the compiler flattens an
+    /// include chain. Not the files it path-calls: a path call reaches its one function and merges
+    /// nothing. Empty when none of them declares it.
     ///
     /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers with
     /// every declaration of the name in the workspace, in index order, and is slow at scale. The files
@@ -204,7 +204,7 @@ public static class DatabaseQueries
 
         HashSet<string> visitedFiles = new(StringComparer.Ordinal) { asking.Path };
         AddDeclaredInIncludeChain(
-            store, askingContextId, normalizedAskingPath, [.. ReachableRelativePaths(asking)], keyName, visitedFiles, matches);
+            store, askingContextId, normalizedAskingPath, IncludedRelativePaths(asking), keyName, visitedFiles, matches);
         return matches.ToImmutable();
     }
 
@@ -218,8 +218,11 @@ public static class DatabaseQueries
     /// The include chain is the corpus's answer, not a guess: cod4 ships
     /// <c>maps\_utility::trigger_off</c> and <c>maps\_utility::array_thread</c> calls, and both
     /// functions live in <c>common_scripts\utility</c>, which <c>maps\_utility</c> includes.
+    ///
+    /// Public for the other thing that names a file outright: a completion row offering to add the
+    /// <c>#include</c> or <c>#using</c> that would bring the function in.
     /// </summary>
-    private static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
+    public static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
         LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
@@ -235,31 +238,61 @@ public static class DatabaseQueries
     ///
     /// On an include dialect, those in the file a path call names, through that file's include chain
     /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own, else its include chain
-    /// (<see cref="ReachableFunctions"/>). Empty when nothing the file reaches declares the name,
-    /// unless <paramref name="fallBackToAny"/>: hover would rather show some declaration than none.
+    /// (<see cref="ReachableFunctions"/>), and nothing else: the engine finds a function only through
+    /// the paths a script provides, never by looking the name up across the install. Empty when
+    /// nothing the file reaches declares the name.
     ///
     /// On a namespace dialect, <see cref="LookupFunctions"/>' answer with the copies the asking file
     /// reaches listed first. A namespace does not pin a file: an mp and a zm copy both declare
     /// <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
     /// </summary>
+    /// <param name="includePrivate">
+    /// For a caller asking only whether a script function hides an engine one of the same name.
+    /// </param>
     public static ImmutableArray<ResolvedFunction> FunctionsTheCallReaches(
         LanguageStore store, string askingContextId, string askingPath, string? keyNamespace, string keyName,
-        string pathCallTarget = "", ImmutableArray<string> askingNamespaces = default, bool fallBackToAny = false)
+        string pathCallTarget = "", ImmutableArray<string> askingNamespaces = default, bool includePrivate = false)
     {
-        if ( keyNamespace is null && !GameProfile.Active.ResolvesByNamespace )
+        if ( ScopedByInclude(keyNamespace) )
         {
-            ImmutableArray<ResolvedFunction> reached = pathCallTarget.Length > 0
+            return pathCallTarget.Length > 0
                 ? FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, keyName)
                 : ReachableFunctions(store, askingContextId, askingPath, keyName);
-            if ( reached.Length > 0 || !fallBackToAny )
-            {
-                return reached;
-            }
         }
 
         ImmutableArray<ResolvedFunction> found = LookupFunctions(
-            store, askingContextId, askingPath, keyNamespace, keyName, askingNamespaces: askingNamespaces);
+            store, askingContextId, askingPath, keyNamespace, keyName, includePrivate, askingNamespaces);
         return ReachedFirst(store, askingPath, found);
+    }
+
+    /// <summary>
+    /// The files declaring what a function call reaches on an include dialect — see
+    /// <see cref="FunctionsTheCallReaches"/> — for a caller holding declaration SITES to narrow, as
+    /// go-to-definition does. Null where the key is not scoped by includes (a namespace dialect, a
+    /// method, a qualified key), for the caller to narrow its own way.
+    /// </summary>
+    public static HashSet<string>? FilesTheIncludeScopedCallReaches(
+        LanguageStore store, string askingContextId, string askingPath, SymbolKey key, string pathCallTarget)
+    {
+        if ( key.Kind != SymbolKind.Function || key.OwnerClass is not null || !ScopedByInclude(key.Namespace) )
+        {
+            return null;
+        }
+
+        HashSet<string> paths = new(StringComparer.Ordinal);
+        foreach ( ResolvedFunction function in FunctionsTheCallReaches(
+            store, askingContextId, askingPath, null, key.Name, pathCallTarget) )
+        {
+            paths.Add(function.Record.Path);
+        }
+
+        return paths;
+    }
+
+    /// <summary>Whether a function key resolves through the file's includes and path calls rather than a namespace.</summary>
+    private static bool ScopedByInclude(string? keyNamespace)
+    {
+        return keyNamespace is null && !GameProfile.Active.ResolvesByNamespace;
     }
 
     /// <summary>
@@ -317,23 +350,34 @@ public static class DatabaseQueries
 
                 foreach ( string path in store.FilesAt(relative) )
                 {
-                    if ( !store.TryGet(path, out ScriptRecord record) )
+                    if ( store.TryGet(path, out ScriptRecord record) )
                     {
-                        continue;
-                    }
-
-                    foreach ( DependencyEdge edge in record.Dependencies )
-                    {
-                        if ( !edge.IsInsert )
-                        {
-                            next.Add(RelativePathIndex.Normalize(edge.RawPath));
-                        }
+                        next.AddRange(IncludedRelativePaths(record));
                     }
                 }
             }
 
             level = next;
         }
+    }
+
+    /// <summary>
+    /// The files a record <c>#include</c>s (or <c>#using</c>s), normalized: what merges another file's
+    /// functions into its scope. Not its path calls — <c>maps\_utility::foo()</c> reaches that one
+    /// function, and puts nothing of maps\_utility in scope for a bare name.
+    /// </summary>
+    private static List<string> IncludedRelativePaths(ScriptRecord record)
+    {
+        List<string> included = [];
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert )
+            {
+                included.Add(RelativePathIndex.Normalize(edge.RawPath));
+            }
+        }
+
+        return included;
     }
 
     /// <summary>

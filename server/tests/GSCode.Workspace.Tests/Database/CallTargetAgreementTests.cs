@@ -157,4 +157,25 @@ public sealed class CallTargetAgreementTests
         Assert.Equal(3, resolved.Length);
         Assert.Equal("mp_a", resolved[0].Function.Parameters[0].Name);
     }
+
+    [Fact]
+    public void ResolveCall_OnAnIncludeDialect_FindsNothingTheFileCannotReach()
+    {
+        // Hover renders the first declaration ResolveCall returns, and there is none to render: the
+        // engine finds a function only through the file's own declarations and its include chain.
+        using TestWorkspace workspace = TestWorkspace.Build(
+            [
+                new TestFile(@"maps\_utility.gsc", "sp_only( sp_b )\n{\n}\n"),
+                new TestFile(@"maps\mp\_utility.gsc", "mp_only( mp_b )\n{\n}\n"),
+                new TestFile(@"maps\mp\caller.gsc", "#include maps\\mp\\_utility;\n\nmain()\n{\n    sp_only();\n}\n"),
+            ],
+            s_cod4);
+        ParseResult result = workspace.Analyze(@"maps\mp\caller.gsc");
+
+        ImmutableArray<ResolvedFunction> resolved = MethodResolution.ResolveCall(
+            workspace.Database.Gsc, "raw", TestPaths.Raw(@"maps\mp\caller.gsc"),
+            new SymbolKey(null, "sp_only", SymbolKind.Function), ReferenceKind.Call, result.Extraction.DeclaredNamespaces);
+
+        Assert.Empty(resolved);
+    }
 }

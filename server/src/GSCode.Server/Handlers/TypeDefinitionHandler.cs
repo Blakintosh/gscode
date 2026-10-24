@@ -173,12 +173,13 @@ public sealed class TypeDefinitionHandler : TypeDefinitionHandlerBase
             return locations;
         }
 
+        // What the pointer reaches from this file, as a call by the same name would.
         string keyName = NameTable.Shared.InternLower(pointer.Name);
-        ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
+        ImmutableArray<ResolvedFunction> functions = DatabaseQueries.FunctionsTheCallReaches(
             target.Store,
             target.ContextId,
             target.Path,
-            pointer.Namespace,
+            pointer.Namespace is null ? null : GameProfile.Active.KeyNamespace(pointer.Namespace),
             keyName,
             askingNamespaces: target.Namespaces);
 

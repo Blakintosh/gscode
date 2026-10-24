@@ -191,8 +191,7 @@ public static class MethodResolution
         }
 
         return DatabaseQueries.FunctionsTheCallReaches(
-            store, askingContextId, askingPath, canonical.Namespace, canonical.Name, pathCallTarget, askingNamespaces,
-            fallBackToAny: true);
+            store, askingContextId, askingPath, canonical.Namespace, canonical.Name, pathCallTarget, askingNamespaces);
     }
 
     /// <summary>

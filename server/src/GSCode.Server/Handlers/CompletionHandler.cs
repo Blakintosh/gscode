@@ -175,7 +175,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
             data.Value<string>("kind") ?? "",
             data.Value<string>("name") ?? "",
             data.Value<string>("ns") ?? "",
-            string.Equals(data.Value<string>("builtin"), "true", StringComparison.Ordinal));
+            string.Equals(data.Value<string>("builtin"), "true", StringComparison.Ordinal),
+            data.Value<string>("import") ?? "");
 
         if ( markdown is null )
         {
@@ -217,7 +218,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// engine <c>SpawnSpectator</c> and three scripts declaring one, so the builtin row rendered
     /// <c>globallogic_spawn::spawnSpectator</c> beneath a header reading "builtin".
     /// </summary>
-    private string? RenderDocumentation(NavigationTarget target, string kind, string name, string ns, bool isBuiltin)
+    private string? RenderDocumentation(
+        NavigationTarget target, string kind, string name, string ns, bool isBuiltin, string importPath)
     {
         if ( name.Length == 0 )
         {
@@ -234,18 +236,21 @@ public sealed class CompletionHandler : CompletionHandlerBase
                     return engine is not null ? MarkdownDocRenderer.RenderBuiltin(engine) : null;
                 }
 
-                // The declaration the name would reach from this file, as hover finds it once written.
-                // The row's namespace is the one its declaration was found under, which on an include
-                // dialect is the file stem — every *\_utility.gsc answers to `_utility` — so it is
-                // keyed through KeyNamespace, which drops it there.
-                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.FunctionsTheCallReaches(
-                    target.Store,
-                    target.ContextId,
-                    target.Path,
-                    ns.Length > 0 ? GameProfile.Active.KeyNamespace(ns) : null,
-                    NameTable.Shared.InternLower(name),
-                    askingNamespaces: target.Namespaces,
-                    fallBackToAny: true);
+                // The declaration the name would reach from this file, as hover finds it once written,
+                // or for a row offering the import, the one in the file it would import. The row's
+                // namespace is the one its declaration was found under, which on an include dialect is
+                // the file stem — every *\_utility.gsc answers to `_utility` — so it is keyed through
+                // KeyNamespace, which drops it there.
+                string keyName = NameTable.Shared.InternLower(name);
+                ImmutableArray<ResolvedFunction> functions = importPath.Length > 0
+                    ? DatabaseQueries.FunctionsDeclaredAt(target.Store, target.ContextId, target.Path, importPath, keyName)
+                    : DatabaseQueries.FunctionsTheCallReaches(
+                        target.Store,
+                        target.ContextId,
+                        target.Path,
+                        ns.Length > 0 ? GameProfile.Active.KeyNamespace(ns) : null,
+                        keyName,
+                        askingNamespaces: target.Namespaces);
 
                 if ( functions.Length > 0 )
                 {
@@ -423,6 +428,10 @@ public sealed class CompletionHandler : CompletionHandlerBase
             // A STRING, like everything else here: Data round-trips through the client untouched, so
             // a bool would be one more thing with a serializer opinion about shape.
             ["builtin"] = entry.IsBuiltin ? "true" : "false",
+
+            // The script a row offering an import would add, "" for a name already in scope. The
+            // file itself cannot reach the function yet, so this is the only route to its docs.
+            ["import"] = entry.ImportPath,
         };
     }
 

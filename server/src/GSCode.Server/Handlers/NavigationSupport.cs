@@ -530,8 +530,10 @@ public sealed class NavigationSupport
             return true;
         }
 
-        return DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true, limit: 1).Length == 0;
+        // Only a script function the call can reach hides the engine's: on an include dialect, one
+        // in a file this one does not include is not in play.
+        return DatabaseQueries.FunctionsTheCallReaches(
+            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true).Length == 0;
     }
 
     /// <summary>Every file in these stores declaring a function key.</summary>

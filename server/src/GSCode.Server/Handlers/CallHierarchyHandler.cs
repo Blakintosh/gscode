@@ -237,8 +237,7 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
             canonical = key;
 
             return DatabaseQueries.FunctionsTheCallReaches(
-                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, pathCallTarget, target.Namespaces,
-                fallBackToAny: true);
+                target.Store, target.ContextId, target.Path, key.Namespace, key.Name, pathCallTarget, target.Namespaces);
         }
 
         canonical = MethodResolution.Canonicalize(target.Store, target.ContextId, key, kind);

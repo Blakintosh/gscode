@@ -22,7 +22,7 @@ namespace GSCode.Server.Tests.Handlers;
 public sealed class CompletionResolveTargetTests
 {
     private static async Task<string> DocumentationAsync(
-        IEnumerable<TestFile> files, GameProfile? profile, string openRelativePath, string name, string ns)
+        IEnumerable<TestFile> files, GameProfile? profile, string openRelativePath, string name, string ns, string importPath = "")
     {
         using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(files, profile);
         workspace.Open(openRelativePath);
@@ -35,7 +35,7 @@ public sealed class CompletionResolveTargetTests
         {
             Label = name,
             Data = CompletionHandler.ResolveData(
-                new CompletionEntry(name, CompletionKind.Function, ns, name + "($0)", Namespace: ns), uri),
+                new CompletionEntry(name, CompletionKind.Function, ns, name + "($0)", Namespace: ns, ImportPath: importPath), uri),
         };
 
         CompletionItem resolved = await handler.Handle(row, CancellationToken.None);
@@ -50,7 +50,29 @@ public sealed class CompletionResolveTargetTests
         new TestFile(@"common_scripts\utility.gsc", "array_thread( ents_param, func_param )\n{\n}\n"),
         new TestFile(@"maps\other\utility.gsc", "array_thread( other_param )\n{\n}\n"),
         new TestFile(@"maps\caller.gsc", "#include maps\\_utility;\n\nmain()\n{\n}\n"),
+        new TestFile(@"maps\mp\caller.gsc", "#include maps\\mp\\_utility;\n\nmain()\n{\n}\n"),
     ];
+
+    [Fact]
+    public async Task OnAnIncludeDialect_ARowForANameTheFileCannotReach_HasNoScriptDocs()
+    {
+        // maps\mp\caller includes maps\mp\_utility only, which declares foo; maps\_utility's
+        // a_param copy is not reachable from it, and the engine would not look there.
+        string documentation = await DocumentationAsync(s_cod4, GameProfile.Cod4, @"maps\mp\caller.gsc", "array_thread", "utility");
+
+        Assert.DoesNotContain("ents_param", documentation);
+        Assert.DoesNotContain("other_param", documentation);
+    }
+
+    [Fact]
+    public async Task AnAutoImportRow_DescribesTheFileItWouldInclude()
+    {
+        string documentation = await DocumentationAsync(
+            s_cod4, GameProfile.Cod4, @"maps\mp\caller.gsc", "array_thread", "utility", importPath: @"common_scripts\utility");
+
+        Assert.Contains("ents_param", documentation);
+        Assert.DoesNotContain("other_param", documentation);
+    }
 
     [Fact]
     public async Task OnAnIncludeDialect_ARowDescribesTheIncludedFilesFunction()

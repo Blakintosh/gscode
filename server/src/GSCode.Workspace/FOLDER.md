@@ -499,15 +499,19 @@ lints, `Completion/` and `Typing/` the information surfaces.
   direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
   completion offering too little is harmless where an Error is not.
 - `FunctionsTheCallReaches` is the one answer to "which declaration does this call mean", the
-  intended one first. On an include dialect: the file a path call names, through that file's
-  `#include` chain, else the asking file's own, else its include chain nearest level first (the
-  private `FunctionsDeclaredAt` and `ReachableFunctions`); empty when nothing reachable declares it,
-  unless the caller asks to fall back to `LookupFunctions`, which hover does. On a namespace dialect:
+  intended one first. On an include dialect a function is keyed by FILE: a path call
+  `maps\_foo::bar()` looks in maps\_foo and what it `#include`s (`FunctionsDeclaredAt`, public also
+  for completion's auto-import rows); a bare `bar()` looks in the asking file, then what IT
+  `#include`s, nearest level first (`ReachableFunctions` — includes only, since a path call merges
+  nothing into scope). Nothing else: the engine never looks a name up across the install, so this is
+  empty when the file's paths reach no declaration. On a namespace dialect, `ns::func`:
   `LookupFunctions` with the copies the file reaches first (`ReachedFirst`), since an mp and a zm copy
-  both declare `#namespace util`. `MethodResolution.ResolveCall` (hover), the call hierarchy and
-  `CallResolution` (signature help, parameter hints) all ask it. `IncludeScopeLookupTests` holds
-  `FunctionsInIncludeScope` as the reference for its single-name answer; `CallTargetAgreementTests`
-  pins the path, chain and namespace-copy cases.
+  both declare `#namespace util`. Hover (`ResolveCall`), the call hierarchy, completion docs, type
+  definition, the builtin-vs-script tests and `CallResolution` (signature help, hints) ask it; go-to-
+  definition narrows its sites with `FilesTheIncludeScopedCallReaches`. Left wide on purpose: the
+  missing-include quick fix and lints, which exist to find the file not yet included.
+  `IncludeScopeLookupTests` holds `FunctionsInIncludeScope` as the reference for the single-name
+  answer; `CallTargetAgreementTests` and `IncludeScopedNavigationTests` pin the cases.
 - The private `VisibleDeclaring` caches, for a name declared by 64 files or more, which of them an
   asking context can see — per index array (`ConditionalWeakTable`) and per `ContextEpoch`. An asker
   that sees few of 2,000 same-named copies otherwise paid a record lookup for each on every question.

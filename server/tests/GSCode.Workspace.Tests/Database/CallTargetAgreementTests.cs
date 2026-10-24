@@ -17,8 +17,9 @@ namespace GSCode.Workspace.Tests.Database;
 ///
 /// On an include dialect a path call names a FILE: <c>maps\mp\_utility::foo()</c> is not
 /// <c>maps\_utility::foo()</c>, though both files' stem is <c>_utility</c>, and
-/// <c>maps\_utility::array_thread()</c> reaches common_scripts\utility through maps\_utility's
-/// include. On a namespace dialect a namespace does not pin a file: an mp and a zm copy both declare
+/// <c>maps\_utility::array_thread()</c> does NOT reach common_scripts\utility through maps\_utility's
+/// include: a path call sees the named file's own functions, and an include copies only the included
+/// file's own (see EngineIncludeRuleTests). On a namespace dialect a namespace does not pin a file: an mp and a zm copy both declare
 /// <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
 ///
 /// Several unreached copies, so an index order that happens to list the reached one first cannot
@@ -98,38 +99,37 @@ public sealed class CallTargetAgreementTests
     }
 
     [Fact]
-    public void SignatureHelp_OnAPathCall_FollowsTheNamedFilesIncludes()
+    public void SignatureHelp_OnAPathCall_SeesOnlyTheNamedFilesOwnFunctions()
     {
+        // array_thread is in common_scripts\utility, which maps\_utility includes — not in
+        // maps\_utility itself, and not the unrelated maps\other copy either.
         using TestWorkspace workspace = Cod4Workspace();
         SignatureEngine engine = new(workspace.Database, BuiltinApiSet.Load(ApiDirectory));
         ParseResult result = workspace.Analyze(@"maps\caller.gsc");
 
-        Assert.Equal("ents", FirstParameter(engine, result, new Position(5, 34)));
+        Assert.Null(FirstParameter(engine, result, new Position(5, 34)));
     }
 
     [Fact]
-    public void ABareCall_OnAnIncludeDialect_FollowsTheIncludeChain()
+    public void ABareCall_OnAnIncludeDialect_DoesNotSeeWhatAnIncludedFileIncludes()
     {
-        // Signature help and the parameter hints share this answer.
+        // Signature help and the parameter hints share this answer. maps\caller includes
+        // maps\_utility, which includes common_scripts\utility: one level too deep.
         using TestWorkspace workspace = Cod4Workspace();
         ParseResult result = workspace.Analyze(@"maps\caller.gsc");
 
-        FunctionSymbol? found = CallResolution.UnqualifiedFunction(workspace.Database.Gsc, "raw", result, "array_thread", s_cod4);
-
-        Assert.NotNull(found);
-        Assert.Equal("ents", found!.Parameters[0].Name);
+        Assert.Null(CallResolution.UnqualifiedFunction(workspace.Database.Gsc, "raw", result, "array_thread", s_cod4));
     }
 
     [Fact]
-    public void APathCall_ForTheHints_FollowsTheNamedFilesIncludes()
+    public void APathCall_ForTheHints_SeesOnlyTheNamedFilesOwnFunctions()
     {
         using TestWorkspace workspace = Cod4Workspace();
 
-        FunctionSymbol? found = CallResolution.PathQualifiedFunction(
-            workspace.Database.Gsc, "raw", TestPaths.Raw(@"maps\caller.gsc"), @"maps\_utility", "array_thread");
-
-        Assert.NotNull(found);
-        Assert.Equal("ents", found!.Parameters[0].Name);
+        Assert.Null(CallResolution.PathQualifiedFunction(
+            workspace.Database.Gsc, "raw", TestPaths.Raw(@"maps\caller.gsc"), @"maps\_utility", "array_thread"));
+        Assert.NotNull(CallResolution.PathQualifiedFunction(
+            workspace.Database.Gsc, "raw", TestPaths.Raw(@"maps\caller.gsc"), @"common_scripts\utility", "array_thread"));
     }
 
     [Fact]

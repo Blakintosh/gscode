@@ -374,31 +374,34 @@ public class FunctionResolutionLintTests
     }
 
     [Fact]
-    public void APathCall_ToAFunctionTheTargetFileIncludes_IsSilent()
+    public void APathCall_ToAFunctionTheTargetFileOnlyIncludes_IsReported()
     {
-        // Stock CoD4: maps\_documents.gsc calls `maps\_utility::trigger_off()`, and trigger_off is
-        // declared in common_scripts\utility, which maps\_utility includes. It ships and works, and
-        // this reported it as an Error once the check stopped at the named file's own functions.
-        // Two hops, since the compiler flattens the whole chain.
+        // A far call reaches the named file's OWN functions, never what that file includes. Stock
+        // CoD4's maps\_documents.gsc writes
+        // `maps\_utility::trigger_off()` with trigger_off in an include of maps\_utility, and no
+        // script loads maps\_documents.gsc.
         string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
 
-        Assert.Empty(LintPathCall(
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
             source,
             (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\utility;\nbar()\n{\n}\n"),
-            (TestPaths.Raw(@"common_scripts\utility.gsc"), "#include common_scripts\\deeper;\nbaz()\n{\n}\n"),
-            (TestPaths.Raw(@"common_scripts\deeper.gsc"), "foo()\n{\n}\n")));
+            (TestPaths.Raw(@"common_scripts\utility.gsc"), "foo()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
     }
 
     [Fact]
-    public void APathCall_IntoATargetWhoseIncludeChainDoesNotResolve_StandsDown()
+    public void APathCall_IntoATargetWithAnUnresolvedInclude_IsStillJudgedOnItsOwnFunctions()
     {
-        // The function may well live in the include nobody can find, so "not found" would be a
-        // guess. Same condition IncludeUsageLint holds itself to: only a complete closure can say no.
+        // What the named file includes cannot supply the function, so an include of it that does not
+        // resolve has nothing to do with whether the call does.
         string source = "run()\n{\n    maps\\mp\\_util::foo();\n}\n";
 
-        Assert.Empty(LintPathCall(
+        Diagnostic diagnostic = Assert.Single(LintPathCall(
             source,
             (TestPaths.Raw(@"maps\mp\_util.gsc"), "#include common_scripts\\missing;\nbar()\n{\n}\n")));
+
+        Assert.Equal(GscDiagnosticCode.ScriptFunctionNotFound, diagnostic.Code);
     }
 
     [Fact]

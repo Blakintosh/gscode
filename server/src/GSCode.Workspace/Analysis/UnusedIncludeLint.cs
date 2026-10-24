@@ -2,7 +2,9 @@ using System.Collections.Immutable;
 using GSCode.Core;
 using GSCode.Core.Diagnostics;
 using GSCode.Core.Symbols;
+using GSCode.Core.Text;
 using GSCode.Parser;
+using GSCode.Parser.Extraction;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Resolution;
 
@@ -13,36 +15,20 @@ namespace GSCode.Workspace.Analysis;
 /// contributes nothing this file uses. Reported as a Hint tagged Unnecessary so the directive greys
 /// out.
 ///
-/// <c>#include</c> MERGES a file's functions into this scope, so "used" is by NAME. Deliberately
-/// conservative — deleting a working include is worse than keeping a stale one — so an autoexec
-/// anywhere it reaches keeps it (imported for its side effects).
+/// <c>#include</c> MERGES a file's OWN functions into this scope, and nothing it includes in turn,
+/// so "used" is by NAME, against
+/// what the target declares itself. A bare call is the only use: a path call loads the file it names
+/// on its own, so an include that only path calls go into adds nothing. Deliberately conservative
+/// otherwise — an autoexec in the target keeps it (imported for its side effects).
 ///
-/// An unreadable <c>#include</c> DIRECTIVE does not suppress the whole pass, for
-/// the reason <see cref="UnusedUsingLint"/> sets out: it never enters the resolved list, so it goes
-/// unjudged while its siblings are judged. What is still bailed out on is one level down — an
-/// unreadable file inside a resolved include's CLOSURE, checked per include below, because there the
-/// missing file really could be the one supplying a name and "nothing else supplies it" is the whole
-/// test.
+/// An unreadable <c>#include</c> DIRECTIVE does not suppress the whole pass, for the reason
+/// <see cref="UnusedUsingLint"/> sets out: it never enters the resolved list, so it goes unjudged
+/// while its siblings are judged.
 ///
 /// There is no unresolved-<c>#insert</c> gate here, unlike <see cref="UnusedUsingLint"/>, and that
-/// is a dialect fact rather than an oversight: <c>#insert</c> does not lex on
-/// an include dialect (<c>Keywords.IsDirectiveEnabled</c>), so the diagnostic that gate reads can
-/// never be raised in a file this rule runs on. Writing it here would be a branch nothing can
-/// take.
-///
-/// The test is MARGINAL, not direct, and that distinction is what stops a Hint from manufacturing an
-/// Error. <c>#include</c> flattens transitively (see <see cref="DatabaseQueries.IncludeClosure"/>), so
-/// a file may include a hub purely as a conduit — <c>maps\_createpath.gsc</c> reaches
-/// <c>flag_init</c> through <c>maps\_utility</c> and includes nothing else. Judging a directive by
-/// what its target declares ITSELF would call that unused and offer "Remove", and the removal would
-/// break the file: 5026 then reports the call as out of scope. A quick fix that turns working code
-/// into an error is worse than either rule being wrong alone.
-///
-/// So an include is reported only when removing it would take nothing away: no called name that its
-/// closure supplies is supplied by it ALONE. Membership in the closure is not enough, or a hub would
-/// count as used whenever anything below it is — and the stock scripts are full of files that include
-/// both a hub and the file under it, where the hub really is redundant. On CoD4 that distinction is
-/// 33 directives for <c>maps\_utility</c> alone.
+/// is a dialect fact rather than an oversight: <c>#insert</c> does not lex on an include dialect
+/// (<c>Keywords.IsDirectiveEnabled</c>), so the diagnostic that gate reads can never be raised in a
+/// file this rule runs on.
 /// </summary>
 public static class UnusedIncludeLint
 {
@@ -63,79 +49,36 @@ public static class UnusedIncludeLint
             return [];
         }
 
-        // Every function name this file calls (unqualified or by path), ignoring its own
-        // definitions. Merge dialects key functions with no namespace, so the name is the whole key.
+        // Every function name this file calls BARE, ignoring its own definitions. Merge dialects key
+        // functions with no namespace, so the name is the whole key; a path call is told apart by its
+        // range and does not count.
+        HashSet<TextRange> pathCallRanges = [];
+        foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
+        {
+            pathCallRanges.Add(pathCall.NameRange);
+        }
+
         HashSet<string> calledFunctions = new(StringComparer.Ordinal);
         foreach ( ReferenceEntry entry in result.Extraction.References )
         {
             // Macro-expanded uses count, for the reason UnusedUsingLint spells out — including
             // the declaration-shaped ones, which is what the flag test preserves.
             if ( (entry.Kind != ReferenceKind.Definition || entry.FromMacro)
-                && entry.Key.Kind == SymbolKind.Function )
+                && entry.Key.Kind == SymbolKind.Function
+                && !pathCallRanges.Contains(entry.Range) )
             {
                 calledFunctions.Add(entry.Key.Name);
             }
         }
 
-        // Which directives are certainly staying: the ones whose OWN declarations this file calls,
-        // or that run something on import. Everything below is judged against what they already
-        // supply, which is what keeps the question non-circular — asking each directive whether some
-        // OTHER removable one covers for it can conclude that two directives each cover the other and
-        // that both may go, and the bulk "remove all" action would then take both.
-        bool[] kept = new bool[resolvedImports.Includes.Length];
-        for ( int index = 0; index < resolvedImports.Includes.Length; index++ )
-        {
-            kept[index] = DeclaresSomethingWanted(resolvedImports.Includes[index].Record, calledFunctions);
-        }
-
-        string extension = GameProfile.Active.ExtensionFor(language);
-        HashSet<string> suppliedByKept = new(StringComparer.Ordinal);
-        List<HashSet<string>?> closures = [];
-
-        for ( int index = 0; index < resolvedImports.Includes.Length; index++ )
-        {
-            IncludeClosure closure = DatabaseQueries.IncludeClosure(
-                store, resolver, result, askingPath, extension, [resolvedImports.Includes[index].Record]);
-
-            // A file we could not read might be the one supplying a name, so nothing is removable.
-            if ( !closure.Complete )
-            {
-                return [];
-            }
-
-            HashSet<string> names = new(StringComparer.Ordinal);
-            foreach ( ScriptRecord record in closure.Records )
-            {
-                foreach ( FunctionSymbol function in record.Functions )
-                {
-                    names.Add(function.KeyName);
-
-                    // An autoexec anywhere it reaches runs on its own; the include IS the point, and
-                    // that is as true through a chain as it is directly.
-                    kept[index] |= function.IsAutoexec;
-                }
-            }
-
-            closures.Add(names);
-        }
-
-        for ( int index = 0; index < closures.Count; index++ )
-        {
-            if ( kept[index] )
-            {
-                suppliedByKept.UnionWith(closures[index]!);
-            }
-        }
-
         ImmutableArray<Diagnostic>.Builder diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
-        for ( int index = 0; index < closures.Count; index++ )
+        foreach ( ImportedFile imported in resolvedImports.Includes )
         {
-            if ( kept[index] || SuppliesSomethingNothingElseDoes(closures[index]!, calledFunctions, suppliedByKept) )
+            if ( DeclaresSomethingWanted(imported.Record, calledFunctions) )
             {
                 continue;
             }
 
-            ImportedFile imported = resolvedImports.Includes[index];
             Diagnostic unused = Diagnostic.Create(
                 imported.DirectiveRange, DiagnosticSeverity.Hint, GscDiagnosticCode.UnusedInclude, imported.RawPath);
 
@@ -151,28 +94,6 @@ public static class UnusedIncludeLint
         foreach ( FunctionSymbol function in record.Functions )
         {
             if ( function.IsAutoexec || calledFunctions.Contains(function.KeyName) )
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Whether removing this directive would take away a called name that nothing certainly-kept
-    /// supplies — which is exactly when removal breaks the file.
-    ///
-    /// Measured against the KEPT set rather than against the other candidates, so two directives
-    /// covering each other cannot both be declared removable. Being conservative here costs a stale
-    /// hint; being wrong costs working code.
-    /// </summary>
-    private static bool SuppliesSomethingNothingElseDoes(
-        HashSet<string> closure, HashSet<string> calledFunctions, HashSet<string> suppliedByKept)
-    {
-        foreach ( string name in closure )
-        {
-            if ( calledFunctions.Contains(name) && !suppliedByKept.Contains(name) )
             {
                 return true;
             }

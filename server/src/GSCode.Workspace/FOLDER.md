@@ -184,7 +184,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `static CallResolution` — which function a WRITTEN call names, shared by signature help and the
   parameter-name inlay hints. `EnclosingClassAt`, then one member per written form, each the first
   of `DatabaseQueries.FunctionsTheCallReaches`: `UnqualifiedFunction` (the asking file's own, then
-  its include chain, on the merge dialects; each declared namespace in turn on BO3),
+  its direct includes' own, on the merge dialects; each declared namespace in turn on BO3),
   `QualifiedFunction` (`ns::name`) and `PathQualifiedFunction` (`maps\_utility::name`). So both
   describe the declaration hover shows and go-to-definition lands on. Builtins are NOT consulted
   here: the two callers present an engine function differently enough that each keeps its own
@@ -493,17 +493,19 @@ lints, `Completion/` and `Typing/` the information surfaces.
   caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
   passes 2. A bare name on a merge dialect has thousands of declarations at scale, and building all
   of them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the two-pass rule as
-  a reference implementation. `IncludeClosure` walks the `#include` graph TRANSITIVELY — the
-  compiler flattens the chain, which the corpus settled — and reports whether the walk saw
-  everything, since a rule may only assert a name is out of scope against a complete one. The
-  direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
-  completion offering too little is harmless where an Error is not.
+  a reference implementation. `IncludedFiles` gives a file's `#include` targets and whether all of
+  them resolved, since a rule may only assert a name is out of scope against a complete set.
+- The include rule is the engine's, applied to every include dialect: an `#include` merges the
+  included file's OWN functions in, not those it got from its own includes, and a path call sees the
+  named file's own functions only. One level, never a chain. Stock CoD4 agrees in every file the game loads; the seven files that rely on more
+  (maps\_createpath, _documents, _guide, _leapfrog, _mortarteam, _photosource, _wood) are named by
+  no other script and never compiled — the corpus tests list them as `UnloadedStockScripts`.
 - `FunctionsTheCallReaches` is the one answer to "which declaration does this call mean", the
   intended one first. On an include dialect a function is keyed by FILE: a path call
-  `maps\_foo::bar()` looks in maps\_foo and what it `#include`s (`FunctionsDeclaredAt`, public also
-  for completion's auto-import rows); a bare `bar()` looks in the asking file, then what IT
-  `#include`s, nearest level first (`ReachableFunctions` — includes only, since a path call merges
-  nothing into scope). Nothing else: the engine never looks a name up across the install, so this is
+  `maps\_foo::bar()` looks in maps\_foo's own functions (`FunctionsDeclaredAt`, public also for
+  completion's auto-import rows); a bare `bar()` looks in the asking file, then in the files it
+  `#include`s directly (`ReachableFunctions` — includes only, since a path call merges nothing into
+  scope). Nothing else: the engine never looks a name up across the install, so this is
   empty when the file's paths reach no declaration. On a namespace dialect, `ns::func`:
   `LookupFunctions` with the copies the file reaches first (`ReachedFirst`), since an mp and a zm copy
   both declare `#namespace util`. Hover (`ResolveCall`), the call hierarchy, completion docs, type
@@ -772,7 +774,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
     to a shallower match under one the user listed second.
   - `DevRawRoot` — the `devraw` folder beside raw (`share\devraw` on BO3), derived only when it is
     on disk and raw is enabled. Another raw: raw context, same relative paths, searched after raw —
-    the engine's order, from CoD4's `FS_Startup` in KisakCOD; BO3's is assumed to match.
+    the engine's order on CoD4; BO3's is assumed to match.
   - `RawScriptsSubfolder` — the profile's script folder under raw and devraw (`scripts` on BO3,
     "" elsewhere), taken with the rest of the layout so a resolver built for one game does not read
     another's from `GameProfile.Active`.
@@ -921,10 +923,9 @@ are out.
   to a function that EXISTS but that nothing merges into scope. Resolution finds it anyway — a merge
   dialect keys functions `(null, name)` and `LookupFunctions` searches every visible record, so
   hover and go-to-definition keep working while the import is missing — which is exactly why 5013/5014
-  stay silent here and this rule is needed. Scope comes from `DatabaseQueries.IncludeClosure`, which
-  follows the graph TRANSITIVELY because the compiler flattens the chain; the corpus settled it, since
-  direct-hops-only reported 36 stock calls, `maps\_createpath.gsc` reaching `flag_init` through
-  `maps\_utility` among them. Gated on `GameProfile.HasTrustedEngineNames`, since a name that is an
+  stay silent here and this rule is needed. Scope is the file's own functions and its direct
+  includes' own (`DatabaseQueries.IncludedFiles`), as the compiler copies them. The 36 stock calls
+  that need a second level are all in five files nothing loads, `maps\_createpath.gsc` among them. Gated on `GameProfile.HasTrustedEngineNames`, since a name that is an
   undocumented engine function AND a script function elsewhere would otherwise be blamed on the user.
   Measurement drew that line: CoD4 qualifies on its own library (the sweep found one gap, `abs`, now
   curated in), MW2 ships no library and borrows CoD4's NAMES, and WaW and BO1 qualify for neither —
@@ -984,13 +985,10 @@ are out.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
-- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012's test is
-  MARGINAL, not direct, and that is what stops a Hint manufacturing an Error: a file may include a
-  hub purely as a conduit, and judging the directive by what its TARGET declares would call that
-  unused, offer "Remove", and the removal would make 5026 fire. It is measured against what is
-  CERTAINLY kept rather than against the other candidates — otherwise two conduits each cover the
-  other and both are declared removable, which the bulk "remove all" action would then act on. 46
-  stock directives across CoD4, MW2 and WaW were in that state.
+- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012 judges an
+  `#include` by what its target declares ITSELF against what this file calls BARE: an include passes
+  nothing it includes in turn on, and a path call loads the file it names on its own. A hub included
+  purely as a conduit is therefore unused — the calls it seemed to serve are 5026's.
 - `UnusedLocalLint` (5008) — a local assigned and never read. A **Hint** for the same reason 5020
   is: as Information it would put 4,711 entries in the Problems panel across the five games — 1,716
   on MW2 alone — in code that ships and works. The `Unnecessary` fade is the useful half.

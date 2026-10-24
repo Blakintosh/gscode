@@ -54,21 +54,24 @@ public class UnusedIncludeLintTests
     }
 
     [Fact]
-    public void KeepsAnIncludeUsedByAPathCall()
+    public void AnIncludeUsedOnlyByAPathCall_IsUnused()
     {
-        // maps\...::helper is keyed (null, helper) too, so a path call counts as using it.
-        Assert.Empty(Lint("#include common_scripts\\utility;\nrun()\n{\n\tcommon_scripts\\utility::helper();\n}\n"));
+        // A path call loads the file it names on its own; the include adds nothing to it.
+        Diagnostic hint = Assert.Single(Lint(
+            "#include common_scripts\\utility;\nrun()\n{\n\tcommon_scripts\\utility::helper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.UnusedInclude, hint.Code);
     }
 
     [Fact]
-    public void KeepsAHubIncludedPurelyAsAConduit()
+    public void AHubIncludedPurelyAsAConduit_IsUnused()
     {
-        // The case that made this test marginal rather than direct. maps\_createpath.gsc reaches
-        // flag_init through maps\_utility and includes nothing else; judging the directive by what
-        // its TARGET declares called that unused and offered "Remove", and taking the offer broke the
-        // file — 5026 then reports the call as out of scope. A Hint whose fix manufactures an Error
-        // is worse than either rule being wrong on its own.
-        Assert.Empty(Lint("#include maps\\_chain;\nrun()\n{\n\thelper();\n}\n"));
+        // A hub passes nothing on: the compiler copies only the included file's own functions. The
+        // stock file that looked like it relied on one, maps\_createpath.gsc reaching flag_init
+        // through maps\_utility, is named by no other script and never compiled.
+        Diagnostic hint = Assert.Single(Lint("#include maps\\_chain;\nrun()\n{\n\thelper();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.UnusedInclude, hint.Code);
     }
 
     [Fact]
@@ -85,14 +88,15 @@ public class UnusedIncludeLintTests
     }
 
     [Fact]
-    public void TwoConduitsCoveringEachOtherAreBothKept()
+    public void TwoHubsThatOnlyIncludeTheDeclaringFile_AreBothUnused()
     {
-        // The trap in judging each directive against the others: helper arrives through both chains,
-        // so neither is the SOLE supplier and an independent test calls both removable. Each removal
-        // is safe alone and the pair is not — and "Remove all N unused #include directives" takes the
-        // pair. Measured against what is certainly kept instead, neither qualifies.
-        Assert.Empty(Lint(
-            "#include maps\\_chain;\n#include maps\\_chain2;\nrun()\n{\n\thelper();\n}\n"));
+        // Neither hub supplies helper: an include merges the included file's OWN functions, not what
+        // it got from its own includes, so the call is out of scope
+        // with or without them, and 5026 says so.
+        ImmutableArray<Diagnostic> hints = Lint(
+            "#include maps\\_chain;\n#include maps\\_chain2;\nrun()\n{\n\thelper();\n}\n");
+
+        Assert.Equal(2, hints.Count(static d => d.Code == GscDiagnosticCode.UnusedInclude));
     }
 
     [Fact]

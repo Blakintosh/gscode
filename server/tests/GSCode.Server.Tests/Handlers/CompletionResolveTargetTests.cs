@@ -85,11 +85,13 @@ public sealed class CompletionResolveTargetTests
     }
 
     [Fact]
-    public async Task OnAnIncludeDialect_ARowDescribesTheFunctionTheIncludeChainReaches()
+    public async Task OnAnIncludeDialect_ARowForAFunctionOnlyANestedIncludeDeclares_HasNoScriptDocs()
     {
+        // maps\caller includes maps\_utility, which includes common_scripts\utility: an include copies
+        // only the included file's own functions, so array_thread is out of reach from here.
         string documentation = await DocumentationAsync(s_cod4, GameProfile.Cod4, @"maps\caller.gsc", "array_thread", "utility");
 
-        Assert.Contains("ents_param", documentation);
+        Assert.DoesNotContain("ents_param", documentation);
         Assert.DoesNotContain("other_param", documentation);
     }
 

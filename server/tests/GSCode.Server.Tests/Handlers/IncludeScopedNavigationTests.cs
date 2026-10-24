@@ -69,11 +69,11 @@ public sealed class IncludeScopedNavigationTests
     }
 
     [Fact]
-    public async Task APathCall_ReachesWhatTheNamedFilesIncludeChainDeclares_AndNothingElse()
+    public async Task APathCall_ToAFunctionTheNamedFileOnlyIncludes_HasNoDefinition()
     {
-        string only = Assert.Single(await DefinitionFilesAsync(6, 19));
-
-        Assert.EndsWith(@"common_scripts\utility.gsc", only);
+        // maps\_utility includes common_scripts\utility, but a far call sees the named file's own
+        // functions, never what that file includes.
+        Assert.Empty(await DefinitionFilesAsync(6, 19));
     }
 
     [Fact]

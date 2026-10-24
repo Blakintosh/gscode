@@ -125,11 +125,11 @@ public sealed class IncludeDialectCallResolutionTests
     }
 
     [Fact]
-    public async Task HoverOnACallReachedThroughANestedIncludeShowsTheIncludedOne()
+    public async Task HoverOnACallOnlyANestedIncludeDeclares_ShowsNoScriptFunction()
     {
-        // The compiler flattens an include chain: maps\_createpath includes maps\_utility and calls
-        // flag_init, which lives in common_scripts\utility, which maps\_utility includes.
-        // "deepfn( 1 );" is line 4, column 1.
+        // An include merges the included file's OWN functions and never what it includes in turn,
+        // so top.gsc cannot reach deep.gsc's deepfn through mid.gsc —
+        // nor the unrelated decoy. "deepfn( 1 );" is line 4, column 1.
         using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
             [
                 new TestFile(@"maps\top.gsc", "#include maps\\mid;\n\nmain()\n{\n\tdeepfn( 1 );\n}\n"),
@@ -145,9 +145,9 @@ public sealed class IncludeDialectCallResolutionTests
             new HoverParams { TextDocument = HandlerWorkspace.Identify(@"maps\top.gsc"), Position = new Position(4, 1) },
             CancellationToken.None);
 
-        string? markdown = hover?.Contents.MarkupContent?.Value;
-        Assert.NotNull(markdown);
-        Assert.Contains("deepparam", markdown!, StringComparison.Ordinal);
+        string markdown = hover?.Contents.MarkupContent?.Value ?? "";
+        Assert.DoesNotContain("deepparam", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("decoyparam", markdown, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -57,12 +57,12 @@ public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record)
 }
 
 /// <summary>
-/// The files an <c>#include</c> chain reaches, and whether the walk saw all of them.
-/// <see cref="Complete"/> is false when a hop did not resolve or was not indexed — the difference
-/// between "these are the files" and "these are the files we could see", which is the difference
-/// between a rule that may assert a name is out of scope and one that must stay quiet.
+/// The files a script <c>#include</c>s, and whether all of them resolved. <see cref="Complete"/> is
+/// false when one did not resolve or was not indexed — the difference between "these are the files"
+/// and "these are the files we could see", which is the difference between a rule that may assert a
+/// name is out of scope and one that must stay quiet.
 /// </summary>
-public readonly record struct IncludeClosure(ImmutableArray<ScriptRecord> Records, bool Complete);
+public readonly record struct IncludedFiles(ImmutableArray<ScriptRecord> Records, bool Complete);
 
 /// <summary>
 /// Shared query logic over one LanguageStore. Namespace lookup MERGES across every
@@ -160,10 +160,11 @@ public static class DatabaseQueries
 
     /// <summary>
     /// The functions a BARE call to <paramref name="keyName"/> reaches from the asking file on an
-    /// include dialect: the asking file's own declarations if it has any, else those of the files it
-    /// <c>#include</c>s, then of what those include, nearest first, since the compiler flattens an
-    /// include chain. Not the files it path-calls: a path call reaches its one function and merges
-    /// nothing. Empty when none of them declares it.
+    /// include dialect: the asking file's own declarations if it has any, else those the files it
+    /// <c>#include</c>s declare THEMSELVES. One level: the engine merges an included file's own
+    /// functions into the including one, not those it got from its own includes. Not the files it
+    /// path-calls: a path
+    /// call reaches its one function and merges nothing. Empty when none of them declares it.
     ///
     /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers with
     /// every declaration of the name in the workspace, in index order, and is slow at scale. The files
@@ -203,21 +204,23 @@ public static class DatabaseQueries
         }
 
         HashSet<string> visitedFiles = new(StringComparer.Ordinal) { asking.Path };
-        AddDeclaredInIncludeChain(
-            store, askingContextId, normalizedAskingPath, IncludedRelativePaths(asking), keyName, visitedFiles, matches);
+        foreach ( string included in IncludedRelativePaths(asking) )
+        {
+            AddDeclaredAt(store, askingContextId, normalizedAskingPath, included, keyName, visitedFiles, matches);
+        }
+
         return matches.ToImmutable();
     }
 
     /// <summary>
     /// The functions named <paramref name="keyName"/> that a PATH CALL — <c>maps\_utility::foo()</c> —
-    /// reaches on an include dialect: those the named file declares, else those its <c>#include</c>
-    /// chain brings in, nearest first. The path names the file outright, so the asking file's own
-    /// declaration of the name does not come into it: <c>combat.gsc</c> declares <c>main</c> and
-    /// path-calls <c>cover_prone::main</c>, which means cover_prone's.
-    ///
-    /// The include chain is the corpus's answer, not a guess: cod4 ships
-    /// <c>maps\_utility::trigger_off</c> and <c>maps\_utility::array_thread</c> calls, and both
-    /// functions live in <c>common_scripts\utility</c>, which <c>maps\_utility</c> includes.
+    /// reaches on an include dialect: those the named file declares itself, and nothing it includes.
+    /// The path names the file outright, so the asking file's own declaration of the name does not
+    /// come into it: <c>combat.gsc</c> declares <c>main</c> and path-calls <c>cover_prone::main</c>,
+    /// which means cover_prone's. And the engine does not look through the named file's includes,
+    /// so a far call into it finds that file's own functions alone. The stock calls
+    /// that relied on more — <c>maps\_utility::trigger_off</c> in maps\_documents.gsc,
+    /// <c>maps\_utility::array_thread</c> in maps\_wood.gsc — are in scripts nothing loads.
     ///
     /// Public for the other thing that names a file outright: a completion row offering to add the
     /// <c>#include</c> or <c>#using</c> that would bring the function in.
@@ -226,8 +229,8 @@ public static class DatabaseQueries
         LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
     {
         ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
-        AddDeclaredInIncludeChain(
-            store, askingContextId, NormalizeAskingPath(askingPath), [RelativePathIndex.Normalize(writtenPath)], keyName,
+        AddDeclaredAt(
+            store, askingContextId, NormalizeAskingPath(askingPath), RelativePathIndex.Normalize(writtenPath), keyName,
             new HashSet<string>(StringComparer.Ordinal), matches);
         return matches.ToImmutable();
     }
@@ -236,11 +239,11 @@ public static class DatabaseQueries
     /// The declarations a function call reaches, the one it means first: what hover, signature help
     /// and the parameter hints describe, and what go-to-definition lands on.
     ///
-    /// On an include dialect, those in the file a path call names, through that file's include chain
-    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own, else its include chain
-    /// (<see cref="ReachableFunctions"/>), and nothing else: the engine finds a function only through
-    /// the paths a script provides, never by looking the name up across the install. Empty when
-    /// nothing the file reaches declares the name.
+    /// On an include dialect a function is keyed by FILE: those the file a path call names declares
+    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own, else those its direct includes
+    /// declare (<see cref="ReachableFunctions"/>), and nothing else: the engine finds a function only
+    /// through the paths a script provides, never by looking the name up across the install. Empty
+    /// when nothing the file reaches declares the name.
     ///
     /// On a namespace dialect, <see cref="LookupFunctions"/>' answer with the copies the asking file
     /// reaches listed first. A namespace does not pin a file: an mp and a zm copy both declare
@@ -323,42 +326,6 @@ public static class DatabaseQueries
 
         ordered.AddRange(unreached);
         return ordered.MoveToImmutable();
-    }
-
-    /// <summary>
-    /// The declarations of <paramref name="keyName"/> in the files at <paramref name="start"/>, else
-    /// in what those files <c>#include</c>, a level at a time, stopping at the first level that has
-    /// any — the nearest declarations an include chain reaches.
-    /// </summary>
-    private static void AddDeclaredInIncludeChain(
-        LanguageStore store, string askingContextId, string normalizedAskingPath, List<string> start, string keyName,
-        HashSet<string> visitedFiles, ImmutableArray<ResolvedFunction>.Builder matches)
-    {
-        HashSet<string> visitedPaths = new(StringComparer.Ordinal);
-        List<string> level = start;
-        while ( level.Count > 0 && matches.Count == 0 )
-        {
-            List<string> next = [];
-            foreach ( string relative in level )
-            {
-                if ( !visitedPaths.Add(relative) )
-                {
-                    continue;
-                }
-
-                AddDeclaredAt(store, askingContextId, normalizedAskingPath, relative, keyName, visitedFiles, matches);
-
-                foreach ( string path in store.FilesAt(relative) )
-                {
-                    if ( store.TryGet(path, out ScriptRecord record) )
-                    {
-                        next.AddRange(IncludedRelativePaths(record));
-                    }
-                }
-            }
-
-            level = next;
-        }
     }
 
     /// <summary>
@@ -891,36 +858,22 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// Every file an <c>#include</c> chain reaches from the asking file, transitively, with whether
-    /// the walk was COMPLETE — false when a hop did not resolve or was not indexed, so the set is
-    /// known to be short.
+    /// The files the asking file <c>#include</c>s, with whether all of them resolved and are indexed —
+    /// false when one is not, so the set is known to be short.
     ///
-    /// Transitivity is a fact about the dialect, not a policy of whichever rule asks: the compiler
-    /// flattens the chain, which the corpus settles. <c>maps\_createpath.gsc</c> includes
-    /// <c>maps\_utility</c> and nothing else, calls <c>flag_init</c>, and <c>flag_init</c> lives in
-    /// <c>common_scripts\utility</c> — which <c>maps\_utility</c> includes on its first line. The file
-    /// ships and works.
+    /// One level, never more: the engine merges an included file's OWN functions into the including
+    /// one, not those it got from its own includes. The stock scripts agree in every file the game loads;
+    /// the five that call through a second level (maps\_createpath, _guide, _leapfrog, _mortarteam,
+    /// _photosource) are named by no other script and never compiled.
     ///
-    /// It lives here rather than inside the one lint that needed it first, so the codebase has a
-    /// single place that answers the transitivity question. The direct-only helpers below
-    /// (<see cref="IncludedScriptPaths"/> and its consumers) are deliberately left as they are: for
-    /// completion and definition, offering or preferring too LITTLE is harmless, and widening them is
-    /// a behaviour change that deserves its own measurement rather than riding along with this one.
-    ///
-    /// The direct includes come from the parse in hand so a directive typed a moment ago counts;
-    /// every hop after that is read from the store's dependency edges. Each hop resolves against ITS
-    /// OWN file's context — a mod's copy of a script includes what the mod can see, and probing those
-    /// paths from the raw root would reach a different file or none at all — and resolutions are
-    /// memoized, since a diamond in the graph (everything reaches <c>common_scripts\utility</c>)
-    /// otherwise costs one filesystem probe per parent rather than per file.
+    /// The includes come from the parse in hand, so a directive typed a moment ago counts.
     /// </summary>
     /// <param name="directIncludes">
     /// The file's own <c>#include</c> targets when the caller has already resolved them, which the
     /// lint pass has: resolving the same list twice in one pass is a filesystem probe per root for
-    /// no new information. Default (uninitialized) means resolve them here, which keeps this usable
-    /// on its own.
+    /// no new information. Default (uninitialized) means resolve them here.
     /// </param>
-    public static IncludeClosure IncludeClosure(
+    public static IncludedFiles IncludedFiles(
         LanguageStore store,
         PathResolver resolver,
         ParseResult result,
@@ -928,72 +881,36 @@ public static class DatabaseQueries
         string extension,
         ImmutableArray<ScriptRecord> directIncludes = default)
     {
+        if ( !directIncludes.IsDefault )
+        {
+            return new IncludedFiles(directIncludes, Complete: true);
+        }
+
         Dictionary<(ResolutionContext Context, string Path), string?> resolved = [];
-        Queue<string> pending = new();
+        ResolutionContext askingContext = resolver.GetContext(askingPath);
+        ImmutableArray<ScriptRecord>.Builder included = ImmutableArray.CreateBuilder<ScriptRecord>();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        if ( directIncludes.IsDefault )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            ResolutionContext askingContext = resolver.GetContext(askingPath);
-
-            foreach ( AstNode element in result.Tree.Root.Elements )
-            {
-                if ( element is not IncludeNode includeNode )
-                {
-                    continue;
-                }
-
-                if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit )
-                {
-                    return new IncludeClosure([], Complete: false);
-                }
-
-                pending.Enqueue(hit);
-            }
-        }
-        else
-        {
-            foreach ( ScriptRecord record in directIncludes )
-            {
-                pending.Enqueue(record.Path);
-            }
-        }
-
-        ImmutableArray<ScriptRecord>.Builder reached = ImmutableArray.CreateBuilder<ScriptRecord>();
-        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
-
-        while ( pending.Count > 0 )
-        {
-            string includedPath = pending.Dequeue();
-            if ( !visited.Add(includedPath) )
+            if ( element is not IncludeNode includeNode )
             {
                 continue;
             }
 
-            if ( !store.TryGet(includedPath, out ScriptRecord record) )
+            if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit
+                || !store.TryGet(hit, out ScriptRecord record) )
             {
-                return new IncludeClosure([], Complete: false);
+                return new IncludedFiles([], Complete: false);
             }
 
-            reached.Add(record);
-            ResolutionContext hop = resolver.GetContext(record.Path);
-
-            foreach ( DependencyEdge edge in record.Dependencies )
+            if ( seen.Add(record.Path) )
             {
-                if ( edge.IsInsert )
-                {
-                    continue;
-                }
-
-                if ( Probe(resolver, resolved, hop, edge.RawPath, extension) is not string hit )
-                {
-                    return new IncludeClosure([], Complete: false);
-                }
-
-                pending.Enqueue(hit);
+                included.Add(record);
             }
         }
 
-        return new IncludeClosure(reached.ToImmutable(), Complete: true);
+        return new IncludedFiles(included.ToImmutable(), Complete: true);
     }
 
     private static string? Probe(
@@ -1483,13 +1400,8 @@ public static class DatabaseQueries
     /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
     /// to qualify with in the first place.
     ///
-    /// Direct hops only, and deliberately narrower than the truth: the compiler flattens the chain
-    /// (see <see cref="IncludeClosure"/>), so a name reached through an included file's own includes
-    /// is legal here and goes unoffered. Completion errs toward offering too little — a name it
-    /// misses is still typable — whereas widening it would offer, from a single <c>#include</c> of
-    /// <c>maps\_utility</c>, everything CoD4's utility chain transitively reaches. The rule that must
-    /// be exactly right about scope is the one that reports an Error, and that one asks
-    /// <see cref="IncludeClosure"/>.
+    /// Direct hops only, which is exactly what the compiler copies in — see
+    /// <see cref="IncludedFiles"/>.
     /// </summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,

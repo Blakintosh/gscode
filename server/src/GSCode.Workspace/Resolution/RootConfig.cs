@@ -17,11 +17,9 @@ public sealed record RootConfig
     /// <summary>
     /// The devraw folder beside <see cref="RawRoot"/>, or null when there is none on disk. Another
     /// raw: its files live in the raw context and are named by the same relative paths, but raw is
-    /// searched first, so devraw only supplies what raw lacks. That is the engine's own order —
-    /// CoD4's <c>FS_Startup</c> adds devraw and then raw to a search list it builds by prepending
-    /// (KisakCOD, <c>com_files.cpp</c>), so raw is found first. BO3's is assumed to match; its file
-    /// system code is not in the decompiled source. Rarely present with anything in it in the mod
-    /// tools, and supported for the installs that use it.
+    /// searched first, so devraw only supplies what raw lacks. That is the engine's own order on
+    /// CoD4; BO3's is assumed to match. Rarely present with anything in it in the mod tools, and
+    /// supported for the installs that use it.
     /// </summary>
     public string? DevRawRoot { get; init; }
 

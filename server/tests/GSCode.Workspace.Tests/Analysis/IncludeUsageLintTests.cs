@@ -25,7 +25,7 @@ public class IncludeUsageLintTests
     /// <summary>An unrelated file the asking script DOES include, so a pass is never suppressed.</summary>
     private const string LoadSource = "main()\n{\n}\n";
 
-    /// <summary>A file that includes utility itself — the second hop of the transitive walk.</summary>
+    /// <summary>A file that includes utility itself — which passes none of utility's functions on.</summary>
     private const string ChainSource = "#include common_scripts\\utility;\n\nchain_helper()\n{\n}\n";
 
     /// <summary>
@@ -84,13 +84,14 @@ public class IncludeUsageLintTests
     }
 
     [Fact]
-    public void SaysNothingWhenTheDeclaringFileIsReachedThroughAnIncludeChain()
+    public void ReportsACallTheDeclaringFileOnlyReachesThroughAnotherInclude()
     {
-        // The include graph is followed transitively, and this is the case that proved it has to be:
-        // maps\_createpath.gsc ships calling flag_init while including only maps\_utility, which
-        // includes common_scripts\utility on its first line. A direct-includes-only rule reported 36
-        // such calls across the stock scripts.
-        Assert.Empty(Lint("#include maps\\_chain;\ninit()\n{\n\tscriptPrintln();\n}\n"));
+        // An include merges the included file's OWN functions, never what it includes in turn. The 36
+        // stock calls that need a second level are all in five files
+        // no other script names, maps\_createpath.gsc among them, and nothing compiles them.
+        Diagnostic reported = Assert.Single(Lint("#include maps\\_chain;\ninit()\n{\n\tscriptPrintln();\n}\n"));
+
+        Assert.Equal(GscDiagnosticCode.FunctionNotIncluded, reported.Code);
     }
 
     [Fact]

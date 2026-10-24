@@ -16,25 +16,21 @@ namespace GSCode.Workspace.Analysis;
 /// The Infinity Ward counterpart to <see cref="NamespaceUsageLint"/>: an unqualified call to a
 /// function that EXISTS in the workspace but that nothing merges into this file's scope.
 ///
-/// The hole it fills is a consequence of how resolution works. <c>#include</c> keys a function as
-/// <c>(null, name)</c>, and <see cref="DatabaseQueries.LookupFunctions"/> with a null namespace
-/// searches every visible record without asking what the file imports — deliberately, so
-/// go-to-definition and hover keep working while an import is missing. That makes
-/// <see cref="FunctionResolutionLint"/> silent here: the call resolves, to a function in a file this
-/// one never included. Hovering it shows the definition and the editor reports nothing, which is
-/// exactly the report that prompted this rule.
+/// The hole it fills is a consequence of how the existence check works. <c>#include</c> keys a
+/// function as <c>(null, name)</c>, and <see cref="DatabaseQueries.LookupFunctions"/> with a null
+/// namespace searches every visible record without asking what the file imports. That makes
+/// <see cref="FunctionResolutionLint"/> silent here: the name exists, in a file this one never
+/// included, and only this rule says the engine will not find it there.
 ///
 /// ERROR severity, matching <see cref="GscDiagnosticCode.NamespaceNotImported"/> and for the same
 /// reason: the engine will not link the call, so the script does not load. That the analyser can
 /// find the function is a fact about the analyser, not about the game.
 ///
-/// The include graph is followed TRANSITIVELY, and that was measured rather than assumed. Direct
-/// includes only is what the completion path does (<see cref="DatabaseQueries.FunctionsInIncludeScope"/>),
-/// where offering too little is harmless — but as an Error it reported 36 calls across the stock
-/// scripts. <c>maps\_createpath.gsc</c> includes <c>maps\_utility</c> and nothing else, calls
-/// <c>flag_init</c>, and <c>flag_init</c> lives in <c>common_scripts\utility</c> — which
-/// <c>maps\_utility</c> includes on its first line. The file ships and works, so the compiler
-/// flattens the chain.
+/// Includes are followed ONE level, as the compiler copies them (see
+/// <see cref="DatabaseQueries.IncludedFiles"/>). The stock CoD4 scripts hold 36 calls that need a
+/// second level, all in five files no other script names and nothing compiles — maps\_createpath,
+/// _guide, _leapfrog, _mortarteam and _photosource. These were once read as proof that the chain
+/// flattens; the engine's source says the opposite, and every loaded file agrees with it.
 ///
 /// Zero false positives by construction, which is what an Error rests on. Each gate below is a
 /// separate way the rule could be wrong for a reason outside the user's control:
@@ -95,14 +91,14 @@ public static class IncludeUsageLint
         }
 
         // #using is not asked about: no include dialect has one, and an unresolvable #include is
-        // already caught by the closure walk below reporting an incomplete set.
+        // already caught below, by the included set reporting itself incomplete.
         if ( ImportGate.AnyMacrosLost(result) )
         {
             return [];
         }
 
-        // Names merged into local scope: this file's own declarations, plus everything declared by
-        // the files it includes. Taken from the parse in hand for the former, since the store holds
+        // Names merged into local scope: this file's own declarations, plus what the files it includes
+        // declare THEMSELVES — one level, as the compiler copies them (see DatabaseQueries.IncludedFiles). Taken from the parse in hand for the former, since the store holds
         // the last INDEXED copy and a function being typed right now is not in it yet.
         HashSet<string> inScope = new(StringComparer.OrdinalIgnoreCase);
         foreach ( FunctionSymbol function in result.Extraction.Functions )
@@ -110,10 +106,8 @@ public static class IncludeUsageLint
             inScope.Add(function.KeyName);
         }
 
-        // The transitive walk itself belongs to the database, not to this rule — see
-        // DatabaseQueries.IncludeClosure for why the chain flattens and what an incomplete walk
-        // means. An incomplete one suppresses the whole pass either way: a file we could not read
-        // might be the one that declares the name.
+        // An include that does not resolve suppresses the whole pass: a file we could not read might
+        // be the one that declares the name.
         //
         // Its direct hops come from the shared resolution when the pipeline has one, so the same
         // #include list is not probed twice in a single analysis.
@@ -128,10 +122,10 @@ public static class IncludeUsageLint
             direct = [.. imports.Includes.Select(static imported => imported.Record)];
         }
 
-        IncludeClosure closure = DatabaseQueries.IncludeClosure(
+        IncludedFiles included = DatabaseQueries.IncludedFiles(
             store, resolver, result, askingPath, game.ExtensionFor(language), direct);
 
-        if ( !closure.Complete )
+        if ( !included.Complete )
         {
             return [];
         }
@@ -141,12 +135,12 @@ public static class IncludeUsageLint
         // would produce the largest single burst of errors. Nothing is lost by staying quiet: a file
         // that calls into another file and imports nothing has one obvious problem, and the first
         // #include it gains turns the rule back on.
-        if ( closure.Records.Length == 0 )
+        if ( included.Records.Length == 0 )
         {
             return [];
         }
 
-        foreach ( ScriptRecord record in closure.Records )
+        foreach ( ScriptRecord record in included.Records )
         {
             foreach ( FunctionSymbol function in record.Functions )
             {

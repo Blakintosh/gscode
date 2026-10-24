@@ -457,7 +457,11 @@ public class CorpusDiagnosticSweepTests
             List<Finding> findings = await AsGameAsync(target.Profile, () => SweepAsync(target));
 
             _output.WriteLine($"{target.Profile.ShortName}: {target.Scripts().Count} scripts swept");
-            reported.AddRange(findings.Where(f => f.Code == GscDiagnosticCode.FunctionNotIncluded));
+
+            // A script nothing loads proves nothing: CoD4 ships five whose calls reach a second
+            // include level the compiler never copies (see UnloadedStockScripts).
+            reported.AddRange(findings.Where(f => f.Code == GscDiagnosticCode.FunctionNotIncluded
+                && !UnloadedStockScripts.Contains(target.Profile, Path.GetRelativePath(target.RawRoot, f.Path))));
         }
 
         // Grouped by message before the assertion, because the useful question on a failure is

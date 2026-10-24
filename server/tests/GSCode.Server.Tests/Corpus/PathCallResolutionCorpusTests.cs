@@ -13,8 +13,10 @@ namespace GSCode.Server.Tests.Corpus;
 /// <summary>
 /// A path call names its file outright: <c>animscripts\cover_prone::main()</c> means cover_prone's
 /// <c>main</c>, even in combat.gsc, which declares a <c>main</c> of its own. Every path call in the
-/// cod4 scripts is resolved here the way hover resolves it, and the declaration found has to be in
-/// the file the call writes.
+/// cod4 scripts is resolved here the way hover resolves it, and the declaration found has to be the
+/// one the written file declares ITSELF — a far call never sees what that file includes. A call into
+/// a file that does not declare the name resolves to nothing, and is allowed
+/// only in a script nothing loads (<see cref="UnloadedStockScripts"/>).
 ///
 /// Under <c>#include</c> every same-named function shares one key, so nothing in the key itself
 /// says which file a call means; only the written path does. The corpus is what makes this worth
@@ -73,10 +75,13 @@ public class PathCallResolutionCorpusTests
                     }
 
                     checkedCalls++;
-                    HashSet<string> scope = IncludeChain(database.Gsc, written);
+                    bool declaredThere = Declares(database.Gsc, written, entry.Key.Name);
                     ImmutableArray<ResolvedFunction> resolved = MethodResolution.ResolveCall(
                         database.Gsc, record.ContextId, record.Path, entry.Key, entry.Kind, pathCallTarget: pathCall.Path);
-                    if ( resolved.IsEmpty || !scope.Contains(RelativePathIndex.Normalize(resolved[0].Record.RelativePath)) )
+                    bool right = declaredThere
+                        ? !resolved.IsEmpty && RelativePathIndex.Normalize(resolved[0].Record.RelativePath) == written
+                        : resolved.IsEmpty && UnloadedStockScripts.Contains(cod4.Profile, record.RelativePath);
+                    if ( !right )
                     {
                         string landed = resolved.IsEmpty ? "nothing" : resolved[0].Record.RelativePath;
                         wrong.Add($"{record.RelativePath}: {pathCall.Path}::{entry.Key.Name} -> {landed}");
@@ -85,7 +90,7 @@ public class PathCallResolutionCorpusTests
                     // What the resolution gave before the written path reached it, for the record.
                     ImmutableArray<ResolvedFunction> unpinned = MethodResolution.ResolveCall(
                         database.Gsc, record.ContextId, record.Path, entry.Key, entry.Kind);
-                    if ( unpinned.IsEmpty || !scope.Contains(RelativePathIndex.Normalize(unpinned[0].Record.RelativePath)) )
+                    if ( unpinned.IsEmpty || RelativePathIndex.Normalize(unpinned[0].Record.RelativePath) != written )
                     {
                         wrongWithoutPath++;
                     }
@@ -109,35 +114,26 @@ public class PathCallResolutionCorpusTests
         }
     }
 
-    /// <summary>
-    /// The written file and everything its #include chain reaches: where a path call's function may
-    /// be declared. cod4 ships maps\_utility::trigger_off, which lives in common_scripts\utility.
-    /// </summary>
-    private static HashSet<string> IncludeChain(LanguageStore store, string relative)
+    /// <summary>Whether a file at the written path declares the function itself.</summary>
+    private static bool Declares(LanguageStore store, string relative, string keyName)
     {
-        HashSet<string> reached = new(StringComparer.Ordinal) { relative };
-        Queue<string> pending = new([relative]);
-        while ( pending.TryDequeue(out string? next) )
+        foreach ( string path in store.FilesAt(relative) )
         {
-            foreach ( string path in store.FilesAt(next) )
+            if ( !store.TryGet(path, out ScriptRecord record) )
             {
-                if ( !store.TryGet(path, out ScriptRecord record) )
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                foreach ( DependencyEdge edge in record.Dependencies )
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( function.KeyName == keyName )
                 {
-                    string target = RelativePathIndex.Normalize(edge.RawPath);
-                    if ( !edge.IsInsert && reached.Add(target) )
-                    {
-                        pending.Enqueue(target);
-                    }
+                    return true;
                 }
             }
         }
 
-        return reached;
+        return false;
     }
 
     private static ReferenceEntry? CallAt(ScriptRecord record, PathCallReference pathCall)

@@ -234,13 +234,18 @@ public sealed class CompletionHandler : CompletionHandlerBase
                     return engine is not null ? MarkdownDocRenderer.RenderBuiltin(engine) : null;
                 }
 
-                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
+                // The declaration the name would reach from this file, as hover finds it once written.
+                // The row's namespace is the one its declaration was found under, which on an include
+                // dialect is the file stem — every *\_utility.gsc answers to `_utility` — so it is
+                // keyed through KeyNamespace, which drops it there.
+                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.FunctionsTheCallReaches(
                     target.Store,
                     target.ContextId,
                     target.Path,
-                    ns.Length > 0 ? ns : null,
+                    ns.Length > 0 ? GameProfile.Active.KeyNamespace(ns) : null,
                     NameTable.Shared.InternLower(name),
-                    askingNamespaces: target.Namespaces);
+                    askingNamespaces: target.Namespaces,
+                    fallBackToAny: true);
 
                 if ( functions.Length > 0 )
                 {

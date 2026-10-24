@@ -367,6 +367,37 @@ public class CorpusDiagnosticSweepTests
     }
 
     [Fact]
+    public async Task NoStockFunctionIsReportedUnresolved_ButCallsIntoUnshippedCampaignScripts()
+    {
+        // 5013 is an Error, and the report above asserts nothing: `&UseButtonPressed` in
+        // util_shared.gsc was one for every mod copying the file until the rule learned a reference
+        // can name an engine function. The only ones stock BO3 earns are in
+        // shared\vehicles\_quadtank.gsc, calling `objectives::` and `globallogic_ui::` through
+        // `#using scripts\cp\...` — campaign scripts the mod tools do not ship.
+        if ( !CorpusFixture.Available )
+        {
+            _output.WriteLine("SKIPPED: %GSCODE_CORPUS_BO3% not found.");
+            return;
+        }
+
+        List<Finding> findings = await AsGameAsync(GameProfile.BlackOps3, () => SweepAsync(Bo3Target()));
+        List<Finding> unresolved = [.. findings.Where(static f => f.Code == GscDiagnosticCode.ScriptFunctionNotFound)];
+
+        // Not empty: the campaign calls are real, and a sweep that stopped reporting them would mean
+        // the rule had stopped looking, not that the scripts had improved.
+        Assert.NotEmpty(unresolved);
+        Assert.Empty(unresolved
+            .Where(static f => !IntoUnshippedCampaignScript(File.ReadLines(f.Path).ElementAt(f.Line)))
+            .Select(static f => $"{Path.GetFileName(f.Path)}:{f.Line + 1}: {f.Message}"));
+    }
+
+    private static bool IntoUnshippedCampaignScript(string line)
+    {
+        return line.Contains("objectives::", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("globallogic_ui::", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task NoStockScriptWritesToAnEngineGlobal()
     {
         // 5035 is an Error, so the bar is zero across every corpus on the machine — not BO3 alone.

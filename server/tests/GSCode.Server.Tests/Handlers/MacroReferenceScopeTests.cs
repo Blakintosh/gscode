@@ -8,7 +8,7 @@ namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
 /// CodeLens' reference count and Find References' peek list — both driven by
-/// <see cref="NavigationSupport.FindAllReferences(NavigationTarget, GSCode.Core.Symbols.SymbolKey, GSCode.Core.Symbols.ReferenceKind)"/> —
+/// <see cref="NavigationSupport.FindAllReferences(NavigationTarget, GSCode.Core.Symbols.SymbolKey, GSCode.Core.Symbols.ReferenceKind, string)"/> —
 /// for the same bug
 /// <see cref="DefinitionHandlerMacroScopeTests"/> covers for go-to-definition: two INDEPENDENT
 /// same-named macros, one per language file, no #insert between them.

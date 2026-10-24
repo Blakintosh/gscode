@@ -201,11 +201,12 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         // On an include dialect a function call reaches only what the file a path call names, or
         // the file itself and its include chain, provide: the engine never looks a name up across
         // the install. So that set, and nothing wider when it is empty.
-        HashSet<string>? reached = DatabaseQueries.FilesTheIncludeScopedCallReaches(
+        ImmutableArray<ResolvedFunction>? reached = DatabaseQueries.IncludeScopedCallTargets(
             target.Store, target.ContextId, target.Path, hit.Key, pathCallTarget);
-        if ( reached is not null )
+        if ( reached is ImmutableArray<ResolvedFunction> targets )
         {
-            return [.. definitions.Where(definition => reached.Contains(definition.Record.Path))];
+            HashSet<string> declaring = [.. targets.Select(static function => function.Record.Path)];
+            return [.. definitions.Where(definition => declaring.Contains(definition.Record.Path))];
         }
 
         if ( pathCallTarget.Length > 0 )

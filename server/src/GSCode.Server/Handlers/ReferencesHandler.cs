@@ -5,6 +5,7 @@ using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
 
 namespace GSCode.Server.Handlers;
 
@@ -57,7 +58,8 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
         // declaration this document actually reaches — see NavigationSupport.DeclaringFile — and
         // does it inside the SHARED query, so this list and the CodeLens count stay in step.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
-            _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
+            _support.FindAllReferences(
+                target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range));
 
         // Per entry, because each builds a DocumentUri: the shared query's own comment names a
         // 1,970-reference case, and find-references is one of the requests a client re-sends.

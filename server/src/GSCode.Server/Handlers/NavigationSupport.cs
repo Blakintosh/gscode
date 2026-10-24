@@ -291,12 +291,17 @@ public sealed class NavigationSupport
     /// namespace and no owner is written the same way by an untyped <c>[[x]]-&gt;m()</c>, a
     /// <c>sys::m()</c> builtin call and a plain unqualified call, and only the kind separates them.
     /// </param>
+    /// <param name="pathCallTarget">
+    /// The file a path call at the cursor names, "" for any other site — what
+    /// <c>PathCallReference.At</c> gives for the hit's range. A path call means the named file's
+    /// function, whatever this file declares under the same name.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
     {
         return FindAllReferences(
             ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
-            IsFileLocalMacro(target, key) ? target.Path : "");
+            IsFileLocalMacro(target, key) ? target.Path : "", pathCallTarget: pathCallTarget);
     }
 
     /// <summary>
@@ -349,10 +354,11 @@ public sealed class NavigationSupport
     /// same code. <c>SameFileReferenceTests</c> requires the two to agree.
     /// </summary>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesInFile(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
     {
         return FindAllReferences(
-            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path);
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path,
+            pathCallTarget: pathCallTarget);
     }
 
     /// <summary>
@@ -371,7 +377,7 @@ public sealed class NavigationSupport
     /// the peek list on the <c>.gsc</c>'s own definition both counted the <c>.csc</c>'s unrelated
     /// one — the same conflation
     /// <see cref="GSCode.Server.Handlers.DefinitionHandler.MacroDefinitionAt"/> answers for
-    /// go-to-definition, here for every OTHER caller of <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind)"/>
+    /// go-to-definition, here for every OTHER caller of <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind, string)"/>
     /// (CodeLens, Find References, Document Highlight, rename).
     ///
     /// Answered from THIS FILE's own preprocessor result, matching go-to-definition exactly: a
@@ -411,7 +417,8 @@ public sealed class NavigationSupport
         SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
         bool macroSpansLanguages = true,
         string onlyPath = "",
-        bool definitionsOnly = false)
+        bool definitionsOnly = false,
+        string pathCallTarget = "")
     {
         // A class MEMBER has the same problem in both directions: the `var` is on one class and
         // the bare uses are keyed by whichever class's body each sits in, so the key canonicalizes
@@ -476,7 +483,27 @@ public sealed class NavigationSupport
         // When the key names one declaring file, only the files that can reach it are read — the
         // same answer, without first collecting every reference to a key that on a merge dialect
         // every `main` in the workspace shares. See FindReferencesReaching.
-        string declaring = DeclaringFile(target, key);
+        // On an include dialect the declaration is the one the call reaches through this file's own
+        // paths — see DatabaseQueries.FunctionsTheCallReaches. One that reaches nothing has no
+        // declaration to gather for, and only this file's own sites mean the same unresolved call.
+        string declaring;
+        ImmutableArray<ResolvedFunction>? reached = DatabaseQueries.IncludeScopedCallTargets(
+            target.Store, target.ContextId, target.Path, key, pathCallTarget);
+        if ( reached is ImmutableArray<ResolvedFunction> targets )
+        {
+            if ( targets.IsEmpty )
+            {
+                return DatabaseQueries.FindAllReferences(
+                    _database, target.Stores, target.ContextId, key, macroSpansLanguages, target.Path);
+            }
+
+            declaring = targets[0].Record.RelativePath;
+        }
+        else
+        {
+            declaring = DeclaringFile(target, key);
+        }
+
         if ( declaring.Length > 0 )
         {
             return DatabaseQueries.FindReferencesReaching(

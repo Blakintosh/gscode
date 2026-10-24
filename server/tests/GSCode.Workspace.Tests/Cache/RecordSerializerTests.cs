@@ -35,7 +35,7 @@ public class RecordSerializerTests
     [InlineData(typeof(MacroRecord), "DocumentationIsFunctionLikeNameNameRangeParameters")]
     [InlineData(typeof(DependencyEdge), "IsInsertRangeRawPathResolvedPath")]
     [InlineData(typeof(PathCallReference), "NameRangePath")]
-    [InlineData(typeof(FieldBinding), "FieldRangeTarget")]
+    [InlineData(typeof(FieldBinding), "FieldRangeTargetTargetRange")]
     [InlineData(typeof(ReferenceEntry), "FromMacroKeyKindRange")]
     [InlineData(typeof(SymbolKey), "KindNameNamespaceOwnerClass")]
     [InlineData(typeof(Diagnostic), "CodeMessageRangeRelatedInformationSeverityTags")]
@@ -236,11 +236,13 @@ public class RecordSerializerTests
                 new FieldBinding(
                     new SymbolKey(null, "callback", SymbolKind.Field),
                     new SymbolKey("ns", "on_damage", SymbolKind.Function),
-                    Range(15)),
+                    Range(15),
+                    Range(17)),
                 new FieldBinding(
                     new SymbolKey(null, "scene", SymbolKind.Field),
                     new SymbolKey(null, "cawarenessscene", SymbolKind.Class),
-                    Range(16)),
+                    Range(16),
+                    Range(18)),
             ],
             References =
             [

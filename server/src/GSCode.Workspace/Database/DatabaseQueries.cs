@@ -269,12 +269,13 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The files declaring what a function call reaches on an include dialect — see
-    /// <see cref="FunctionsTheCallReaches"/> — for a caller holding declaration SITES to narrow, as
-    /// go-to-definition does. Null where the key is not scoped by includes (a namespace dialect, a
-    /// method, a qualified key), for the caller to narrow its own way.
+    /// What a function call reaches on an include dialect — see <see cref="FunctionsTheCallReaches"/>
+    /// — for a caller asking about a KEY rather than a call: go-to-definition narrowing its sites,
+    /// find-references choosing whose references to gather. Null where the key is not scoped by
+    /// includes (a namespace dialect, a method, a qualified key), for the caller to narrow its own way;
+    /// empty when the call reaches nothing.
     /// </summary>
-    public static HashSet<string>? FilesTheIncludeScopedCallReaches(
+    public static ImmutableArray<ResolvedFunction>? IncludeScopedCallTargets(
         LanguageStore store, string askingContextId, string askingPath, SymbolKey key, string pathCallTarget)
     {
         if ( key.Kind != SymbolKind.Function || key.OwnerClass is not null || !ScopedByInclude(key.Namespace) )
@@ -282,14 +283,7 @@ public static class DatabaseQueries
             return null;
         }
 
-        HashSet<string> paths = new(StringComparer.Ordinal);
-        foreach ( ResolvedFunction function in FunctionsTheCallReaches(
-            store, askingContextId, askingPath, null, key.Name, pathCallTarget) )
-        {
-            paths.Add(function.Record.Path);
-        }
-
-        return paths;
+        return FunctionsTheCallReaches(store, askingContextId, askingPath, null, key.Name, pathCallTarget);
     }
 
     /// <summary>Whether a function key resolves through the file's includes and path calls rather than a namespace.</summary>

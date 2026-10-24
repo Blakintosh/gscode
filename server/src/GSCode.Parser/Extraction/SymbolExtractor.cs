@@ -1222,14 +1222,15 @@ public sealed class SymbolExtractor
                 _fieldBindings.Add(new FieldBinding(
                     field,
                     new SymbolKey(null, _names.InternLower(instance.ClassToken.Text), SymbolKind.Class),
-                    target.NameToken.RootRange));
+                    target.NameToken.RootRange,
+                    instance.ClassToken.RootRange));
                 return;
 
             // &foo, &ns::foo — an explicit function reference.
             case PrefixNode { Operator: TokenKind.Ampersand } pointer:
-                if ( TryCalleeKey(pointer.Operand, out SymbolKey addressed, out _) )
+                if ( TryCalleeKey(pointer.Operand, out SymbolKey addressed, out PToken addressedName) )
                 {
-                    _fieldBindings.Add(new FieldBinding(field, addressed, target.NameToken.RootRange));
+                    _fieldBindings.Add(new FieldBinding(field, addressed, target.NameToken.RootRange, addressedName.RootRange));
                 }
 
                 return;
@@ -1239,9 +1240,9 @@ public sealed class SymbolExtractor
             // same distinction FlowTyper draws when it decides what carries a FunctionTarget.
             case QualifiedNode:
             case PathQualifiedNode:
-                if ( TryCalleeKey(value, out SymbolKey named, out _) )
+                if ( TryCalleeKey(value, out SymbolKey named, out PToken namedName) )
                 {
-                    _fieldBindings.Add(new FieldBinding(field, named, target.NameToken.RootRange));
+                    _fieldBindings.Add(new FieldBinding(field, named, target.NameToken.RootRange, namedName.RootRange));
                 }
 
                 return;

@@ -25,7 +25,7 @@ public static class CacheSchema
     /// written in the file — and a ReferenceKind inserted mid-enum shifts every later ordinal on the
     /// wire, so each of an old blob's kinds reads as its neighbour.
     /// </remarks>
-    public const int RecordFormatVersion = 10;
+    public const int RecordFormatVersion = 11;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";

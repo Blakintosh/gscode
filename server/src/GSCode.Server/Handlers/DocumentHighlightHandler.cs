@@ -4,6 +4,7 @@ using GSCode.Server.Mapping;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
 
 namespace GSCode.Server.Handlers;
 
@@ -52,7 +53,8 @@ public sealed class DocumentHighlightHandler : DocumentHighlightHandlerBase
         // so the key derivation, the method union, the scoping and the shadow rule are the same code.
         List<DocumentHighlight> highlights = [];
         foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in
-            _support.FindReferencesInFile(target, hit.Key, hit.ReferenceKind) )
+            _support.FindReferencesInFile(
+                target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range)) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 

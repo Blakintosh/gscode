@@ -61,16 +61,10 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         if ( hit.Key.Kind == SymbolKind.Field )
         {
             List<CallHierarchyItem> bound = [];
-            // The two-level form, where the other three field callers use the flattened
-            // FunctionsOf: the item's Data carries the KEY, and the key a write named is not the
-            // one rebuilt from the declaration it resolved to. An unqualified `&foo` keys with a
-            // null namespace, which is what the union behind find-references is built on.
-            foreach ( SymbolKey held in FieldTargets.FunctionKeysOf(_support, target, hit.Key, cancellationToken) )
+            // With the key each write named, which the item's Data carries — see BoundFunctionsOf.
+            foreach ( BoundFunction held in FieldTargets.BoundFunctionsOf(_support, target, hit.Key, cancellationToken) )
             {
-                foreach ( ResolvedFunction resolved in FieldTargets.Functions(target, held) )
-                {
-                    bound.Add(MakeItem(held, resolved.Record, resolved.Function.NameRange));
-                }
+                bound.Add(MakeItem(held.Key, held.Function.Record, held.Function.Function.NameRange));
             }
 
             return Task.FromResult<Container<CallHierarchyItem>?>(
@@ -83,7 +77,8 @@ public sealed class CallHierarchyHandler : CallHierarchyHandlerBase
         }
 
         // Anchor the item at the function's definition.
-        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(
+            target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range)) )
         {
             if ( reference.Entry.Kind == ReferenceKind.Definition )
             {

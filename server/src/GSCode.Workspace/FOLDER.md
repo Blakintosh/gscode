@@ -510,7 +510,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `LookupFunctions` with the copies the file reaches first (`ReachedFirst`), since an mp and a zm copy
   both declare `#namespace util`. Hover (`ResolveCall`), the call hierarchy, completion docs, type
   definition, the builtin-vs-script tests and `CallResolution` (signature help, hints) ask it; go-to-
-  definition narrows its sites with `FilesTheIncludeScopedCallReaches`. Left wide on purpose: the
+  definition narrows its sites, and find-references picks its declaration, with
+  `IncludeScopedCallTargets`, null where a key is not include-scoped. Left wide on purpose: the
   missing-include quick fix and lints, which exist to find the file not yet included.
   `IncludeScopeLookupTests` holds `FunctionsInIncludeScope` as the reference for the single-name
   answer; `CallTargetAgreementTests` and `IncludeScopedNavigationTests` pin the cases.
@@ -612,6 +613,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Cache/CacheSchema.cs
 
+- Format 11 added `FieldBinding.TargetRange`, so a pointer written with a path can be resolved where
+  it was stored.
 - Format 7 added `ScriptRecord.FieldBindings` AND put `ReferenceKind.FieldWrite` in the middle of
   the enum; format 8 put `FieldUpdate` beside it. Those halves are why neither bump was optional:
   a kind goes on the wire as its ordinal, so an older blob reads every kind after the insertion

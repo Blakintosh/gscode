@@ -249,6 +249,7 @@ public static class RecordSerializer
             writer.WriteVarUInt((uint)binding.Target.Kind);
             writer.WriteString(binding.Target.OwnerClass);
             writer.WriteRange(binding.Range);
+            writer.WriteRange(binding.TargetRange);
         }
 
         writer.WriteStrings(record.WrittenFields);
@@ -355,11 +356,13 @@ public static class RecordSerializer
             SymbolKind targetKind = (SymbolKind)reader.ReadVarUInt();
             string? targetOwner = reader.ReadString();
             TextRange bindingRange = reader.ReadRange();
+            TextRange targetRange = reader.ReadRange();
 
             bindings.Add(new FieldBinding(
                 new SymbolKey(null, fieldName, SymbolKind.Field),
                 new SymbolKey(targetNamespace, targetName, targetKind, targetOwner),
-                bindingRange));
+                bindingRange,
+                targetRange));
         }
 
         ImmutableArray<string> writtenFields = reader.ReadStrings();

@@ -1,8 +1,12 @@
 using System.Collections.Immutable;
 using GSCode.Core.Symbols;
+using GSCode.Parser.Extraction;
 using GSCode.Workspace.Database;
 
 namespace GSCode.Server.Handlers;
+
+/// <summary>A function a field holds: the key its write named, and the declaration that resolves to.</summary>
+internal readonly record struct BoundFunction(SymbolKey Key, ResolvedFunction Function);
 
 /// <summary>
 /// What the scripts put IN a field, for the four requests that each ask a version of that question:
@@ -47,13 +51,108 @@ internal static class FieldTargets
         CancellationToken cancellationToken)
     {
         ImmutableArray<ResolvedFunction>.Builder found = ImmutableArray.CreateBuilder<ResolvedFunction>();
-
-        foreach ( SymbolKey bound in BoundKeys(references, field, SymbolKind.Function, cancellationToken) )
+        foreach ( BoundFunction bound in BoundFunctionsOf(target, references, field, cancellationToken) )
         {
-            found.AddRange(Functions(target, bound));
+            found.Add(bound.Function);
         }
 
         return found.ToImmutable();
+    }
+
+    /// <summary>
+    /// Every function bound to this field, each with the key its write named — for call hierarchy,
+    /// whose item carries the key in <c>Data</c> so the next step can resolve without re-reading the
+    /// position. The key a write NAMED is not the one rebuilt from its declaration: an unqualified
+    /// <c>&amp;foo</c> keys with a null namespace, which is what the union behind find-references is
+    /// built on.
+    /// </summary>
+    public static ImmutableArray<BoundFunction> BoundFunctionsOf(
+        NavigationSupport support, NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
+    {
+        return BoundFunctionsOf(target, ReferencesTo(support, target, field), field, cancellationToken);
+    }
+
+    /// <summary>
+    /// The same, from a reference set the caller already has.
+    ///
+    /// Each target is resolved in the file that WROTE it, as a call written there would be:
+    /// <c>level.cb = ::handler;</c> means the handler that file reaches, whichever file later calls
+    /// <c>[[ level.cb ]]()</c>, and <c>maps\_util::handler</c> means maps\_util's. Asked from the reader's
+    /// file instead, the answer was every same-named function in the workspace on an include dialect.
+    /// Deduplicated by declaration: one handler stored from four game modes is one implementation.
+    /// </summary>
+    public static ImmutableArray<BoundFunction> BoundFunctionsOf(
+        NavigationTarget target,
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
+        SymbolKey field,
+        CancellationToken cancellationToken)
+    {
+        ImmutableArray<BoundFunction>.Builder found = ImmutableArray.CreateBuilder<BoundFunction>();
+        if ( field.Kind != SymbolKind.Field )
+        {
+            return found.ToImmutable();
+        }
+
+        HashSet<string> visited = new(StringComparer.Ordinal);
+        HashSet<(string Path, GSCode.Core.Text.TextRange Range)> seen = [];
+
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Only a file that WRITES the field can bind it, and a file is read once however many
+            // times it writes.
+            ScriptRecord writer = reference.Record;
+            if ( reference.Entry.Kind != ReferenceKind.FieldWrite || !visited.Add(writer.Path) )
+            {
+                continue;
+            }
+
+            LanguageStore? store = StoreHolding(target, writer);
+            if ( store is null )
+            {
+                continue;
+            }
+
+            foreach ( FieldBinding binding in writer.FieldBindings )
+            {
+                if ( binding.Field != field || binding.Target.Kind != SymbolKind.Function )
+                {
+                    continue;
+                }
+
+                foreach ( ResolvedFunction resolved in DatabaseQueries.FunctionsTheCallReaches(
+                    store,
+                    writer.ContextId,
+                    writer.Path,
+                    binding.Target.Namespace,
+                    binding.Target.Name,
+                    PathCallReference.At(writer.PathCallTargets, binding.TargetRange),
+                    writer.DeclaredNamespaces) )
+                {
+                    if ( seen.Add((resolved.Record.Path, resolved.Function.NameRange)) )
+                    {
+                        found.Add(new BoundFunction(binding.Target, resolved));
+                    }
+                }
+            }
+        }
+
+        return found.ToImmutable();
+    }
+
+    /// <summary>The language store holding <paramref name="record"/>, of those the request may read.</summary>
+    private static LanguageStore? StoreHolding(NavigationTarget target, ScriptRecord record)
+    {
+        foreach ( LanguageStore store in target.Stores )
+        {
+            if ( store.TryGet(record.Path, out _) )
+            {
+                return store;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The declarations of every class bound to this field.</summary>
@@ -79,33 +178,6 @@ internal static class FieldTargets
         }
 
         return found.ToImmutable();
-    }
-
-    /// <summary>
-    /// The bound FUNCTION KEYS rather than their declarations, for call hierarchy.
-    ///
-    /// The one caller that wants the key: a <c>CallHierarchyItem</c> carries it in <c>Data</c> so
-    /// the incoming and outgoing steps can resolve without re-reading the position, and the key a
-    /// write NAMED is not the same as one rebuilt from the declaration it resolved to — an
-    /// unqualified <c>&amp;foo</c> keys with a null namespace, which is what makes the union
-    /// behind find-references work.
-    /// </summary>
-    public static ImmutableArray<SymbolKey> FunctionKeysOf(
-        NavigationSupport support, NavigationTarget target, SymbolKey field, CancellationToken cancellationToken)
-    {
-        return BoundKeys(ReferencesTo(support, target, field), field, SymbolKind.Function, cancellationToken);
-    }
-
-    /// <summary>The declarations one bound key names.</summary>
-    public static ImmutableArray<ResolvedFunction> Functions(NavigationTarget target, SymbolKey function)
-    {
-        return DatabaseQueries.LookupFunctions(
-            target.Store,
-            target.ContextId,
-            target.Path,
-            function.Namespace,
-            function.Name,
-            askingNamespaces: target.Namespaces);
     }
 
     /// <summary>

@@ -175,12 +175,15 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same question,
   so a new directive form is taught here once.
 - `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
-  number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
-  does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers
-  what it reaches. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
+  number and the list cannot disagree. It narrows to "which file does this key mean, FROM THIS
+  DOCUMENT" — a lens on a declaration answers itself, a call answers what it reaches. On an include
+  dialect that is `DatabaseQueries.IncludeScopedCallTargets`, with the path call at the cursor when
+  the handler has one (references, rename, highlight, call hierarchy pass `PathCallReference.At` for
+  the hit), so a path call means the named file's function; a call that reaches nothing answers for
+  this file's own sites alone. Elsewhere it is `DeclaringFile`. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
   copies of a script, so without it a count merges both game modes' callers. Matches on the whole
   key, namespace included, or a file's own unrelated same-named function would claim the lens.
-- When `DeclaringFile` names one file, the query is `DatabaseQueries.FindReferencesReaching` — the
+- When one declaring file is known, the query is `DatabaseQueries.FindReferencesReaching` — the
   files that can reach it, not every file mentioning the key — and only an unnarrowed key collects
   everything and scopes afterwards. Same answer (`ReferenceScopeCorpusTests`); on a merge dialect,
   where `main`'s key is every `main`, it took a whole-file CodeLens at 50,000 files from 707 ms to
@@ -274,9 +277,13 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   fetched. Go-to-implementation wants the writes AND what they bind, and running the query twice
   paid the indexed lookup, the shadow rule and the include scoping over again - and left the two
   halves reading sets nothing guaranteed were equal.
-- `FunctionsOf`/`ClassesOf` return the declarations; `FunctionKeysOf` returns the KEYS, for call
-  hierarchy alone. An item carries the key in `Data`, and the key a write named is not the one
-  rebuilt from the declaration it resolved to - an unqualified `&foo` keys with a null namespace.
+- `FunctionsOf`/`ClassesOf` return the declarations; `BoundFunctionsOf` pairs each with the KEY its
+  write named, for call hierarchy, whose item carries the key in `Data` - an unqualified `&foo` keys
+  with a null namespace, which is not the key rebuilt from its declaration.
+- A bound function resolves in the file that WROTE it, through `DatabaseQueries.FunctionsTheCallReaches`
+  from that record: `level.cb = ::handler;` means the handler the writer reaches, and a path-written
+  pointer means the named file's, found again from the binding's `TargetRange` among the writer's
+  path calls. Asked from the reader's file, an include dialect answered every same-named function.
 - Reads `ScriptRecord.FieldBindings`, recorded at extraction, so a callback bound in one script
   answers in another without re-parsing that file on the request path. Cost is bounded by the
   field's WRITES, not the workspace: the reference query is indexed by key, and only the files

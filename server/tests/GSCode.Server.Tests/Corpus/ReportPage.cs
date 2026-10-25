@@ -145,7 +145,6 @@ internal static class ReportPage
         html.AppendLine("td.n{text-align:right;font-variant-numeric:tabular-nums}td.hot{background:var(--hot)}");
         html.AppendLine("td.bar{min-width:9rem;font-variant-numeric:tabular-nums}");
         html.AppendLine("td.bar i{display:inline-block;height:.65rem;margin-right:.4rem;background:var(--bar);vertical-align:middle}");
-        html.AppendLine("tr.stale td{opacity:.5}.tag{font-size:.75rem;padding:0 .3rem;border:1px solid var(--muted);border-radius:3px}");
         html.AppendLine("code{font:13px ui-monospace,monospace}");
         html.AppendLine(".q{width:100%;box-sizing:border-box;padding:.4rem .6rem;font:13px ui-monospace,monospace;");
         html.AppendLine("border:1px solid var(--line);border-radius:3px;background:transparent;color:inherit}");

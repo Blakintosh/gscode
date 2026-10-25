@@ -873,8 +873,9 @@ internal static class PerfReport
     ///
     /// Runs after EVERY sweep rather than once at the end, because there is no "end" a test can hook:
     /// whichever finishes last produces the complete page, and the ones before it produce correct
-    /// partial ones. Each row carries its own timestamp, and a sidecar <see cref="IsStale"/> names is
-    /// marked stale and kept out of the cross-game tables rather than silently compared.
+    /// partial ones. Each row carries the time its sweep ran: sidecars stay in the folder between
+    /// runs, so a game left out of the latest sweep shows its older numbers beside the newer ones.
+    /// Clear the folder for a comparison of one run only.
     /// </summary>
     public static void WriteAggregate(string directory)
     {
@@ -918,14 +919,6 @@ internal static class PerfReport
         }
 
         DateTime newest = games.Count == 0 ? DateTime.MinValue : games.Max(static g => RunAt(g));
-        HashSet<string> stale = new(StringComparer.Ordinal);
-        foreach ( GameSummary game in games )
-        {
-            if ( IsStale(RunAt(game), newest) )
-            {
-                stale.Add(game.Game);
-            }
-        }
 
         // Known sweeps in pipeline order, then anything else a sidecar names — a retired sweep's
         // leftovers still show, under their own heading.
@@ -953,8 +946,8 @@ internal static class PerfReport
         html.AppendLine("<h2>Perf sweeps</h2>");
         html.AppendLine($"<div class=\"sub\">{games.Count} sidecar(s) in <code>{ReportPage.Escape(directory)}</code>, "
             + $"newest run at {ReportPage.Escape(newest.ToString("s", CultureInfo.InvariantCulture))}. A game not in "
-            + "the latest sweep keeps its previous numbers; one far older than the newest is dimmed, "
-            + "marked stale, and left out of the cross-game tables.</div>");
+            + "the latest sweep keeps its previous numbers: check each row's run time, or clear the folder "
+            + "to compare one run only.</div>");
 
         List<string> contents = [];
         foreach ( string kind in kinds )
@@ -978,12 +971,10 @@ internal static class PerfReport
                 continue;
             }
 
-            List<GameSummary> fresh = [.. ofKind.Where(g => !stale.Contains(g.Game))];
-
             html.AppendLine($"<h2 id=\"{ReportPage.Escape(kind)}\">{ReportPage.Escape(KindHeading(kind))}</h2>");
-            KindTable(html, directory, kind, ofKind, stale);
-            HotspotTable(html, fresh);
-            SubPhasePivot(html, fresh);
+            KindTable(html, directory, kind, ofKind);
+            HotspotTable(html, ofKind);
+            SubPhasePivot(html, ofKind);
         }
 
         ReportPage.Foot(html);
@@ -1043,22 +1034,8 @@ internal static class PerfReport
         return DateTime.MinValue;
     }
 
-    /// <summary>
-    /// Whether a sidecar is too old to sit beside the newest run as if it were current. A stale one
-    /// stays on the page, dimmed and labelled, but is left out of the hotspot and sub-phase tables so
-    /// it cannot be read as part of today's comparison.
-    ///
-    /// No rule has been chosen, so nothing is stale yet: every sidecar is compared as current, and
-    /// the page's note about dimming describes a path that does not run. The question is in
-    /// <c>server/FOLLOWUPS.md</c>.
-    /// </summary>
-    private static bool IsStale(DateTime runAt, DateTime newest)
-    {
-        return false;
-    }
-
     private static void KindTable(
-        StringBuilder html, string directory, string kind, IReadOnlyList<GameSummary> games, HashSet<string> stale)
+        StringBuilder html, string directory, string kind, IReadOnlyList<GameSummary> games)
     {
         bool phases = kind == AnalysisKind;
         bool entries = games.Any(static g => g.Entries is not null);
@@ -1096,14 +1073,13 @@ internal static class PerfReport
 
         foreach ( GameSummary game in games )
         {
-            bool isStale = stale.Contains(game.Game);
             string page = ReportPage.PerfPage(game.Game);
             string name = File.Exists(Path.Combine(directory, page))
                 ? $"<a href=\"{ReportPage.Escape(page)}\"><code>{ReportPage.Escape(BaseGameOf(game.Game))}</code></a>"
                 : $"<code>{ReportPage.Escape(BaseGameOf(game.Game))}</code>";
 
             StringBuilder line = new();
-            line.Append(isStale ? "<tr class=\"stale\">" : "<tr>");
+            line.Append("<tr>");
             line.Append($"<td>{name}</td>");
             line.Append($"<td class=\"n\">{game.Files}</td><td class=\"n\">{game.TotalMilliseconds:F0}</td>");
             line.Append($"<td class=\"n\">{game.Median:F2}</td><td class=\"n\">{game.P90:F2}</td>");
@@ -1131,8 +1107,7 @@ internal static class PerfReport
                 }
             }
 
-            string label = isStale ? " <span class=\"tag\">stale</span>" : "";
-            line.Append($"<td>{ReportPage.Escape(game.GeneratedAt)}{label}</td></tr>");
+            line.Append($"<td>{ReportPage.Escape(game.GeneratedAt)}</td></tr>");
             html.AppendLine(line.ToString());
         }
 

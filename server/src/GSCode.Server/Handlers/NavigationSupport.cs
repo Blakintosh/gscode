@@ -313,12 +313,16 @@ public sealed class NavigationSupport
     /// copy calls, the full query read every reaching file's references — 100,103 of them for
     /// flag::init at 50,000 heavy BO3 files — to keep one.
     /// </summary>
+    /// <param name="pathCallTarget">
+    /// The file a path call at the cursor names, as for <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind, string)"/>.
+    /// Without it a path call into a file nothing includes reads as a bare call that reaches nothing.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindDefinitionSites(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
     {
         return FindAllReferences(
             ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
-            IsFileLocalMacro(target, key) ? target.Path : "", definitionsOnly: true);
+            IsFileLocalMacro(target, key) ? target.Path : "", definitionsOnly: true, pathCallTarget: pathCallTarget);
     }
 
     /// <summary>

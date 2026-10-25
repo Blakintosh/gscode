@@ -77,6 +77,28 @@ public sealed class IncludeScopedNavigationTests
     }
 
     [Fact]
+    public async Task APathCallIntoAFileNotIncluded_GoesToThatFilesFunction()
+    {
+        // The path names the file outright, so nothing has to include it: ModWarfare's _globallogic
+        // calls `self thread maps\mp\gametypes\_hardpoints::giveHardpointItem( hp )` with no include of
+        // _hardpoints. "\tif ( self thread maps\pathed::pathed_fn( 1 ) )" — pathed_fn at column 31.
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+            [
+                new TestFile(@"maps\pathed.gsc", "pathed_fn( p )\n{\n}\n"),
+                new TestFile(@"maps\caller2.gsc", "main()\n{\n\tif ( self thread maps\\pathed::pathed_fn( 1 ) )\n\t\treturn;\n}\n"),
+            ],
+            GameProfile.Cod4);
+        workspace.Open(@"maps\caller2.gsc");
+
+        LocationOrLocationLinks? result = await new DefinitionHandler(workspace.Navigation, HandlerWorkspace.Selector).Handle(
+            new DefinitionParams { TextDocument = HandlerWorkspace.Identify(@"maps\caller2.gsc"), Position = new Position(2, 31) },
+            CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.EndsWith(@"maps\pathed.gsc", Assert.Single(result!).Location!.Uri.GetFileSystemPath(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task AnEngineFunction_IsNotHiddenByAScriptFunctionTheFileCannotReach()
     {
         // maps\_utility declares its own spawn(), but this script does not include it.

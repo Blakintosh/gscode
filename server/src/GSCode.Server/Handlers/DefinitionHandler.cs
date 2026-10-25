@@ -104,7 +104,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         bool field = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field;
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
-            [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
+            [.. DefinitionSources(target, hit)
                 .Where(source => field ? source.Entry.IsFieldWrite : source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
@@ -159,16 +159,16 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// macro keys (a macro declared in a header is recorded there rather than in either language
     /// store, and without it go-to-definition on an inserted macro finds nothing at all).
     /// </summary>
-    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind)
+    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, PositionHit hit)
     {
         // A field has no declaration; its writes are everywhere it is written.
-        if ( key.Kind == GSCode.Core.Symbols.SymbolKind.Field )
+        if ( hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field )
         {
-            return _support.FindAllReferences(target, key, referenceKind);
+            return _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
         }
 
-        return _support.FindDefinitionSites(target, key, referenceKind);
+        return _support.FindDefinitionSites(
+            target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range));
     }
 
     /// <summary>

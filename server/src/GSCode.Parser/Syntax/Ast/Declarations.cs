@@ -29,7 +29,7 @@ public sealed record FileScopeConstantNode(TextRange Range, PToken NameToken, Ex
 /// <summary>#namespace name; — changes the namespace state for everything below it.</summary>
 public sealed record NamespaceNode(TextRange Range, PToken NameToken) : AstNode(Range);
 
-/// <summary>#precache(type, value, ...); — arguments kept raw for P4's table validation.</summary>
+/// <summary>#precache(type, value, ...); — arguments kept raw for <c>SymbolExtractor</c> to validate against <c>PrecacheAssetTypes</c>.</summary>
 public sealed record PrecacheNode(TextRange Range, ImmutableArray<PToken> Arguments) : AstNode(Range);
 
 /// <summary>#using_animtree("name");</summary>

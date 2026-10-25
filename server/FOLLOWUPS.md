@@ -306,6 +306,16 @@ spelled like the script function rather than the builtin, say — is where it wo
 
 ---
 
+### The perf hub never marks a sidecar stale
+
+`PerfReport.WriteAggregate` sets an older sidecar apart from the newest run: dimmed, labelled, and
+kept out of the cross-game tables. The page says so, and the code to do it is wired. But
+`PerfReport.IsStale` returns false, because no rule was ever chosen, so every sidecar is compared as
+current however old it is. The choice: an age gap from the newest run (a fixed number of hours or
+days), a different server build than the newest run, or both. A build rule is exact but needs the
+build identity written into each sidecar; an age rule needs nothing new but can call a week-old run
+of unchanged code stale. Until one is chosen, the page's note about dimming is not true.
+
 ## Known limitations from the triage pass
 
 Recorded because each was a deliberate stopping point, not an oversight. Neither needs work unless

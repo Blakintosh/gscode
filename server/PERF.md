@@ -2815,7 +2815,7 @@ diagnostics identical) and A/B'd at 25K before it was committed:
 ### 2026-10-21, later: the holes the first pass left, and three it had not looked at
 
 The same shape and harness, the same 15 GiB limit, one run each. "Before" is the table above; "after"
-is the branch at `bf063b82`. Two full 50K runs of the after state put the cold index at 52.5 and
+is the branch at `f03b0f9c`. Two full 50K runs of the after state put the cold index at 52.5 and
 39.3 s, so read that row as a range; the rest agreed between them within a few percent.
 
 | 50,000 files | before | after |
@@ -2895,7 +2895,7 @@ whether the raw copy's count. The first version also refused the raw script besi
 which is every stock script in an install with mods, and at 50K helped nothing until a log of its
 decisions showed why.
 
-| 50,000 heavy BO3 files, p99 | before (`bf063b82`) | after |
+| 50,000 heavy BO3 files, p99 | before (`f03b0f9c`) | after |
 |---|---:|---:|
 | CodeLens after an edit | 90.4 ms | **1.4 ms** |
 | one edit, end to end | 107.0 ms | **24.8 ms** |
@@ -2924,7 +2924,7 @@ its first 60 lines — with a separate row for every lens resolved. That one cos
 one-step list did, since each resolve looks the file up and builds the cache's signature again; no
 editor asks for it.
 
-| 50,000 heavy BO3 files, p99 | before (`3ffc2782`) | after (`d20174b5`) |
+| 50,000 heavy BO3 files, p99 | before (`483b5650`) | after (`9612c6f3`) |
 |---|---:|---:|
 | CodeLens on opening a file | 95.8 ms | **1.25 ms** |
 | CodeLens after an edit | 1.4 ms | 0.82 ms |
@@ -2944,7 +2944,7 @@ first 60 lines, appends a comment, lists and resolves again, and finally resolve
 **It works on the wire.** Lenses arrive with no command; every resolved one carries a title; the
 titles are the same after the edit. The first session also found a hang the harness cannot see: a
 client that sends `textDocument` capabilities without `completion` had `CompletionHandler` read off
-a null capability inside initialize, which was then never answered (`f3f27393`). VS Code always
+a null capability inside initialize, which was then never answered (`41a3f2a2`). VS Code always
 sends completion.
 
 | 50,000 heavy BO3 files, one session each | cold (no cache) | warm (cache) |
@@ -2990,27 +2990,27 @@ resolve (a workspace query) every 200 ms from Ready until the diagnostics push h
 
 Three causes, three commits:
 
-- **The sweep ran at request priority** on the thread pool (`8dba8f67`). Its workers are now
+- **The sweep ran at request priority** on the thread pool (`d05fa37d`). Its workers are now
   threads of their own at below-normal priority.
-- **The push was mostly Hints, sent twice, all at once** (`2dbb6f9e`). 85% of a closed file's
+- **The push was mostly Hints, sent twice, all at once** (`172f109b`). 85% of a closed file's
   diagnostics were Hints — unused bindings and locals — which VS Code shows only in an open editor;
   a file opened during the sweep triggered a refresh that pushed every record's parse-only set
   before the sweep replaced it; and the whole set went into the output channel ahead of every
   response. Closed files now go without Hints, full mode refreshes only once the sweep is done, and
   more than 256 sends are paced 100 at a time, 25 ms apart, in order, with a file's queued send
   dropped when it opens.
-- **The post-index compaction stopped the process for seconds** (`4f1a6ae7`): 626 ms at 10K,
+- **The post-index compaction stopped the process for seconds** (`7384188e`): 626 ms at 10K,
   2,539 at 25K, 4,095 at 50K, landing just after the sweep. Past 1 GB live a background gen2 runs
   instead. The trade is the last row: about 1.5 GB more resident at 50K.
 
 **An edit's diagnostics.** On `_globallogic.gsc` at 50K, an edit published 280–307 ms after the last
 change: a fixed 250 ms debounce, then 30–33 ms of analysis (`Analysed … in` at verbose). The wait is
-now three times the document's last analysis, between 125 and 250 ms (`e1931400`): 160–210 ms after
+now three times the document's last analysis, between 125 and 250 ms (`a87b6d29`): 160–210 ms after
 a single edit, 166–183 ms after the last key of a burst.
 
 What the analysis itself is, from a CPU profile of 69 edits: lints 54% (flow typing 12%, argument
 count 9%, then ten rules of 2–5%), parse 21%, committing the record to the index 10%. Three rules
-walked each function body's local uses separately; they now share one walk (`ff8b76f8`, about 6%).
+walked each function body's local uses separately; they now share one walk (`ee04db3d`, about 6%).
 A probe around each analysis put its allocation at 8.0 MB parse, 4.2 MB lints and 0.9 MB commit,
 and a gen0 collection landed in 6 of 16 edits, adding 12–21 ms each time.
 
@@ -3068,7 +3068,7 @@ This pass worked through what the 50,000-file work had left open: cod4's shape a
 memory questions, the cold index's spread, a bulk change on disk, and the editor's own cost. Every
 number here comes over stdio from the Release server unless it says it comes from the harness.
 
-**A branch switch froze the editor** (`8fe1c173`). VS Code sends every file event until 250 ms of
+**A branch switch froze the editor** (`0a84005e`). VS Code sends every file event until 250 ms of
 quiet as one `didChangeWatchedFiles`. The handler re-indexed the batch inside `Handle`, one file
 at a time, so the editor waited for all of it. The driver rewrote 5,000 copies on disk, sent them
 as one batch, typed in an open file two seconds later, and asked `documentSymbol` every 200 ms:
@@ -3089,10 +3089,10 @@ There is no forced collection between chunks. Still open: the comment-only switc
 a re-index replaces every array.
 
 **cod4 at 50,000 heavy files** was never measured before. The harness's hot-call probe looked only
-at namespace-qualified calls, which cod4 does not have, so it measured nothing (`740d5fee`). At 10K
+at namespace-qualified calls, which cod4 does not have, so it measured nothing (`01cc788a`). At 10K
 cod4 behaved like BO3. At 50K, a request that resolves a bare call grew with the workspace, because
 each function name is declared by about 2,000 copies. `LookupFunctions` returned every one of them,
-and hover took the first, which was sometimes the wrong function (`29186c93`). Calls now resolve
+and hover took the first, which was sometimes the wrong function (`2d7f5173`). Calls now resolve
 through the asking file, then the files it includes and path-calls:
 
 | cod4 50K | before | after |
@@ -3104,7 +3104,7 @@ through the asking file, then the files it includes and path-calls:
 
 A path call is keyed the same way as a bare call on these dialects, so `maps\other::main()` resolved
 like a bare `main()`. That was true before this pass as well. It now resolves in the file it names,
-then that file's include chain (`f7a64ce4`). `PathCallResolutionCorpusTests` checks all 12,483 path
+then that file's include chain (`10892acd`). `PathCallResolutionCorpusTests` checks all 12,483 path
 calls in cod4's stock scripts, and 2,104 of them land elsewhere without the written path.
 
 Unchanged:
@@ -3118,7 +3118,7 @@ A trace of the lint pass found no single rule growing, and per-rule p99 in the s
 The lens count on the stock file declaring `anim_pos` says 53, while find-references from a copy
 returns 45,228. That is visibility, not a bug: raw files cannot see workspace files.
 
-**Every full-mode start re-ran the whole lint sweep** (`3e5aba15`), warm or cold, to reach the
+**Every full-mode start re-ran the whole lint sweep** (`3369a96f`), warm or cold, to reach the
 diagnostics the previous session already had. The sweep's results are now stored with a
 fingerprint of the whole workspace and put back only when the fingerprint matches. One changed
 file anywhere and the start sweeps as before. Each pair below is a cold start and then an unchanged
@@ -3131,7 +3131,7 @@ restart, with the pushed diagnostics digested and compared:
 | bo3 50K, cold | 56.3 s | 117.7 s | 35,310 | `4c0c6d65…` |
 | bo3 50K, restart | **0.6 s** | **37.8 s** | 35,310 | `4c0c6d65…` |
 
-Every directive's and path call's resolution is part of the fingerprint too (`687b7ca3`). A lint
+Every directive's and path call's resolution is part of the fingerprint too (`3b525c7c`). A lint
 asks the resolver whether a target exists, and a target can exist without being a record. With two
 files opened at Ready, as VS Code restores tabs, a BO3 50K restart restored 49,985 files and linted
 the 2 open ones again, in 1.2 s.
@@ -3158,7 +3158,7 @@ on BO3, 37.7 s of 103 s on cod4. The collector is a fifth to a third of a cold s
 "cache" phase of one earlier start was the stale cache being emptied: `DELETE FROM files` over a
 1.8 GB table, most likely read from disk. The same delete took 1.6 s with the file in the OS cache.
 A stale cache's file is now deleted instead, in 0.1 s, which also gives back the 1.7 GB the row
-delete left on disk (`bfe3fa2b`). The harness's own cold figure still varies run to run, 51.0 s
+delete left on disk (`0d44008c`). The harness's own cold figure still varies run to run, 51.0 s
 then 76.4 s on cod4 50K with no indexing change between them. That is not explained.
 
 **Memory: reported, not changed.** At cod4 50K the harness puts a record at 162 KB:
@@ -3180,12 +3180,12 @@ the keys are 6.6 KB. As before, nothing that only wins on the copy shape was bui
 ### 2026-10-23: the tails, the features never timed at scale, and what the harness was measuring
 
 The rest of the open list, at 50,000 copies of the 25 heaviest scripts, cod4 and BO3. The harness now
-names the file behind each request's slowest time (`c668c66b`), and that answered the cod4 tails at
+names the file behind each request's slowest time (`9f3251e2`), and that answered the cod4 tails at
 once. Every slow file was a STOCK script (`maps\_utility`, `cargoship`, `airlift`, `_globallogic`,
 `sniperescape_code`). Stock scripts see none of the ~2,000 workspace copies that declare each of
 their names, and `LookupFunctions` paid a record lookup for every one of them on every question.
 The visible share of a name's declaring files is now taken once per asking context and kept against
-the index's array (`f9c5c14c`). A context epoch notices a file that moves context without changing
+the index's array (`9d3e3c99`). A context epoch notices a file that moves context without changing
 what it declares.
 
 | cod4 50K, p99 (harness) | before | after |
@@ -3202,7 +3202,7 @@ Over stdio, on stock `maps\_utility.gsc`: formatting went from 155 to 50.6 ms me
 from 34.0 to 15.5. What formatting has left is the formatter's own work on a very large file.
 Definition's 14 ms p99 is one copy's call and is left.
 
-**Features never timed at scale**, added to the per-request table (`b16c1b50`). At BO3 50K, p99:
+**Features never timed at scale**, added to the per-request table (`904a47aa`). At BO3 50K, p99:
 
 | request | p99 |
 |---|---:|
@@ -3214,7 +3214,7 @@ On-type formatting formats the whole file and keeps the edits around the cursor.
 costs about as much as whole-file formatting even when it returns nothing. Formatting only a
 fragment would need a formatter that can, which is a redesign; it is in budget as it is.
 
-**A workspace folder added mid-session froze the editor** (`c539cb91`). The handler ran the resolver
+**A workspace folder added mid-session froze the editor** (`803ffb3e`). The handler ran the resolver
 swap, a warm re-index and, in full mode, the whole sweep inside the notification. The driver added a
 ten-file folder at BO3 50K, typed in an open file two seconds later, and asked `documentSymbol`
 every 200 ms:
@@ -3227,7 +3227,7 @@ every 200 ms:
 The change now runs in the background, one change at a time and in order. The re-index (about 15 s)
 and the sweep still run; the editor no longer waits on them.
 
-**Running in the background opened a window, and it was closed** (`5ad2415b`, `9884aa4b`). A
+**Running in the background opened a window, and it was closed** (`82b865c4`, `4916d131`). A
 folder change restores every unchanged file from the cache, and a cached record carries its parse
 diagnostics only, so for the sweep's minute every closed file held less than it had published. A
 save in that minute ends in a refresh. The driver added the folder, then saved one closed file once
@@ -3242,7 +3242,7 @@ A restore now keeps a live record of the same content, context and relative path
 pump holds what its batch's files last published until their relint, so a refresh from elsewhere
 cannot send the parse-only sets in between.
 
-**The branch switch's republish** (`c0969529`). A comment-only switch of 5,000 files sent 3,561
+**The branch switch's republish** (`b21bf100`). A comment-only switch of 5,000 files sent 3,561
 closed files whose diagnostics had not changed. `Refresh` compared each set by reference, and a
 re-index builds new arrays. It now compares by value and holds files awaiting their relint: across
 four batches in two runs, each switch sent one notification, the open file's own, with no file sent
@@ -3250,16 +3250,16 @@ twice and none withdrawn.
 
 **Two correctness fixes the async pump made worth doing:**
 - A document opened between a re-index's first "is it open?" and its commit had its buffer
-  overwritten by the disk record. The indexer now asks again right before it writes (`21c3e130`).
+  overwritten by the disk record. The indexer now asks again right before it writes (`f4d872cd`).
 - A bare call to a function reached only through a nested `#include` fell back to the wide lookup.
-  The reachable lookup now walks the include chain, nearest first (`29f43da8`).
+  The reachable lookup now walks the include chain, nearest first (`56e55fd1`).
 
 **The cold index's run-to-run spread was the OS file cache.** This machine has 32 GB, the two 50K
 workspaces hold 11 GB of source, and the server keeps a 12 GB heap, so the cache rarely holds both
 workspaces. Reading the cod4 workspace took 39.2 s from disk and 3.3 s from the cache. The same BO3
 cold index measured 75.0 s in a full run that started cold, then 34.1 and 34.2 s back to back. The
 harness now reads every script first, on a row of its own, and times the index from the cache
-(`daecb047`): cod4 40.0 s to read, then 49.3 s to index; BO3 45.6 s to read, then 35.6 s to index.
+(`08f54eeb`): cod4 40.0 s to read, then 49.3 s to index; BO3 45.6 s to read, then 35.6 s to index.
 A first start after a reboot does pay the read.
 
 **gen0 on a large heap: measured, not changed.** A gen0 costs 15–20 ms when it lands in a request

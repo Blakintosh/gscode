@@ -204,7 +204,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
-        // Saves bypass the debounce: dependents and the cache (P5/P6) key off saved state.
+        // Saves bypass the debounce: dependents and the cache key off saved state.
         if ( _documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
             // Scheduled like every other analysis rather than run right here: inline it would be a

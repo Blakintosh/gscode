@@ -123,7 +123,7 @@ public static class WorkspaceLints
 
         ImmutableArray<Diagnostic>.Builder lints = ImmutableArray.CreateBuilder<Diagnostic>();
 
-        // The file's imports, resolved ONCE for the four lints that need them: every resolve is a
+        // The file's imports, resolved ONCE for the five lints that need them: every resolve is a
         // filesystem probe per configured root, and this runs on every keystroke.
         FileImports imports;
         using ( LintScope.For("lint.FileImports.Resolve", timings) )

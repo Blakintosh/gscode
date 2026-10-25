@@ -8,7 +8,7 @@ namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
 /// The add-#using fix, driven the way the EDITOR drives it: through CodeActionHandler.Handle with a
-/// real document store and navigation support, rather than by calling FindMissingUsings directly.
+/// real document store and navigation support, rather than by calling FindMissingUsingSites directly.
 ///
 /// The direct tests on FindMissingUsings pass and always have, which is exactly why these exist —
 /// the reported fault was that asking for the fix on a `gscode-5000` produced nothing, and a unit

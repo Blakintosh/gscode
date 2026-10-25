@@ -290,7 +290,7 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             }
         }
 
-        // Organize Imports is NOT built here — see BuildOrganizeImportsAction's own call site in
+        // Organize Imports is NOT built here — see AddOrganizeImportsAction's own call site in
         // Handle(). This method only ever sees whatever unusedUsings/unusedIncludes the REQUEST's
         // own diagnostics carried (the client's selection, or DiagnosticsForFixes' one-line
         // fallback), and "Organize Imports" is a whole-DOCUMENT command by convention — scoping it

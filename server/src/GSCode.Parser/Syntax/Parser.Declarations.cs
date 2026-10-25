@@ -238,7 +238,7 @@ public sealed partial class Parser
         PToken directive = Advance();
         Expect(TokenKind.OpenParen, "(");
 
-        // Arguments are kept raw (commas included); P4 validates them against the
+        // Arguments are kept raw (commas included); SymbolExtractor validates them against the
         // PrecacheAssetTypes table.
         ImmutableArray<PToken>.Builder arguments = ImmutableArray.CreateBuilder<PToken>();
         int depth = 1;

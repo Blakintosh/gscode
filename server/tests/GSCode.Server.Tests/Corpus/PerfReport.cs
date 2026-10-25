@@ -873,7 +873,7 @@ internal static class PerfReport
     ///
     /// Runs after EVERY sweep rather than once at the end, because there is no "end" a test can hook:
     /// whichever finishes last produces the complete page, and the ones before it produce correct
-    /// partial ones. Each row carries its own timestamp, and a sidecar far older than the newest is
+    /// partial ones. Each row carries its own timestamp, and a sidecar <see cref="IsStale"/> names is
     /// marked stale and kept out of the cross-game tables rather than silently compared.
     /// </summary>
     public static void WriteAggregate(string directory)
@@ -1047,10 +1047,13 @@ internal static class PerfReport
     /// Whether a sidecar is too old to sit beside the newest run as if it were current. A stale one
     /// stays on the page, dimmed and labelled, but is left out of the hotspot and sub-phase tables so
     /// it cannot be read as part of today's comparison.
+    ///
+    /// No rule has been chosen, so nothing is stale yet: every sidecar is compared as current, and
+    /// the page's note about dimming describes a path that does not run. The question is in
+    /// <c>server/FOLLOWUPS.md</c>.
     /// </summary>
     private static bool IsStale(DateTime runAt, DateTime newest)
     {
-        // TODO(user): decide the staleness rule. See the conversation for the trade-offs.
         return false;
     }
 

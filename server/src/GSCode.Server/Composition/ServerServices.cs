@@ -158,9 +158,9 @@ internal static class ServerServices
         services.AddSingleton<ServerStatusNotifier>();
 
         services.AddSingleton<ScriptDatabase>();
-        // Lazy factories, not eager instances: the game (and so which data files to read) is
-        // selected after ConfigureServices, so loading is deferred to first resolution to give
-        // GameProfile.Active a chance to be the workspace's game rather than the startup default.
+        // Lazy factories, not eager instances: which data files to read depends on GameProfile.Active,
+        // which Program.cs selects from --game before this runs and initialize selects again as a
+        // safety net, so loading is deferred to first resolution and reads the game then in force.
         services.AddSingleton(new LensCountCache());
         services.AddSingleton(_ => LoadBuiltinApi());
         services.AddSingleton(_ => LoadObjectFields());

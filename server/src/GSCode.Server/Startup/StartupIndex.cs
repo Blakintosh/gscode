@@ -391,9 +391,15 @@ internal sealed class StartupIndexRunner
     // real server over stdio at 10,000 files, a document-symbol request made then waited 521 ms
     // against 10 ms around it. Past the limit a background gen2 collects what indexing left without
     // stopping the process; what it does not give back is a small part of a heap that large.
+    //
+    // The heap is measured as of the last collection, not by GC.GetTotalMemory, which also counts
+    // garbage no collection has reached yet and so depends on when the last one ran. On the stock
+    // BO3 install (1,086 files) it read 1,236 MB in one start and 162 MB in the next, against 65 MB
+    // actually live: the first start skipped the compaction and kept 1.4 GB of working set that the
+    // compaction gives back in about 120 ms.
     private static void Compact()
     {
-        long live = GC.GetTotalMemory(forceFullCollection: false);
+        long live = GC.GetGCMemoryInfo().HeapSizeBytes;
         Stopwatch pause = Stopwatch.StartNew();
 
         if ( live > CompactionLiveLimit )

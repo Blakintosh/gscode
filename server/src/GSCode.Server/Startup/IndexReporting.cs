@@ -137,7 +137,7 @@ internal static class IndexReporting
         GCMemoryInfo info = GC.GetGCMemoryInfo();
 
         double workingSet = Environment.WorkingSet / (1024.0 * 1024.0);
-        double managedLive = GC.GetTotalMemory(forceFullCollection: false) / (1024.0 * 1024.0);
+        double allocated = GC.GetTotalMemory(forceFullCollection: false) / (1024.0 * 1024.0);
         double heapSize = info.HeapSizeBytes / (1024.0 * 1024.0);
         double committed = info.TotalCommittedBytes / (1024.0 * 1024.0);
         double fragmented = info.FragmentedBytes / (1024.0 * 1024.0);
@@ -146,7 +146,7 @@ internal static class IndexReporting
         report.AppendLine($"Memory after {phase}:");
         report.AppendLine($"    files           {outcome.Total,8:N0}  ({outcome.Restored:N0} restored · {outcome.Analysed:N0} analysed)");
         report.AppendLine($"    working set     {workingSet,8:F1} MB   (what the OS reports)");
-        report.AppendLine($"    managed live    {managedLive,8:F1} MB   (retained objects)");
+        report.AppendLine($"    allocated       {allocated,8:F1} MB   (live, plus garbage not yet collected)");
         report.AppendLine($"    heap size       {heapSize,8:F1} MB");
         report.AppendLine($"    committed       {committed,8:F1} MB");
         report.AppendLine($"    fragmented      {fragmented,8:F1} MB");

@@ -12,7 +12,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Position = GSCode.Core.Text.Position;
 using TextRange = GSCode.Core.Text.TextRange;
 using SymbolKind = GSCode.Core.Symbols.SymbolKind;
-using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
 
 namespace GSCode.Server.Handlers;
 
@@ -68,8 +67,7 @@ public sealed class RenameHandler : RenameHandlerBase
 
         Dictionary<DocumentUri, List<TextEdit>> edits = new();
         // The full visible set: a header macro renamed in GSC alone would leave CSC broken.
-        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(
-            target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range)) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, hit) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 

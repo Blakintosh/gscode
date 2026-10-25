@@ -143,6 +143,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri, cancellationToken)` — shared plumbing
   turning a document URI into its live analysis + the language store and context id to query.
+  `NavigationTarget.PathCallAt(range)` is the file a path call at that range names, "" for any
+  other site — the one spelling of "the path call at the cursor" every handler asks for.
 - `SymbolQueryContext` + `ResolveForQuery(uri, cancellationToken)` — the same thing WITHOUT a parse,
   answering from the file's record when it is not open. For the hierarchies: expanding an incoming
   call or a supertype names another file, and that file is normally not one the user has open, so
@@ -178,9 +180,11 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   number and the list cannot disagree. It narrows to "which file does this key mean, FROM THIS
   DOCUMENT" — a lens on a declaration answers itself, a call answers what it reaches. On an include
   dialect that is `DatabaseQueries.IncludeScopedCallTargets`, with the path call at the cursor when
-  the handler has one (references, rename, highlight, call hierarchy pass `PathCallReference.At` for
-  the hit), so a path call means the named file's function; a call that reaches nothing answers for
-  this file's own sites alone. Elsewhere it is `DeclaringFile`. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
+  the handler has one, so a path call means the named file's function; a call that reaches nothing
+  answers for this file's own sites alone. Every request at a cursor (references, rename, highlight,
+  definition, call hierarchy) asks through the `PositionHit` overloads of `FindAllReferences`,
+  `FindReferencesInFile` and `FindDefinitionSites`, which take the path call from the hit, so none
+  can drop it. Elsewhere it is `DeclaringFile`. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
   copies of a script, so without it a count merges both game modes' callers. Matches on the whole
   key, namespace included, or a file's own unrelated same-named function would claim the lens.
 - When one declaring file is known, the query is `DatabaseQueries.FindReferencesReaching` — the
@@ -280,6 +284,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 - `FunctionsOf`/`ClassesOf` return the declarations; `BoundFunctionsOf` pairs each with the KEY its
   write named, for call hierarchy, whose item carries the key in `Data` - an unqualified `&foo` keys
   with a null namespace, which is not the key rebuilt from its declaration.
+- Both kinds walk one private `Bindings(references, field, kind)`: each binding of that kind, with the
+  file that wrote it, reading each writing file once - so which write counts cannot differ between
+  functions and classes.
 - A bound function resolves in the file that WROTE it, through `DatabaseQueries.FunctionsTheCallReaches`
   from that record: `level.cb = ::handler;` means the handler the writer reaches, and a path-written
   pointer means the named file's, found again from the binding's `TargetRange` among the writer's

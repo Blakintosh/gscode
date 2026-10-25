@@ -110,6 +110,7 @@ public static class FunctionResolutionLint
 
         // Path-qualified calls name a FILE, so they are script-domain regardless of dialect. They
         // are keyed with a null namespace like everything else, and are told apart by their range.
+        // A map rather than PathCallReference.NameRanges: the rule needs the file each range names.
         Dictionary<TextRange, string> pathCallTargets = [];
         foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
         {

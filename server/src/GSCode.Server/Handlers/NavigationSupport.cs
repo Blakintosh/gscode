@@ -10,6 +10,7 @@ using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
 using GSCode.Server.Configuration;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -33,7 +34,18 @@ public sealed record NavigationTarget(
     LanguageStore Store,
     ImmutableArray<LanguageStore> Stores,
     string ContextId,
-    ImmutableArray<string> Namespaces);
+    ImmutableArray<string> Namespaces)
+{
+    /// <summary>
+    /// The file a path call at <paramref name="range"/> in this document names, "" when the site there
+    /// is not a path call. Every request asked at a cursor needs it: a path call means the named file's
+    /// function, and a resolver handed "" reads it as a bare call.
+    /// </summary>
+    public string PathCallAt(TextRange range)
+    {
+        return GSCode.Parser.Extraction.PathCallReference.At(Result.Extraction.PathCalls, range);
+    }
+}
 
 /// <summary>
 /// Everything a symbol query needs about the file doing the asking, with no parse attached.
@@ -293,8 +305,8 @@ public sealed class NavigationSupport
     /// </param>
     /// <param name="pathCallTarget">
     /// The file a path call at the cursor names, "" for any other site — what
-    /// <c>PathCallReference.At</c> gives for the hit's range. A path call means the named file's
-    /// function, whatever this file declares under the same name.
+    /// <see cref="NavigationTarget.PathCallAt"/> gives for the hit's range. A path call means the
+    /// named file's function, whatever this file declares under the same name.
     /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
@@ -302,6 +314,15 @@ public sealed class NavigationSupport
         return FindAllReferences(
             ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
             IsFileLocalMacro(target, key) ? target.Path : "", pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>
+    /// The same query, asked of the hit under a cursor: its key, how the site used it, and the path
+    /// call there if it is one. The form every request at a cursor takes, so none can drop the path.
+    /// </summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(NavigationTarget target, PositionHit hit)
+    {
+        return FindAllReferences(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
     }
 
     /// <summary>
@@ -323,6 +344,12 @@ public sealed class NavigationSupport
         return FindAllReferences(
             ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
             IsFileLocalMacro(target, key) ? target.Path : "", definitionsOnly: true, pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>The same, asked of the hit under a cursor, as <see cref="FindAllReferences(NavigationTarget, PositionHit)"/>.</summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindDefinitionSites(NavigationTarget target, PositionHit hit)
+    {
+        return FindDefinitionSites(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
     }
 
     /// <summary>
@@ -363,6 +390,12 @@ public sealed class NavigationSupport
         return FindAllReferences(
             ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path,
             pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>The same, asked of the hit under a cursor, as <see cref="FindAllReferences(NavigationTarget, PositionHit)"/>.</summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesInFile(NavigationTarget target, PositionHit hit)
+    {
+        return FindReferencesInFile(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
     }
 
     /// <summary>
@@ -412,10 +445,10 @@ public sealed class NavigationSupport
     /// </param>
     /// <param name="onlyPath">
     /// See <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/>'s parameter of
-    /// the same name, and <see cref="FindReferencesInFile"/> for the caller it exists for.
+    /// the same name, and <see cref="FindReferencesInFile(NavigationTarget, SymbolKey, ReferenceKind, string)"/> for the caller it exists for.
     /// </param>
     /// <param name="definitionsOnly">
-    /// The caller keeps only declaration entries — see <see cref="FindDefinitionSites"/>.
+    /// The caller keeps only declaration entries — see <see cref="FindDefinitionSites(NavigationTarget, SymbolKey, ReferenceKind, string)"/>.
     /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
@@ -585,21 +618,17 @@ public sealed class NavigationSupport
 
     /// <summary>
     /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
-    /// specific file.
+    /// specific file — for the keys <see cref="DatabaseQueries.IncludeScopedCallTargets"/> leaves to
+    /// the caller. A bare function key on an include dialect never gets here: the engine's own rule
+    /// answers it first, in <see cref="FindAllReferences(SymbolQueryContext, SymbolKey, ReferenceKind, bool, string, bool, string)"/>.
     ///
-    /// Under a merge dialect a function has no namespace, so the key alone names every same-named
-    /// function in the workspace; what disambiguates it is the asking file, which can only reach
-    /// declarations it owns, imports or path-calls. Resolving from the asking document therefore
-    /// answers both callers correctly with one rule: a CodeLens sits on a declaration and resolves
-    /// to the file it is already in, while find-references on a call resolves to the declaration
-    /// that call actually reaches.
-    ///
-    /// A namespace-driven dialect needs the same rule for a smaller reason: the namespace is in the
-    /// key, but it does not pin a FILE. Both <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and
-    /// <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> declare <c>#namespace globallogic_utils</c>,
-    /// so without this a reference count on either merged both game modes' callers. The reachability
-    /// question is identical — a <c>#using</c> edge is a dependency edge like an <c>#include</c> — so
-    /// the same walk answers it.
+    /// On a namespace dialect the namespace is in the key, but it does not pin a FILE. Both
+    /// <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and <c>scripts\zm\gametypes\_globallogic_utils.gsc</c>
+    /// declare <c>#namespace globallogic_utils</c>, so without this a reference count on either merged
+    /// both game modes' callers. What disambiguates it is the asking file, which can only reach
+    /// declarations it owns, <c>#using</c>s or path-calls. Resolving from the asking document answers
+    /// both callers with one rule: a CodeLens sits on a declaration and resolves to the file it is
+    /// already in, while find-references on a call resolves to the declaration that call reaches.
     ///
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.

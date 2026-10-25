@@ -1298,14 +1298,7 @@ public static class DatabaseQueries
     public static HashSet<string> ReachableRelativePaths(ScriptRecord record)
     {
         HashSet<string> reachable = new(StringComparer.Ordinal) { RelativePathIndex.Normalize(record.RelativePath) };
-
-        foreach ( DependencyEdge edge in record.Dependencies )
-        {
-            if ( !edge.IsInsert )
-            {
-                reachable.Add(RelativePathIndex.Normalize(edge.RawPath));
-            }
-        }
+        reachable.UnionWith(IncludedRelativePaths(record));
 
         foreach ( PathCallReference pathCall in record.PathCallTargets )
         {
@@ -1315,6 +1308,10 @@ public static class DatabaseQueries
         return reachable;
     }
 
+    /// <summary>
+    /// <see cref="ReachableRelativePaths"/>' set, tested against one path without building it: this
+    /// runs once per candidate declaration, so it stops at the first match and allocates nothing.
+    /// </summary>
     private static bool CanReach(ScriptRecord record, string declaring)
     {
         if ( RelativePathIndex.Normalize(record.RelativePath) == declaring )
@@ -1393,6 +1390,10 @@ public static class DatabaseQueries
     ///
     /// Direct hops only, which is exactly what the compiler copies in — see
     /// <see cref="IncludedFiles"/>.
+    ///
+    /// The same rule as <see cref="ReachableFunctions"/>, kept apart on purpose: that one answers ONE
+    /// name from the stored record, this every name from the include list completion already has.
+    /// <c>IncludeScopeLookupTests</c> requires the two to agree.
     /// </summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,

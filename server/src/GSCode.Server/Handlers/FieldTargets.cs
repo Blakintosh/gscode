@@ -88,52 +88,29 @@ internal static class FieldTargets
         CancellationToken cancellationToken)
     {
         ImmutableArray<BoundFunction>.Builder found = ImmutableArray.CreateBuilder<BoundFunction>();
-        if ( field.Kind != SymbolKind.Field )
-        {
-            return found.ToImmutable();
-        }
-
-        HashSet<string> visited = new(StringComparer.Ordinal);
         HashSet<(string Path, GSCode.Core.Text.TextRange Range)> seen = [];
 
-        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
+        foreach ( (ScriptRecord Writer, FieldBinding Binding) bound in Bindings(references, field, SymbolKind.Function, cancellationToken) )
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            // Only a file that WRITES the field can bind it, and a file is read once however many
-            // times it writes.
-            ScriptRecord writer = reference.Record;
-            if ( reference.Entry.Kind != ReferenceKind.FieldWrite || !visited.Add(writer.Path) )
-            {
-                continue;
-            }
-
+            ScriptRecord writer = bound.Writer;
             LanguageStore? store = StoreHolding(target, writer);
             if ( store is null )
             {
                 continue;
             }
 
-            foreach ( FieldBinding binding in writer.FieldBindings )
+            foreach ( ResolvedFunction resolved in DatabaseQueries.FunctionsTheCallReaches(
+                store,
+                writer.ContextId,
+                writer.Path,
+                bound.Binding.Target.Namespace,
+                bound.Binding.Target.Name,
+                PathCallReference.At(writer.PathCallTargets, bound.Binding.TargetRange),
+                writer.DeclaredNamespaces) )
             {
-                if ( binding.Field != field || binding.Target.Kind != SymbolKind.Function )
+                if ( seen.Add((resolved.Record.Path, resolved.Function.NameRange)) )
                 {
-                    continue;
-                }
-
-                foreach ( ResolvedFunction resolved in DatabaseQueries.FunctionsTheCallReaches(
-                    store,
-                    writer.ContextId,
-                    writer.Path,
-                    binding.Target.Namespace,
-                    binding.Target.Name,
-                    PathCallReference.At(writer.PathCallTargets, binding.TargetRange),
-                    writer.DeclaredNamespaces) )
-                {
-                    if ( seen.Add((resolved.Record.Path, resolved.Function.NameRange)) )
-                    {
-                        found.Add(new BoundFunction(binding.Target, resolved));
-                    }
+                    found.Add(new BoundFunction(bound.Binding.Target, resolved));
                 }
             }
         }
@@ -171,24 +148,28 @@ internal static class FieldTargets
     {
         ImmutableArray<ResolvedClass>.Builder found = ImmutableArray.CreateBuilder<ResolvedClass>();
 
-        foreach ( SymbolKey bound in BoundKeys(references, field, SymbolKind.Class, cancellationToken) )
+        // Deduplicated by key rather than by site: <c>level.cls = new Foo()</c> written in four game
+        // modes is one class, and offering it four times is a picker the reader has to squint at.
+        HashSet<SymbolKey> seen = [];
+        foreach ( (ScriptRecord Writer, FieldBinding Binding) bound in Bindings(references, field, SymbolKind.Class, cancellationToken) )
         {
-            found.AddRange(DatabaseQueries.LookupClasses(
-                target.Store, target.ContextId, namespaceName: null, bound.Name));
+            if ( seen.Add(bound.Binding.Target) )
+            {
+                found.AddRange(DatabaseQueries.LookupClasses(
+                    target.Store, target.ContextId, namespaceName: null, bound.Binding.Target.Name));
+            }
         }
 
         return found.ToImmutable();
     }
 
     /// <summary>
-    /// Every distinct symbol of <paramref name="kind"/> bound to <paramref name="field"/>, or
-    /// empty when the key is not a field or nothing binds it.
-    ///
-    /// Deduplicated by key rather than by site: <c>level.callback = &amp;on_damage</c> written in
-    /// four game modes is one implementation, and offering it four times is a picker the reader has
-    /// to squint at rather than an answer.
+    /// Every binding of a <paramref name="kind"/> symbol to <paramref name="field"/>, with the file
+    /// that wrote it; nothing when the key is not a field. Only a file that WRITES the field can bind
+    /// it, and a file is read once however many times it writes. The one walk both kinds of target
+    /// take, so which write counts cannot differ between them.
     /// </summary>
-    private static ImmutableArray<SymbolKey> BoundKeys(
+    private static IEnumerable<(ScriptRecord Writer, FieldBinding Binding)> Bindings(
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> references,
         SymbolKey field,
         SymbolKind kind,
@@ -196,19 +177,14 @@ internal static class FieldTargets
     {
         if ( field.Kind != SymbolKind.Field )
         {
-            return [];
+            yield break;
         }
 
         HashSet<string> visited = new(StringComparer.Ordinal);
-        HashSet<SymbolKey> seen = [];
-        ImmutableArray<SymbolKey>.Builder found = ImmutableArray.CreateBuilder<SymbolKey>();
-
         foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in references )
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Only a file that WRITES the field can bind it, and a file is read once however many
-            // times it writes.
             if ( reference.Entry.Kind != ReferenceKind.FieldWrite || !visited.Add(reference.Record.Path) )
             {
                 continue;
@@ -216,18 +192,11 @@ internal static class FieldTargets
 
             foreach ( FieldBinding binding in reference.Record.FieldBindings )
             {
-                if ( binding.Field != field || binding.Target.Kind != kind )
+                if ( binding.Field == field && binding.Target.Kind == kind )
                 {
-                    continue;
-                }
-
-                if ( seen.Add(binding.Target) )
-                {
-                    found.Add(binding.Target);
+                    yield return (reference.Record, binding);
                 }
             }
         }
-
-        return found.ToImmutable();
     }
 }

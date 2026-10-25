@@ -151,11 +151,7 @@ public static class IncludeUsageLint
         // Path calls name their target file, so no import makes them legal or illegal. Told apart
         // from bare calls by range, the way FunctionResolutionLint does it — both are keyed with a
         // null namespace.
-        HashSet<TextRange> pathCallRanges = [];
-        foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
-        {
-            pathCallRanges.Add(pathCall.NameRange);
-        }
+        HashSet<TextRange> pathCallRanges = PathCallReference.NameRanges(result.Extraction.PathCalls);
 
         Dictionary<string, ImmutableArray<ResolvedFunction>> lookups =
             new(StringComparer.OrdinalIgnoreCase);

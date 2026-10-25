@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Text;
 using GSCode.Core.Symbols;
 using GSCode.Parser;
-using GSCode.Parser.Extraction;
 using GSCode.Parser.Lexing;
 using GSCode.Workspace.Api;
 using GSCode.Workspace.Database;
@@ -135,7 +134,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 // name when the receiver's class is unknown. LookupFunctions alone never sees one.
                 ImmutableArray<ResolvedFunction> functions = MethodResolution.ResolveCall(
                     target.Store, target.ContextId, target.Path, key, referenceKind,
-                    askingNamespaces: target.Namespaces, pathCallTarget: PathCallReference.At(target.Result.Extraction.PathCalls, hitRange));
+                    askingNamespaces: target.Namespaces, pathCallTarget: target.PathCallAt(hitRange));
 
                 if ( functions.Length > 0 )
                 {

@@ -10,7 +10,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
-using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
 using Position = GSCode.Core.Text.Position;
 using TextRange = GSCode.Core.Text.TextRange;
 
@@ -167,8 +166,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
             return _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
         }
 
-        return _support.FindDefinitionSites(
-            target, hit.Key, hit.ReferenceKind, PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range));
+        return _support.FindDefinitionSites(target, hit);
     }
 
     /// <summary>
@@ -196,7 +194,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     {
         // A path call names its target file explicitly — pin to it (as its own single-file scope).
         // Empty on BO3, which has no inline path calls, so the loop costs nothing there.
-        string pathCallTarget = PathCallReference.At(target.Result.Extraction.PathCalls, hit.Range);
+        string pathCallTarget = target.PathCallAt(hit.Range);
 
         // On an include dialect a function call reaches only what the file a path call names, or
         // the file itself and its include chain, provide: the engine never looks a name up across

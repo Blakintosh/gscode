@@ -31,6 +31,22 @@ public readonly record struct PathCallReference(string Path, TextRange NameRange
 
         return "";
     }
+
+    /// <summary>
+    /// The name range of every path call, for a caller that asks of each reference whether it is one.
+    /// A path call is keyed <c>(null, name)</c> like a bare call, so its range is all that tells the
+    /// two apart.
+    /// </summary>
+    public static HashSet<TextRange> NameRanges(ImmutableArray<PathCallReference> pathCalls)
+    {
+        HashSet<TextRange> ranges = [];
+        foreach ( PathCallReference pathCall in pathCalls )
+        {
+            ranges.Add(pathCall.NameRange);
+        }
+
+        return ranges;
+    }
 }
 
 /// <summary>

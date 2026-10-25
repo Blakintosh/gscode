@@ -52,11 +52,7 @@ public static class UnusedIncludeLint
         // Every function name this file calls BARE, ignoring its own definitions. Merge dialects key
         // functions with no namespace, so the name is the whole key; a path call is told apart by its
         // range and does not count.
-        HashSet<TextRange> pathCallRanges = [];
-        foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
-        {
-            pathCallRanges.Add(pathCall.NameRange);
-        }
+        HashSet<TextRange> pathCallRanges = PathCallReference.NameRanges(result.Extraction.PathCalls);
 
         HashSet<string> calledFunctions = new(StringComparer.Ordinal);
         foreach ( ReferenceEntry entry in result.Extraction.References )

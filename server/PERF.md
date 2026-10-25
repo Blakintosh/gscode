@@ -3333,8 +3333,24 @@ them.
 asks at the first call whose name the file also declares. In `ambush.gsc` that is line 26,
 `maps\_bm21_troops::main( "vehicle_bm21_mobile_cover" )`, a path call in a file with a `main` of its
 own. Before, references there answered with ambush's own `main` (6.6 KB). Now they answer with
-`_bm21_troops`'s `main` and every call to it in every copy (3,269 KB); the median stays 0.01 ms. On
-cod4 the row name is now a misnomer for files like this: it times a path call into a busy file.
+`_bm21_troops`'s `main` and every call to it in every copy (3,269 KB); the median stays 0.01 ms.
+
+So the rows were split (`56b92073`): "own call" skips path calls, and a path call gets rows of its
+own. Rerun at cod4 50K, after only:
+
+| cod4 50K | median | p99 | largest answer |
+|---|---:|---:|---:|
+| references, own call | 0.01 ms | 0.29 ms | 6.6 KB |
+| rename, own call | 0.01 ms | 0.11 ms | 4.8 KB |
+| references, path call | 8.9 ms | **5,576 ms** | **764 MB** |
+| rename, path call | 10.6 ms | **4,188 ms** | **410 MB** |
+
+The tail is one call: `animscripts\utility::setFootstepEffect`, which each `_fx` script calls about
+twenty times, in a workspace holding thousands of copies of them. Find-references answers with every
+one of those calls, and serializing that answer alone took 3.5 s. It is the copy shape at its
+extreme, the same shape that made a 45K-location answer acceptable before, and references stay
+uncapped; the harness now streams each answer into a character count (`CountingWriter`), since a
+string of that size does not fit.
 
 Unchanged where nothing touched them: index, sweep, memory, warm start, CodeLens and the edit
 bundle are within the spread on both games.

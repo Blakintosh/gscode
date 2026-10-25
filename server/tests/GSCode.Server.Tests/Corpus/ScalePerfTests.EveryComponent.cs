@@ -485,10 +485,41 @@ public partial class ScalePerfTests
             return;
         }
 
+        // Streamed into a counter rather than built as one string: references on a path call into a
+        // stock function every copy calls answers with more characters than one string can hold.
         long serializeStarted = Stopwatch.GetTimestamp();
-        string payload = JsonConvert.SerializeObject(result);
+        using CountingWriter counter = new();
+        s_serializer.Serialize(counter, result);
         stats.SerializeMilliseconds.Add(Stopwatch.GetElapsedTime(serializeStarted).TotalMilliseconds);
-        stats.PayloadChars.Add(payload.Length);
+        stats.PayloadChars.Add(counter.Count);
+    }
+
+    private static readonly JsonSerializer s_serializer = JsonSerializer.CreateDefault();
+
+    /// <summary>A writer that keeps nothing and counts what it was given.</summary>
+    private sealed class CountingWriter : TextWriter
+    {
+        public long Count { get; private set; }
+
+        public override Encoding Encoding
+        {
+            get { return Encoding.UTF8; }
+        }
+
+        public override void Write(char value)
+        {
+            Count++;
+        }
+
+        public override void Write(char[] buffer, int index, int count)
+        {
+            Count += count;
+        }
+
+        public override void Write(string? value)
+        {
+            Count += value?.Length ?? 0;
+        }
     }
 
     /// <summary>Lines an editor shows at once, whose lenses it resolves on opening a file.</summary>

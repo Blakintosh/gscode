@@ -48,7 +48,7 @@ public sealed class CodeLensHandler : CodeLensHandlerBase
         }
 
         // ResolveFresh, not Resolve: lens ranges are positional, and serving them from the
-        // 250 ms-stale analysis put every lens one edit behind the buffer — the rows jumped on
+        // debounce-stale analysis put every lens one edit behind the buffer — the rows jumped on
         // each keystroke and dragged the viewport with them.
         NavigationTarget? target = _support.ResolveFresh(request.TextDocument.Uri, cancellationToken);
         if ( target is null )

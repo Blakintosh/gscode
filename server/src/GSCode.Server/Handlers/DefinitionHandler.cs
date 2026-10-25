@@ -172,7 +172,8 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// <summary>
     /// Narrows definitions to the file the call actually reaches. A function call on an include
     /// dialect is strict: the declarations <see cref="DatabaseQueries.FunctionsTheCallReaches"/>
-    /// names, through the include chain, and none when it names none. Anything else — a namespace
+    /// names (the file's own, else its direct includes' own, or the named file's own for a path
+    /// call), and none when it names none. Anything else — a namespace
     /// dialect, a class, a macro's fallback — prefers the asking file's import scope, itself plus the
     /// files it links against, and gets the full set back when nothing matches.
     ///
@@ -197,8 +198,8 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         string pathCallTarget = target.PathCallAt(hit.Range);
 
         // On an include dialect a function call reaches only what the file a path call names, or
-        // the file itself and its include chain, provide: the engine never looks a name up across
-        // the install. So that set, and nothing wider when it is empty.
+        // the file itself and its direct includes, declare themselves: the engine never looks a name
+        // up across the install. So that set, and nothing wider when it is empty.
         ImmutableArray<ResolvedFunction>? reached = DatabaseQueries.IncludeScopedCallTargets(
             target.Store, target.ContextId, target.Path, hit.Key, pathCallTarget);
         if ( reached is ImmutableArray<ResolvedFunction> targets )

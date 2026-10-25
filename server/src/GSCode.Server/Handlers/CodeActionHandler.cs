@@ -815,9 +815,10 @@ public sealed class CodeActionHandler : CodeActionHandlerBase
             return fixes;
         }
 
-        // Under a merge dialect an unqualified call already resolves by NAME across everything the
-        // include graph pulled in, so a call that reached this diagnostic is not one an import would
-        // fix. Only a namespace dialect can have the function present but out of reach.
+        // Under a merge dialect a call to a function some file declares is 5026's, whose fix adds the
+        // #include; one that reached this diagnostic is declared nowhere the workspace indexes, so no
+        // import would fix it. Only a namespace dialect can have the function present but out of
+        // reach here.
         if ( !context.Profile.ResolvesByNamespace )
         {
             return fixes;

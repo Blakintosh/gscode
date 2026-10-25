@@ -62,7 +62,8 @@ public static class CallResolution
     /// function's namespace to its FILE NAME STEM — a resolution fallback that names no scope
     /// anybody wrote. Asking by declared namespace there answers for the asking file's OWN
     /// functions and for nothing else, which is why a feature that got this wrong still looked like
-    /// it worked. There the asking file's own declaration wins, then its include chain, nearest first.
+    /// it worked. There the asking file's own declaration wins, then its direct includes' own
+    /// declarations: one level, as the engine merges them.
     /// On a namespace dialect, each namespace the file declares, in order.
     /// </remarks>
     public static FunctionSymbol? UnqualifiedFunction(
@@ -108,9 +109,9 @@ public static class CallResolution
 
     /// <summary>
     /// The function a <c>maps\_utility::set_ambient( ... )</c> call names — the Infinity Ward path
-    /// form, which only the merge dialects have: the named file's own declaration, else the nearest
-    /// in that file's include chain. The asking file's own declaration of the name does not come
-    /// into it; the path says where the call goes.
+    /// form, which only the merge dialects have: the named file's own declaration, and nothing that
+    /// file includes. The asking file's own declaration of the name does not come into it; the path
+    /// says where the call goes.
     /// </summary>
     public static FunctionSymbol? PathQualifiedFunction(
         LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)

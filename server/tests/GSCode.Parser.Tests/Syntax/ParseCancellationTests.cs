@@ -12,7 +12,7 @@ namespace GSCode.Parser.Tests.Syntax;
 /// <summary>
 /// An analysis nobody is waiting for any more stops instead of finishing.
 ///
-/// The 250 ms debounce bounds when an analysis STARTS; nothing bounded how long one runs, and the
+/// The debounce bounds when an analysis STARTS; nothing bounded how long one runs, and the
 /// cancellation token reached <c>Task.Delay</c> and nothing else. A superseded pass therefore ran
 /// to completion, holding its own token arrays and tree the whole way, and then published. On a
 /// file slow enough to outrun the debounce that is several dead analyses in flight at once.

@@ -184,11 +184,8 @@ public class BuiltinHarvestTests
     }
 
     /// <summary>
-    /// Writes the findings as JSON next to the harvest, so curating the library is a matter of
-    /// reading a file rather than scraping test output.
-    /// </summary>
-    /// <summary>
-    /// Writes the findings as JSON, one file per KIND. They are separate deliverables: the builtin
+    /// Writes the findings as JSON, one file per KIND, next to the harvest, so curating is a matter of
+    /// reading a file rather than scraping test output. They are separate deliverables: the builtin
     /// list feeds curating the engine library, while the script list is about files the distribution
     /// did not ship. Mixing them means whoever is doing one job has to filter out the other's rows.
     /// </summary>

@@ -38,7 +38,7 @@ namespace GSCode.Server.Tests.Corpus;
 /// rows, the builtin-page lookup, ScriptDoc generation, prepare-rename, rename, references,
 /// highlight, call hierarchy), the KEYSTROKE BUNDLE —
 /// what one edit costs end to end, re-analysis, the lint pass and the five requests the editor
-/// re-issues after it, against the 250 ms debounce — and the watched-file paths: a header every file
+/// re-issues after it, against the 250 ms debounce budget — and the watched-file paths: a header every file
 /// inserts, a stock script every file uses, a file created and deleted.
 ///
 /// Every request runs once untimed, the JIT is let settle, and a second pass is timed — the same

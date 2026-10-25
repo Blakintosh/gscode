@@ -162,7 +162,7 @@ public sealed class CallTargetAgreementTests
     public void ResolveCall_OnAnIncludeDialect_FindsNothingTheFileCannotReach()
     {
         // Hover renders the first declaration ResolveCall returns, and there is none to render: the
-        // engine finds a function only through the file's own declarations and its include chain.
+        // engine finds a function only through the file's own declarations and its direct includes'.
         using TestWorkspace workspace = TestWorkspace.Build(
             [
                 new TestFile(@"maps\_utility.gsc", "sp_only( sp_b )\n{\n}\n"),

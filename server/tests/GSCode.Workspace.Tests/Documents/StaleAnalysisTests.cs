@@ -7,7 +7,7 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Documents;
 
 /// <summary>
-/// Text updates on every keystroke; analysis is debounced by 250 ms. Anything that pairs a LIVE
+/// Text updates on every keystroke; analysis is debounced by up to 250 ms. Anything that pairs a LIVE
 /// cursor position with the STALE result text is therefore reading characters the user has
 /// already replaced.
 ///

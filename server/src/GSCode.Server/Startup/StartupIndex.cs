@@ -304,8 +304,6 @@ internal sealed class StartupIndexRunner
         return Task.CompletedTask;
     }
 
-    // One compacting collection at the indexing -> serving transition, while the heap is small.
-    //
     /// <summary>
     /// The full-mode lint sweep, or — when the workspace is the one the last stored sweep was computed
     /// against — its stored results, with only the files they do not cover linted. See
@@ -361,13 +359,17 @@ internal sealed class StartupIndexRunner
         }
     }
 
+    // One compacting collection at the indexing -> serving transition, while the heap is small.
+    //
     // Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off phase
     // change after which the allocation profile is completely different. Analysing a file allocates
-    // token and PToken arrays that clear the 85 KB large-object threshold, so most scripts put theirs
-    // straight on the LOH — which is NOT compacted by default. Measured on 1,105 files: a cold index
-    // left 183 MB fragmented out of a 282 MB heap (65% holes) even after 19 gen2 collections, because
-    // ordinary collections reclaim LOH memory without moving anything. Serving requests allocates
-    // nothing like that, so anything left behind would simply persist.
+    // source text, token and PToken arrays large enough for the large-object heap — which is NOT
+    // compacted by default. Measured on 1,105 files at the default 85 KB threshold: a cold index left
+    // 183 MB fragmented out of a 282 MB heap (65% holes) even after 19 gen2 collections, because
+    // ordinary collections reclaim LOH memory without moving anything. The threshold is 2 MB now
+    // (runtimeconfig.template.json), which keeps most of those arrays off the LOH while indexing but
+    // leaves a higher transient peak, and this is what returns it. Serving requests allocates nothing
+    // like that, so anything left behind would simply persist.
     //
     // Not gated on measured fragmentation: with System.GC.ConserveMemory fragmentation is roughly
     // zero while the large-object heap can still hold tens of megabytes of committed, unfragmented,
@@ -379,8 +381,7 @@ internal sealed class StartupIndexRunner
     // Its cost is a one-off pause, and the pause is NOT confined to this thread. Both collections
     // below are `blocking: true` gen2s, which suspend every thread in the process, and the LSP
     // connection is live by the time this runs (RunAsync returns as soon as the indexing task is
-    // launched). So a request arriving in that window waits for it: 1.8 s at 50,000 files, once, at
-    // the end of indexing (PERF.md, the scale section, which states this correctly).
+    // launched). So a request arriving in that window waits for it, which is why it is capped below.
     //
     // It earns its place — it returned 446 MB on bo1. Deferring it to the first idle moment is a
     // separate decision that needs its own measurement, and is not made here.

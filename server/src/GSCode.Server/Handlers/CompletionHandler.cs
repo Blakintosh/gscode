@@ -89,7 +89,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     ///
     /// The cancellation checks are here because this is a read path with no debounce in front of it
     /// — as are <see cref="SignatureHelpHandler"/> and <see cref="WorkspaceSymbolHandler"/>, which
-    /// check for the same reason. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst
+    /// check for the same reason. Diagnostics wait up to 250 ms behind <c>TextSyncHandler</c>, so a burst
     /// of keystrokes produces one analysis; completion answers the keystroke that asked, and a
     /// client that types through its own request cancels it and sends another. Without a check,
     /// every superseded request is built in full and its result thrown away by the client.

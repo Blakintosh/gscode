@@ -317,8 +317,8 @@ public class FunctionResolutionLintTests
 
     // --- Path calls (`maps\mp\_util::foo()`) name a FILE outright ---
     //
-    // The call reaches what the NAMED file can run: its own functions and what its #include chain
-    // merges into it. Neither the broad by-name lookup (which searches every file the merge dialect
+    // The call reaches the NAMED file's own functions, and nothing that file's #includes merge into
+    // it. Neither the broad by-name lookup (which searches every file the merge dialect
     // scope reaches) nor the own-file shortcut (which exists for an UNQUALIFIED call) should be
     // able to make a path call resolve on anyone else's say-so.
 

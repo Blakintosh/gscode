@@ -41,7 +41,8 @@ public sealed record GameMismatchParams(
     IReadOnlyList<SupportedGame> SupportedGames);
 
 /// <summary>
-/// Document lifecycle: incremental text sync, ~250 ms debounced re-analysis on typing,
+/// Document lifecycle: incremental text sync, re-analysis on typing debounced by
+/// <see cref="AnalysisTiming.DebounceFor"/> (125–250 ms),
 /// immediate analysis on open and save, diagnostic clearing on close.
 /// </summary>
 public sealed class TextSyncHandler : TextDocumentSyncHandlerBase

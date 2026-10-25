@@ -1,7 +1,7 @@
 @echo off
 setlocal
 rem The scale suite: generated workspaces of thousands of stock-script copies, measuring cold and
-rem warm start, memory, completion and lint against budgets.
+rem warm start, memory and every request through its handler, against budgets.
 rem
 rem   scale.bat                    10,000 files
 rem   scale.bat 10000 50000        each size in turn
@@ -13,10 +13,13 @@ rem Release, for the same reason as perf.bat.
 rem
 rem GSCODE_SCALE_SOURCE=heaviest duplicates ONE script instead (bo3: scripts\zm\_zm.gsc, ~2,950
 rem calls) so every stock function it calls is referenced once per copy, and writes its own report,
-rem temp\gscode-scale-<stem>.md. GSCODE_SCALE_NAMESPACE=same leaves every copy in one namespace.
+rem temp\gscode-scale-<stem>.md. heaviest:N copies the N largest round-robin; PERF.md's 50,000-file
+rem numbers use heaviest:25 on bo3 and cod4 (GSCODE_SCALE_GAMES=bo3,cod4).
+rem GSCODE_SCALE_NAMESPACE=same leaves every copy in one namespace.
 rem The heavy shape retains several times what the mixed one does: ramp the sizes (2000 5000 10000)
-rem and read "KB a file" before asking for 50,000, and set DOTNET_GCHeapHardLimitPercent=0x46 so
-rem a size that does not fit fails with OutOfMemory rather than paging the machine.
+rem and read "KB a file" before asking for 50,000, and set a heap limit so a size that does not fit
+rem fails with OutOfMemory rather than paging the machine: DOTNET_GCHeapHardLimit=0x3C0000000 (15 GB)
+rem is what the recorded 50,000-file runs used. Every scale variable is in server\tests\FOLDER.md.
 
 set "GSCODE_SCALE_SIZES="
 :args

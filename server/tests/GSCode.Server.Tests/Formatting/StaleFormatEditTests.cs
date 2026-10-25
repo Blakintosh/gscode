@@ -11,7 +11,7 @@ namespace GSCode.Server.Tests.Formatting;
 /// A formatting edit is only valid against the text it was computed from.
 ///
 /// FormatMinimalEdits diffs the formatted output against the analysed text, so its ranges are
-/// offsets INTO that text. Analysis is debounced 250 ms behind the keystrokes, so a format arriving
+/// offsets INTO that text. Analysis is debounced up to 250 ms behind the keystrokes, so a format arriving
 /// in that window (format-on-save fires right after edits, and on-type formatting fires mid-word)
 /// would apply ranges computed against text that is no longer there. Every other stale read shows
 /// something wrong; this one writes something wrong.

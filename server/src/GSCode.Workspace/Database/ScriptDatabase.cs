@@ -464,8 +464,9 @@ public sealed class ScriptDatabase
         PerfTracker.Begin("commit.hash");
 
         // Hashed in CHUNKS through a pooled buffer rather than by materialising the whole file as
-        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over
-        // ~85 KB lands on the large-object heap, which is not compacted by default — on BO1,
+        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over the
+        // large-object threshold (85 KB by default; the server raises it to 2 MB) lands on the
+        // large-object heap, which is not compacted by default — measured at the default on BO1,
         // thousands of holes, and a fragmented figure after an index that dwarfs the live one.
         //
         // An Encoder, not repeated GetBytes calls: a chunk boundary can fall between the two halves
@@ -504,8 +505,8 @@ public sealed class ScriptDatabase
     }
 
     /// <summary>
-    /// Characters hashed per chunk. Sized so both pooled buffers stay well under the 85 KB
-    /// large-object threshold — the entire point of chunking.
+    /// Characters hashed per chunk. Sized so both pooled buffers stay well under the default 85 KB
+    /// large-object threshold, whatever a host sets it to — the entire point of chunking.
     /// </summary>
     private const int ChunkChars = 8 * 1024;
 

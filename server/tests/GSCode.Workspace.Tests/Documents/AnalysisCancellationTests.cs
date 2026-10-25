@@ -11,7 +11,7 @@ namespace GSCode.Workspace.Tests.Documents;
 /// The debounce bounds when a pass STARTS. Nothing bounded how long one runs: the token reached
 /// <c>Task.Delay</c> and no further, so every pass the user had already typed past ran to
 /// completion — holding its own token arrays and tree — and then published. On a file slow enough
-/// to outrun the 250 ms debounce that is several dead analyses in flight at once, which is the
+/// to outrun the debounce that is several dead analyses in flight at once, which is the
 /// memory face of the same bug.
 /// </summary>
 public class AnalysisCancellationTests

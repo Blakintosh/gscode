@@ -120,7 +120,7 @@ public sealed class NavigationSupport
     /// Resolves an open document, re-analysing first if the text has moved on since the last run.
     ///
     /// For features whose request carries a LIVE cursor position — completion and signature help.
-    /// Analysis is debounced by 250 ms, so mid-typing the cursor offset lands in text the user has
+    /// Analysis is debounced by up to 250 ms, so mid-typing the cursor offset lands in text the user has
     /// already replaced: at <c>#pre</c> the stale text might still read <c>#p</c>, the '#'-context
     /// check reads the wrong characters, and completion falls back to statement scope and offers
     /// `private`. That it worked whenever the user paused is exactly the tell.

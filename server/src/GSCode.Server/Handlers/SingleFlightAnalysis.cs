@@ -21,9 +21,9 @@ internal sealed class SingleFlightAnalysis
     private readonly DocumentStore _documents;
 
     /// <summary>
-    /// One analysis in flight per document, at most. The 250 ms debounce only guards the WAIT
-    /// between an edit and analysis STARTING; once analysis has started, nothing stopped a second
-    /// one starting 250 ms later on a file slow enough to still be running, each carrying its own
+    /// One analysis in flight per document, at most. The debounce only guards the WAIT between an
+    /// edit and analysis STARTING; once analysis has started, nothing stopped a second one starting
+    /// one debounce later on a file slow enough to still be running, each carrying its own
     /// token arrays and AST. Keyed by normalized path rather than kept on <see cref="OpenDocument"/>
     /// itself: this is scheduling state private to how analysis is driven, not a fact about the
     /// document.

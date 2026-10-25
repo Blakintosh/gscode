@@ -14,7 +14,8 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   `maps\_utility::foo()` sees only `maps\_utility`'s own functions. Hover, Go to Definition, find
   references, signature help, inlay hints, completion docs and call hierarchy all follow this rule,
   so they no longer pick a same-named function from elsewhere in the install. A call that only an
-  include's own include declares is now reported (`gscode-5026`), since the game does not find it.
+  include's own include declares is now reported (`gscode-5026`), and so is a path call to a function
+  the named file only gets from one of its own includes (`gscode-5013`): the game finds neither.
 - **Black Ops III: a call into a namespace that several copies of a script declare** (the `mp`, `zm`
   and `cp` copies share one `#namespace`) now describes and navigates to the copy the file
   `#using`s, in every feature, not the first copy in the index.

@@ -545,10 +545,10 @@ public class CorpusPerfTests
     /// Where the CROSS-FILE LINT time goes — the layer the two sweeps above do not touch at all.
     ///
     /// They time <c>ScriptAnalysis.Analyze</c>, whose four phases are lex, preprocess, parse and
-    /// extract. Everything the editor runs ON TOP of that parse — the include-closure walk, the
-    /// store lookups, the arity and resolution rules — was unmeasured, and it is the half that grew:
-    /// a keystroke now pays a transitive graph walk and several name lookups that a parse-only
-    /// measurement reports as free.
+    /// extract. Everything the editor runs ON TOP of that parse — the include walk, the store
+    /// lookups, the arity and resolution rules — was unmeasured, and it is the half that grew: a
+    /// keystroke now pays an include walk and several name lookups that a parse-only measurement
+    /// reports as free.
     ///
     /// The parse is done BEFORE the stopwatch and reused, so this is lint cost and nothing else, and
     /// the lints run once to warm before the timed pass for the same reason the parse sweep does.
@@ -703,7 +703,7 @@ public class CorpusPerfTests
     ///
     /// The three sweeps above cover the parse, the cold index and the cross-file lints. Completion is
     /// none of those, and it is the one that cannot hide behind a debounce: <c>TextSyncHandler</c>
-    /// holds diagnostics back ~250 ms, but <c>CompletionHandler</c> answers the keystroke that asked.
+    /// holds diagnostics back up to 250 ms, but <c>CompletionHandler</c> answers the keystroke that asked.
     ///
     /// Read the DISTRIBUTION, not the total. The question this exists to answer is whether a single
     /// request completes before the user types the next character, which is a p99 question; a sum

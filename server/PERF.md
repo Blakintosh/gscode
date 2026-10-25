@@ -3277,6 +3277,68 @@ the same cold BO3 50K session:
 Fewer collections land in requests, at 1.3 GB more resident. The default stays: trading memory
 for pauses is the same trade as skipping the post-index compaction, made the other way.
 
+### 2026-10-25: the resolver and include-rule changes at 50,000 files, and five requests never timed
+
+Between `185c18b8` and `1a64fe15` every request that turns a call into a declaration was moved onto
+one resolver (`FunctionsTheCallReaches`), include dialects were made strict and one level deep, a
+stored callback was resolved in the file that stored it, and find-references learned the path call
+at the cursor. None of it had run at 50,000 files. The harness also gained rows it never had: the
+builtin-page lookup, planning a file rename, ScriptDoc generation, resolving a completion row, and
+implementation / type definition / call hierarchy on a field holding a callback (`1a64fe15`).
+
+Both versions ran the new harness, Release, built in their own worktrees, against the same
+generated 50,000-copy workspaces of the 25 heaviest scripts (`GSCODE_SCALE_SOURCE=heaviest:25`),
+under a 15 GiB heap limit, back to back and interleaved per game: four runs in 21.5 minutes. One run
+each, so a p99 moving by 20% on a request nothing touched is the run-to-run spread (BO3 code
+actions 12.7 → 16.0 ms, range formatting 21.0 → 26.4 ms).
+
+| 50,000 files | bo3 before | bo3 after | cod4 before | cod4 after |
+|---|---:|---:|---:|---:|
+| cold index | 35.4 s | 36.4 s | 51.4 s | 50.3 s |
+| warm start | 13.9 s | 13.7 s | 34.3 s | 32.5 s |
+| full-mode lint sweep | 81.8 s | 80.1 s | 111.0 s | 111.9 s |
+| retained memory | 8,716 MB | 8,720 MB | 10,261 MB | 10,263 MB |
+| one edit, end to end, p99 | 22.4 ms | 22.7 ms | 29.6 ms | 31.7 ms |
+| hover, stock call, p99 | 0.03 ms | 0.03 ms | 0.14 ms | 0.04 ms |
+| definition, stock call, p99 | 0.12 ms | 0.12 ms | 14.4 ms | 12.1 ms |
+| signature help, p99 | 0.02 ms | 0.03 ms | 0.03 ms | 0.05 ms |
+| inlay hints, whole file, p99 | 4.5 ms | 4.7 ms | 7.0 ms | 6.8 ms |
+| completion, stock call, p99 | 0.52 ms | 0.62 ms | 16.4 ms | 11.0 ms |
+| code actions, p99 | 12.7 ms | 16.0 ms | 26.4 ms | 14.8 ms |
+
+The rows never timed before, p99 (largest answer):
+
+| request | bo3 before | bo3 after | cod4 before | cod4 after |
+|---|---:|---:|---:|---:|
+| builtin at, stock call | 0.02 ms | 0.02 ms | 17.4 ms | **0.05 ms** |
+| plan rename, this file | 28.7 ms (11.4 MB) | 29.5 ms | 13.0 ms (6.6 MB) | 12.5 ms |
+| generate scriptdoc, declaration | 0.02 ms | 0.02 ms | 0.02 ms | 0.02 ms |
+| completion resolve, a script row | 0.01 ms | 0.06 ms | 0.03 ms | 0.03 ms |
+| implementation, callback field | 42.1 ms | 48.0 ms | 36.4 ms (2,240 KB) | 43.3 ms (2,220 KB) |
+| type definition, callback field | 34.7 ms | 39.5 ms | 29.9 ms (749 KB) | 41.3 ms (743 KB) |
+| call hierarchy, prepare on a callback field | 38.8 ms | 48.1 ms | 31.6 ms (1,563 KB) | 47.9 ms (1,549 KB) |
+
+**The builtin-page lookup on cod4.** It asked whether any script in the workspace declares the
+name, through the wide lookup that pays for thousands of same-named copies. It now asks whether a
+function the call can reach does, which is also the right answer: 17.4 → 0.05 ms.
+
+**The callback-field rows cost more, and answer less.** A stored callback is now resolved in each
+file that writes the field, through that file's own includes. Before, the bound keys were
+de-duplicated and each looked up once from the reader. A field written by thousands of copies is
+thousands of small lookups instead of a handful of wide ones: about 5–16 ms more at p99, all under
+50 ms. The answers shrank, because the functions only an unincluded file declares are no longer in
+them.
+
+**Find-references and rename "on an own call" on cod4: 0.3 → 34 ms, and that is the fix.** The row
+asks at the first call whose name the file also declares. In `ambush.gsc` that is line 26,
+`maps\_bm21_troops::main( "vehicle_bm21_mobile_cover" )`, a path call in a file with a `main` of its
+own. Before, references there answered with ambush's own `main` (6.6 KB). Now they answer with
+`_bm21_troops`'s `main` and every call to it in every copy (3,269 KB); the median stays 0.01 ms. On
+cod4 the row name is now a misnomer for files like this: it times a path call into a busy file.
+
+Unchanged where nothing touched them: index, sweep, memory, warm start, CodeLens and the edit
+bundle are within the spread on both games.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

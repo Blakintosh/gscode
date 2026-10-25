@@ -32,9 +32,11 @@ namespace GSCode.Server.Tests.Corpus;
 ///
 /// The other partials time the rows PERF.md's scale table budgets; this one is the full surface:
 /// per-document requests (symbols, semantic tokens, folding, selection, links, formatting, inlay
-/// hints, CodeLens, code actions), per-position requests at a stock call, a call into the file's own
-/// namespace and a declaration (hover, definition, type definition, implementation, signature help,
-/// completion, prepare-rename, rename, references, highlight, call hierarchy), the KEYSTROKE BUNDLE —
+/// hints, CodeLens, code actions, planning a rename of the file), per-position requests at a stock
+/// call, a call into the file's own namespace, a declaration and a field holding a callback (hover,
+/// definition, type definition, implementation, signature help, completion and resolving one of its
+/// rows, the builtin-page lookup, ScriptDoc generation, prepare-rename, rename, references,
+/// highlight, call hierarchy), the KEYSTROKE BUNDLE —
 /// what one edit costs end to end, re-analysis, the lint pass and the five requests the editor
 /// re-issues after it, against the 250 ms debounce — and the watched-file paths: a header every file
 /// inserts, a stock script every file uses, a file created and deleted.
@@ -130,6 +132,9 @@ public partial class ScalePerfTests
             Highlight = new DocumentHighlightHandler(Support, selector);
             Calls = new CallHierarchyHandler(Support, selector);
             Types = new TypeHierarchyHandler(Support, selector);
+            BuiltinAt = new BuiltinAtHandler(Support, builtins);
+            PlanRename = new PlanRenameHandler(database, Holder);
+            ScriptDoc = new GenerateScriptDocHandler(Documents);
         }
 
         public ResolverHolder Holder { get; }
@@ -165,15 +170,22 @@ public partial class ScalePerfTests
         public DocumentHighlightHandler Highlight { get; }
         public CallHierarchyHandler Calls { get; }
         public TypeHierarchyHandler Types { get; }
+        public BuiltinAtHandler BuiltinAt { get; }
+        public PlanRenameHandler PlanRename { get; }
+        public GenerateScriptDocHandler ScriptDoc { get; }
     }
 
     /// <summary>The positions one file's requests are asked at, found from its own parse.</summary>
     /// <param name="DeclarationBody">The first function's whole range, for range formatting.</param>
     /// <param name="DeclarationEnd">Just past the first function's closing brace, where typing <c>}</c> asks for on-type formatting.</param>
     /// <param name="Class">The first class's name, for the type hierarchy; null on a dialect without classes.</param>
+    /// <param name="CallbackField">
+    /// The first field this file stores a function in (<c>level.cb = &amp;foo</c>, <c>level.cb = ::foo</c>),
+    /// for the requests that answer what a field holds; null when the file stores none.
+    /// </param>
     private sealed record Positions(
         LspPosition? StockCall, LspPosition? InsideStockCall, LspPosition? LocalCall, LspPosition? Declaration, LspRange? StockCallRange,
-        LspRange? DeclarationBody, LspPosition? DeclarationEnd, LspPosition? Class);
+        LspRange? DeclarationBody, LspPosition? DeclarationEnd, LspPosition? Class, LspPosition? CallbackField);
 
     private async Task<ComponentRow> MeasureEveryComponentAsync(
         ScaleCorpus corpus, ScriptDatabase database, PathResolver resolver, NameTable names,
@@ -265,6 +277,9 @@ public partial class ScalePerfTests
             await TimeAsync(into, "codeLens, every lens resolved", () => server.Lenses.HandleResolvedAsync(
                 new CodeLensParams { TextDocument = id }, CancellationToken.None));
             server.LensCounts.Clear();
+            await TimeAsync(into, "plan rename, this file", () => server.PlanRename.Handle(
+                new PlanRenameParams { OldPath = path, NewPath = Path.ChangeExtension(path, null) + "_renamed" + Path.GetExtension(path) },
+                CancellationToken.None));
 
             if ( at.StockCall is LspPosition call && at.StockCallRange is LspRange callRange )
             {
@@ -279,6 +294,20 @@ public partial class ScalePerfTests
                 await TimeAsync(into, "implementation, stock call", () => server.Implementation.Handle(new ImplementationParams { TextDocument = id, Position = call }, CancellationToken.None));
                 await TimeAsync(into, "highlight, stock call", () => server.Highlight.Handle(new DocumentHighlightParams { TextDocument = id, Position = call }, CancellationToken.None));
                 await TimeAsync(into, "completion, stock call", () => server.Completion.Handle(new CompletionParams { TextDocument = id, Position = call }, CancellationToken.None));
+                await TimeAsync(into, "builtin at, stock call", () => server.BuiltinAt.Handle(
+                    new BuiltinAtParams { Uri = id.Uri.ToString(), Line = call.Line, Character = call.Character }, CancellationToken.None));
+
+                // The row the editor highlights resolves for its docs: a script function's, which is
+                // the one that looks a declaration up.
+                CompletionList listed = await server.Completion.Handle(new CompletionParams { TextDocument = id, Position = call }, CancellationToken.None);
+                CompletionItem? scriptRow = listed.Items.FirstOrDefault(static item =>
+                    item.Kind == CompletionItemKind.Function
+                    && item.Data is Newtonsoft.Json.Linq.JObject data
+                    && data.Value<string>("builtin") == "false");
+                if ( scriptRow is not null )
+                {
+                    await TimeAsync(into, "completion resolve, a script function's row", () => server.Completion.Handle(scriptRow, CancellationToken.None));
+                }
             }
 
             if ( at.InsideStockCall is LspPosition inside )
@@ -329,6 +358,9 @@ public partial class ScalePerfTests
             {
                 await TimeAsync(into, "prepare rename, declaration", () => server.PrepareRename.Handle(
                     new PrepareRenameParams { TextDocument = id, Position = declaration }, CancellationToken.None));
+                await TimeAsync(into, "generate scriptdoc, declaration", () => server.ScriptDoc.Handle(
+                    new GenerateScriptDocParams { Uri = id.Uri.ToString(), Line = declaration.Line, Character = declaration.Character },
+                    CancellationToken.None));
 
                 Container<CallHierarchyItem>? items = await server.Calls.Handle(
                     new CallHierarchyPrepareParams { TextDocument = id, Position = declaration }, CancellationToken.None);
@@ -341,6 +373,16 @@ public partial class ScalePerfTests
                     await TimeAsync(into, "call hierarchy, incoming", () => server.Calls.Handle(new CallHierarchyIncomingCallsParams { Item = item }, CancellationToken.None));
                     await TimeAsync(into, "call hierarchy, outgoing", () => server.Calls.Handle(new CallHierarchyOutgoingCallsParams { Item = item }, CancellationToken.None));
                 }
+            }
+
+            if ( at.CallbackField is LspPosition field )
+            {
+                await TimeAsync(into, "implementation, callback field", () => server.Implementation.Handle(
+                    new ImplementationParams { TextDocument = id, Position = field }, CancellationToken.None));
+                await TimeAsync(into, "type definition, callback field", () => server.TypeDefinition.Handle(
+                    new TypeDefinitionParams { TextDocument = id, Position = field }, CancellationToken.None));
+                await TimeAsync(into, "call hierarchy, prepare on a callback field", () => server.Calls.Handle(
+                    new CallHierarchyPrepareParams { TextDocument = id, Position = field }, CancellationToken.None));
             }
 
             await MeasureKeystrokeAsync(
@@ -535,7 +577,17 @@ public partial class ScalePerfTests
             classAt = new LspPosition(firstClass.NameRange.Start.Line, firstClass.NameRange.Start.Character);
         }
 
-        return new Positions(stockAt, inside, local, declaration, stockRange, body, bodyEnd, classAt);
+        LspPosition? callbackField = null;
+        foreach ( FieldBinding binding in parsed.Extraction.FieldBindings )
+        {
+            if ( binding.Target.Kind == SymbolKind.Function )
+            {
+                callbackField = new LspPosition(binding.Range.Start.Line, binding.Range.Start.Character);
+                break;
+            }
+        }
+
+        return new Positions(stockAt, inside, local, declaration, stockRange, body, bodyEnd, classAt, callbackField);
     }
 
     /// <summary>

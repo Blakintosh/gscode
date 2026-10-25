@@ -133,6 +133,45 @@ The merge dialects key a function as `(null, name)` — no namespace. CoD4's ani
 Scope per REFERENCE, never per file: a path call names its file outright, and a bare name resolves
 locally first. Filtering whole files was wrong twice.
 
+## The engine finds a function only through the paths the script provides
+
+```gsc
+// maps\caller.gsc
+#include maps\_direct;           // _direct.gsc itself does #include maps\_nested;
+
+main()
+{
+    own_fn();                    // this file's own: found
+    direct_fn();                 // _direct.gsc declares it: found
+    nested_fn();                 // only _nested.gsc declares it: NOT found
+    maps\_pathed::pathed_fn();   // _pathed.gsc declares it, no #include needed: found
+    maps\_direct::nested_fn();   // _direct.gsc only INCLUDES it: NOT found
+}
+```
+
+A bare call sees the file's own functions, then its DIRECT includes' own — an include merges the
+included file's own functions, not what it got from its own includes, so includes are one level
+deep. A path call sees the named file's own functions and nothing that file includes. Nothing is
+looked up across the install by name, so a call that reaches nothing resolves to nothing; there is
+no "offer every same-named function" fallback.
+
+The stock scripts agree in every file the game loads. CoD4 ships seven that rely on more
+(`maps\_createpath`, `_documents`, `_guide`, `_leapfrog`, `_mortarteam`, `_photosource`, `_wood`), and
+nothing loads them: they are listed as rawfiles in its zone sources and named by no other script.
+They are the only files a corpus guard may excuse (`UnloadedStockScripts`).
+
+A reader brings the opposite assumption from C's transitive `#include`, and an earlier resolver
+followed the include chain. That made 5026 silent on calls the game rejects and navigation land on
+copies the call cannot reach. `DatabaseQueries.FunctionsTheCallReaches` is the rule; the include
+lints apply it too (`EngineIncludeRuleTests`).
+
+## A namespace does not pin a file either
+
+BO3's `mp`, `zm` and `cp` copies of a script declare the same `#namespace` — 565 such pairs in the
+stock scripts — so `util::f` names several declarations. The one a call means is the copy the file
+reaches through its `#using`s. Narrow to the reached copies when there are any, and keep every copy
+when there are none, so a missing `#using` still leads somewhere.
+
 ## A function pointer is always SPELLED as one, and the spelling forks by dialect
 
 ```gsc

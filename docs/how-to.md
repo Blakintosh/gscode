@@ -8,7 +8,7 @@ the index; follow the link rather than a summary, because the skill is what gets
 |---|---|---|
 | Build, run tests, run a corpus sweep | [build-and-test](../.claude/skills/build-and-test/SKILL.md) | per-project builds, the DLL lock, the corpus no-op trap, the batch files |
 | Add a diagnostic, or change one's severity | [add-diagnostic](../.claude/skills/add-diagnostic/SKILL.md) | code ranges, the message table, where the rule belongs, severity by measurement, the sweep that must pass |
-| Add or change an LSP feature | [lsp-handler](../.claude/skills/lsp-handler/SKILL.md) | stale analysis, `ResolveFresh` vs `Resolve`, the shared reference query, failures only a live editor shows |
+| Add or change an LSP feature | [lsp-handler](../.claude/skills/lsp-handler/SKILL.md) | stale analysis, `ResolveFresh` vs `Resolve`, the shared call resolver and reference query, the message loop, failures only a live editor shows |
 | Support another game, or change a dialect | [add-game-profile](../.claude/skills/add-game-profile/SKILL.md) | the `GameProfile` seam, the verification bar, BO3-shaped assumptions |
 | Add builtins or engine fields | [regenerate-game-data](../.claude/skills/regenerate-game-data/SKILL.md) | the source layers, the ASCII rule, what a regeneration must not drop |
 | Write a rule about variables, arrays, scope or names | [gsc-dialect-facts](../.claude/skills/gsc-dialect-facts/SKILL.md) | language facts every earlier wrong lint learned |
@@ -46,6 +46,14 @@ the index; follow the link rather than a summary, because the skill is what gets
 4. If a query needs it across files, add an index to `LanguageStore` and include it in
    `ApplyIndexes`.
 
+**Add a request that turns a call into a declaration.**
+1. Resolve the call through `DatabaseQueries.FunctionsTheCallReaches` (or `MethodResolution.ResolveCall`
+   / `CallResolution`, which build on it), never by picking from `LookupFunctions`.
+2. Pass the path call at the cursor: `target.PathCallAt(hit.Range)`, or the `PositionHit` overloads
+   of `NavigationSupport`'s reference queries.
+3. Add the request's row to `SharedResolverMatrixTests`, which asks every request the same cod4 and
+   BO3 calls, and a row to `ScalePerfTests.EveryComponent`.
+
 **Answer a new cross-file question.** Write it as a `DatabaseQueries` method. If it needs "every
 file that …", add an inverted index (usually a `PackedInvertedIndex<TKey>`) to `LanguageStore`,
 built in `Contributions.Of` and diffed in `ApplyIndexes`. Keep the walk it replaces as a reference
@@ -53,7 +61,8 @@ implementation in a test, as the `*IndexTests` classes do.
 
 **Record a performance change.** Measure with `scripts\perf.bat` (or `scale.bat`) before and after
 in Release, and add a dated entry to the relevant section of `server/PERF.md` with both numbers,
-including when the result is "not worth it".
+including when the result is "not worth it". A change on a request path is measured at 50,000 files
+on bo3 and cod4; the `build-and-test` skill has the settings that run needs.
 
 **Record an open question.** Add it to `server/FOLLOWUPS.md` under Backlog, with what is known and
 what would decide it. Nowhere else.

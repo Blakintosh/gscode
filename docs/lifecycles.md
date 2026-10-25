@@ -50,31 +50,46 @@ Paths are relative to the repository root. `Server/` means `server/src/GSCode.Se
    - opens the SQLite cache when `gscode.enableWorkspaceCache` is on, whatever the indexing mode:
      `SqliteCache.ResolveDatabasePath` hashes the roots into
      `%APPDATA%/gscode/cache/<hash>.db`, `ServerBuildIdentity.Compute` fingerprints game + assemblies
-     + bundled data, and `SqliteCache.Open` wipes the file when either version or identity differs.
-     `LoadAll` hands the indexer the stored rows as `CachedEntry` blobs, not yet deserialized;
+     + bundled data, and `SqliteCache.Open` deletes the file and creates a fresh one when either
+     version or identity differs (emptying a 1.8 GB table row by row took minutes at 50,000 files).
+     `LoadAll` hands the indexer the stored rows as `CachedEntry` blobs, not yet deserialized, and
+     `LoadSweep` the stored lint sweep if there is one;
    - unless `gscode.workspaceIndexingMode` is `off`, starts the indexing task under
      `IndexingLifetime` (cancellable by shutdown and by clear-cache).
 7. The indexing task (`WorkspaceIndexer.IndexAsync` in `Workspace/Indexing/WorkspaceIndexer.cs`):
-   - enumerates targets (`PathResolver.EnumerateIndexTargets`: every script under raw, mods and the
-     workspace folders, skipping `GameProfile.ToolOutputDirectories`);
+   - enumerates targets (`PathResolver.EnumerateIndexTargets`: every script under raw, devraw, mods
+     and the workspace folders, skipping `GameProfile.ToolOutputDirectories`). A workspace folder that
+     holds the game install is not walked itself; its scripts come through raw, devraw and the mods.
+     Within raw, BO3 walks only `scripts`, where all its stock scripts are. devraw sits beside raw, is
+     searched after it, and a devraw file raw also has is not indexed;
    - runs a bounded `Parallel.ForEachAsync` over them. Per file: if the on-disk content hash matches
-     the cached entry, deserialize the blob (`RecordSerializer.Deserialize`) and commit it;
+     the cached entry, deserialize the blob (`RecordSerializer.Deserialize`, interning every name and
+     path through the indexer's `NameTable`) and commit it;
      otherwise read, run `ScriptAnalysis.Analyze`, build the record, commit it and enqueue it to the
      cache (`SqliteCache.Enqueue` serializes on the calling thread; one background writer does the
      SQL);
    - phase two re-parses restored files that `#insert` a header which changed since last session;
    - a file the editor already has open is not overwritten (`ownedByEditor: documents.IsOpen`) —
-     the buffer is the truth for an open file;
+     the buffer is the truth for an open file. The question is asked again right before the store
+     write (`OpenedSince`), since a tab can open while its file is being analysed;
    - `IndexProgressNotifier` turns progress into `gscode/indexingStarted|Progress|Complete`,
      throttled to one per ~40 ms by `ProgressThrottle`.
 8. When indexing finishes, `StartupIndexRunner` then:
-   - in `full` mode, runs `WorkspaceLintSweep.RunFullSweepAsync` — the cross-file lints over every
-     closed file;
+   - in `full` mode, restores the stored sweep when the workspace is the one it was computed
+     against (`LintSweepCache.TryRestore`: a fingerprint of every record and of what every import and
+     path call resolves to on disk), linting again only the files it does not cover. Otherwise it runs
+     `WorkspaceLintSweep.RunFullSweepAsync` — the cross-file lints over every closed file, on threads
+     of their own at below-normal priority (`BelowNormalWorkers`) — and stores the result
+     (`LintSweepCache.Capture`, `SqliteCache.SaveSweep`). At 50,000 files an unchanged restart
+     restores in about a second instead of sweeping for a minute;
    - publishes closed-file problems (`WorkspaceDiagnosticsPublisher.Refresh`) and re-lints open
      tabs (`DependentDiagnosticsRefresher.Schedule`), because tabs restored with the window were
-     linted against a half-built index;
-   - waits for the cache writer to go idle, runs one compacting GC (`Compact`), logs the memory
-     report, and starts `ServerStatusNotifier` (the status-bar memory figure).
+     linted against a half-built index. The publisher leaves out a closed file's Hints, sends up to
+     256 files inline and paces the rest from a queue, 100 at a time;
+   - waits for the cache writer to go idle and runs one compacting GC (`Compact`) — unless the live
+     heap (`GCMemoryInfo.HeapSizeBytes`) is past 1 GB, where the pause would cost seconds and it
+     asks for a background collection instead — logs the memory report, and starts
+     `ServerStatusNotifier` (the status-bar memory figure).
    - On failure it sends `gscode/indexingFailed`. Either way `StartupLogController.Settle` drops the
      log level to what the client asked for.
 
@@ -88,7 +103,8 @@ Where the time goes, and what each step measured at: `server/PERF.md`, sections 
 1. The client sends `textDocument/didChange` (incremental). `TextSyncHandler.Handle`
    (`Server/Handlers/TextSyncHandler.cs`) applies the edit with `DocumentStore.ApplyChange` and calls
    `ScheduleDebouncedAnalysis`.
-2. `RunDebouncedAsync` waits `AnalysisTiming.DebounceMilliseconds` (250 ms). A newer edit cancels the
+2. `RunDebouncedAsync` waits `AnalysisTiming.DebounceFor` the document's last analysis time: three
+   times it, between 125 and 250 ms (`DebounceMilliseconds`, the budget). A newer edit cancels the
    pending one (`ReplacePendingAnalysis`), silently.
 3. `SingleFlightAnalysis.Run` makes sure only one analysis per document runs at a time; a trigger
    that arrives while one is running queues a rerun.
@@ -115,7 +131,7 @@ Where the time goes, and what each step measured at: `server/PERF.md`, sections 
       added, renamed, re-parametered — not a body edit), `DependentDiagnosticsRefresher.Schedule`
       re-lints the other open tabs after a 900 ms debounce, and in `full` mode the closed files
       that reference what changed (`ClosedDependentsOf`, `WorkspaceLintSweep.RelintClosedFilesAsync`).
-5. A pass that took longer than the debounce logs a Warning naming the file.
+5. A pass that took longer than the debounce budget logs a Warning naming the file.
 
 `didOpen` is the same path without the debounce (`ScheduleImmediateAnalysis`, on the thread pool).
 It also runs the game-mismatch check once per session (`GameShapeDetector`, sending
@@ -141,17 +157,26 @@ three steps.
    (`Workspace/Database/SymbolAtPosition.cs`): which classified reference — function, class, macro,
    field, literal, or an import path — sits under the cursor. Member hits are checked against the
    class graph.
-3. The handler queries the database. For hover, `DatabaseQueries.LookupFunctions` /
-   `LookupClasses` (narrowed by `DeclarationIndex` and `NamespaceIndex`, never a walk of every
-   record), then `MarkdownDocRenderer` renders it. A builtin comes from `BuiltinApiSet`, a macro from
+3. The handler queries the database. For a function, hover asks `MethodResolution.ResolveCall`,
+   which resolves a plain call through `DatabaseQueries.FunctionsTheCallReaches` with the path call
+   at the cursor (`NavigationTarget.PathCallAt`): on an include dialect the file's own declaration,
+   else its direct includes' own, or the named file's own for a path call; on BO3 the namespace's
+   copies narrowed to the ones the file `#using`s. Classes come from `LookupClasses`. All of it is
+   narrowed by `DeclarationIndex` and `NamespaceIndex`, never a walk of every record; then
+   `MarkdownDocRenderer` renders it. A builtin comes from `BuiltinApiSet`, a macro from
    the parse's macro table, an engine field from `ObjectFields`.
 4. No reference under the cursor: keyword docs (`KeywordDocs`), then the flow typer's local type
    (`FlowTyper.TryGetLocalTypeAt`, read from the shared per-version result).
 5. `LspMapping` converts Core ranges to protocol ranges. It is the only place the two type systems
    meet.
 
-References go through `NavigationSupport.FindAllReferences`, the one query behind the reference
-list, the CodeLens count and document highlight, so the three cannot disagree. A **local** variable
+Definition, references, highlight, rename and call hierarchy ask through the `PositionHit` overloads
+of `NavigationSupport.FindAllReferences`, `FindReferencesInFile` and `FindDefinitionSites`, which take
+the path call from the hit. `FindAllReferences` is the one query behind the reference list, the
+CodeLens count and document highlight, so the three cannot disagree. On an include dialect it gathers
+for the declaration the call reaches (`DatabaseQueries.IncludeScopedCallTargets`); a call that reaches
+nothing answers for this file's own sites alone. CodeLens lists its lenses without counts and counts
+each on `codeLens/resolve`, so the editor pays only for the lenses on screen. A **local** variable
 is not in the shared index; every position-based handler falls through to `LocalReferences` /
 `LocalDefinition` for it. A **macro** key is the one exception to language isolation: it is
 answered against both stores, because one header is inserted into `.gsc` and `.csc` alike.
@@ -172,11 +197,13 @@ answered against both stores, because one header is inserted into `.gsc` and `.c
    (`ImportEdits.InsertionPoint`), and marks the list incomplete when any row was narrowed or needs
    an import, so the editor asks again on the next keystroke.
 5. Documentation for a row arrives later through completion-resolve, keyed by the row's
-   `ResolveData`.
+   `ResolveData`. It describes the declaration the name would reach from the file being edited
+   (`FunctionsTheCallReaches`), as hover does once the name is written: on an include dialect a row
+   carries only its file stem, which every `*\_utility.gsc` shares.
 
 Signature help (`SignatureHelpHandler` → `SignatureEngine.Resolve`) scans back to the open `(`,
-asks the macro table first, then the script function (`CallResolution`), then the builtin, and
-counts top-level commas for the active parameter.
+asks the macro table first, then the script function (`CallResolution`, the same declaration
+go-to-definition lands on), then the builtin, and counts top-level commas for the active parameter.
 
 ---
 
@@ -217,15 +244,21 @@ Every formatting rule and the corpus measurements behind it: `server/FORMATTING.
 ## 7. A file changes on disk
 
 1. The client's file watcher sends `workspace/didChangeWatchedFiles` (`**/*.gsc|csc|gsh`).
-2. `WatchedFilesHandler` applies each change through `WatchedFileUpdater.Apply`
-   (`Workspace/Indexing/WatchedFileUpdater.cs`): re-index created/changed files, drop deleted ones.
-   A changed header invalidates its `InsertCache` entry and re-indexes every script that inserts
-   it (`DatabaseQueries.ScriptsInserting`). A create or delete clears the resolver's memo
-   (`InvalidateResolutionCache`), since "does this path exist" may have changed.
-3. Files open in the editor are skipped: the buffer may hold unsaved edits.
-4. In `full` mode, every record the update rewrote (the changed files and every file a changed
-   header is inserted into) is linted again (`WorkspaceLintSweep.RelintClosedFilesAsync`), since a
-   re-index stores the parse diagnostics alone.
+2. `WatchedFilesHandler` queues the batch and returns at once: a branch switch arrives as one
+   notification of thousands of changes, and applying it inside the handler held the editor for
+   32 s at 50,000 files. A background pump applies the queue in arrival order, each path's last event
+   standing for its earlier ones, through `WatchedFileUpdater` (`Workspace/Indexing/WatchedFileUpdater.cs`):
+   deletions first, then changed scripts re-indexed in parallel on `BelowNormalWorkers`, then headers,
+   since each re-indexes its inserters from disk (`DatabaseQueries.ScriptsInserting`) and invalidates
+   its `InsertCache` entry. The resolver's existence memo is cleared once per batch
+   (`NoteFilesAppearedOrVanished`).
+3. Files open in the editor are skipped: the buffer may hold unsaved edits. The indexer asks again
+   right before each write, since a file can open while it is being re-indexed.
+4. In `full` mode, the batch's closed files keep what they last published
+   (`WorkspaceDiagnosticsPublisher.HoldUntilRelinted`) while every record the update rewrote (the
+   changed files and every file a changed header is inserted into) is linted again
+   (`WorkspaceLintSweep.RelintClosedFilesAsync`), since a re-index stores the parse diagnostics
+   alone. A set that comes back equal by value is not sent again.
 5. The handler then refreshes closed-file problems, and names each file whose exports moved as an
    origin for `DependentDiagnosticsRefresher`, which re-lints open tabs and, in `full` mode, the
    closed files calling its functions. A deleted file has no record left to name its functions, so
@@ -239,10 +272,12 @@ Every formatting rule and the corpus measurements behind it: `server/FORMATTING.
   log level live. It asks the client to refresh inlay hints when an inlay family toggled, and
   republishes workspace diagnostics when `gscode.diagnostics.scope` moved. Root and game settings
   need a reload; `client/src/reloadPrompt.ts` offers one.
-- **A workspace folder is added or removed.** `WorkspaceFoldersHandler`: swap the resolver first,
-  drop workspace-context records under removed folders, then index added folders (unchanged files
-  restore from cache), and in `full` mode sweep again. Either way it then republishes closed-file
-  problems (taking back a removed folder's) and re-lints the open tabs, as startup does.
+- **A workspace folder is added or removed.** `WorkspaceFoldersHandler` queues the change and
+  returns; changes run in the background one at a time, in arrival order. Each swaps the resolver
+  first, drops workspace-context records under removed folders, then indexes added folders
+  (unchanged files restore from cache, and a live record with the same content is kept, since it may
+  carry the sweep's diagnostics), and in `full` mode sweeps again. Either way it then republishes
+  closed-file problems (taking back a removed folder's) and re-lints the open tabs, as startup does.
 - **The game is changed.** `gscode.selectGame` (`client/src/gamePicker.ts`) asks the server for the
   roster (`gscode/supportedGames`), writes `gscode.game` and reloads the window. The game is a
   launch argument, so nothing short of a new server process applies it.

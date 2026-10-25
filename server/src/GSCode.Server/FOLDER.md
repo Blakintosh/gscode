@@ -33,18 +33,25 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/AnalysisTiming.cs
 
-- The 250 ms keystroke debounce, in one place. `TextSyncHandler` waits on it and warns against it;
-  the corpus `LintBudgetTests` gate asserts each lint rule against a percentage of it. Two readers
-  is why it is not a private constant any more — a budget written against a hardcoded 250 would keep
-  passing if the debounce were shortened, which is when it would need to fail.
+- The keystroke debounce, in one place. `DebounceMilliseconds` (250 ms) is the BUDGET: the longest an
+  edit waits, and what the corpus `LintBudgetTests` gate asserts each lint rule against a percentage
+  of. A budget written against a hardcoded 250 would keep passing if the debounce were shortened,
+  which is when it would need to fail.
+- `DebounceFor(lastAnalysisMilliseconds)` is the wait itself: three times the document's last
+  analysis, kept between `MinimumDebounceMilliseconds` (125) and the budget, and the budget when
+  nothing is measured yet. The floor is long enough that the pause between two keys of a word falls
+  inside it, so a half-typed name is not reported on its way to being typed; a slow file still waits
+  the whole budget. At 50,000 heavy BO3 files a fast file's diagnostics landed 160–210 ms after an
+  edit instead of 280–307 ms. `AnalysisTimingTests` pins the formula.
   `DependentDiagnosticsRefresher`'s 900 ms fan-out debounce is a different quantity and stays its own.
 
 ## Handlers/TextSyncHandler.cs
 
 - Incremental text sync. didOpen → scheduled onto the thread pool (`Task.Run`, no delay — a file
   opens once, so nothing needs coalescing, only getting off the LSP handler thread, where a window's
-  worth of restored tabs would run their analyses back to back); didChange → ~250 ms debounced
-  re-analysis with per-document cancellation (superseded runs are cancelled, silently); didSave →
+  worth of restored tabs would run their analyses back to back); didChange → re-analysis after
+  `AnalysisTiming.DebounceFor` the document's last analysis time (125–250 ms), kept per open document
+  in a `ConditionalWeakTable` so a closed one takes its entry with it, with per-document cancellation (superseded runs are cancelled, silently); didSave →
   immediate (bypasses debounce); didClose → clears diagnostics. `AnalysisGate` makes both scheduled
   paths single-flight per document: a second trigger while one is still running queues a rerun
   instead of starting a concurrent second analysis. Publishes diagnostics stamped with the WINNING
@@ -137,7 +144,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/WorkspaceSymbolHandler.cs
 
 - workspace/symbol — spans BOTH language stores (no asking file), matching functions and
-  classes by case-insensitive substring, each result located at its file. Capped at 256.
+  classes by case-insensitive substring, each result located at its file. Capped at 256, and the
+  walk STOPS there: functions first, then classes, in record order, which is the order the list had.
+  Overlay shadowing is decided per match against the store's path index (a raw match drops when a
+  non-raw record at its relative path declares the same name), which gives what `ApplyShadowing`
+  over the finished list gave. An empty query went from 646 ms to 0.5 ms at 25,000 heavy BO3 files.
+  A query matching nothing still reads every name; that needs a prefix index.
 
 ## Handlers/NavigationSupport.cs
 
@@ -384,9 +396,20 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge. An
   `autoexec` function reads "autoexec entry point" when the count is zero: the engine calls it on
   load, so its call sites are in no script and a bare "0 references" reads as dead code.
-- Counts are computed in `Handle`, one `FindAllReferences` per declaration in the file — so the cost
-  of the whole request is that query times the file's declaration count, and it is why the query
-  must never walk the workspace. `ResolveProvider` is false: there is no lazy resolve step.
+- Listed WITHOUT counts, counted on resolve (`ResolveProvider = true`). `Handle` returns each lens
+  with its key and file in `Data` and no command; resolving one runs `FindAllReferences` for that
+  key. VS Code resolves only the lenses it is showing, so a file's first request no longer pays one
+  reference query per declaration: about 90 ms at 50,000 heavy BO3 files before. `Data` holds
+  primitives only, since it goes to the client and back (`CodeLensResolveTests` serialises it).
+  `HandleResolvedAsync` lists and resolves every lens, for tests and measurements that want every
+  count.
+- `LensCountCache` keeps, per open file, the part of each count that comes from OTHER files while
+  only that file is written: typing changes the open file's own part, which is counted again by the
+  same query narrowed to it (`FindReferencesInFile`). A change to the file's shape — what it declares,
+  imports and path-calls (`SignatureOf`) — starts its counts over. Not cached: a file that overrides
+  a raw script, and one the store does not hold. `CodeLensCountCacheTests` writes between two
+  requests and requires the second to see it; `LensCountCorpusTests` requires the kept counts to
+  equal a handler that keeps nothing, over every lens of a real bo3 and cod4 index.
 
 ## Handlers/WorkspaceFoldersHandler.cs
 

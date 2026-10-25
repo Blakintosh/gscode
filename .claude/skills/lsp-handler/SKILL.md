@@ -7,8 +7,9 @@ description: Add or change an LSP handler in GSCode.Server. Use when touching ho
 
 ## Stale analysis is the recurring bug
 
-Analysis is debounced **250 ms** behind keystrokes, so `document.LatestResult` routinely describes
-text the client has already changed.
+Analysis is debounced **125–250 ms** behind keystrokes (three times the document's last analysis,
+`AnalysisTiming.DebounceFor`), so `document.LatestResult` routinely describes text the client has
+already changed.
 
 **Anything positional must freshen.** Use `_documents.AnalyzeIfStale(document)`, or
 `NavigationSupport.ResolveFresh(uri)` where available. Freshen if the handler's answer is a
@@ -56,7 +57,13 @@ typed into the dependent.
 - **One analysis in flight per document** (`SingleFlightAnalysis`); a request arriving mid-analysis
   queues a rerun rather than starting a second.
 - Closed files belong to `WorkspaceDiagnosticsPublisher`, which sends a file only when its
-  diagnostics changed. Open files belong to `TextSyncHandler`; neither publishes for the other's.
+  diagnostics changed, compared BY VALUE (a re-index builds new arrays whether or not anything
+  moved). Open files belong to `TextSyncHandler`; neither publishes for the other's.
+- A closed file's set goes without its Hints: VS Code shows a Hint only as faded text in an open
+  file, and at 50,000 files Hints were most of a 366 MB push. Up to 256 sends go out inline; a larger
+  set joins a queue sent 100 at a time, in the order decided, and opening a file drops its queued
+  send. Anything that relints closed files in the background holds their last set with
+  `HoldUntilRelinted` until the relint lands, or a parse-only set flashes in between.
 
 ## Diagnostics: one reporter per cause
 
@@ -65,19 +72,46 @@ that would otherwise report every macro from that header as an unknown function 
 instead. If you find yourself adding a second diagnostic for a condition already reported, the
 answer is usually to suppress the downstream one.
 
+## A call means one declaration, and one resolver says which
+
+Every request that turns a call into a declaration — hover, definition, type definition,
+implementation, signature help, inlay hints, call hierarchy, completion resolve, a field holding a
+callback — asks `DatabaseQueries.FunctionsTheCallReaches`, directly or through
+`MethodResolution.ResolveCall` / `CallResolution`. It is the engine's rule: on an include dialect a
+bare call sees the file's own functions, then its DIRECT includes' own; a path call the named file's
+own; nothing across the install. On BO3 a namespace's copies narrow to the ones the file `#using`s.
+Never call `LookupFunctions` for a call and pick from the answer: it lists every same-named copy, and
+"the first one" is whatever the index listed first.
+
+**Pass the path call at the cursor.** A path call and a bare call share the `(null, name)` key, so
+the resolver needs the written path to tell them apart: `target.PathCallAt(hit.Range)`, or the
+`PositionHit` overloads of `FindAllReferences`, `FindReferencesInFile` and `FindDefinitionSites`,
+which read it from the hit. Go-to-definition once dropped it and answered null on a path call into
+a file nothing includes, while hover, which passed it, was right.
+
+A callback stored in a field resolves in the file that STORED it (`FieldTargets`), as a call written
+there would. **A new request that resolves calls gets its row in `SharedResolverMatrixTests`**, which
+asks every request the same calls with a same-stem decoy beside each target.
+
 ## References, rename, CodeLens and highlight share one query
 
 `NavigationSupport.FindAllReferences` backs find-references, rename, document highlight **and** the
 CodeLens count. They must stay on it: narrowing one without the others reproduces the
 count-versus-peek disagreement the shared query exists to prevent.
 
-It narrows through `DeclaringFile` — which file the key means FROM THIS DOCUMENT — and when that is
-one file it reads only the files that can reach it (`DatabaseQueries.FindReferencesReaching`, via the
+It narrows to which declaration the key means FROM THIS DOCUMENT. On an include dialect that is
+`DatabaseQueries.IncludeScopedCallTargets`, the declaration the call reaches; one that reaches
+nothing answers for this file's own sites alone. Elsewhere it is `DeclaringFile`. When that is one
+file it reads only the files that can reach it (`DatabaseQueries.FindReferencesReaching`, via the
 dependents index) instead of every file mentioning the key; otherwise it collects everything and
 applies `ScopeToIncludeGraph`. Both attribute **per reference** — a path call names its file
 outright, and a bare name resolves locally first. Filtering whole FILES is not sufficient, and was
 wrong twice. `ReferenceScopeCorpusTests` holds the two paths to identical answers; change one and
 run it.
+
+CodeLens lists its lenses without counts and counts each on `codeLens/resolve`, so the editor pays
+only for what is on screen; `LensCountCache` keeps the other files' part of each count while only
+the open file is written. `LensCountCorpusTests` holds both to the uncached answer.
 
 ## Never walk the store on a request
 
@@ -90,8 +124,18 @@ question has no index, add one to `LanguageStore`'s diff rather than a loop. Pas
 `LookupFunctions` a `limit` when you only need to know whether a name resolves (1) or resolves to
 one declaration (2).
 
-Measure a handler at scale with `Category=Scale` (`GSCODE_SCALE_SIZES=10000,50000`): its row must be
-flat between the two sizes. `HandlerCostTests` covers the densest stock files.
+Measure a handler at scale with `Category=Scale` (`GSCODE_SCALE_SIZES=10000,50000`,
+`GSCODE_SCALE_SOURCE=heaviest:25`, `GSCODE_SCALE_GAMES=bo3,cod4`): its row must be flat between the
+two sizes. `ScalePerfTests.EveryComponent` times every request through its handler; a new handler
+gets a row there. `HandlerCostTests` covers the densest stock files.
+
+## Never hold the message loop
+
+A notification handler returns at once. `didChangeWatchedFiles` and `didChangeWorkspaceFolders`
+queue their work and apply it in the background — at 50,000 files a branch switch applied inline
+held the editor for 32 s and a folder add for 86 s — and bulk work (the lint sweep, the watched-file
+pump) runs on `BelowNormalWorkers`, so the scheduler runs a request's thread whenever it is ready.
+A test waits for the queue with the handler's `WhenIdleAsync`.
 
 ## Renameability is ownership, not kind
 

@@ -103,7 +103,9 @@ See the `build-and-test` skill for the environment variables and the duration ch
 ## 7. It has to fit inside the keystroke debounce
 
 A new rule runs on every keystroke, inside `AnalysisTiming.DebounceMilliseconds` (250 ms), alongside
-every rule already there. `LintBudgetTests` in the same `Category=Corpus` run asserts the bound:
+every rule already there. That is the BUDGET: a fast file waits less (`DebounceFor`, three times its
+last analysis, down to 125 ms), so a rule that slows the pass also delays every quick file's
+diagnostics. `LintBudgetTests` in the same `Category=Corpus` run asserts the bound:
 
 - **no single rule over 40% of the debounce** on its worst file, bo3 or cod4
 - **the whole pass under 25% at p99**

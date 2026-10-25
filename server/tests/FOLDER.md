@@ -74,22 +74,46 @@ are deliberately different filenames, so a perf run never overwrites a diagnosti
 
 `Category=Scale` is the fourth, and costs minutes per size. `ScaleCorpusFixture` builds a workspace
 far larger than any game ships out of the real scripts — the game's raw tree stays raw, and a
-generated workspace folder holds copies, one subfolder per copy, `#namespace` suffixed per copy on
-bo3, about three quarters of them at or above the median file size — and reuses it once marked
-complete. `ScalePerfTests` (with its `.Handlers` and `.Lookups` partials) measures each size in a fresh database:
+generated workspace folder holds copies, a thousand to a folder, `#namespace` suffixed per copy on
+bo3 — and reuses it once marked complete. By default the copies are a mix, about three quarters of
+them at or above the median file size; `GSCODE_SCALE_SOURCE=heaviest:25` copies the 25 largest
+scripts instead, round-robin, which is the shape PERF.md's 50,000-file numbers are measured on
+(bo3's top 25 average 98 KB and about 1,500 calls, against 12 KB across the corpus), since every
+stock function those scripts call is then called once per copy. `ScalePerfTests` (with its
+`.Handlers`, `.Lookups`, `.Heavy`, `.Memory` and `.EveryComponent` partials) measures each size in a
+fresh database:
 cold and warm start, dropped cache writes, retained memory, the compaction pause, completion (call
 site, literal, field), one file's lint pass with a per-rule breakdown, the full-mode sweep, and
 CodeLens / references / rename over 50 stock and 50 copied files, and the narrower lookups
 (directive path completion, a changed header's dependents, a rename's directive edits, class
 lookups, header macro references, `ArgumentCountLint` alone), each printed beside its budget and
-written to `temp/gscode-scale.md`. The per-request rows must stay FLAT as the workspace grows; one
-that climbs means something on that path walks the store. PERF.md's scale section holds the numbers.
+written to `temp/gscode-scale.md`. `.Heavy` times the requests whose ANSWER grows with the workspace
+(references and rename on the stock function the copies call most, serialized as well as built;
+CodeLens on its declaring file; workspace symbol search). `.Memory` breaks a record's retained
+bytes down by field. `.EveryComponent` times every request the editor can make through its handler,
+wired as `ServerServices` wires it, at a stock call, a call into the file's own namespace, a path
+call, a declaration and a field holding a callback, plus the keystroke bundle (re-analysis, the lint
+pass and the requests an edit triggers), a branch switch and a header save; each row names the file
+behind its slowest time and whether a collection landed in it, and answers are streamed into a
+counting writer so a huge one is measured without being held. The per-request rows must stay FLAT
+as the workspace grows; one that climbs means something on that path walks the store. PERF.md's
+scale section holds the numbers.
+
+At 50,000 heavy files the harness needs a heap limit or it pages the machine: run Release (in a
+separate worktree if the editor's server holds `bin\Release`) with `DOTNET_GCHeapHardLimit` set, so
+a size that does not fit fails with OutOfMemory instead.
 
 | Variable | Meaning |
 |---|---|
 | `GSCODE_SCALE_SIZES` | Totals to build and measure, e.g. `10000,25000,50000`. Unset = no-op |
 | `GSCODE_SCALE_GAMES` | Which games, default `bo3`; each needs its `GSCODE_CORPUS_<GAME>` |
 | `GSCODE_SCALE_ROOT` | Where the generated workspaces go, default `%TEMP%\gscode-scale` |
+| `GSCODE_SCALE_SOURCE` | Copy named scripts instead of the mix: `heaviest` (the largest), `heaviest:N` (the N largest), or one raw-relative path. Writes its own report, `temp/gscode-scale-<stem>.md` |
+| `GSCODE_SCALE_NAMESPACE` | `same` leaves every copy in one namespace (bo3), the shape where one key names every copy |
+| `GSCODE_SCALE_CLASSES` | `same` leaves every copy's class names unsuffixed; implied by `GSCODE_SCALE_NAMESPACE=same` |
+| `GSCODE_SCALE_COLD_ONLY` | `1`: the cold index and what it retains, nothing after — for trying a GC setting in seconds |
+| `GSCODE_SCALE_SAVE_ONLY` | `1`: the cold index, then one save of the header every file inserts, with the heap sampled through it |
+| `GSCODE_SCALE_PHASE_FILE` | A file the harness appends each phase's name to as it starts, so an outside profiler can attach for one phase |
 
 ---
 
@@ -183,7 +207,10 @@ pass without proving anything. Two test files worked around that by building `Sc
 hand before the profile was a parameter.
 
 **Analysis (the lints).** `IncludeUsageLintTests` 5026, the reported case plus every gate the Error
-rests on and the transitive chain the corpus proved is required · `ArgumentCountLintTests`
+rests on, and a call that only an include's own include declares, which the engine does not merge ·
+`EngineIncludeRuleTests` how the engine finds a function on an include dialect: a bare call sees the
+file's own functions and its DIRECT includes' own, a path call the named file's own and nothing it
+includes — through the resolver, 5013, 5026 and the unused-include hint · `ArgumentCountLintTests`
 5022/5023, which declaration a call is judged against when a script function and a builtin share a
 name — including the differently-SPELLED case that must not shadow · `UsingNotFoundLintTests` 5009,
 both import spellings, since an unresolvable `#include` that reported nothing would silence 5026
@@ -247,13 +274,22 @@ and the active argument, the reported case of an `#insert`ed macro invoked at fi
 three positions that must NOT answer with a macro — an object-like one, a name whose case does not
 match, and a qualified `namespace::NAME(`.
 
-**Database and resolution.** `ScriptDatabaseTests` · `PathResolverTests` raw/mod resolution order,
+**Database and resolution.** `ScriptDatabaseTests` · `GameFolderScopeTests` what the cold index walks
+when the open folder is the game install (raw's script folders, devraw and the mods, not the tools
+around them), and devraw as a second raw searched after it · `CallTargetAgreementTests` hover,
+signature help and parameter hints describing the declaration go-to-definition lands on: the named
+file's own on a path call, the copy the file `#using`s among BO3's mp and zm copies ·
+`PackedInvertedIndexTests` a posting array handed out is never changed under its holder and never
+hides a later write · `ReferenceTableTests` the packed per-record reference table against the entries
+it was built from: order, each key's group, ranges and flags, and keys sharing a hash code ·
+`PathResolverTests` raw/mod resolution order,
 plus the resolution memo (a hit and a miss both cost nothing the second time; a watched
 create/delete forces a re-probe) · `ImportResolutionProbeCostTests` the filesystem-probe count
 behind `#using`/`#include` — confirms the memo's fix, and that the cold, root-count-multiplied cost
 it cannot remove is still exactly what it should be · `WorkspaceIndexerOwnershipTests` an open
 document's committed record survives a concurrent index pass untouched, and the disk content still
-reaches the cache · `WorkspaceIndexerConcurrencyTests` two `IndexAsync` calls on one indexer never
+reaches the cache, including a file opened while a watched change was re-indexing it (the indexer
+asks again right before the write) · `WorkspaceIndexerConcurrencyTests` two `IndexAsync` calls on one indexer never
 interleave · `DependencyRewriteTests` · `RawWriteGuardTests` refusing to write into a game install ·
 `ClassGraphTests` incremental class-index updates · `MethodResolutionTests` inherited and qualified
 method lookup · `MethodReferenceTests` class-method reference unions · `MacroNavigationTests`,
@@ -292,7 +328,10 @@ exercise · `InsertCacheTests` two headers differing only by case on Linux ·
 scripts that insert it · `WatcherRaceTests` a slow index commit never clobbering a fresher
 watched-file one.
 
-**Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` · `RecordSerializerTests` the
+**Cache, documents, typing.** `SqliteCacheTests`, `DeleteDatabaseTests` (a stale cache file is
+deleted and recreated rather than emptied row by row) · `ColdRestoreTests` (in `SqliteCacheTests.cs`)
+a re-index restoring unchanged content keeps the live record, whose full-mode diagnostics the cached
+one lacks · `RecordSerializerTests` the
 binary record layout: every settable property of every record type pinned, a fully populated round
 trip, and corrupt, truncated and old-format blobs reading as null · `StaleAnalysisTests` edits
 racing analysis, including that `AnalyzeSnapshot` stamps the WINNING version on a superseded
@@ -380,6 +419,15 @@ line means "suppressed on this game" rather than "run twice".
 - `ClientArityHarvestTests` — what a game's SERVER library gets wrong against its CLIENT scripts, the
   input for building a CSC library from the GSC one. `StockScriptListTests` generates the per-game
   stock lists behind the raw-folder save warning.
+- `PathCallResolutionCorpusTests` — every cod4 path call resolved the way hover resolves it, to the
+  file it names and that file's own declaration, never one the file only includes; and
+  `EveryPathCallsDefinitionIsInTheFileItNames` asks go-to-definition the same through the handler
+  (12,479 calls). A call into a file that does not declare the name is allowed only in
+  `UnloadedStockScripts`: the seven cod4 stock scripts nothing loads, the only ones relying on more
+  than the engine's include rule.
+- `LensCountCorpusTests` — opens every script of a real bo3 and cod4 index and requires the same
+  CodeLens titles from a handler that keeps nothing, from one filling `LensCountCache`, and from the
+  same one reading it back.
 - `HandlerCostTests` — what one CodeLens, inlay-hint and format request costs on the densest files.
   `InlayHintCorpusTests` — what the hints SAY over 250 files spread through bo3 and cod4: totals per
   family reported, and three things asserted — that neither dialect produces zero of either family
@@ -442,7 +490,27 @@ never marks the index complete, so 5013/5014 and the unused-import hint stand do
 parse diagnostics, including a folder added mid-session; and a folder change republishes, taking a
 removed folder's problems back ·
 `CodeLensArgumentTests` the lens command payload, which must be primitives so no serializer can
-case-mangle it · `CompletionResolveDataTests` · `DiagnosticsScopeTests` `gscode.diagnostics.scope` ·
+case-mangle it · `CodeLensResolveTests` lenses listed without counts and counted on resolve, after a
+serialised round trip through the client · `CodeLensCountCacheTests` a kept count seeing another
+file's new call, a new file and the open file's own edit, including a raw script a mod copies ·
+`SharedResolverMatrixTests` every request that turns a call into a declaration (hover, definition,
+type definition, implementation, signature help, hints, references, highlight, rename, call
+hierarchy, CodeLens, completion resolve, the builtin page) asked the same cod4 calls — own, direct
+include, include-of-include, path call — with a same-stem decoy beside every target, the same through
+a field holding a callback, and BO3's mp/zm/cp copies of one namespace. A new request that resolves
+calls gets its row here · `IncludeScopedNavigationTests`, `IncludeScopedReferenceTests` navigation
+and references keeping to what the calling file provides, a callback resolved where it was stored,
+and a path call meaning the named file's function · `IncludeDialectCallResolutionTests` hover and the
+outgoing call hierarchy on a bare call answering the one function the file reaches, not the first of
+2,000 same-named copies · `CompletionResolveTargetTests` a completion row's docs describing the
+declaration the name reaches from the edited file, not whichever same-stem copy the index lists
+first · `WatchedFilesBatchTests` a branch-switch batch queued and applied in parallel, leaving what a
+sequential apply would: records replaced, deletions gone, full mode relinted ·
+`LintSweepCacheTests` the stored full-mode sweep restored only for the workspace it was computed
+against: a changed callee signature, a file it does not cover, or an import target vanishing from
+disk with no record changed all sweep again · `AnalysisTimingTests` the debounce formula ·
+`RegistrationWithoutCapabilityTests` a client that sends no completion capability still gets its
+initialize answered · `CompletionResolveDataTests` · `DiagnosticsScopeTests` `gscode.diagnostics.scope` ·
 `BuiltinAtTests` the builtin-under-cursor request · `OnTypeBlockScopeTests` ·
 `UntitledDocumentTests` documents with no path · `WorkspaceFoldersHandlerTests` ·
 `IndexProgressNotifierTests`, `ServerStatusNotifierTests` · `DocumentSymbolNamelessTests` a
@@ -479,7 +547,10 @@ assert on, and `DiscardingDiagnosticsSink`.
 in flight per document and none for a document nothing holds · `DiagnosticsPublishOrderTests` the
 newest analysis wins whatever order they finish in · `DependentRefreshStampTests` a refresh publishes
 the version it ANALYSED · `DiagnosticsUriTests` one file, one URI spelling ·
-`WorkspaceDiagnosticsRefreshTests` a closed file resent only when its diagnostics changed ·
+`WorkspaceDiagnosticsRefreshTests` a closed file resent only when its diagnostics changed, compared
+by value; its Hints never sent; nothing sent by a full-mode refresh before the sweep has finished; a
+large refresh paced through a queue with later decisions behind earlier ones; a file opened mid-push
+ending on its take-back; and a file awaiting its relint keeping what it last published ·
 `ResolveFreshCancellationTests`, `SignatureHelpCancellationTests` read paths dropping a cancelled
 request · `StartupRacePreAnalysisTests` folding and selection answered before any analysis
 published.

@@ -23,7 +23,11 @@ bug in this area came from assuming the first.
 
 Under `Include`, every same-named function in the workspace shares one key — CoD4's animscripts
 hold 1,230 `main()`s — so anything keyed by name must scope by reachability. `GameProfile.KeyNamespace`
-and `DatabaseQueries.ScopeToIncludeGraph` exist for exactly this.
+and `DatabaseQueries.FunctionsTheCallReaches` exist for exactly this. Reachability is the ENGINE's:
+a bare call sees the file's own functions and its direct includes' own, one level deep; a path call
+the named file's own. Before giving a new include-dialect game the same rule, check its stock scripts
+against it (`EngineIncludeRuleTests`, `PathCallResolutionCorpusTests`); the `gsc-dialect-facts`
+skill has the rule and the seven CoD4 files nothing loads.
 
 It is also a COST, and the one that bites at scale. A namespaced lookup narrows through the
 `(namespace, name)` index; a bare-name lookup on a merge dialect cannot, so at 50,000 files it has
@@ -34,7 +38,13 @@ on cod4 — run `Category=Scale` with `GSCODE_SCALE_GAMES=bo3,cod4`.
 
 **`HasInlinePathCalls`.** `maps\mp\_util::foo()` reaches a function with **no import at all**. Any
 reachability rule that only follows `#include` will be wrong on these — that mistake took a
-function's reference count from 1,230 to zero, which reads as "this is dead code".
+function's reference count from 1,230 to zero, which reads as "this is dead code". It reaches the
+named file's OWN functions only, not what that file includes, and a request at a cursor has to pass
+the written path (`NavigationTarget.PathCallAt`) or the call reads as a bare one.
+
+**The raw layout.** `RawSubfolder` names raw. A `devraw` folder beside it, with the same layout, is
+raw context searched after raw. On BO3 only raw's `scripts` folder is walked, because every stock
+script lives there; check where a new game keeps its scripts before narrowing its walk the same way.
 
 ## Directives are gated one at a time, and the default is NOT "everything has it"
 

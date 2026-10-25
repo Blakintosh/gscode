@@ -4,6 +4,39 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+
+- **CoD4, WaW, MW2 and BO1: a call now reaches what the game itself would find, and nothing else.**
+  A bare call sees the file's own functions and the functions its `#include`d files declare
+  themselves, one level deep: not what those files include in turn. A path call such as
+  `maps\_utility::foo()` sees only `maps\_utility`'s own functions. Hover, Go to Definition, find
+  references, signature help, inlay hints, completion docs and call hierarchy all follow this rule,
+  so they no longer pick a same-named function from elsewhere in the install. A call that only an
+  include's own include declares is now reported (`gscode-5026`), since the game does not find it.
+- **Black Ops III: a call into a namespace that several copies of a script declare** (the `mp`, `zm`
+  and `cp` copies share one `#namespace`) now describes and navigates to the copy the file
+  `#using`s, in every feature, not the first copy in the index.
+- A callback stored in a field (`level.cb = ::handler;`) is resolved in the file that stored it.
+- Diagnostics appear sooner after typing in a file that analyses quickly: the wait is now three times
+  the file's last analysis, between 125 and 250 ms, where it was always 250 ms.
+- Opening a game install as the workspace folder indexes only its script folders, and a `devraw`
+  folder beside raw is now indexed, searched after raw.
+- In a large workspace a branch switch, a workspace folder change and the `full`-mode lint sweep run
+  in the background at low priority, so the editor stays responsive while they finish. A restart
+  with nothing changed restores the `full`-mode results from the cache instead of linting again.
+- Reference counts above declarations are computed only for the lenses on screen.
+
+### Fixed
+
+- A function reference to an engine function (`&UseButtonPressed`, which stock BO3 stores) was
+  reported as an unresolved script function (`gscode-5013`).
+- A `#define` written in a script is no longer counted, renamed or listed together with another
+  script's macro of the same name.
+- After a cache rebuild, the first start no longer spends minutes emptying the old cache.
+- Clients other than VS Code that send no completion capability got no answer to `initialize`.
+
 ## 2.2.2
 
 ### Fixed

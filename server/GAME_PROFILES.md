@@ -129,14 +129,28 @@ how a function is KEYED (`KeyNamespace`, and the extractor that builds the key),
 offer bare, and which code actions apply. They coincide for every game today (a test asserts it), and
 BO3 is the only game that is namespace-driven.
 
-**A namespace does not pin a file, and scoping is not conditional on the dialect.** A namespace in
-the key does not make the answer unique: a namespace is shared freely across files, and the stock
-scripts declare the same `#namespace` in an `mp` copy and a `zm` copy of the same script 565 times
-over (the count is `AmbiguousFunctionLint`'s). So `globallogic_utils::get_time_remaining` names two
-declarations, and only the asking file's `#using` list says which. Both dialect families therefore
-narrow by the same rule — the file itself plus what it links against — and the only difference is
-which directive spells "links against". `DatabaseQueries.LinkedScriptPaths` owns that one choice;
-callers do not branch on the profile themselves.
+**How the engine finds a function under `#include`: only through the paths the script provides.**
+A function is keyed by the file that declares it. A bare call looks in the calling file, then in
+what its `#include`s merge in — and an include merges the included file's OWN functions, not those
+it got from its own includes, so includes are one level deep. A path call (`maps\_utility::foo()`)
+looks in the named file's own functions and nothing that file includes. Nothing is looked up across
+the install by name. The stock scripts agree in every file the game loads; CoD4 ships seven that
+rely on more (`maps\_createpath`, `_documents`, `_guide`, `_leapfrog`, `_mortarteam`, `_photosource`,
+`_wood`), and they are listed as rawfiles in its zone sources, named by no other script, and never
+loaded (`UnloadedStockScripts` in the tests). `DatabaseQueries.FunctionsTheCallReaches` is this rule,
+and every request that turns a call into a declaration asks it; the include lints apply the same
+rule (`EngineIncludeRuleTests`). A call that reaches nothing resolves to nothing: there is no
+workspace-wide fallback for a function call on these dialects.
+
+**A namespace does not pin a file either.** A namespace in the key does not make the answer unique:
+a namespace is shared freely across files, and the stock scripts declare the same `#namespace` in an
+`mp` copy and a `zm` copy of the same script 565 times over (the count is `AmbiguousFunctionLint`'s).
+So `globallogic_utils::get_time_remaining` names two declarations, and only the asking file's
+`#using` list says which. A namespaced call therefore narrows to the copies the file reaches when it
+reaches any, and keeps every copy when it reaches none, so a missing `#using` still leads somewhere.
+Both families narrow by what the file links against, and the only difference there is which
+directive spells it: `DatabaseQueries.LinkedScriptPaths` owns that one choice, and callers do not
+branch on the profile themselves.
 
 A **class** name is the exception on BO3: it is global, named bare as `new Throttle()` or
 `class Derived : Throttle`, with no `ns::Throttle` form — so a class key never carries a namespace on
@@ -259,6 +273,21 @@ The layout is per-game, and this is the one path fact a profile carries:
 |---|---|---|
 | BO3 | `<install>\share\raw` | `<install>\mods` |
 | every earlier game | `<install>\raw` | `<install>\mods` |
+
+**devraw** sits beside raw (`share\devraw` on BO3, `devraw` elsewhere) with the same layout, holding
+development files that do not ship. When it exists its scripts are raw context under the same
+relative paths, searched after raw — the engine's order on CoD4, assumed to match on BO3 — and a
+devraw file that raw also has is not indexed, since two raw records at one relative path would
+shadow nothing and every lookup by name would see both.
+
+**What is walked.** A workspace folder that holds the raw or devraw folder is treated as the install:
+it is not walked itself, and its scripts come through raw, devraw and the mods. The install is
+mostly tools and assets — 295,640 files around 1,106 scripts on BO3. Within raw, BO3 walks only
+`scripts`, where all its stock scripts are; the earlier games spread theirs over `maps`,
+`animscripts`, `character`, `aitype`, `clientscripts` and more, so all of raw is walked there, and so
+is a raw with no `scripts` folder. Opening the BO3 install went from 1,106 files in 285 ms to 1,086
+in 11 ms; the 20 left out live under `usermaps\*\scripts` and `rex\templates`, and are indexed when
+their own folder is opened.
 
 Nothing is read from the **environment**, which is the part that never generalised.
 `%TA_TOOLS_PATH%` is set by Treyarch's mod tools and CoD4, WaW, MW2 and BO1 ship nothing equivalent,

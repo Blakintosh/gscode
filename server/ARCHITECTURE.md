@@ -47,6 +47,17 @@ handlers read immutable record snapshots; open documents keep their full `ParseR
 `DocumentStore`. Path/mod-overlay questions (`share\raw` vs `mods\<name>` vs workspace)
 are answered solely by the `PathResolver`.
 
+What a function call reaches is one rule in one place, `DatabaseQueries.FunctionsTheCallReaches`,
+and it is the engine's: on an include dialect a bare call sees the file's own functions and its
+DIRECT includes' own, a path call the named file's own, and nothing is looked up across the install;
+on BO3 a namespace's copies narrow to the ones the file `#using`s. Hover, signature help, hints,
+definition, the hierarchies, a callback field and completion resolve all ask it
+(`SharedResolverMatrixTests` asks each the same calls).
+
+Work that is not a request stays off the message loop: watched-file batches and folder changes are
+queued and applied in the background, and the lint sweep and the watched-file pump run below normal
+priority (`BelowNormalWorkers`), so an edit's diagnostics and the next request do not wait on them.
+
 Each language store keeps a set of inverted indexes beside its records — by reference key, declared
 name (bare and namespace-qualified), namespace, class, script path, the files naming a path, and the
 workspace's literal and field vocabulary — maintained in the same per-file diff that swaps a record
@@ -64,6 +75,8 @@ exception is a MACRO key: a header is inserted into both worlds, so its uses are
 whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.csc` use behind.
 
 - **Sync + diagnostics**: incremental text sync with debounced re-analysis (`TextSyncHandler`),
+  debounced by three times the document's last analysis, between 125 and 250 ms
+  (`AnalysisTiming.DebounceFor`), and
   push-model `publishDiagnostics` merging parse diagnostics with the cross-file lints — all of them,
   through `Analysis/WorkspaceLints.Analyze`, which is the one entry point and currently runs
   twenty-six rules — seventeen called directly and nine more sharing `NodeLintPass`'s single AST
@@ -71,12 +84,14 @@ whoever asks — otherwise renaming a header macro from a `.gsc` leaves every `.
   get the cross-file lints from live text; `workspaceIndexingMode: full` (`WorkspaceLintSweep`) also
   runs them over every indexed CLOSED file, storing the merged result on the record, and
   `DependentDiagnosticsRefresher` re-sweeps just the closed files an edit's declared functions
-  reach (`LanguageStore.FilesReferencing`) rather than the workspace.
+  reach (`LanguageStore.FilesReferencing`) rather than the workspace. A closed file's set goes out
+  without its Hints, paced from a queue, and an unchanged restart restores the stored sweep
+  (`LintSweepCache`) instead of running it.
 - **Read**: hover (with inferred local types), definition, references (incl. literals),
   document highlight, document links, document/workspace symbols, folding, selection ranges,
   semantic tokens (full/delta/range).
-- **Assist**: completion + signature help, code lens (reference counts), rename (+prepareRename),
-  call and type hierarchy, inlay hints (inferred types + parameter names).
+- **Assist**: completion + signature help, code lens (reference counts, counted on resolve),
+  rename (+prepareRename), call and type hierarchy, inlay hints (inferred types + parameter names).
 - **Edit**: formatting (whole/range/on-type) via `Formatting/GscFormatter`; code actions —
   remove-duplicate and add-missing `#using`, add-missing `#include` (5026), the pair offered for
   a call that resolved to nothing (5013/5014): declare the function here, or import and qualify it,
@@ -139,7 +154,7 @@ be unreadable, so it groups them by area with a keyword-bearing sentence each �
 the point being to find the right class by searching for the construct. It also carries the
 canonical list of ENVIRONMENT VARIABLES (`GSCODE_CORPUS_<GAME>`,
 `GSCODE_COD4_DOCS`, `GSCODE_INSTRUMENTATION`, `GSCODE_PERF_REPORT`, `GSCODE_SWEEP_REPORT`, and the
-`GSCODE_SCALE_*` trio behind the scale sweep),
+`GSCODE_SCALE_*` variables behind the scale sweep),
 since most of them exist to point tests at game data or reports and were otherwise discoverable
 only by reading fixture source.
 

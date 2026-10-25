@@ -36,7 +36,8 @@ an answer computed in two places drifts.
 semantic tokens and formatting use `NavigationSupport.ResolveFresh` / `DocumentStore.AnalyzeIfStale`;
 an answer that is a symbol may use `Resolve`. Every read path that may re-analyse takes the
 request's `CancellationToken`.
-*Why:* analysis is 250 ms behind the keystroke, and a stale position lands on the wrong characters.
+*Why:* analysis runs up to 250 ms behind the keystroke, and a stale position lands on the wrong
+characters.
 *Source:* `lsp-handler` skill, "Stale analysis is the recurring bug".
 
 ---
@@ -56,9 +57,16 @@ are `PathUtil.NormalizeAbsolute`; directive paths are `RelativePathIndex.Normali
 through `NavigationSupport.FindAllReferences`. Prepare-rename and rename share
 `RenameHandler.IsRenameable`. Every lint reaches the pipeline through `WorkspaceLints.Analyze`, and
 the server reaches that only through `DocumentLinter`. What is a use of a local is decided once, by
-`LocalUses.Of`.
-*Why:* when two features compute the same answer separately, users see them disagree.
-*Source:* the sections of those types in each `FOLDER.md`.
+`LocalUses.Of`. What a CALL reaches is decided once, by `DatabaseQueries.FunctionsTheCallReaches`
+(with `MethodResolution.ResolveCall` and `CallResolution` built on it): hover, signature help, hints,
+definition, completion resolve and a callback field all ask it, and the include lints (5013, 5026,
+5012) apply the same rule, which `EngineIncludeRuleTests` holds them to. A request at a cursor
+passes the path call there (`NavigationTarget.PathCallAt`, or the `PositionHit` overloads of the
+reference queries), or a path call reads as a bare call.
+*Why:* when two features compute the same answer separately, users see them disagree. Go-to-definition
+once answered null on a path call that hover resolved.
+*Source:* the sections of those types in each `FOLDER.md`. Test: `SharedResolverMatrixTests`, which
+asks every request the same calls.
 
 **8. `DatabaseQueries.LinkedScriptPaths` owns the `#using` / `#include` fork.** Callers do not
 branch on the dialect to decide what a file links against.
@@ -99,12 +107,23 @@ folder changes, the closed-file publisher and sweep, workspace symbol search); g
 *Source:* `server/ARCHITECTURE.md`, `server/PERF.md` (scale section). Enforced by the `Scale`
 suite's per-request budgets.
 
-**13. No lint may take more than 40% of the 250 ms debounce on its worst stock file**, and the whole
-pass no more than 25% at p99.
+**13. No lint may take more than 40% of the 250 ms debounce budget on its worst stock file**, and the
+whole pass no more than 25% at p99. A fast file waits less than the budget; the rules are held to the
+budget all the same.
 *Source:* `server/PERF.md`, per-lint budget. Enforced by `LintBudgetTests` (corpus).
 
 **14. Measure before optimising, and record the result**, including what was tried and rejected.
 *Source:* `server/PERF.md`. Some decisions there are final; check before re-proposing one.
+
+**14a. A notification handler returns at once; background work runs below normal priority.**
+Watched-file batches and workspace-folder changes are queued and applied off the message loop; the
+lint sweep and the watched-file pump run on `BelowNormalWorkers`. Closed-file diagnostics go out
+paced, without Hints (VS Code shows a closed file's Hints nowhere).
+*Why:* at 50,000 files a branch switch held the editor for 32 s, a folder add for 86 s, and a cold
+start's 366 MB diagnostics push queued every response behind it for seconds.
+*Source:* `server/PERF.md`, the scale section; `Server/FOLDER.md`, `Handlers/WatchedFilesHandler.cs`,
+`Handlers/WorkspaceFoldersHandler.cs`. Tests: `WatchedFilesBatchTests`,
+`WorkspaceDiagnosticsRefreshTests`.
 
 ---
 
@@ -134,15 +153,20 @@ from the input's means no edits.
 
 **19. A superseded analysis neither publishes nor commits.** Diagnostics carry the version that was
 analysed; `OpenDocument.Publish` refuses an older snapshot over a newer one; a buffer the editor owns
-is never overwritten from disk.
+is never overwritten from disk — the indexer asks again right before each write, since a file can
+open while it is being re-indexed. A re-index that would restore unchanged content keeps the live
+record, which may carry more (the full-mode sweep's diagnostics).
 *Source:* `Workspace/FOLDER.md`, `Documents/DocumentStore.cs`. Tests: `StaleAnalysisTests`,
 `DiagnosticsPublishOrderTests`, `WorkspaceIndexerOwnershipTests`, `WatcherRaceTests`.
 
 **20. The cache can never serve a stale record.** Content hash per file, schema and record-format
-versions, and a build identity (game + assemblies + bundled data). Any mismatch wipes it; there are
-no migrations. A new record field needs both halves of `RecordSerializer` and a version bump.
-*Source:* `Workspace/FOLDER.md`, `Cache/`. Tests: `RecordSerializerTests`,
-`RecordFormatCorpusTests`, `ServerBuildIdentityTests`.
+versions, and a build identity (game + assemblies + bundled data). Any mismatch deletes the file and
+starts a new one; there are no migrations. A new record field needs both halves of
+`RecordSerializer` and a version bump. The stored full-mode lint sweep is all or nothing: it is
+restored only when a fingerprint of every record AND of what every import and path call resolves to
+on disk is unchanged, since a cross-file result depends on files other than its own.
+*Source:* `Workspace/FOLDER.md`, `Cache/`; `Server/FOLDER.md`, `LintSweepCache`. Tests:
+`RecordSerializerTests`, `RecordFormatCorpusTests`, `ServerBuildIdentityTests`, `LintSweepCacheTests`.
 
 ---
 
@@ -154,6 +178,14 @@ from the keyword set where they can, so they cannot drift from what the lexer do
 
 **22. A core profile encodes nothing game-specific.** A blank is better than a guess.
 *Source:* `server/GAME_PROFILES.md`.
+
+**22a. On an include dialect a call reaches only what its own file provides.** A bare call: the
+file's own functions, else its DIRECT includes' own. A path call: the named file's own. Never a
+workspace-wide lookup by name, and no "nothing reached, so offer everything" fallback for a
+function call. The stock scripts agree in every file the game loads; the seven cod4 scripts that
+rely on more are loaded by nothing (`UnloadedStockScripts`).
+*Source:* `server/GAME_PROFILES.md`, "Imports & function pointers"; `gsc-dialect-facts` skill.
+Tests: `EngineIncludeRuleTests`, `PathCallResolutionCorpusTests`, `SharedResolverMatrixTests`.
 
 **23. The server owns the game roster.** The client never keeps its own list of games.
 *Source:* `client/src/FOLDER.md`, `gamePicker.ts`. Test: `SupportedGamesHandlerTests`.

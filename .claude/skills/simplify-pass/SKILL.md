@@ -150,6 +150,9 @@ The seams to grep for by name, with what each one owns:
 | Seam | The question it answers |
 |---|---|
 | `GameProfile.KeyNamespace` | what namespace a function is KEYED under, which is not the one it is declared in |
+| `DatabaseQueries.FunctionsTheCallReaches` | which declaration a call means: the engine's include rule, a path call's file, BO3's reached copy |
+| `NavigationTarget.PathCallAt` / `PathCallReference.At` | the file a path call at a range names, "" for any other site |
+| `DatabaseQueries.IsLoadedFor` | whether a record is one the asker sees and the engine loads (context, and a mod overlay hiding raw) |
 | `PathUtil.NormalizeAbsolute` / `NormalizeScriptPath` | the comparison form of an on-disk path, and of a script path |
 | `RelativePathIndex.Normalize` | the form `#using` and `#include` name a file in |
 | `DirectiveIndex.WrittenKey` | the form that folds everything a directive-path comparison ignores |

@@ -507,7 +507,7 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `#include`s directly (`ReachableFunctions` — includes only, since a path call merges nothing into
   scope). Nothing else: the engine never looks a name up across the install, so this is
   empty when the file's paths reach no declaration. On a namespace dialect, `ns::func`:
-  `LookupFunctions` with the copies the file reaches first (`ReachedFirst`), since an mp and a zm copy
+  `LookupFunctions` narrowed to the copies the file reaches when it reaches any (`ReachedWhereAny`), since an mp and a zm copy
   both declare `#namespace util`. Hover (`ResolveCall`), the call hierarchy, completion docs, type
   definition, the builtin-vs-script tests and `CallResolution` (signature help, hints) ask it; go-to-
   definition narrows its sites, and find-references picks its declaration, with

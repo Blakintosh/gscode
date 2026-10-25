@@ -144,9 +144,10 @@ public sealed class CallTargetAgreementTests
     }
 
     [Fact]
-    public void ResolveCall_OnANamespaceCall_ListsTheCopyTheFileUsesFirst()
+    public void ResolveCall_OnANamespaceCall_IsTheCopyTheFileUses()
     {
-        // Hover renders the first declaration ResolveCall returns.
+        // Hover renders the first declaration ResolveCall returns, and type definition and a stored
+        // callback list all of them: the zm and cp copies are not what this mp script calls.
         using TestWorkspace workspace = Bo3Workspace();
         ParseResult result = workspace.Analyze(@"scripts\mp\caller.gsc");
 
@@ -154,8 +155,7 @@ public sealed class CallTargetAgreementTests
             workspace.Database.Gsc, "raw", TestPaths.Raw(@"scripts\mp\caller.gsc"),
             new SymbolKey("util", "f", SymbolKind.Function), ReferenceKind.Call, result.Extraction.DeclaredNamespaces);
 
-        Assert.Equal(3, resolved.Length);
-        Assert.Equal("mp_a", resolved[0].Function.Parameters[0].Name);
+        Assert.Equal("mp_a", Assert.Single(resolved).Function.Parameters[0].Name);
     }
 
     [Fact]

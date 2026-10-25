@@ -245,9 +245,9 @@ public static class DatabaseQueries
     /// through the paths a script provides, never by looking the name up across the install. Empty
     /// when nothing the file reaches declares the name.
     ///
-    /// On a namespace dialect, <see cref="LookupFunctions"/>' answer with the copies the asking file
-    /// reaches listed first. A namespace does not pin a file: an mp and a zm copy both declare
-    /// <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
+    /// On a namespace dialect, <see cref="LookupFunctions"/>' answer narrowed to the copies the asking
+    /// file reaches when it reaches any. A namespace does not pin a file: an mp and a zm copy both
+    /// declare <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
     /// </summary>
     /// <param name="includePrivate">
     /// For a caller asking only whether a script function hides an engine one of the same name.
@@ -265,7 +265,7 @@ public static class DatabaseQueries
 
         ImmutableArray<ResolvedFunction> found = LookupFunctions(
             store, askingContextId, askingPath, keyNamespace, keyName, includePrivate, askingNamespaces);
-        return ReachedFirst(store, askingPath, found);
+        return ReachedWhereAny(store, askingPath, found);
     }
 
     /// <summary>
@@ -293,10 +293,13 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// <paramref name="found"/> with the declarations in files the asker reaches — itself, an import,
-    /// a path call — first, each group in its original order.
+    /// The declarations in <paramref name="found"/> whose files the asker reaches — itself, an import,
+    /// a path call — when there are any, else all of them. A namespace does not pin a file, and the
+    /// copies the file does not <c>#using</c> are not what it calls; go-to-definition narrows its sites
+    /// the same way (<see cref="PreferIncludeScope"/>). With none reached, every copy stays, so a
+    /// missing import still leads somewhere.
     /// </summary>
-    private static ImmutableArray<ResolvedFunction> ReachedFirst(
+    private static ImmutableArray<ResolvedFunction> ReachedWhereAny(
         LanguageStore store, string askingPath, ImmutableArray<ResolvedFunction> found)
     {
         if ( found.Length < 2 || !store.TryGet(NormalizeAskingPath(askingPath), out ScriptRecord asking) )
@@ -304,22 +307,16 @@ public static class DatabaseQueries
             return found;
         }
 
-        ImmutableArray<ResolvedFunction>.Builder ordered = ImmutableArray.CreateBuilder<ResolvedFunction>(found.Length);
-        List<ResolvedFunction> unreached = [];
+        ImmutableArray<ResolvedFunction>.Builder reached = ImmutableArray.CreateBuilder<ResolvedFunction>();
         foreach ( ResolvedFunction function in found )
         {
             if ( Reaches(asking, function.Record.RelativePath) )
             {
-                ordered.Add(function);
-            }
-            else
-            {
-                unreached.Add(function);
+                reached.Add(function);
             }
         }
 
-        ordered.AddRange(unreached);
-        return ordered.MoveToImmutable();
+        return reached.Count > 0 ? reached.ToImmutable() : found;
     }
 
     /// <summary>

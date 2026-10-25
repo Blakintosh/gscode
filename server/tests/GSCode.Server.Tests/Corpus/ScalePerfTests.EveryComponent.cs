@@ -179,13 +179,19 @@ public partial class ScalePerfTests
     /// <param name="DeclarationBody">The first function's whole range, for range formatting.</param>
     /// <param name="DeclarationEnd">Just past the first function's closing brace, where typing <c>}</c> asks for on-type formatting.</param>
     /// <param name="Class">The first class's name, for the type hierarchy; null on a dialect without classes.</param>
+    /// <param name="LocalCall">
+    /// The first bare call to a function this file declares. Not a path call: <c>maps\_x::main()</c> in
+    /// a file with a <c>main</c> of its own means _x's, which is <paramref name="PathCall"/>'s row.
+    /// </param>
+    /// <param name="PathCall">The first path call, <c>maps\_x::foo()</c>; null on a dialect without them.</param>
     /// <param name="CallbackField">
     /// The first field this file stores a function in (<c>level.cb = &amp;foo</c>, <c>level.cb = ::foo</c>),
     /// for the requests that answer what a field holds; null when the file stores none.
     /// </param>
     private sealed record Positions(
         LspPosition? StockCall, LspPosition? InsideStockCall, LspPosition? LocalCall, LspPosition? Declaration, LspRange? StockCallRange,
-        LspRange? DeclarationBody, LspPosition? DeclarationEnd, LspPosition? Class, LspPosition? CallbackField);
+        LspRange? DeclarationBody, LspPosition? DeclarationEnd, LspPosition? Class, LspPosition? CallbackField,
+        LspPosition? PathCall);
 
     private async Task<ComponentRow> MeasureEveryComponentAsync(
         ScaleCorpus corpus, ScriptDatabase database, PathResolver resolver, NameTable names,
@@ -325,6 +331,15 @@ public partial class ScalePerfTests
                     CancellationToken.None));
                 await TimeAsync(into, "rename, own call", () => server.Rename.Handle(
                     new RenameParams { TextDocument = id, Position = local, NewName = "scale_renamed" }, CancellationToken.None));
+            }
+
+            if ( at.PathCall is LspPosition pathCall )
+            {
+                await TimeAsync(into, "references, path call", () => server.References.Handle(
+                    new ReferenceParams { TextDocument = id, Position = pathCall, Context = new ReferenceContext { IncludeDeclaration = true } },
+                    CancellationToken.None));
+                await TimeAsync(into, "rename, path call", () => server.Rename.Handle(
+                    new RenameParams { TextDocument = id, Position = pathCall, NewName = "scale_renamed" }, CancellationToken.None));
             }
 
             if ( at.DeclarationBody is LspRange body && at.DeclarationEnd is LspPosition end )
@@ -549,12 +564,32 @@ public partial class ScalePerfTests
             declared.Add(function.KeyName);
         }
 
+        HashSet<GSCode.Core.Text.TextRange> pathCalls = [];
+        foreach ( GSCode.Parser.Extraction.PathCallReference pathCall in parsed.Extraction.PathCalls )
+        {
+            pathCalls.Add(pathCall.NameRange);
+        }
+
         LspPosition? local = null;
+        LspPosition? pathCallAt = null;
         foreach ( ReferenceEntry reference in parsed.Extraction.References )
         {
-            if ( reference.Kind == ReferenceKind.Call && !reference.FromMacro && declared.Contains(reference.Key.Name) )
+            if ( reference.Kind != ReferenceKind.Call || reference.FromMacro )
+            {
+                continue;
+            }
+
+            if ( pathCalls.Contains(reference.Range) )
+            {
+                pathCallAt ??= new LspPosition(reference.Range.Start.Line, reference.Range.Start.Character);
+            }
+            else if ( local is null && declared.Contains(reference.Key.Name) )
             {
                 local = new LspPosition(reference.Range.Start.Line, reference.Range.Start.Character);
+            }
+
+            if ( local is not null && pathCallAt is not null )
+            {
                 break;
             }
         }
@@ -587,7 +622,7 @@ public partial class ScalePerfTests
             }
         }
 
-        return new Positions(stockAt, inside, local, declaration, stockRange, body, bodyEnd, classAt, callbackField);
+        return new Positions(stockAt, inside, local, declaration, stockRange, body, bodyEnd, classAt, callbackField, pathCallAt);
     }
 
     /// <summary>

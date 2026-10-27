@@ -248,7 +248,7 @@ internal sealed class StartupIndexRunner
                         await draining.WaitForIdleAsync(_indexingLifetime.Token);
                     }
 
-                    Compact();
+                    Compact(_settings.MemoryCompactionLimitMegabytes);
                     IndexReporting.LogMemoryReport("compaction", outcome);
 
                     // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
@@ -387,7 +387,8 @@ internal sealed class StartupIndexRunner
     // It earns its place — it returned 446 MB on bo1. Deferring it to the first idle moment is a
     // separate decision that needs its own measurement, and is not made here.
     //
-    // Only up to CompactionLiveLimit, though. The pause grows with the live heap — 626 ms at 10,000
+    // Only up to a limit, though: gscode.memory.compactionLimitMB, 1 GB by default — see ShouldCompact.
+    // The pause grows with the live heap — 626 ms at 10,000
     // heavy BO3 files (1.7 GB live), 2,539 ms at 25,000 (4.8 GB) and 4,095 ms at 50,000 (9.8 GB), from
     // the scale run — and it lands just after Ready, when an editor is opening files: driving the
     // real server over stdio at 10,000 files, a document-symbol request made then waited 521 ms
@@ -399,18 +400,18 @@ internal sealed class StartupIndexRunner
     // BO3 install (1,086 files) it read 1,236 MB in one start and 162 MB in the next, against 65 MB
     // actually live: the first start skipped the compaction and kept 1.4 GB of working set that the
     // compaction gives back in about 120 ms.
-    private static void Compact()
+    private static void Compact(int limitMegabytes)
     {
         long live = GC.GetGCMemoryInfo().HeapSizeBytes;
         Stopwatch pause = Stopwatch.StartNew();
 
-        if ( live > CompactionLiveLimit )
+        if ( !ShouldCompact(live, limitMegabytes) )
         {
             GC.Collect(2, GCCollectionMode.Default, blocking: false, compacting: false);
             Log.Information(
-                "Post-index compaction skipped: {LiveMegabytes:N0} MB live is past the {LimitMegabytes:N0} MB its pause is affordable for; "
-                + "a background collection was requested instead",
-                live / 1048576, CompactionLiveLimit / 1048576);
+                "Post-index compaction skipped: {LiveMegabytes:N0} MB live is past the {LimitMegabytes:N0} MB limit "
+                + "(gscode.memory.compactionLimitMB); a background collection was requested instead",
+                live / Megabyte, limitMegabytes);
             return;
         }
 
@@ -425,8 +426,16 @@ internal sealed class StartupIndexRunner
     }
 
     /// <summary>
-    /// The live heap past which the post-index compaction is not run — see <see cref="Compact"/>. A
-    /// stock-sized workspace is a few hundred MB; 1 GB keeps the pause to a few hundred ms.
+    /// Whether the post-index compaction runs on a heap of <paramref name="liveBytes"/>: only up to
+    /// <paramref name="limitMegabytes"/>, the user's <c>gscode.memory.compactionLimitMB</c>, and never
+    /// when that is 0. A stock-sized workspace is a few hundred MB, and the default 1 GB keeps the
+    /// pause to a few hundred ms. Raising it trades a longer stop just after Ready for a smaller
+    /// resident set: at 50,000 heavy files, about 4 s for about 1.5 GB.
     /// </summary>
-    private const long CompactionLiveLimit = 1L << 30;
+    internal static bool ShouldCompact(long liveBytes, int limitMegabytes)
+    {
+        return limitMegabytes > 0 && liveBytes <= limitMegabytes * Megabyte;
+    }
+
+    private const long Megabyte = 1024 * 1024;
 }

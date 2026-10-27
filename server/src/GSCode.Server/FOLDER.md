@@ -726,10 +726,15 @@ transport owner and flushes logs.
   OmniSharp's `OnStarted` hands the caller — both are ordinary types already used elsewhere in this
   project (every handler resolves the facade the same way), so `RunAsync` depends on nothing this
   call site would need to learn a new name for.
-- `Compact()` — the one compacting collection at the indexing-to-serving transition. Lives here
-  rather than in `IndexReporting.cs` because it is a GC operation the startup task performs, not a
-  log line it prints; `IndexReporting.LogMemoryReport`, called before and after it, is what reports
-  the effect.
+- `Compact(limitMegabytes)` — the one compacting collection at the indexing-to-serving transition.
+  Lives here rather than in `IndexReporting.cs` because it is a GC operation the startup task
+  performs, not a log line it prints; `IndexReporting.LogMemoryReport`, called before and after it,
+  is what reports the effect.
+- `ShouldCompact(liveBytes, limitMegabytes)` — whether it runs: only while the live heap is at most
+  `gscode.memory.compactionLimitMB` (1 GB by default), and never when that is 0. Above the limit a
+  background, non-compacting collection is requested instead, since the blocking pause grows with
+  the heap (4 s at 50,000 heavy files). The setting makes that trade the user's: a larger limit
+  pays the pause for about 1.5 GB less resident at that size.
 
 ## Startup/IndexReporting.cs
 

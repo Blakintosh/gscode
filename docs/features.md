@@ -135,6 +135,7 @@ Every `gscode.*` key the client contributes, and the server file that reads it. 
 | `gscode.rawFileWarningMode` | `stock` | `TextSyncHandler` → `RawWriteGuard` | Live |
 | `gscode.workspaceIndexingMode` | `partial` | `StartupIndexRunner`, `WorkspaceFoldersHandler` | Reload |
 | `gscode.enableWorkspaceCache` | `true` | `StartupIndexRunner` | Reload |
+| `gscode.memory.compactionLimitMB` | `1024` | `StartupIndexRunner.ShouldCompact` | Reload (read when the startup index finishes) |
 | `gscode.diagnostics.scope` | `workspace` | `WorkspaceDiagnosticsPublisher`, `ConfigurationHandler` | Live (republishes) |
 | `gscode.outline.showAssignments` | `true` | `DocumentSymbolHandler` | Live |
 | `gscode.codeLens.enabled` | `false` | `CodeLensHandler` | Live |

@@ -87,7 +87,8 @@ Paths are relative to the repository root. `Server/` means `server/src/GSCode.Se
      linted against a half-built index. The publisher leaves out a closed file's Hints, sends up to
      256 files inline and paces the rest from a queue, 100 at a time;
    - waits for the cache writer to go idle and runs one compacting GC (`Compact`) — unless the live
-     heap (`GCMemoryInfo.HeapSizeBytes`) is past 1 GB, where the pause would cost seconds and it
+     heap (`GCMemoryInfo.HeapSizeBytes`) is past `gscode.memory.compactionLimitMB` (1 GB by
+     default), where the pause would cost seconds and it
      asks for a background collection instead — logs the memory report, and starts
      `ServerStatusNotifier` (the status-bar memory figure).
    - On failure it sends `gscode/indexingFailed`. Either way `StartupLogController.Settle` drops the

@@ -29,6 +29,13 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   with nothing changed restores the `full`-mode results from the cache instead of linting again.
 - Reference counts above declarations are computed only for the lenses on screen.
 
+### Added
+
+- `gscode.memory.compactionLimitMB` (default 1024): the most memory, in MB, at which the server still
+  compacts once after indexing. The compaction returns indexing's memory to the system but stops the
+  server briefly, longer on bigger workspaces; above the limit a background cleanup runs instead.
+  Raise it to trade a pause for lower memory use on a very large workspace, or set 0 to never compact.
+
 ### Fixed
 
 - A function reference to an engine function (`&UseButtonPressed`, which stock BO3 stores) was

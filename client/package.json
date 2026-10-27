@@ -574,6 +574,13 @@
 						"description": "Verbosity of the GSCode language server's log output (the 'GSCode Server' channel). Applies live, no restart needed.",
 						"scope": "window"
 					},
+					"gscode.memory.compactionLimitMB": {
+						"type": "integer",
+						"default": 1024,
+						"minimum": 0,
+						"description": "After indexing, the server compacts its memory once so it can return what indexing used to the system. That stops the server briefly, and the stop grows with the workspace: about 0.1 s for a stock install, several seconds at tens of thousands of files. It runs only while the server holds this many MB or less; above that a background cleanup runs instead, which does not stop anything but leaves more memory in use. Raise it to keep memory lower on a large workspace at the cost of that pause; 0 never compacts. A change applies from the next start.",
+						"scope": "window"
+					},
 					"gscode.trace.server": {
 						"type": "string",
 						"default": "off",

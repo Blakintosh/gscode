@@ -6,7 +6,31 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
 
 ## Unreleased
 
+Upgrading: the workspace cache moves to a new format and rebuilds once on the first start. On CoD4,
+WaW, MW2 and BO1, expect new `gscode-5026` and `gscode-5013` errors on calls that only worked by
+reaching through an include's own includes; the game rejects those calls too (see **Changed**).
+
 ### Changed
+
+**Performance on large workspaces.** Measured at 50,000 copies of the heaviest stock scripts, the
+server now stays responsive at a size where it used to stall for minutes:
+
+- Indexing a large workspace is about four times faster (BO3 at 50,000 files: 158 s to 36 s), and
+  the server holds about 30% less memory afterwards (12.2 GB to 8.7 GB). A warm start is about three
+  times faster.
+- The `full`-mode lint sweep over every closed file is about ten times faster (855 s to 80 s), and a
+  restart with nothing changed restores its results instead of running it again.
+- An edit's diagnostics, CodeLens, Go to Definition, find-references, rename, completion, formatting,
+  code actions and workspace symbol search no longer slow down as the workspace grows. One edit end
+  to end went from 116 ms to 23 ms, Go to Definition from 296 ms to under 1 ms, and an empty
+  workspace symbol search from 1.5 s to about 1 ms.
+- Saving a header that every script inserts re-checks its dependents in parallel: about 4 minutes to
+  39 s at 50,000 files.
+- A cold start's problems for closed files arrive spread over a few seconds instead of in one burst
+  that held every other request behind it. Hints, which VS Code shows only in an open file, are no
+  longer sent for closed files at all. At 50,000 files the push went from 366 MB to 86 MB.
+
+**Code navigation and diagnostics.**
 
 - **CoD4, WaW, MW2 and BO1: a call now reaches what the game itself would find, and nothing else.**
   A bare call sees the file's own functions and the functions its `#include`d files declare
@@ -44,6 +68,11 @@ This project follows [Keep a Changelog](http://keepachangelog.com/).
   script's macro of the same name.
 - After a cache rebuild, the first start no longer spends minutes emptying the old cache.
 - Clients other than VS Code that send no completion capability got no answer to `initialize`.
+- A file opened while the server was re-indexing it from disk could have its open, unsaved text
+  replaced by the version on disk in the server's view.
+- After a branch switch, closed files whose problems had not changed were sent to the editor again.
+- On a large workspace, the server could stop for several seconds just after indexing while it
+  compacted its memory; above `gscode.memory.compactionLimitMB` it now cleans up in the background.
 
 ## 2.2.2
 

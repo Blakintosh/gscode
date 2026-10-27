@@ -249,9 +249,10 @@ internal static class ServerServices
             // Whether each root was asked for or worked out: "why is it using THAT raw folder"
             // is otherwise unanswerable from the log alone.
             Log.Information(
-                "Roots: raw={RawRoot} ({RawSource}), mods={ModsRoot} ({ModsSource}), workspace folders={FolderCount}",
+                "Roots: raw={RawRoot} ({RawSource}), devraw={DevRawRoot}, mods={ModsRoot} ({ModsSource}), workspace folders={FolderCount}",
                 rootConfig.RawRoot,
                 RootSource(settings.RawPath, rootConfig.RawRoot),
+                rootConfig.DevRawRoot ?? "none",
                 rootConfig.ModsRoot,
                 RootSource(settings.ModsPath, rootConfig.ModsRoot),
                 rootConfig.WorkspaceFolders.Length);

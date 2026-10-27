@@ -513,7 +513,8 @@ disk with no record changed all sweep again · `AnalysisTimingTests` the debounc
 initialize answered · `CompletionResolveDataTests` · `DiagnosticsScopeTests` `gscode.diagnostics.scope` ·
 `BuiltinAtTests` the builtin-under-cursor request · `OnTypeBlockScopeTests` ·
 `UntitledDocumentTests` documents with no path · `WorkspaceFoldersHandlerTests` ·
-`IndexProgressNotifierTests`, `ServerStatusNotifierTests` · `DocumentSymbolNamelessTests` a
+`IndexProgressNotifierTests`, `ServerStatusNotifierTests` · `IndexBreakdownTests` the startup
+log's per-language file counts, devraw counted apart from raw · `DocumentSymbolNamelessTests` a
 half-typed declaration, which must not fail the WHOLE outline request · `RenameScopeTests` what may
 be renamed, drawn on ownership rather than kind · `RenameNameValidationTests` what a rename may
 rename TO · `MacroRenameAcrossLanguagesTests` a macro rename reaching both language worlds ·

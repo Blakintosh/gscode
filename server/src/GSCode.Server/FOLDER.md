@@ -734,9 +734,10 @@ transport owner and flushes logs.
 ## Startup/IndexReporting.cs
 
 - `internal static class IndexReporting` — startup-time logging helpers with no state of their own:
-  `LogIndexBreakdown` (per-language file counts split by raw/mod/workspace context, via
-  `CategorizeContext` + `FormatLanguageLine`, plus a totals line of functions · classes · macros ·
-  distinct namespaces), `LogMemoryReport` (the managed-heap-vs-working-set breakdown, via
+  `LogIndexBreakdown` over `IndexBreakdown` (per-language file counts split into raw, devraw, mod
+  and workspace, via `Categorize` + `FormatLanguageLine`, plus a totals line of functions · classes ·
+  macros · distinct namespaces; a devraw file is raw context, so it is told apart by being under the
+  resolver's devraw root), `LogMemoryReport` (the managed-heap-vs-working-set breakdown, via
   `AppendGenerations` for the per-generation fragmentation), `BundledDataFilePaths` (feeds the
   cache's build-identity hash), and `ServerVersion` (read from the assembly so it cannot drift from
   what actually shipped). `ServerVersion` is `internal` because `Program.cs` itself calls it twice,

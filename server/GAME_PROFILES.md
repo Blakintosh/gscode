@@ -300,7 +300,7 @@ The server log says which route each root took, since "why is it using *that* ra
 otherwise unanswerable:
 
 ```
-Roots: raw=…\share\raw (derived), mods=…\mods (derived), workspace folders=1
+Roots: raw=…\share\raw (derived), devraw=…\share\devraw, mods=…\mods (derived), workspace folders=1
 ```
 
 ## Bundled data files (`DataFilePrefix`)

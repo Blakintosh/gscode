@@ -216,7 +216,8 @@ internal sealed class StartupIndexRunner
                     // traversal ran whatever the log level was.
                     if ( Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose) )
                     {
-                        IndexReporting.LogIndexBreakdown(services.GetRequiredService<ScriptDatabase>());
+                        IndexReporting.LogIndexBreakdown(
+                            services.GetRequiredService<ScriptDatabase>(), _resolverHolder.Current.Config.DevRawRoot);
                     }
 
                     // Only now: the cross-file picture is complete, and a record's stored

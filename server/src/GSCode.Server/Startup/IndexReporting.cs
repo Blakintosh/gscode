@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using GSCode.Core;
+using GSCode.Core.Paths;
 using GSCode.Server.Transport;
 using GSCode.Workspace.Database;
 using GSCode.Workspace.Indexing;
@@ -16,15 +17,26 @@ namespace GSCode.Server.Startup;
 /// </summary>
 internal static class IndexReporting
 {
-    // Logs a formatted breakdown of what the index holds: per-language file counts with a
-    // raw/mod/workspace split, plus total declared functions, classes, macros, and distinct
-    // namespaces.
-    internal static void LogIndexBreakdown(ScriptDatabase database)
+    // Logs a formatted breakdown of what the index holds — see IndexBreakdown.
+    internal static void LogIndexBreakdown(ScriptDatabase database, string? devRawRoot)
+    {
+        Log.Verbose("{IndexReport}", IndexBreakdown(database, devRawRoot));
+    }
+
+    /// <summary>
+    /// Per-language file counts with a raw / devraw / mod / workspace split, plus total declared
+    /// functions, classes, macros and distinct namespaces. A devraw file is raw context, so it is told
+    /// apart by being under <paramref name="devRawRoot"/>, the resolver's devraw folder (null when the
+    /// install has none, and then every raw-context file counts as raw).
+    /// </summary>
+    internal static string IndexBreakdown(ScriptDatabase database, string? devRawRoot)
     {
         int gscRaw = 0;
+        int gscDevRaw = 0;
         int gscMod = 0;
         int gscWorkspace = 0;
         int cscRaw = 0;
+        int cscDevRaw = 0;
         int cscMod = 0;
         int cscWorkspace = 0;
         int functions = 0;
@@ -34,7 +46,7 @@ internal static class IndexReporting
 
         foreach ( ScriptRecord record in database.Gsc.AllRecords )
         {
-            CategorizeContext(record.ContextId, ref gscRaw, ref gscMod, ref gscWorkspace);
+            Categorize(record, devRawRoot, ref gscRaw, ref gscDevRaw, ref gscMod, ref gscWorkspace);
             functions += record.Functions.Length;
             classes += record.Classes.Length;
             macros += record.Macros.Length;
@@ -46,7 +58,7 @@ internal static class IndexReporting
 
         foreach ( ScriptRecord record in database.Csc.AllRecords )
         {
-            CategorizeContext(record.ContextId, ref cscRaw, ref cscMod, ref cscWorkspace);
+            Categorize(record, devRawRoot, ref cscRaw, ref cscDevRaw, ref cscMod, ref cscWorkspace);
             functions += record.Functions.Length;
             classes += record.Classes.Length;
             macros += record.Macros.Length;
@@ -65,24 +77,32 @@ internal static class IndexReporting
 
         StringBuilder report = new();
         report.Append("Index contents:");
-        report.Append('\n').Append(FormatLanguageLine("GSC", gscRaw, gscMod, gscWorkspace));
-        report.Append('\n').Append(FormatLanguageLine("CSC", cscRaw, cscMod, cscWorkspace));
+        report.Append('\n').Append(FormatLanguageLine("GSC", gscRaw, gscDevRaw, gscMod, gscWorkspace));
+        report.Append('\n').Append(FormatLanguageLine("CSC", cscRaw, cscDevRaw, cscMod, cscWorkspace));
         report.Append('\n').Append($"    GSH  {gshFiles,6:N0} files");
         report.Append('\n').Append("    ─────────────────────────────────────────────");
         report.Append('\n').Append(
             $"    {functions,6:N0} functions · {classes:N0} classes · {macros:N0} macros · {namespaces.Count:N0} namespaces");
 
-        Log.Verbose("{IndexReport}", report.ToString());
+        return report.ToString();
     }
 
-    // Tallies one record's context into the raw / mod / workspace buckets for its language.
-    private static void CategorizeContext(string contextId, ref int raw, ref int mod, ref int workspace)
+    // Tallies one record into the raw / devraw / mod / workspace buckets for its language.
+    private static void Categorize(
+        ScriptRecord record, string? devRawRoot, ref int raw, ref int devRaw, ref int mod, ref int workspace)
     {
-        if ( contextId == "raw" )
+        if ( record.ContextId == "raw" )
         {
-            raw++;
+            if ( devRawRoot is not null && PathUtil.IsUnder(record.Path, devRawRoot) )
+            {
+                devRaw++;
+            }
+            else
+            {
+                raw++;
+            }
         }
-        else if ( contextId.StartsWith("mod:", StringComparison.Ordinal) )
+        else if ( record.ContextId.StartsWith("mod:", StringComparison.Ordinal) )
         {
             mod++;
         }
@@ -92,16 +112,21 @@ internal static class IndexReporting
         }
     }
 
-    // Renders one aligned "GSC  1,234 files  (1,000 raw · 200 mod · 34 workspace)" line, omitting
-    // any bucket that is empty.
-    private static string FormatLanguageLine(string label, int raw, int mod, int workspace)
+    // Renders one aligned "GSC  1,234 files  (1,000 raw · 12 devraw · 200 mod · 34 workspace)" line,
+    // omitting any bucket that is empty.
+    private static string FormatLanguageLine(string label, int raw, int devRaw, int mod, int workspace)
     {
-        int total = raw + mod + workspace;
+        int total = raw + devRaw + mod + workspace;
 
         List<string> parts = [];
         if ( raw > 0 )
         {
             parts.Add($"{raw:N0} raw");
+        }
+
+        if ( devRaw > 0 )
+        {
+            parts.Add($"{devRaw:N0} devraw");
         }
 
         if ( mod > 0 )

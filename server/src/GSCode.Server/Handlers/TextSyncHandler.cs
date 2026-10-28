@@ -428,9 +428,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         // Read BEFORE the commit replaces it. A file first opened has no prior record, and its
         // exports are new to the world, so treat that as a change too.
-        ulong exportsBefore = _database.TryGetAnyRecord(document.Path, out ScriptRecord previous)
-            ? ExportSignature.Of(previous)
-            : 0;
+        ScriptRecord? before = _database.TryGetAnyRecord(document.Path, out ScriptRecord previous) ? previous : null;
+        ulong exportsBefore = before is not null ? ExportSignature.Of(before) : 0;
 
         ScriptRecord committed = _database.Commit(
             result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
@@ -446,9 +445,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // Other open files' diagnostics are computed against this one, and nothing else republishes
         // them. Only when something they can actually SEE moved — an ordinary keystroke inside a
         // function body leaves the signature alone, which is what keeps this off the edit path.
+        // With the functions the edit changed, so the closed re-lint reaches their callers and no one
+        // else's — adding one function to a shared utility used to re-parse every file that called
+        // any of the others.
         if ( ExportSignature.Of(committed) != exportsBefore )
         {
-            _dependents.Schedule(document.Path);
+            _dependents.Schedule(document.Path, ExportSignature.ChangedFunctionKeys(before, committed, GameProfile.Active));
         }
     }
 }

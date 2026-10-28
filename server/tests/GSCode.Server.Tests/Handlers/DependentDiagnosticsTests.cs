@@ -1,4 +1,5 @@
 using GSCode.Core.Paths;
+using GSCode.Core.Symbols;
 using GSCode.Server.Handlers;
 using GSCode.Server.Configuration;
 using GSCode.Workspace.Database;
@@ -130,6 +131,64 @@ public class DependentDiagnosticsTests
             OriginIn(workspace), workspace.Database.Gsc, workspace.Documents);
 
         Assert.DoesNotContain(PathUtil.NormalizeAbsolute(s_libPath), dependents);
+    }
+
+    /// <summary>
+    /// lib declares helper and other; one closed caller each, and a third calling lib::gone, which lib
+    /// no longer declares — the state right after an edit removed it.
+    /// </summary>
+    private static Task<HandlerWorkspace> ThreeCallerWorkspaceAsync()
+    {
+        return HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(LibRelativePath, "#namespace lib;\nfunction helper()\n{\n}\nfunction other()\n{\n}\n"),
+            new TestFile(@"scripts\calls_helper.gsc", "#using scripts\\lib;\n#namespace a;\nfunction run()\n{\n    lib::helper();\n}\n"),
+            new TestFile(@"scripts\calls_other.gsc", "#using scripts\\lib;\n#namespace b;\nfunction run()\n{\n    lib::other();\n}\n"),
+            new TestFile(@"scripts\calls_gone.gsc", "#using scripts\\lib;\n#namespace c;\nfunction run()\n{\n    lib::gone();\n}\n"),
+        ]);
+    }
+
+    [Fact]
+    public async Task ClosedDependentsOf_TheChangedFunctions_AreOnlyTheirCallers()
+    {
+        // Adding or re-signing one function can only change what a call to THAT function reports.
+        using HandlerWorkspace workspace = await ThreeCallerWorkspaceAsync();
+
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
+            OriginIn(workspace), workspace.Database.Gsc, workspace.Documents,
+            new HashSet<SymbolKey> { new("lib", "helper", SymbolKind.Function) });
+
+        Assert.Equal([PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\calls_helper.gsc"))], dependents);
+    }
+
+    [Fact]
+    public async Task ClosedDependentsOf_AFunctionTheEditRemoved_StillFindsItsCallers()
+    {
+        // The origin's record no longer declares gone, so walking its functions never named this
+        // caller, and it kept reporting a call that resolved.
+        using HandlerWorkspace workspace = await ThreeCallerWorkspaceAsync();
+
+        HashSet<string> dependents = DependentDiagnosticsRefresher.ClosedDependentsOf(
+            OriginIn(workspace), workspace.Database.Gsc, workspace.Documents,
+            new HashSet<SymbolKey> { new("lib", "gone", SymbolKind.Function) });
+
+        Assert.Equal([PathUtil.NormalizeAbsolute(TestPaths.Raw(@"scripts\calls_gone.gsc"))], dependents);
+    }
+
+    [Fact]
+    public async Task OneOriginScheduledTwice_KeepsEveryChangedFunction_AndAWideScheduleWins()
+    {
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync([]);
+        DependentDiagnosticsRefresher refresher = EmptyRefresher(workspace);
+        SymbolKey helper = new("lib", "helper", SymbolKind.Function);
+        SymbolKey other = new("lib", "other", SymbolKind.Function);
+
+        refresher.Schedule(s_libPath, new HashSet<SymbolKey> { helper });
+        refresher.Schedule(s_libPath, new HashSet<SymbolKey> { other });
+        Assert.Equal([helper, other], refresher.PendingChangedFunctions(s_libPath)!.OrderBy(static key => key.Name));
+
+        refresher.Schedule(s_libPath);
+        Assert.Null(refresher.PendingChangedFunctions(s_libPath));
     }
 
     private sealed class CountingCodeLensSink : ICodeLensRefreshSink

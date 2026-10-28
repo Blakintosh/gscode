@@ -62,6 +62,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `static ExportSignature` — hashes only the cross-file surface a record exposes: namespaces,
   functions, classes, methods, parameters, and visibility/dev-only flags. Body edits therefore do
   not fan out diagnostics, while changes another file can observe invalidate dependents.
+- `ChangedFunctionKeys(before, after, game)` — which top-level functions an edit added, removed or
+  re-signed, under the key callers' references use (`GameProfile.KeyNamespace`), from the same
+  per-function rendering `Of` hashes. Null when the change is not the functions' alone: no previous
+  record, a moved file, or changed `#namespace`s or imports — the caller then re-lints every caller.
 
 ## Database/LanguageStore.cs
 

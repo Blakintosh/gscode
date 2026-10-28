@@ -890,8 +890,14 @@ that chose it. These are the pieces that implement it:
   `HasCompletedIndex` (5013/5014/5025/5026) would stay silent until it was closed and reopened.
   CLOSED files, `workspaceIndexingMode: full` only, gated on `ScriptDatabase.HasCompletedLintSweep`:
   `ClosedDependentsOf` names the files `LanguageStore.FilesReferencing` says mention a function the
-  ORIGIN declares, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
-  costs the files that mention the name, not the workspace. Only fires for a caller-named origin
+  edit CHANGED, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
+  costs the files that mention the name, not the workspace. The editor path hands `Schedule` the
+  keys `ExportSignature.ChangedFunctionKeys` found (added, removed or re-signed), so adding one
+  function to a shared utility re-lints its callers, none on stock BO3, where it used to re-parse
+  all 263 files calling anything in `util_shared.gsc`; a removed function's callers are found
+  although the origin no longer declares it. Origins scheduled twice merge their keys, and a
+  schedule with no keys (an on-disk change, a saved header, a moved file or changed imports)
+  re-lints every caller of every function the origin declares. Only fires for a caller-named origin
   (not the on-disk-change case) and only covers top-level function declarations, not classes or
   methods — stated gaps. Origins a pass does not finish with are handed BACK when it is cancelled:
   the set is cleared the moment a pass takes it, so cancellation after that point would drop them,

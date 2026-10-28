@@ -85,7 +85,11 @@ public sealed class DependentDiagnosticsRefresher
     /// exports it no longer has. A token source per origin would mean a timer per origin;
     /// accumulating costs one set.
     /// </summary>
-    private readonly HashSet<string> _origins = new(StringComparer.Ordinal);
+    ///
+    /// Each origin carries the functions its edits changed, or null when they cannot be named — an
+    /// on-disk change, a saved header, a moved file. Null wins a merge: one wide schedule means every
+    /// caller of the origin is re-linted.
+    private readonly Dictionary<string, HashSet<SymbolKey>?> _origins = new(StringComparer.Ordinal);
 
     public DependentDiagnosticsRefresher(
         DocumentStore documents,
@@ -137,24 +141,29 @@ public sealed class DependentDiagnosticsRefresher
     /// The document the caller publishes itself, or "" when there is none — an on-disk change
     /// behind the editor's back belongs to no open document, so every one of them is a dependent.
     /// </param>
-    public void Schedule(string originPath = "")
+    /// <param name="changedFunctions">
+    /// The function keys the origin's edit added, removed or re-signed — see
+    /// <see cref="ExportSignature.ChangedFunctionKeys"/> — so the closed re-lint reaches only their
+    /// callers. Null when they cannot be named, which re-lints every closed caller of the origin.
+    /// </param>
+    public void Schedule(string originPath = "", IReadOnlySet<SymbolKey>? changedFunctions = null)
     {
-        Restart([originPath]);
+        Restart([new KeyValuePair<string, IReadOnlySet<SymbolKey>?>(originPath, changedFunctions)]);
     }
 
     /// <summary>
     /// Adds origins to the waiting set and restarts the debounce: the pass in flight is cancelled
     /// and a new one takes over everything waiting, including whatever the cancelled one had left.
     /// </summary>
-    private void Restart(IReadOnlyCollection<string> origins)
+    private void Restart(IEnumerable<KeyValuePair<string, IReadOnlySet<SymbolKey>?>> origins)
     {
         CancellationTokenSource pending = new();
 
         lock ( _gate )
         {
-            foreach ( string originPath in origins )
+            foreach ( KeyValuePair<string, IReadOnlySet<SymbolKey>?> origin in origins )
             {
-                _origins.Add(originPath);
+                Merge(origin.Key, origin.Value);
             }
 
             _pending?.Cancel();
@@ -193,17 +202,19 @@ public sealed class DependentDiagnosticsRefresher
         // Taken after the wait, not before it: everything scheduled during the window belongs
         // to this pass. A pass cancelled DURING the wait never gets here, so its origins stay in
         // the set and the pass that superseded it picks them up.
-        HashSet<string> origins;
+        Dictionary<string, HashSet<SymbolKey>?> taken;
         lock ( _gate )
         {
-            origins = new HashSet<string>(_origins, StringComparer.Ordinal);
+            taken = new Dictionary<string, HashSet<SymbolKey>?>(_origins, StringComparer.Ordinal);
             _origins.Clear();
         }
+
+        HashSet<string> origins = new(taken.Keys, StringComparer.Ordinal);
 
         // What this pass has not finished with. Cancellation after the take would otherwise lose it:
         // the set has already been cleared, and nothing else re-lints a CLOSED dependent, which would
         // keep diagnostics computed against exports the origin no longer has.
-        HashSet<string> outstanding = new(origins, StringComparer.Ordinal);
+        Dictionary<string, HashSet<SymbolKey>?> outstanding = new(taken, StringComparer.Ordinal);
 
         try
         {
@@ -214,10 +225,10 @@ public sealed class DependentDiagnosticsRefresher
 
             Refresh(origins, cancellationToken);
 
-            foreach ( string originPath in origins )
+            foreach ( KeyValuePair<string, HashSet<SymbolKey>?> origin in taken )
             {
-                await RefreshClosedDependentsAsync(originPath, cancellationToken).ConfigureAwait(false);
-                outstanding.Remove(originPath);
+                await RefreshClosedDependentsAsync(origin.Key, origin.Value, cancellationToken).ConfigureAwait(false);
+                outstanding.Remove(origin.Key);
             }
 
             RequestCodeLensRefresh();
@@ -239,9 +250,49 @@ public sealed class DependentDiagnosticsRefresher
         {
             lock ( _gate )
             {
-                return new HashSet<string>(_origins, StringComparer.Ordinal);
+                return new HashSet<string>(_origins.Keys, StringComparer.Ordinal);
             }
         }
+    }
+
+    /// <summary>
+    /// The functions an origin waiting for the next pass changed, or null when it waits wide (or
+    /// not at all). For tests.
+    /// </summary>
+    internal IReadOnlySet<SymbolKey>? PendingChangedFunctions(string originPath)
+    {
+        lock ( _gate )
+        {
+            return _origins.TryGetValue(originPath, out HashSet<SymbolKey>? keys) && keys is not null
+                ? new HashSet<SymbolKey>(keys)
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// Adds one origin's changed functions to what already waits for it. Null — "every caller" —
+    /// absorbs anything merged with it. Called under <see cref="_gate"/>.
+    /// </summary>
+    private void Merge(string originPath, IReadOnlySet<SymbolKey>? changedFunctions)
+    {
+        if ( !_origins.TryGetValue(originPath, out HashSet<SymbolKey>? waiting) )
+        {
+            _origins[originPath] = changedFunctions is null ? null : new HashSet<SymbolKey>(changedFunctions);
+            return;
+        }
+
+        if ( waiting is null )
+        {
+            return;
+        }
+
+        if ( changedFunctions is null )
+        {
+            _origins[originPath] = null;
+            return;
+        }
+
+        waiting.UnionWith(changedFunctions);
     }
 
     /// <summary>
@@ -269,21 +320,29 @@ public sealed class DependentDiagnosticsRefresher
     /// Scheduled rather than merely added: the pass that superseded this one may already be past
     /// its own take, in which case nothing would come along to look at the set again.
     /// </summary>
-    private void ReturnOrigins(IReadOnlySet<string> outstanding)
+    private void ReturnOrigins(Dictionary<string, HashSet<SymbolKey>?> outstanding)
     {
         if ( outstanding.Count == 0 )
         {
             return;
         }
 
-        Restart(outstanding);
+        List<KeyValuePair<string, IReadOnlySet<SymbolKey>?>> returned = [];
+        foreach ( KeyValuePair<string, HashSet<SymbolKey>?> origin in outstanding )
+        {
+            returned.Add(new KeyValuePair<string, IReadOnlySet<SymbolKey>?>(origin.Key, origin.Value));
+        }
+
+        Restart(returned);
     }
 
     /// <summary>
-    /// The `full`-mode half of a refresh: CLOSED files that reference a function the origin
-    /// declares. See the class comment for exactly what this does and does not cover yet.
+    /// The `full`-mode half of a refresh: CLOSED files that call what the origin's edit changed —
+    /// <paramref name="changedFunctions"/>, or every function it declares when that is null. See the
+    /// class comment for exactly what this does and does not cover yet.
     /// </summary>
-    private async Task RefreshClosedDependentsAsync(string originPath, CancellationToken cancellationToken)
+    private async Task RefreshClosedDependentsAsync(
+        string originPath, IReadOnlySet<SymbolKey>? changedFunctions, CancellationToken cancellationToken)
     {
         if ( originPath.Length == 0 || !_database.HasCompletedLintSweep )
         {
@@ -296,7 +355,7 @@ public sealed class DependentDiagnosticsRefresher
             return;
         }
 
-        HashSet<string> dependents = ClosedDependentsOf(origin, _database.StoreFor(origin.Language), _documents);
+        HashSet<string> dependents = ClosedDependentsOf(origin, _database.StoreFor(origin.Language), _documents, changedFunctions);
         if ( dependents.Count == 0 )
         {
             return;
@@ -403,29 +462,27 @@ public sealed class DependentDiagnosticsRefresher
     }
 
     /// <summary>
-    /// The CLOSED files that reference any function <paramref name="origin"/> declares — the
-    /// dependent set a full-mode re-lint actually needs to touch. Excludes the origin itself and
-    /// any path that turns out to be open (the live-analysis path already covers those, from
-    /// text that may be ahead of what is on disk).
+    /// The CLOSED files that call what the origin's edit changed — the dependent set a full-mode
+    /// re-lint actually needs to touch. Excludes the origin itself and any path that turns out to be
+    /// open (the live-analysis path already covers those, from text that may be ahead of what is on
+    /// disk).
+    ///
+    /// With <paramref name="changedFunctions"/>, the callers of those keys only: adding one function
+    /// to a shared utility can change what a call to IT reports and nothing else, and re-linting
+    /// every caller of the file re-parsed 263 closed scripts on stock BO3 for an edit none of them
+    /// could see — about 300 MB of allocation in a third of a second, which the GC then kept
+    /// committed. A removed function's key is in the set too, so its callers are found although the
+    /// origin no longer declares it. Without the set, every function the origin declares.
     ///
     /// Only function declarations, not classes — a stated gap, not a silent one; see the class
     /// comment.
     /// </summary>
-    internal static HashSet<string> ClosedDependentsOf(ScriptRecord origin, LanguageStore store, DocumentStore documents)
+    internal static HashSet<string> ClosedDependentsOf(
+        ScriptRecord origin, LanguageStore store, DocumentStore documents, IReadOnlySet<SymbolKey>? changedFunctions = null)
     {
         HashSet<string> dependents = new(StringComparer.Ordinal);
-
-        // KeyNamespace, not the declared namespace: on a merge dialect a function is declared into
-        // the file stem but every call to it is keyed with no namespace, so a key rebuilt from the
-        // declaration matched no reference and no closed caller was ever re-linted.
-        GameProfile game = GameProfile.Active;
-
-        // Top-level functions only: a class method lives on its class, not in this list, so methods
-        // fall inside the class gap the class comment states rather than being covered here.
-        foreach ( FunctionSymbol function in origin.Functions )
+        foreach ( SymbolKey key in changedFunctions ?? FunctionKeysOf(origin) )
         {
-            SymbolKey key = new(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
-
             foreach ( string path in store.FilesReferencing(key) )
             {
                 if ( string.Equals(path, origin.Path, StringComparison.Ordinal) )
@@ -443,6 +500,26 @@ public sealed class DependentDiagnosticsRefresher
         }
 
         return dependents;
+    }
+
+    /// <summary>
+    /// Every top-level function <paramref name="origin"/> declares, under the key its callers'
+    /// references were indexed with. KeyNamespace, not the declared namespace: on a merge dialect a
+    /// function is declared into the file stem but every call to it is keyed with no namespace, so a
+    /// key rebuilt from the declaration matched no reference and no closed caller was ever re-linted.
+    /// A class method lives on its class, not in this list, so methods fall inside the class gap the
+    /// class comment states.
+    /// </summary>
+    private static HashSet<SymbolKey> FunctionKeysOf(ScriptRecord origin)
+    {
+        GameProfile game = GameProfile.Active;
+        HashSet<SymbolKey> keys = [];
+        foreach ( FunctionSymbol function in origin.Functions )
+        {
+            keys.Add(new SymbolKey(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function));
+        }
+
+        return keys;
     }
 
     internal void RefreshOne(OpenDocument document)

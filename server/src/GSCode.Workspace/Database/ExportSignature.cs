@@ -1,5 +1,6 @@
 using System.IO.Hashing;
 using System.Text;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 
 namespace GSCode.Workspace.Database;
@@ -54,23 +55,7 @@ public static class ExportSignature
 
         foreach ( FunctionSymbol function in record.Functions )
         {
-            // Everything a caller's lints ask about a callee, and nothing else. Arity and varargs
-            // are what ArgumentCountLint compares; the flags are what PrivateAccessLint and
-            // DevBlockCallLint gate on.
-            rendered.Append("fn:").Append(function.Namespace).Append("::").Append(function.KeyName)
-                .Append('/').Append(function.Parameters.Length)
-                .Append(function.HasVarargs ? "+" : "")
-                .Append(function.IsPrivate ? "p" : "")
-                .Append(function.IsAutoexec ? "a" : "")
-                .Append(function.IsDevOnly ? "d" : "");
-
-            // Default values decide how few arguments a call may legally pass.
-            foreach ( ParameterSymbol parameter in function.Parameters )
-            {
-                rendered.Append(parameter.DefaultValueText.Length > 0 ? "=" : "-");
-            }
-
-            rendered.Append('\n');
+            AppendFunction(rendered, function);
         }
 
         foreach ( ClassSymbol classSymbol in record.Classes )
@@ -118,5 +103,116 @@ public static class ExportSignature
         }
 
         return XxHash64.HashToUInt64(Encoding.UTF8.GetBytes(rendered.ToString()));
+    }
+
+    /// <summary>
+    /// Everything a caller's lints ask about a callee, and nothing else. Arity and varargs are what
+    /// ArgumentCountLint compares; the flags are what PrivateAccessLint and DevBlockCallLint gate on;
+    /// default values decide how few arguments a call may legally pass. One spelling for
+    /// <see cref="Of"/> and <see cref="ChangedFunctionKeys"/>, so a change the signature sees is a
+    /// change the narrowed re-lint sees.
+    /// </summary>
+    private static void AppendFunction(StringBuilder rendered, FunctionSymbol function)
+    {
+        rendered.Append("fn:").Append(function.Namespace).Append("::").Append(function.KeyName)
+            .Append('/').Append(function.Parameters.Length)
+            .Append(function.HasVarargs ? "+" : "")
+            .Append(function.IsPrivate ? "p" : "")
+            .Append(function.IsAutoexec ? "a" : "")
+            .Append(function.IsDevOnly ? "d" : "");
+        foreach ( ParameterSymbol parameter in function.Parameters )
+        {
+            rendered.Append(parameter.DefaultValueText.Length > 0 ? "=" : "-");
+        }
+
+        rendered.Append('\n');
+    }
+
+    /// <summary>
+    /// WHICH of a file's top-level functions an edit added, removed or re-signed, under the key their
+    /// callers' references were indexed with (<see cref="GameProfile.KeyNamespace"/>) — so a
+    /// full-mode re-lint can reach only the files calling those, rather than every file calling
+    /// anything the edited one declares.
+    ///
+    /// Null when the change cannot be put down to functions: no previous record, or the file moved,
+    /// or its <c>#namespace</c>s or imports changed. Each of those moves what other files resolve to
+    /// in ways no one function names, so the caller re-lints every caller of the file, as before.
+    /// Classes and macros are not looked at; the closed re-lint does not cover them either.
+    /// </summary>
+    public static IReadOnlySet<SymbolKey>? ChangedFunctionKeys(ScriptRecord? before, ScriptRecord after, GameProfile game)
+    {
+        if ( before is null
+            || !string.Equals(before.RelativePath, after.RelativePath, StringComparison.Ordinal)
+            || !before.DeclaredNamespaces.SequenceEqual(after.DeclaredNamespaces)
+            || !SameImports(before, after) )
+        {
+            return null;
+        }
+
+        Dictionary<SymbolKey, string> was = RenderedFunctions(before, game);
+        Dictionary<SymbolKey, string> now = RenderedFunctions(after, game);
+        HashSet<SymbolKey> changed = [];
+        foreach ( KeyValuePair<SymbolKey, string> function in was )
+        {
+            if ( !now.TryGetValue(function.Key, out string? rendered) || !string.Equals(rendered, function.Value, StringComparison.Ordinal) )
+            {
+                changed.Add(function.Key);
+            }
+        }
+
+        foreach ( SymbolKey key in now.Keys )
+        {
+            if ( !was.ContainsKey(key) )
+            {
+                changed.Add(key);
+            }
+        }
+
+        return changed;
+    }
+
+    /// <summary>Each top-level function's rendering, by its call key; two declarations of one key render together.</summary>
+    private static Dictionary<SymbolKey, string> RenderedFunctions(ScriptRecord record, GameProfile game)
+    {
+        Dictionary<SymbolKey, StringBuilder> rendered = [];
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            SymbolKey key = new(game.KeyNamespace(function.Namespace), function.KeyName, SymbolKind.Function);
+            if ( !rendered.TryGetValue(key, out StringBuilder? text) )
+            {
+                text = new StringBuilder();
+                rendered[key] = text;
+            }
+
+            AppendFunction(text, function);
+        }
+
+        Dictionary<SymbolKey, string> done = [];
+        foreach ( KeyValuePair<SymbolKey, StringBuilder> function in rendered )
+        {
+            done[function.Key] = function.Value.ToString();
+        }
+
+        return done;
+    }
+
+    private static bool SameImports(ScriptRecord before, ScriptRecord after)
+    {
+        if ( before.Dependencies.Length != after.Dependencies.Length )
+        {
+            return false;
+        }
+
+        for ( int index = 0; index < before.Dependencies.Length; index++ )
+        {
+            DependencyEdge was = before.Dependencies[index];
+            DependencyEdge now = after.Dependencies[index];
+            if ( was.IsInsert != now.IsInsert || !string.Equals(was.RawPath, now.RawPath, StringComparison.Ordinal) )
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -248,8 +248,13 @@ internal sealed class StartupIndexRunner
                         await draining.WaitForIdleAsync(_indexingLifetime.Token);
                     }
 
-                    Compact(_settings.MemoryCompactionLimitMegabytes);
-                    IndexReporting.LogMemoryReport("compaction", outcome);
+                    // Only after a compaction that ran. A skipped one requests a background collection
+                    // that has not started when this would sample, so its report repeated the one
+                    // above and read as a compaction that freed nothing.
+                    if ( Compact(_settings.MemoryCompactionLimitMegabytes) )
+                    {
+                        IndexReporting.LogMemoryReport("compaction", outcome);
+                    }
 
                     // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
                     // build pays neither the timing scopes nor this dump.
@@ -400,7 +405,9 @@ internal sealed class StartupIndexRunner
     // BO3 install (1,086 files) it read 1,236 MB in one start and 162 MB in the next, against 65 MB
     // actually live: the first start skipped the compaction and kept 1.4 GB of working set that the
     // compaction gives back in about 120 ms.
-    private static void Compact(int limitMegabytes)
+    //
+    // Returns whether the compaction ran.
+    private static bool Compact(int limitMegabytes)
     {
         long live = GC.GetGCMemoryInfo().HeapSizeBytes;
         Stopwatch pause = Stopwatch.StartNew();
@@ -412,7 +419,7 @@ internal sealed class StartupIndexRunner
                 "Post-index compaction skipped: {LiveMegabytes:N0} MB live is past the {LimitMegabytes:N0} MB limit "
                 + "(gscode.memory.compactionLimitMB); a background collection was requested instead",
                 live / Megabyte, limitMegabytes);
-            return;
+            return false;
         }
 
         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
@@ -423,6 +430,7 @@ internal sealed class StartupIndexRunner
         // already been consumed, so this one is an ordinary compacting gen2.
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
         Log.Information("Post-index compaction: {Milliseconds:N0} ms", pause.ElapsedMilliseconds);
+        return true;
     }
 
     /// <summary>

@@ -3412,6 +3412,31 @@ took BO3's header save 1.7 GB higher, nearest the limit. The budget costs CPU in
 peaked at 1.1 GB and each compaction stopped the server for 78–93 ms. Smaller allocations were the
 better fix than cleaning up after large ones.
 
+### 2026-10-27: a warm start keeps no more than a cold index
+
+**The question.** A warm start at about 50,000 files with `gscode.memory.compactionLimitMB` raised
+to 20 GB compacted to 11.2 GB live, against the 9.8 GB the scale run's cold index leaves. The two
+numbers were not comparable: the scale run compacts straight after the cold index, before the lint
+sweep and without the rest of the server. Measured the real server instead, over stdio, Release,
+on one generated workspace, cold from a deleted cache and then warm from the cache that run wrote:
+
+| real server, bo3 | 10K cold | 10K warm | 50K cold | 50K warm |
+|---|---:|---:|---:|---:|
+| files | 10,117 | 10,117 | 50,117 | 50,117 |
+| Ready after start | 12.8 s | 5.3 s | 54.2 s | 18.9 s |
+| lint sweep | 19.5 s | restored, 0.2 s | 135.2 s | restored, 1.0 s |
+| working set before compaction | 3,224 MB | 2,156 MB | 12,270 MB | 12,334 MB |
+| compaction pause | 734 ms | 587 ms | 3,214 ms | 3,005 ms |
+| live after compaction | 1,544 MB | 1,536 MB | 9,117 MB | 9,085 MB |
+| working set after compaction | 1,667 MB | 1,648 MB | 9,338 MB | 9,264 MB |
+
+A restore keeps the same heap as an analysis, within 1%. The 11.2 GB start indexed 49,020 files,
+so it was a different workspace, not a restore cost. Nothing changed in the restore path.
+
+The report printed after a SKIPPED compaction is gone. It sampled the heap before the background
+collection the skip requests had started, so it repeated the report above it and read as a
+compaction that freed nothing. The skip's own line already says what happened.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

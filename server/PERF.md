@@ -3355,6 +3355,63 @@ string of that size does not fit.
 Unchanged where nothing touched them: index, sweep, memory, warm start, CodeLens and the edit
 bundle are within the spread on both games.
 
+### 2026-10-27: memory that climbed after editing, and a 32 MB gen0 budget
+
+**The report.** On stock BO3 with a mod copy of `util_shared.gsc`, full mode, the server rested at
+148 MB after the post-index compaction and climbed to about 1 GB after a few edits. Live data never
+moved: a forced full collection after each step read 58 MB every time. What grew was memory the GC
+had committed and kept.
+
+**Two causes, measured over stdio against the real install** (Debug, the mod folder as the workspace,
+cache off, three edits each adding a function to `util_shared.gsc`):
+
+- **Every closed caller of the file was re-linted.** An export change re-linted every closed file
+  calling ANY function the edited file declares: 263 files re-parsed in about 330 ms per edit, around
+  300 MB allocated, for edits none of them could see. `bea8806a` re-lints only the callers of the
+  functions the edit added, removed or re-signed, which for these edits is none. The same walk read
+  only the file's NEW functions, so a removed function's callers were never re-linted; that is fixed
+  with it.
+- **Server GC's gen0 budgets.** Each of the eight heaps sizes its gen0 budget from the CPU cache and
+  keeps the regions committed after a collection. The 2 MB large-object threshold (`497e859f`) makes
+  this worse, since arrays up to 2 MB now land in gen0. With the re-lint gone, ordinary editing and
+  request traffic still filled the budgets: 785 MB at rest after a minute of edits with a
+  `documentSymbol` every 100 ms.
+
+| stock BO3 + mod, at rest after edits and requests | working set |
+|---|---:|
+| `main` | 341 MB |
+| this branch before (2 MB threshold, all callers re-linted) | 920–1,372 MB |
+| narrowed re-lint only | 785 MB |
+| narrowed re-lint + 32 MB gen0 budget | **323 MB** |
+| narrowed re-lint + DATAS (no fixed heap count) | 309 MB |
+| 2 MB threshold undone (85 KB default) | 301 MB |
+
+`System.GC.Gen0MaxBudget` is now 32 MB in both runtime configs (the runtime reads it as
+`GCGen0MaxBudget`, and the startup GC line now prints it). Over 200 edits with the outline and
+CodeLens requests after each, live data stayed at 58 MB and the working set rose to 349 MB by edit
+50 and stayed there: eight heaps' budgets, reused. One edit to `util_shared.gsc` (105 KB) allocates
+about 18 MB: 11.7 MB of analysis, 1.9 MB of semantic tokens, 1.5 MB of CodeLens, 1.1 MB of symbols.
+
+**What it costs at 50,000 heavy files**, one Debug run each under the 15 GiB limit:
+
+| 50K | shipped | 32 MB budget | DATAS | 85 KB threshold |
+|---|---:|---:|---:|---:|
+| BO3 cold index | 90.0 s | 78.4 s | 79.0 s | 115.6 s |
+| BO3 GC paused in it | 7.3 s | 17.6 s | 16.3 s | 22.0 s |
+| BO3 peak, cold index / header save | 10.7 / 10.9 GB | 10.3 / 10.7 GB | 10.5 / 12.7 GB | 15.3 / 15.0 GB |
+| CoD4 cold index | 97.5 s | 115.5 s | 108.3 s | 162.3 s |
+| CoD4 GC paused in it | 9.1 s | 29.3 s | 16.7 s | 40.0 s |
+| CoD4 peak | 13.8 GB | 14.8 GB | 15.0 GB | 15.3 GB |
+
+Retained memory is the same in every column. Undoing the threshold is the worst at scale. DATAS
+took BO3's header save 1.7 GB higher, nearest the limit. The budget costs CPU in CoD4's cold index
+(+18%) and GC pause time, once per start; it is the choice.
+
+**Tried and dropped:** compacting after each background burst while the live heap is under
+`gscode.memory.compactionLimitMB`. It returned the memory (139 MB after each), but the burst still
+peaked at 1.1 GB and each compaction stopped the server for 78–93 ms. Smaller allocations were the
+better fix than cleaning up after large ones.
+
 ## Results
 
 Measured on the local BO3-tools machine (corpus not committed):

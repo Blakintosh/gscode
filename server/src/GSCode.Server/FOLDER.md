@@ -673,6 +673,11 @@ teardown. Returns a non-zero exit code for a bad command line or a transport tha
 and silences CommandLineParser's own `HelpWriter` because it writes to STDOUT, which is the stdio
 transport's wire.
 
+Logs one GC line at start: server or workstation, the heap count, and the conserve-memory level and
+gen0 budget as the RUNTIME reports them (`GC.GetConfigurationVariables`, keys `GCConserveMem` and
+`GCGen0MaxBudget`), since an environment variable overrides the runtime config and a server built
+without the 32 MB budget rests several hundred MB higher with nothing else to say why.
+
 Waits for exit, cancels and bounded-awaits `IndexingLifetime` BEFORE `CacheHolder.CloseAsync()` (so
 an in-flight cache write is not silently dropped by closing out from under it), then disposes the
 transport owner and flushes logs.

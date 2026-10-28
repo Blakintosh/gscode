@@ -38,12 +38,16 @@ Log.Information("GSCode {Version} language server starting", IndexReporting.Serv
 // The conserve-memory level is read from the runtime rather than the config file, since the
 // DOTNET_GCConserveMemory environment variable overrides it: on a heap of several GB a compacting
 // gen2 takes seconds, and this says which level a measured pause ran under.
+// The gen0 budget the same way: it is what decides how much a burst of allocation leaves committed,
+// and a server rebuilt without it rests several hundred MB higher with nothing else to say why.
 IReadOnlyDictionary<string, object> gcVariables = GC.GetConfigurationVariables();
+long gen0Budget = gcVariables.TryGetValue("GCGen0MaxBudget", out object? budget) ? Convert.ToInt64(budget) : 0;
 Log.Information(
-    "GC: {Mode}, {Heaps} heap(s), conserve memory {Conserve}, {Processors} processors",
+    "GC: {Mode}, {Heaps} heap(s), conserve memory {Conserve}, gen0 budget {Gen0Budget}, {Processors} processors",
     GCSettings.IsServerGC ? "server" : "workstation",
     AppContext.GetData("System.GC.HeapCount") ?? "one per core",
     gcVariables.TryGetValue("GCConserveMem", out object? conserve) ? conserve : 0,
+    gen0Budget > 0 ? $"{gen0Budget / 1048576} MB a heap" : "the runtime's default",
     Environment.ProcessorCount);
 
 // HelpWriter is silenced because the default one writes to STDOUT, and stdout is the stdio

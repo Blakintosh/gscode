@@ -223,7 +223,8 @@ The other levers are already pulled: string interning (`NameTable`, also for rec
 the cache), a binary record format for the cache, a packed per-record reference table grouped by key
 (`ReferenceTable`), struct enumerators for AST walks, one shared walk for nine node rules
 (`NodeLintPass`), one flow-typer pass per document version, and Server GC with a 2 MB large-object
-threshold. After indexing the server compacts the heap once, unless the live heap is already past
+threshold and a 32 MB gen0 budget per heap (without the cap, eight heaps' budgets kept about 800 MB
+committed on a stock install after a few edits, against 58 MB of live data). After indexing the server compacts the heap once, unless the live heap is already past
 1 GB (`gscode.memory.compactionLimitMB`), where the pause would cost seconds; it then asks for a
 background collection instead.
 

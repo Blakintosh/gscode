@@ -20,6 +20,10 @@ server now stays responsive at a size where it used to stall for minutes:
   times faster.
 - The `full`-mode lint sweep over every closed file is about ten times faster (855 s to 80 s), and a
   restart with nothing changed restores its results instead of running it again.
+- In `full` mode, changing a function in a shared script re-checks only the closed files that call
+  the functions you changed. Adding one function to a mod's `util_shared.gsc` used to re-check all
+  263 stock files calling anything in it. Removing or renaming a function now re-checks the files
+  still calling it, which it previously missed.
 - An edit's diagnostics, CodeLens, Go to Definition, find-references, rename, completion, formatting,
   code actions and workspace symbol search no longer slow down as the workspace grows. One edit end
   to end went from 116 ms to 23 ms, Go to Definition from 296 ms to under 1 ms, and an empty

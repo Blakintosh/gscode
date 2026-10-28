@@ -9,6 +9,9 @@
     "System.GC.HeapCount": 8,
 
     "_comment_LOHThreshold": "2 MB, not the default 85 KB. A heavy script's source text (a 98 KB file is a 196 KB string), its token arrays and a record's reference array all cross 85 KB, and the large-object heap is collected only by gen2: at 10,000 copies of the heaviest BO3 scripts it swung up to 3.3 GB during the cold index and took 72 gen2 collections. Measured cold-only at 10K, retained memory identical (2,109 MB) at every setting: default 19.0 s, 3.9 s paused, 72 gen2, 6.6 GB peak working set; 512 KB 13.5 s / 5.4 GB; 1 MB 9.1 s / 5.5 GB; 2 MB 7.5 s, 1.9 s paused, 4 gen2, 4.2 GB; 8 MB the same as 2 MB. At stock size (bo3, 1,000 files) 0.3 s against 0.4, and a transient peak of 648 MB against 383 that the post-index compaction returns.",
-    "System.GC.LOHThreshold": 2097152
+    "System.GC.LOHThreshold": 2097152,
+
+    "_comment_Gen0MaxBudget": "32 MB per heap. Server GC sizes each heap's gen0 budget from the CPU cache, and with eight heaps the budgets grew to about 800 MB that the GC then kept committed: on stock BO3 the server rested at 148 MB after indexing and climbed to 785 MB under ordinary editing and request traffic, and to 920 MB after a closed-dependents relint, against 58 MB live. The 2 MB large-object threshold made it worse, since arrays up to 2 MB now fill gen0. Capped, the same session rests at 323 MB (main: 341). At 50,000 heavy files it costs CPU in the cold index: BO3 90 to 78 s, CoD4 98 to 116 s, GC pause 7 to 18 s and 9 to 29 s, with peaks within a GB of before (PERF.md, 2026-10-27). DATAS rested at 309 MB but took BO3's header save 1.7 GB higher.",
+    "System.GC.Gen0MaxBudget": 33554432
   }
 }

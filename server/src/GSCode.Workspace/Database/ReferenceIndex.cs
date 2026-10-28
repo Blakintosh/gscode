@@ -23,12 +23,12 @@ public sealed class ReferenceIndex
     /// <c>LanguageStore</c>'s gate it made every indexing thread wait on every other thread's
     /// hashing — the commit stage was 22% of CoD4's cold-index thread-time.
     /// </summary>
-    public static HashSet<SymbolKey> KeysOf(ImmutableArray<ReferenceEntry> references)
+    public static HashSet<SymbolKey> KeysOf(ReferenceTable references)
     {
-        HashSet<SymbolKey> keys = [];
-        foreach ( ReferenceEntry entry in references )
+        HashSet<SymbolKey> keys = new(references.Keys.Length);
+        foreach ( SymbolKey key in references.Keys )
         {
-            keys.Add(entry.Key);
+            keys.Add(key);
         }
 
         return keys;

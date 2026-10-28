@@ -30,7 +30,14 @@ Every problem GSCode reports has one stable code, `gscode-NNNN`, defined in
 
 Open files are linted from the live buffer on every analysis. Closed files report what was stored on
 their record at index time; in `gscode.workspaceIndexingMode: full` that includes the cross-file
-lints (`WorkspaceLintSweep`). Which closed files report at all is `gscode.diagnostics.scope`.
+lints (`WorkspaceLintSweep`), restored on an unchanged restart from the copy the last session stored
+(`LintSweepCache`). Which closed files report at all is `gscode.diagnostics.scope`. A closed file's
+Hints are never sent: VS Code shows a Hint only as faded text in an open file.
+
+On the include dialects the function rules follow the engine's rule for what a call reaches: a bare
+call sees the file's own functions and its direct includes' own, a path call the named file's own.
+So 5013 reports a path call into a file that does not itself declare the name, 5026 a call only an
+include's own include declares, and 5012 counts an include as used only for what it declares itself.
 
 ## Gates — why a rule sometimes says nothing
 

@@ -62,6 +62,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
 - `static ExportSignature` — hashes only the cross-file surface a record exposes: namespaces,
   functions, classes, methods, parameters, and visibility/dev-only flags. Body edits therefore do
   not fan out diagnostics, while changes another file can observe invalidate dependents.
+- `ChangedFunctionKeys(before, after, game)` — which top-level functions an edit added, removed or
+  re-signed, under the key callers' references use (`GameProfile.KeyNamespace`), from the same
+  per-function rendering `Of` hashes. Null when the change is not the functions' alone: no previous
+  record, a moved file, or changed `#namespace`s or imports — the caller then re-lints every caller.
 
 ## Database/LanguageStore.cs
 
@@ -94,6 +98,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `FilesWriting(writtenKey)`, `FilesInserting(headerPath)`, `PathChildren(folder, context)`,
   `MayBeDevOnly(name)`, `VisibleLiterals(kind, context)`, `VisibleFieldNames(owner, context)`,
   `HasOverlayAt(path, context)`.
+- `ContextEpoch` moves whenever a path that stays in the store changes context (a folder added or
+  removed, a raw script becoming a mod's). It invalidates the one visibility answer cached against
+  an index array, `DatabaseQueries.VisibleDeclaring`, since that array does not change when only a
+  file's context does.
 - The write gates are STRIPED by path, 64 of them, not one for the store. The race they stop is
   between two writers of the SAME file — read-previous and swap are separate steps — and two writers
   of different files share nothing here, because each index below serialises its own dictionary. One
@@ -125,6 +133,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   once a second appears. Most keys are carried by one file and a HashSet holding one reference costs
   ~150 bytes to carry 8 — on BO1 that is the declaration index costing 5.1 MB against well under
   one. The union never escapes the class.
+- The promoted set is a `PostingSet`: a `HashSet<string>` that also keeps the last array `FilesFor`
+  handed out, cleared by every write. A key read many times between writes is copied once, not once
+  per read — the per-read copy under the shard lock made the full-mode lint sweep quadratic when
+  thousands of files declare one name. The array is a cache, not the storage, so the cold index still
+  adds a file to a hot key in constant time. See `PERF.md`, the scale section.
 - Sharded 64 ways by key hash, each shard its own dictionary and lock, taking a shard lock per key
   rather than one lock per diff. Sound only because no invariant spans two keys. This took
   `commit.upsert` from 28.6% of CoD4's cold-index thread-time to 8.4%; see `PERF.md`.
@@ -173,11 +186,14 @@ lints, `Completion/` and `Typing/` the information surfaces.
 ## Database/CallResolution.cs
 
 - `static CallResolution` — which function a WRITTEN call names, shared by signature help and the
-  parameter-name inlay hints. `EnclosingClassAt`, `UnqualifiedFunction` (the
-  `ResolvesByNamespace` split: `FunctionInIncludeScope` on the merge dialects, the declared-namespace
-  loop on BO3) and `PathQualifiedFunction` (`maps\_utility::name`, scoped to the file the path names
-  by asking with an empty asking path). Builtins are NOT consulted here: the two callers present an
-  engine function differently enough that each keeps its own fallback.
+  parameter-name inlay hints. `EnclosingClassAt`, then one member per written form, each the first
+  of `DatabaseQueries.FunctionsTheCallReaches`: `UnqualifiedFunction` (the asking file's own, then
+  its direct includes' own, on the merge dialects; each declared namespace in turn on BO3),
+  `QualifiedFunction` (`ns::name`) and `PathQualifiedFunction` (`maps\_utility::name`). So both
+  describe the declaration hover shows and go-to-definition lands on. Builtins are NOT consulted
+  here: the two callers present an engine function differently enough that each keeps its own
+  fallback. Signature help reads a path call's written path from the tokens, so it works before the
+  argument list is closed.
 - It exists because the two had a resolver each and one of them never got the merge-dialect rule, so
   inlay hints answered only for the asking file's own functions on four of the five games. What stays
   separate is what genuinely differs: signature help is token-driven and works before there is a
@@ -475,22 +491,37 @@ lints, `Completion/` and `Typing/` the information surfaces.
   function.
 - `LookupFunctions` asks `DeclarationIndex` for its candidate files rather than scanning every
   record — the `(namespace, name)` list when a namespace is given. It applies overlay shadowing PER
-  RECORD inside the walk (a raw record is skipped when `HasOverlayAt` its path — `ApplyShadowing`'s
-  rule with a store, whose other half is implied), which is what lets `limit` stop the walk early: a
+  RECORD inside the walk (`IsLoadedFor`: visible to the asker, and not a raw record an overlay
+  replaces — `ApplyShadowing`'s rule with a store, whose other half is implied; the include-chain
+  walks and `NavigationSupport.DeclaringFile` ask the same), which is what lets `limit` stop the walk early: a
   caller asking whether a name resolves passes 1, one asking whether it resolves to exactly one
   passes 2. A bare name on a merge dialect has thousands of declarations at scale, and building all
   of them to answer "yes" was two lints' whole cost. `BoundedLookupTests` keeps the two-pass rule as
-  a reference implementation. `IncludeClosure` walks the `#include` graph TRANSITIVELY — the
-  compiler flattens the chain, which the corpus settled — and reports whether the walk saw
-  everything, since a rule may only assert a name is out of scope against a complete one. The
-  direct-only helpers beside it (`FunctionsInIncludeScope` and friends) stay narrow on purpose:
-  completion offering too little is harmless where an Error is not. `FunctionInIncludeScope` is that
-  scope's answer for ONE name, for signature help, which asks per keystroke inside an argument list
-  and would otherwise build every function the scope offers to read one. It decides shadowing per
-  record rather than over the set, which is sound HERE and not in `ApplyShadowing`'s general case
-  because the scope has already dropped every record the asker cannot see — what is left of the set
-  rule is then exactly what `HasOverlayAt` answers alone. `IncludeScopeLookupTests` keeps the full
-  list as the reference implementation.
+  a reference implementation. `IncludedFiles` gives a file's `#include` targets and whether all of
+  them resolved, since a rule may only assert a name is out of scope against a complete set.
+- The include rule is the engine's, applied to every include dialect: an `#include` merges the
+  included file's OWN functions in, not those it got from its own includes, and a path call sees the
+  named file's own functions only. One level, never a chain. Stock CoD4 agrees in every file the game loads; the seven files that rely on more
+  (maps\_createpath, _documents, _guide, _leapfrog, _mortarteam, _photosource, _wood) are named by
+  no other script and never compiled — the corpus tests list them as `UnloadedStockScripts`.
+- `FunctionsTheCallReaches` is the one answer to "which declaration does this call mean", the
+  intended one first. On an include dialect a function is keyed by FILE: a path call
+  `maps\_foo::bar()` looks in maps\_foo's own functions (`FunctionsDeclaredAt`, public also for
+  completion's auto-import rows); a bare `bar()` looks in the asking file, then in the files it
+  `#include`s directly (`ReachableFunctions` — includes only, since a path call merges nothing into
+  scope). Nothing else: the engine never looks a name up across the install, so this is
+  empty when the file's paths reach no declaration. On a namespace dialect, `ns::func`:
+  `LookupFunctions` narrowed to the copies the file reaches when it reaches any (`ReachedWhereAny`), since an mp and a zm copy
+  both declare `#namespace util`. Hover (`ResolveCall`), the call hierarchy, completion docs, type
+  definition, the builtin-vs-script tests and `CallResolution` (signature help, hints) ask it; go-to-
+  definition narrows its sites, and find-references picks its declaration, with
+  `IncludeScopedCallTargets`, null where a key is not include-scoped. Left wide on purpose: the
+  missing-include quick fix and lints, which exist to find the file not yet included.
+  `IncludeScopeLookupTests` holds `FunctionsInIncludeScope` as the reference for the single-name
+  answer; `CallTargetAgreementTests` and `IncludeScopedNavigationTests` pin the cases.
+- The private `VisibleDeclaring` caches, for a name declared by 64 files or more, which of them an
+  asking context can see — per index array (`ConditionalWeakTable`) and per `ContextEpoch`. An asker
+  that sees few of 2,000 same-named copies otherwise paid a record lookup for each on every question.
 - `LinkedScriptPaths(result, profile)` — the paths a file links against in whichever directive its
   dialect uses (`#using` where namespace-driven, `#include` where merging), and the ONE place that
   fork lives. Scoping callers want this rather than `ImportedScriptPaths`/`IncludedScriptPaths`,
@@ -518,7 +549,10 @@ lints, `Completion/` and `Typing/` the information surfaces.
   declarations and still has to be narrowed by the `#using` graph. `CanReach` answers both families
   unchanged, a `#using` edge being a non-insert dependency edge exactly as an `#include` is.
   Attribution matches on the whole KEY via `GameProfile.KeyNamespace`, so the "declares it itself"
-  shortcut cannot claim a same-named function from an unrelated namespace.
+  shortcut cannot claim a same-named function from an unrelated namespace. `DeclaresKey(game,
+  record, key)` is that match for a whole record, public for `NavigationSupport`'s own-file test.
+  Its reachable-file test keeps LookupFunctions' looser match, where a key with no namespace means
+  any namespace; on BO3 the two disagree for every such key.
 
 ## Database/MethodResolution.cs
 
@@ -532,6 +566,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Indexing/WorkspaceIndexer.cs
 
+- `BackgroundParallelism` — one thread per core but one, so a request always has a core. The cold
+  index, the directory walk, a header's re-index and the server's `BelowNormalWorkers` all use it.
 - `IndexingMode` (Off/Partial/Full) + `IIndexProgressListener` (+Null impl) —
   the server maps listener events onto gscode/indexing* notifications.
 - `sealed class WorkspaceIndexer` — cold start: enumerate targets → bounded
@@ -568,7 +604,11 @@ lints, `Completion/` and `Typing/` the information surfaces.
   whether that commit landed before or after its own disk read — so for an owned path it builds
   the record (`ScriptDatabase.BuildRecord`, still enqueued to the cache) without calling `Commit`,
   the same "skip the store write, keep everything else" rule `WatchedFileUpdater.Apply` already
-  applied to an on-disk change behind the editor's back.
+  applied to an on-disk change behind the editor's back. `OpenedSince` asks again right before the
+  store write, since a document opened between the read and the write has had its buffer committed.
+- A restore keeps the live record instead when its content hash, context and relative path match
+  and it has no unsaved edits: a cached record carries parse diagnostics only, and the live one may
+  carry the full-mode sweep's.
 - `AnalyzeForLintSweep(path)` — read + analyse with NO commit, NO cache write, NO header seeding:
   purely a `ParseResult` for the `workspaceIndexingMode: full` lint sweep (`WorkspaceLintSweep`,
   server-side), which needs one because records do not retain theirs. Reads and analyses through
@@ -577,13 +617,16 @@ lints, `Completion/` and `Typing/` the information surfaces.
 
 ## Cache/CacheSchema.cs
 
+- Format 11 added `FieldBinding.TargetRange`, so a pointer written with a path can be resolved where
+  it was stored.
 - Format 7 added `ScriptRecord.FieldBindings` AND put `ReferenceKind.FieldWrite` in the middle of
   the enum; format 8 put `FieldUpdate` beside it. Those halves are why neither bump was optional:
   a kind goes on the wire as its ordinal, so an older blob reads every kind after the insertion
   shifted by one - a format-6 blob would read each of its macro uses as a literal.
 - `static CacheSchema` — SchemaVersion + RecordFormatVersion (the hand-bumped gates),
-  the meta keys, and the `meta`/`files` table DDL. Either version mismatch (or a
-  build-identity mismatch) wipes the cache; there are no migrations.
+  the meta keys, and the `meta`/`files`/`swept` table DDL. Either version mismatch (or a
+  build-identity mismatch) wipes the cache; there are no migrations. `swept` holds the full-mode
+  lint sweep's results, `meta.sweep_fingerprint` the workspace they describe (schema 3).
 
 ## Cache/ServerBuildIdentity.cs
 
@@ -607,10 +650,15 @@ lints, `Completion/` and `Typing/` the information surfaces.
   gains or loses a settable property, and `RecordFormatCorpusTests` round-trips every record a real
   index produces and compares their JSON. Deserialize returns null on anything malformed — truncated,
   corrupted, or another layout — so one bad row costs one re-analysis.
+- Names and paths are read through the indexer's `NameTable` (`ReadString`), free text — doc
+  comments, default-value text, diagnostic messages — is not (`ReadText`), matching what a cold
+  parse interns. The per-blob table only shares within one file, so before this a warm start held
+  its own copy of every name in every file: about a quarter more retained heap than a cold index of
+  the same records (bo3 10k files: 549 MB warm against 437 MB cold; now 437 against 427).
 
 ## Cache/CachedEntry.cs
 
-- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize()` — one cached
+- `sealed record CachedEntry(ulong ContentHash, byte[] Blob)` + `Materialize(NameTable)` — one cached
   record still in its stored form. The deserialize is deliberately NOT done when the cache is read:
   `LoadAll` runs before the indexer knows which files are current, so materialising everything there
   paid gzip inflation and a JSON parse for files about to be re-analysed anyway — on ONE thread, in
@@ -632,6 +680,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   before paying for it), and
   `DisposeAsync` (drains the writer + checkpoints so a clean exit loses nothing), and
   `WaitForIdleAsync` (returns once every enqueued command has COMMITTED, not merely left the queue).
+  `LoadSweep`/`SaveSweep` read and replace the stored lint sweep (`StoredSweep`, `SweptEntry`); the
+  rows and their fingerprint go in one transaction.
+- A mismatch DELETES THE FILE (with `-wal`/`-shm`) and creates a fresh one; only a file another
+  server holds open has its rows deleted instead. A row delete visits every page — 1.6 s over the
+  1.8 GB cache of 50,000 heavy BO3 files with it already in the OS cache — and left the file its
+  full size, since SQLite returns freed pages only on a VACUUM.
 - The channel is unbounded, so a backlog costs memory (the compressed blobs, until written) rather
   than data: bounded at 4,096 with the writer serializing, it refused 82% of writes at 50,000 files
   and the next "warm" start re-analysed four files in five. `DroppedWrites` counts only writes after
@@ -656,7 +710,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
   `WorkspaceIndexer.InvalidateResolutionCache()` — a file appearing or vanishing can falsify any
   cached "does this exist" answer `PathResolver.Resolve` has given out, for a `.gsc`/`.csc` target
   as much as a header. A plain content change does not: nothing about whether a target EXISTS
-  moved.
+  moved. A caller applying a batch passes `invalidateResolution: false` and calls
+  `NoteFilesAppearedOrVanished` once for the batch instead.
 
 ## Documents/DocumentStore.cs
 
@@ -724,6 +779,12 @@ lints, `Completion/` and `Typing/` the information surfaces.
   - `FindRootAbove(startFolders, subfolder, fileSystem)` — each start folder is exhausted to the
     drive before the next is tried, so an earlier workspace folder wins outright rather than losing
     to a shallower match under one the user listed second.
+  - `DevRawRoot` — the `devraw` folder beside raw (`share\devraw` on BO3), derived only when it is
+    on disk and raw is enabled. Another raw: raw context, same relative paths, searched after raw —
+    the engine's order on CoD4; BO3's is assumed to match.
+  - `RawScriptsSubfolder` — the profile's script folder under raw and devraw (`scripts` on BO3,
+    "" elsewhere), taken with the rest of the layout so a resolver built for one game does not read
+    another's from `GameProfile.Active`.
 
 ## Resolution/ResolutionContext.cs
 
@@ -741,8 +802,8 @@ lints, `Completion/` and `Typing/` the information surfaces.
     the key an overlay shadows on. Both entry points NORMALIZE what they are given. Unnormalized
     input would come back `""` as `ScriptRecord.RelativePath`, and every import match downstream
     would silently never fire.
-  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw] · Raw: [raw] ·
-    Workspace: [base, other folders, raw]; first existing file wins. Rooted paths, drive letters,
+  - `Resolve(context, scriptPathWithExtension)` — probes Mod: [mods\m, raw, devraw] · Raw: [raw,
+    devraw] · Workspace: [base, other folders, raw, devraw]; first existing file wins. Rooted paths, drive letters,
     and ".." are rejected. Both slash styles accepted. Memoized by `(context, relative path)`, MISS
     included: an uncached miss walks every root and is asked about on every keystroke by two
     independent callers resolving the same directive list (`FileImports` and `UsingNotFoundLint`) —
@@ -751,8 +812,18 @@ lints, `Completion/` and `Typing/` the information surfaces.
     (`WatchedFileUpdater.Apply`, both branches, regardless of language) — coarse, but those events
     are user-paced, and a create can turn a cached miss into a hit just as a delete can turn a
     cached hit into a miss.
-  - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh under raw + mods + workspace
-    folders, deduplicated (cold-start indexing input).
+  - `EnumerateIndexTargets()` — every .gsc/.csc/.gsh the cold index visits, deduplicated: raw's
+    and devraw's script folder (all of raw on pre-BO3 games, or when raw has no `scripts`), the
+    mods, and every workspace folder that is not the game install. A workspace folder holding raw
+    or devraw is the install opened in the editor and is not walked — its scripts come through
+    raw, devraw and mods (BO3: 295,640 files walked for 1,105 scripts before). A devraw file raw
+    also has is skipped: raw shadows it, and two raw-context records with one relative path would
+    shadow nothing.
+  - `IsIndexTarget(path)` — the same answer for one file, from the same `WalkRoots()`; what a
+    watched create or change asks (`WatchedFileUpdater.ShouldIndex`), so a script appearing where
+    the walk does not look stays out of the index until a restart would have put it in.
+  - `DevRawCounterpart(path)` — the devraw file a raw one shadows. `WatchedFileUpdater.Apply`
+    retires it when the raw file appears and indexes it when the raw file goes.
 
 ## Analysis/NamespaceUsageLint.cs
 
@@ -859,10 +930,9 @@ are out.
   to a function that EXISTS but that nothing merges into scope. Resolution finds it anyway — a merge
   dialect keys functions `(null, name)` and `LookupFunctions` searches every visible record, so
   hover and go-to-definition keep working while the import is missing — which is exactly why 5013/5014
-  stay silent here and this rule is needed. Scope comes from `DatabaseQueries.IncludeClosure`, which
-  follows the graph TRANSITIVELY because the compiler flattens the chain; the corpus settled it, since
-  direct-hops-only reported 36 stock calls, `maps\_createpath.gsc` reaching `flag_init` through
-  `maps\_utility` among them. Gated on `GameProfile.HasTrustedEngineNames`, since a name that is an
+  stay silent here and this rule is needed. Scope is the file's own functions and its direct
+  includes' own (`DatabaseQueries.IncludedFiles`), as the compiler copies them. The 36 stock calls
+  that need a second level are all in five files nothing loads, `maps\_createpath.gsc` among them. Gated on `GameProfile.HasTrustedEngineNames`, since a name that is an
   undocumented engine function AND a script function elsewhere would otherwise be blamed on the user.
   Measurement drew that line: CoD4 qualifies on its own library (the sweep found one gap, `abs`, now
   curated in), MW2 ships no library and borrows CoD4's NAMES, and WaW and BO1 qualify for neither —
@@ -922,13 +992,10 @@ are out.
 - `UnusedBindingLint` (5020) — a parameter or `waittill` output nothing reads. A **Hint**, so it
   never reaches the Problems panel and the fade is the entire output: at any panel-visible severity
   it would report 5,277 findings on BO3's own scripts, most of them engine-fixed callback signatures.
-- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012's test is
-  MARGINAL, not direct, and that is what stops a Hint manufacturing an Error: a file may include a
-  hub purely as a conduit, and judging the directive by what its TARGET declares would call that
-  unused, offer "Remove", and the removal would make 5026 fire. It is measured against what is
-  CERTAINLY kept rather than against the other candidates — otherwise two conduits each cover the
-  other and both are declared removable, which the bulk "remove all" action would then act on. 46
-  stock directives across CoD4, MW2 and WaW were in that state.
+- `UnusedIncludeLint` (5012) / `UnusedUsingLint` — an import contributing nothing. 5012 judges an
+  `#include` by what its target declares ITSELF against what this file calls BARE: an include passes
+  nothing it includes in turn on, and a path call loads the file it names on its own. A hub included
+  purely as a conduit is therefore unused — the calls it seemed to serve are 5026's.
 - `UnusedLocalLint` (5008) — a local assigned and never read. A **Hint** for the same reason 5020
   is: as Information it would put 4,711 entries in the Problems panel across the five games — 1,716
   on MW2 alone — in code that ships and works. The `Unnecessary` fade is the useful half.

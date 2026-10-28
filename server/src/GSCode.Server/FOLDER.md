@@ -33,18 +33,25 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/AnalysisTiming.cs
 
-- The 250 ms keystroke debounce, in one place. `TextSyncHandler` waits on it and warns against it;
-  the corpus `LintBudgetTests` gate asserts each lint rule against a percentage of it. Two readers
-  is why it is not a private constant any more — a budget written against a hardcoded 250 would keep
-  passing if the debounce were shortened, which is when it would need to fail.
+- The keystroke debounce, in one place. `DebounceMilliseconds` (250 ms) is the BUDGET: the longest an
+  edit waits, and what the corpus `LintBudgetTests` gate asserts each lint rule against a percentage
+  of. A budget written against a hardcoded 250 would keep passing if the debounce were shortened,
+  which is when it would need to fail.
+- `DebounceFor(lastAnalysisMilliseconds)` is the wait itself: three times the document's last
+  analysis, kept between `MinimumDebounceMilliseconds` (125) and the budget, and the budget when
+  nothing is measured yet. The floor is long enough that the pause between two keys of a word falls
+  inside it, so a half-typed name is not reported on its way to being typed; a slow file still waits
+  the whole budget. At 50,000 heavy BO3 files a fast file's diagnostics landed 160–210 ms after an
+  edit instead of 280–307 ms. `AnalysisTimingTests` pins the formula.
   `DependentDiagnosticsRefresher`'s 900 ms fan-out debounce is a different quantity and stays its own.
 
 ## Handlers/TextSyncHandler.cs
 
 - Incremental text sync. didOpen → scheduled onto the thread pool (`Task.Run`, no delay — a file
   opens once, so nothing needs coalescing, only getting off the LSP handler thread, where a window's
-  worth of restored tabs would run their analyses back to back); didChange → ~250 ms debounced
-  re-analysis with per-document cancellation (superseded runs are cancelled, silently); didSave →
+  worth of restored tabs would run their analyses back to back); didChange → re-analysis after
+  `AnalysisTiming.DebounceFor` the document's last analysis time (125–250 ms), kept per open document
+  in a `ConditionalWeakTable` so a closed one takes its entry with it, with per-document cancellation (superseded runs are cancelled, silently); didSave →
   immediate (bypasses debounce); didClose → clears diagnostics. `AnalysisGate` makes both scheduled
   paths single-flight per document: a second trigger while one is still running queues a rerun
   instead of starting a concurrent second analysis. Publishes diagnostics stamped with the WINNING
@@ -75,8 +82,8 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   late publish put diagnostics back on a closed file under the normalized URI, where nothing takes
   them away again. A close is remembered only until the document is reopened, and a path the
   publisher was never told about still publishes: only a close is evidence, silence is not.
-  Push because closed files have no puller; open documents are a migration candidate to LSP 3.17
-  `textDocument/diagnostic`.
+  Push only. LSP 3.17 pull diagnostics were built, measured no better at 50,000 files, and removed:
+  PERF.md, "pull diagnostics, and why push stays the default".
 
 ## Handlers/DocumentSymbolHandler.cs
 
@@ -121,9 +128,12 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 
 ## Handlers/WatchedFilesHandler.cs
 
-- didChangeWatchedFiles → applies each create/change/delete via WatchedFileUpdater
-  (registers **/*.gsc|csc|gsh watchers). A branch switch's whole batch applies before
-  returning.
+- didChangeWatchedFiles → queues each create/change/delete and returns; a background pump merges
+  queued events per path and applies them via WatchedFileUpdater (registers **/*.gsc|csc|gsh
+  watchers). Deletions first, scripts in parallel on `BelowNormalWorkers`, headers last.
+  `WhenIdleAsync` is for tests.
+- In `full` mode the batch's closed files keep what they last published
+  (`WorkspaceDiagnosticsPublisher.HoldUntilRelinted`) until the relint below has run.
 - In `full` mode it re-lints every record the batch rewrote (`RelintClosedFilesAsync` over the
   paths `Apply` returns), since a re-index stores the parse diagnostics alone and a branch switch
   otherwise emptied the Problems panel of every closed file it touched. Then it republishes, and
@@ -134,12 +144,19 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
 ## Handlers/WorkspaceSymbolHandler.cs
 
 - workspace/symbol — spans BOTH language stores (no asking file), matching functions and
-  classes by case-insensitive substring, each result located at its file. Capped at 256.
+  classes by case-insensitive substring, each result located at its file. Capped at 256, and the
+  walk STOPS there: functions first, then classes, in record order, which is the order the list had.
+  Overlay shadowing is decided per match against the store's path index (a raw match drops when a
+  non-raw record at its relative path declares the same name), which gives what `ApplyShadowing`
+  over the finished list gave. An empty query went from 646 ms to 0.5 ms at 25,000 heavy BO3 files.
+  A query matching nothing still reads every name; that needs a prefix index.
 
 ## Handlers/NavigationSupport.cs
 
 - `NavigationTarget` + `NavigationSupport.Resolve(uri, cancellationToken)` — shared plumbing
   turning a document URI into its live analysis + the language store and context id to query.
+  `NavigationTarget.PathCallAt(range)` is the file a path call at that range names, "" for any
+  other site — the one spelling of "the path call at the cursor" every handler asks for.
 - `SymbolQueryContext` + `ResolveForQuery(uri, cancellationToken)` — the same thing WITHOUT a parse,
   answering from the file's record when it is not open. For the hierarchies: expanding an incoming
   call or a supertype names another file, and that file is normally not one the user has open, so
@@ -172,12 +189,17 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   taken from the ASKING document's language. Go-to-definition and ctrl-click ask this same question,
   so a new directive form is taught here once.
 - `FindAllReferences` is the single query behind both the CodeLens count and the peek list, so the
-  number and the list cannot disagree. It narrows via `DeclaringFile`, which resolves "which file
-  does this key mean, FROM THIS DOCUMENT" — a lens on a declaration answers itself, a call answers
-  what it reaches. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
+  number and the list cannot disagree. It narrows to "which file does this key mean, FROM THIS
+  DOCUMENT" — a lens on a declaration answers itself, a call answers what it reaches. On an include
+  dialect that is `DatabaseQueries.IncludeScopedCallTargets`, with the path call at the cursor when
+  the handler has one, so a path call means the named file's function; a call that reaches nothing
+  answers for this file's own sites alone. Every request at a cursor (references, rename, highlight,
+  definition, call hierarchy) asks through the `PositionHit` overloads of `FindAllReferences`,
+  `FindReferencesInFile` and `FindDefinitionSites`, which take the path call from the hit, so none
+  can drop it. Elsewhere it is `DeclaringFile`. Applies to every dialect: a BO3 namespace is shared between the `mp` and `zm`
   copies of a script, so without it a count merges both game modes' callers. Matches on the whole
   key, namespace included, or a file's own unrelated same-named function would claim the lens.
-- When `DeclaringFile` names one file, the query is `DatabaseQueries.FindReferencesReaching` — the
+- When one declaring file is known, the query is `DatabaseQueries.FindReferencesReaching` — the
   files that can reach it, not every file mentioning the key — and only an unnarrowed key collects
   everything and scopes afterwards. Same answer (`ReferenceScopeCorpusTests`); on a merge dialect,
   where `main`'s key is every `main`, it took a whole-file CodeLens at 50,000 files from 707 ms to
@@ -271,9 +293,16 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   fetched. Go-to-implementation wants the writes AND what they bind, and running the query twice
   paid the indexed lookup, the shadow rule and the include scoping over again - and left the two
   halves reading sets nothing guaranteed were equal.
-- `FunctionsOf`/`ClassesOf` return the declarations; `FunctionKeysOf` returns the KEYS, for call
-  hierarchy alone. An item carries the key in `Data`, and the key a write named is not the one
-  rebuilt from the declaration it resolved to - an unqualified `&foo` keys with a null namespace.
+- `FunctionsOf`/`ClassesOf` return the declarations; `BoundFunctionsOf` pairs each with the KEY its
+  write named, for call hierarchy, whose item carries the key in `Data` - an unqualified `&foo` keys
+  with a null namespace, which is not the key rebuilt from its declaration.
+- Both kinds walk one private `Bindings(references, field, kind)`: each binding of that kind, with the
+  file that wrote it, reading each writing file once - so which write counts cannot differ between
+  functions and classes.
+- A bound function resolves in the file that WROTE it, through `DatabaseQueries.FunctionsTheCallReaches`
+  from that record: `level.cb = ::handler;` means the handler the writer reaches, and a path-written
+  pointer means the named file's, found again from the binding's `TargetRange` among the writer's
+  path calls. Asked from the reader's file, an include dialect answered every same-named function.
 - Reads `ScriptRecord.FieldBindings`, recorded at extraction, so a callback bound in one script
   answers in another without re-parsing that file on the request path. Cost is bounded by the
   field's WRITES, not the workspace: the reference query is indexed by key, and only the files
@@ -367,9 +396,20 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   gated by codeLens.enabled). Clicking invokes the gscode.showReferences client bridge. An
   `autoexec` function reads "autoexec entry point" when the count is zero: the engine calls it on
   load, so its call sites are in no script and a bare "0 references" reads as dead code.
-- Counts are computed in `Handle`, one `FindAllReferences` per declaration in the file — so the cost
-  of the whole request is that query times the file's declaration count, and it is why the query
-  must never walk the workspace. `ResolveProvider` is false: there is no lazy resolve step.
+- Listed WITHOUT counts, counted on resolve (`ResolveProvider = true`). `Handle` returns each lens
+  with its key and file in `Data` and no command; resolving one runs `FindAllReferences` for that
+  key. VS Code resolves only the lenses it is showing, so a file's first request no longer pays one
+  reference query per declaration: about 90 ms at 50,000 heavy BO3 files before. `Data` holds
+  primitives only, since it goes to the client and back (`CodeLensResolveTests` serialises it).
+  `HandleResolvedAsync` lists and resolves every lens, for tests and measurements that want every
+  count.
+- `LensCountCache` keeps, per open file, the part of each count that comes from OTHER files while
+  only that file is written: typing changes the open file's own part, which is counted again by the
+  same query narrowed to it (`FindReferencesInFile`). A change to the file's shape — what it declares,
+  imports and path-calls (`SignatureOf`) — starts its counts over. Not cached: a file that overrides
+  a raw script, and one the store does not hold. `CodeLensCountCacheTests` writes between two
+  requests and requires the second to see it; `LensCountCorpusTests` requires the kept counts to
+  equal a handler that keeps nothing, over every lens of a real bo3 and cod4 index.
 
 ## Handlers/WorkspaceFoldersHandler.cs
 
@@ -382,6 +422,9 @@ completion, hover, signature help, code lens, rename, the hierarchies, inlay hin
   objects — the latter drops ONLY workspace-context records, since raw and mod files stay
   reachable regardless of which folders are open. `BuildConfig` is shared with `Program.cs`, so
   a rebuild cannot drift from what initialize constructed.
+- The handler returns at once; each change runs in the background, one at a time and in arrival
+  order, on a `ContinueWith` chain. Not merged with the watched-file pump: that one folds events per
+  path, and folder changes must not be reordered or folded. `WhenIdleAsync` is for tests.
 - After the change it does what startup does after its index: in `full` mode sweeps again (the
   whole set, since an added file can resolve a call another reported missing), then republishes
   closed-file problems — taking back a removed folder's — and re-lints the open tabs.
@@ -630,6 +673,11 @@ teardown. Returns a non-zero exit code for a bad command line or a transport tha
 and silences CommandLineParser's own `HelpWriter` because it writes to STDOUT, which is the stdio
 transport's wire.
 
+Logs one GC line at start: server or workstation, the heap count, and the conserve-memory level and
+gen0 budget as the RUNTIME reports them (`GC.GetConfigurationVariables`, keys `GCConserveMem` and
+`GCGen0MaxBudget`), since an environment variable overrides the runtime config and a server built
+without the 32 MB budget rests several hundred MB higher with nothing else to say why.
+
 Waits for exit, cancels and bounded-awaits `IndexingLifetime` BEFORE `CacheHolder.CloseAsync()` (so
 an in-flight cache write is not silently dropped by closing out from under it), then disposes the
 transport owner and flushes logs.
@@ -683,17 +731,23 @@ transport owner and flushes logs.
   OmniSharp's `OnStarted` hands the caller — both are ordinary types already used elsewhere in this
   project (every handler resolves the facade the same way), so `RunAsync` depends on nothing this
   call site would need to learn a new name for.
-- `Compact()` — the one compacting collection at the indexing-to-serving transition. Lives here
-  rather than in `IndexReporting.cs` because it is a GC operation the startup task performs, not a
-  log line it prints; `IndexReporting.LogMemoryReport`, called before and after it, is what reports
-  the effect.
+- `Compact(limitMegabytes)` — the one compacting collection at the indexing-to-serving transition.
+  Lives here rather than in `IndexReporting.cs` because it is a GC operation the startup task
+  performs, not a log line it prints; `IndexReporting.LogMemoryReport`, called before it and again
+  after it when it ran (it returns whether it did), is what reports the effect.
+- `ShouldCompact(liveBytes, limitMegabytes)` — whether it runs: only while the live heap is at most
+  `gscode.memory.compactionLimitMB` (1 GB by default), and never when that is 0. Above the limit a
+  background, non-compacting collection is requested instead, since the blocking pause grows with
+  the heap (4 s at 50,000 heavy files). The setting makes that trade the user's: a larger limit
+  pays the pause for about 1.5 GB less resident at that size.
 
 ## Startup/IndexReporting.cs
 
 - `internal static class IndexReporting` — startup-time logging helpers with no state of their own:
-  `LogIndexBreakdown` (per-language file counts split by raw/mod/workspace context, via
-  `CategorizeContext` + `FormatLanguageLine`, plus a totals line of functions · classes · macros ·
-  distinct namespaces), `LogMemoryReport` (the managed-heap-vs-working-set breakdown, via
+  `LogIndexBreakdown` over `IndexBreakdown` (per-language file counts split into raw, devraw, mod
+  and workspace, via `Categorize` + `FormatLanguageLine`, plus a totals line of functions · classes ·
+  macros · distinct namespaces; a devraw file is raw context, so it is told apart by being under the
+  resolver's devraw root), `LogMemoryReport` (the managed-heap-vs-working-set breakdown, via
   `AppendGenerations` for the per-generation fragmentation), `BundledDataFilePaths` (feeds the
   cache's build-identity hash), and `ServerVersion` (read from the assembly so it cannot drift from
   what actually shipped). `ServerVersion` is `internal` because `Program.cs` itself calls it twice,
@@ -841,8 +895,14 @@ that chose it. These are the pieces that implement it:
   `HasCompletedIndex` (5013/5014/5025/5026) would stay silent until it was closed and reopened.
   CLOSED files, `workspaceIndexingMode: full` only, gated on `ScriptDatabase.HasCompletedLintSweep`:
   `ClosedDependentsOf` names the files `LanguageStore.FilesReferencing` says mention a function the
-  ORIGIN declares, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
-  costs the files that mention the name, not the workspace. Only fires for a caller-named origin
+  edit CHANGED, and `WorkspaceLintSweep.RelintClosedFilesAsync` re-lints just those — a rename
+  costs the files that mention the name, not the workspace. The editor path hands `Schedule` the
+  keys `ExportSignature.ChangedFunctionKeys` found (added, removed or re-signed), so adding one
+  function to a shared utility re-lints its callers, none on stock BO3, where it used to re-parse
+  all 263 files calling anything in `util_shared.gsc`; a removed function's callers are found
+  although the origin no longer declares it. Origins scheduled twice merge their keys, and a
+  schedule with no keys (an on-disk change, a saved header, a moved file or changed imports)
+  re-lints every caller of every function the origin declares. Only fires for a caller-named origin
   (not the on-disk-change case) and only covers top-level function declarations, not classes or
   methods — stated gaps. Origins a pass does not finish with are handed BACK when it is cancelled:
   the set is cleared the moment a pass takes it, so cancellation after that point would drop them,
@@ -877,15 +937,28 @@ that chose it. These are the pieces that implement it:
   `KeepOnRecord` is the same write for an OPEN document: in `full` mode `TextSyncHandler` stores the
   set it just published on the record its analysis committed, because a commit stores the parse
   diagnostics alone and the record is what the file reports once it closes.
+- `LintSweepCache` — the sweep's results kept in the workspace cache. `Capture` takes every GSC/CSC
+  record's set and a `Fingerprint` of the whole workspace after a startup sweep: each record's path,
+  context, language and content hash, headers included, and what each of its directives and path
+  calls resolves to on disk now — `gscode-5009` and an include scope's completeness ask the resolver,
+  not the index, and a target can exist without being a record; `TryRestore` puts them back on the next start
+  only when the fingerprint is the same, and names the files they do not cover for a relint. All or
+  nothing, because a cross-file result depends on files other than its own: one changed signature
+  anywhere and the start sweeps as before. Everything else a lint reads is in the cache's build
+  identity. At 50,000 heavy cod4 files an unchanged restart's sweep went from 103 s to 0.7 s, its
+  diagnostics identical.
 - `WorkspaceDiagnosticsPublisher` — publishes problems for files that are not open, per
   `gscode.diagnostics.scope`. It skips open documents deliberately, since `TextSyncHandler` owns
   those and publishes a richer set for them — which is why every caller of its `Refresh()` has to
   pair it with `DependentDiagnosticsRefresher.Schedule()` to cover the other half.
 - `Refresh()` sends a file only when its diagnostics differ from what was last sent — it remembers
-  the array per path and compares by reference, since a record's diagnostics are replaced wholesale
-  whenever they are recomputed (erring toward resending, never toward staleness). It runs after
-  every re-lint of an edit's closed dependents, where resending every file with a problem would
-  flood the client. Files no longer reported are still taken back.
+  the array per path and compares by value, since a re-index builds new arrays whether or not
+  anything in them moved. It runs after every re-lint of an edit's closed dependents, where
+  resending every file with a problem would flood the client. Files no longer reported are still
+  taken back. A file under `HoldUntilRelinted` keeps its last-published set until `Release`.
+- `BelowNormalWorkers` — runs an index range on threads of its own at below-normal priority, one per
+  core but one, stopping on cancellation or the first exception. The lint sweep and the watched-file
+  pump both use it, so a request the editor is waiting on wins every core it wants.
 
 ## .editorconfig
 

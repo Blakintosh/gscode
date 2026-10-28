@@ -13,8 +13,9 @@ public static class CacheSchema
     /// 2: the <c>deps</c> table is gone. Nothing had written or read it since the same edges moved
     /// into the serialized record (<c>ScriptRecord.Dependencies</c>); the wipe a mismatch triggers
     /// drops it from a version-1 file.
+    /// 3: the <c>swept</c> table, the full-mode lint sweep's results for a start that changed nothing.
     /// </remarks>
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
 
     /// <summary>Bumped when the ScriptRecord blob serialization changes.</summary>
     /// <remarks>
@@ -24,12 +25,15 @@ public static class CacheSchema
     /// written in the file — and a ReferenceKind inserted mid-enum shifts every later ordinal on the
     /// wire, so each of an old blob's kinds reads as its neighbour.
     /// </remarks>
-    public const int RecordFormatVersion = 9;
+    public const int RecordFormatVersion = 11;
 
     // meta keys.
     public const string MetaSchemaVersion = "schema_version";
     public const string MetaRecordFormatVersion = "record_format_version";
     public const string MetaServerBuildIdentity = "server_build_identity";
+
+    /// <summary>The workspace the rows of <c>swept</c> describe — see <c>LintSweepCache.Fingerprint</c>.</summary>
+    public const string MetaSweepFingerprint = "sweep_fingerprint";
 
     /// <summary>Creates the tables if absent. WAL + busy_timeout are set on the connection, not here.</summary>
     public const string CreateTables = """
@@ -46,6 +50,12 @@ public static class CacheSchema
             content_hash TEXT NOT NULL,
             analysed_at  INTEGER NOT NULL,
             record       BLOB NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS swept (
+            path         TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            diagnostics  BLOB NOT NULL
         );
         """;
 }

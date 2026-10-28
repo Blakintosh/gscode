@@ -83,6 +83,7 @@ internal sealed class StartupIndexRunner
         // (serially deserializing every record here once cost 1,509 ms on BO3, in front of a cold
         // index that does the whole job in 390).
         TimeSpan restoreElapsed = TimeSpan.Zero;
+        StoredSweep? storedSweep = null;
         if ( _settings.EnableWorkspaceCache )
         {
             Stopwatch restoreWatch = Stopwatch.StartNew();
@@ -110,6 +111,7 @@ internal sealed class StartupIndexRunner
                 // held state nobody reads — and simpler than threading "should I bother"
                 // through this block for what is already a rare (cache disabled) path.
                 indexer.UseCache(workspaceCache, workspaceCache.LoadAll());
+                storedSweep = workspaceCache.LoadSweep();
             }
             catch ( Exception exception )
             {
@@ -206,17 +208,7 @@ internal sealed class StartupIndexRunner
                     // PERF.md's 2026-09-15 entry for why this is affordable.
                     if ( mode == IndexingMode.Full )
                     {
-                        Stopwatch lintStopwatch = Stopwatch.StartNew();
-                        LintSweepOutcome lintOutcome = await services
-                            .GetRequiredService<WorkspaceLintSweep>()
-                            .RunFullSweepAsync(_indexingLifetime.Token);
-                        lintStopwatch.Stop();
-
-                        Log.Information(
-                            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped)",
-                            lintOutcome.Linted,
-                            lintStopwatch.Elapsed.TotalSeconds,
-                            lintOutcome.Skipped);
+                        await SweepOrRestoreAsync(services, storedSweep).ConfigureAwait(false);
                     }
 
                     // Guarded: the breakdown walks every record in both stores plus every GSH,
@@ -224,7 +216,8 @@ internal sealed class StartupIndexRunner
                     // traversal ran whatever the log level was.
                     if ( Log.IsEnabled(Serilog.Events.LogEventLevel.Verbose) )
                     {
-                        IndexReporting.LogIndexBreakdown(services.GetRequiredService<ScriptDatabase>());
+                        IndexReporting.LogIndexBreakdown(
+                            services.GetRequiredService<ScriptDatabase>(), _resolverHolder.Current.Config.DevRawRoot);
                     }
 
                     // Only now: the cross-file picture is complete, and a record's stored
@@ -255,8 +248,13 @@ internal sealed class StartupIndexRunner
                         await draining.WaitForIdleAsync(_indexingLifetime.Token);
                     }
 
-                    Compact();
-                    IndexReporting.LogMemoryReport("compaction", outcome);
+                    // Only after a compaction that ran. A skipped one requests a background collection
+                    // that has not started when this would sample, so its report repeated the one
+                    // above and read as a compaction that freed nothing.
+                    if ( Compact(_settings.MemoryCompactionLimitMegabytes) )
+                    {
+                        IndexReporting.LogMemoryReport("compaction", outcome);
+                    }
 
                     // Compiles to nothing without -p:GscodeInstrumentation=true, so a normal
                     // build pays neither the timing scopes nor this dump.
@@ -312,15 +310,72 @@ internal sealed class StartupIndexRunner
         return Task.CompletedTask;
     }
 
-    // One compacting collection at the indexing -> serving transition, UNCONDITIONALLY.
+    /// <summary>
+    /// The full-mode lint sweep, or — when the workspace is the one the last stored sweep was computed
+    /// against — its stored results, with only the files they do not cover linted. See
+    /// <see cref="LintSweepCache"/>. A completed sweep is stored for the next start.
+    /// </summary>
+    private async Task SweepOrRestoreAsync(IServiceProvider services, StoredSweep? storedSweep)
+    {
+        ScriptDatabase database = services.GetRequiredService<ScriptDatabase>();
+        WorkspaceLintSweep sweep = services.GetRequiredService<WorkspaceLintSweep>();
+        Stopwatch lintStopwatch = Stopwatch.StartNew();
+        TimeSpan pausedBefore = GC.GetTotalPauseDuration();
+
+        int restored = 0;
+        List<string>? unrestored = null;
+        if ( storedSweep is not null )
+        {
+            unrestored = LintSweepCache.TryRestore(
+                database, _resolverHolder.Current, storedSweep, services.GetRequiredService<NameTable>(), out restored);
+        }
+
+        if ( unrestored is not null )
+        {
+            if ( unrestored.Count > 0 )
+            {
+                await sweep.RelintClosedFilesAsync(unrestored, _indexingLifetime.Token).ConfigureAwait(false);
+            }
+
+            database.MarkLintSweepComplete();
+            Log.Information(
+                "Workspace lint sweep restored from the cache: {Restored} file(s), {Linted} linted again, in {Seconds:F1}s",
+                restored,
+                unrestored.Count,
+                lintStopwatch.Elapsed.TotalSeconds);
+            return;
+        }
+
+        LintSweepOutcome lintOutcome = await sweep.RunFullSweepAsync(_indexingLifetime.Token).ConfigureAwait(false);
+        lintStopwatch.Stop();
+
+        // The pause total says how much of a long sweep was the collector, not the lints: at 50,000
+        // heavy files the per-file lint time stayed flat while the sweep grew faster than the file
+        // count.
+        Log.Information(
+            "Workspace lint sweep complete: {Linted} file(s) in {Seconds:F1}s ({Skipped} skipped, GC paused {Paused:F1}s)",
+            lintOutcome.Linted,
+            lintStopwatch.Elapsed.TotalSeconds,
+            lintOutcome.Skipped,
+            (GC.GetTotalPauseDuration() - pausedBefore).TotalSeconds);
+
+        if ( _cacheHolder.Current is SqliteCache cache && LintSweepCache.Capture(database, _resolverHolder.Current) is SweepCapture capture )
+        {
+            cache.SaveSweep(capture.Fingerprint, capture.Entries);
+        }
+    }
+
+    // One compacting collection at the indexing -> serving transition, while the heap is small.
     //
     // Calling GC.Collect is normally wrong, but this is the case that justifies it: a one-off phase
     // change after which the allocation profile is completely different. Analysing a file allocates
-    // token and PToken arrays that clear the 85 KB large-object threshold, so most scripts put theirs
-    // straight on the LOH — which is NOT compacted by default. Measured on 1,105 files: a cold index
-    // left 183 MB fragmented out of a 282 MB heap (65% holes) even after 19 gen2 collections, because
-    // ordinary collections reclaim LOH memory without moving anything. Serving requests allocates
-    // nothing like that, so anything left behind would simply persist.
+    // source text, token and PToken arrays large enough for the large-object heap — which is NOT
+    // compacted by default. Measured on 1,105 files at the default 85 KB threshold: a cold index left
+    // 183 MB fragmented out of a 282 MB heap (65% holes) even after 19 gen2 collections, because
+    // ordinary collections reclaim LOH memory without moving anything. The threshold is 2 MB now
+    // (runtimeconfig.template.json), which keeps most of those arrays off the LOH while indexing but
+    // leaves a higher transient peak, and this is what returns it. Serving requests allocates nothing
+    // like that, so anything left behind would simply persist.
     //
     // Not gated on measured fragmentation: with System.GC.ConserveMemory fragmentation is roughly
     // zero while the large-object heap can still hold tens of megabytes of committed, unfragmented,
@@ -332,13 +387,41 @@ internal sealed class StartupIndexRunner
     // Its cost is a one-off pause, and the pause is NOT confined to this thread. Both collections
     // below are `blocking: true` gen2s, which suspend every thread in the process, and the LSP
     // connection is live by the time this runs (RunAsync returns as soon as the indexing task is
-    // launched). So a request arriving in that window waits for it: 1.8 s at 50,000 files, once, at
-    // the end of indexing (PERF.md, the scale section, which states this correctly).
+    // launched). So a request arriving in that window waits for it, which is why it is capped below.
     //
     // It earns its place — it returned 446 MB on bo1. Deferring it to the first idle moment is a
     // separate decision that needs its own measurement, and is not made here.
-    private static void Compact()
+    //
+    // Only up to a limit, though: gscode.memory.compactionLimitMB, 1 GB by default — see ShouldCompact.
+    // The pause grows with the live heap — 626 ms at 10,000
+    // heavy BO3 files (1.7 GB live), 2,539 ms at 25,000 (4.8 GB) and 4,095 ms at 50,000 (9.8 GB), from
+    // the scale run — and it lands just after Ready, when an editor is opening files: driving the
+    // real server over stdio at 10,000 files, a document-symbol request made then waited 521 ms
+    // against 10 ms around it. Past the limit a background gen2 collects what indexing left without
+    // stopping the process; what it does not give back is a small part of a heap that large.
+    //
+    // The heap is measured as of the last collection, not by GC.GetTotalMemory, which also counts
+    // garbage no collection has reached yet and so depends on when the last one ran. On the stock
+    // BO3 install (1,086 files) it read 1,236 MB in one start and 162 MB in the next, against 65 MB
+    // actually live: the first start skipped the compaction and kept 1.4 GB of working set that the
+    // compaction gives back in about 120 ms.
+    //
+    // Returns whether the compaction ran.
+    private static bool Compact(int limitMegabytes)
     {
+        long live = GC.GetGCMemoryInfo().HeapSizeBytes;
+        Stopwatch pause = Stopwatch.StartNew();
+
+        if ( !ShouldCompact(live, limitMegabytes) )
+        {
+            GC.Collect(2, GCCollectionMode.Default, blocking: false, compacting: false);
+            Log.Information(
+                "Post-index compaction skipped: {LiveMegabytes:N0} MB live is past the {LimitMegabytes:N0} MB limit "
+                + "(gscode.memory.compactionLimitMB); a background collection was requested instead",
+                live / Megabyte, limitMegabytes);
+            return false;
+        }
+
         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
         GC.WaitForPendingFinalizers();
@@ -346,5 +429,21 @@ internal sealed class StartupIndexRunner
         // The second pass collects what the finalizers just released; the LOH mode is one-shot and has
         // already been consumed, so this one is an ordinary compacting gen2.
         GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        Log.Information("Post-index compaction: {Milliseconds:N0} ms", pause.ElapsedMilliseconds);
+        return true;
     }
+
+    /// <summary>
+    /// Whether the post-index compaction runs on a heap of <paramref name="liveBytes"/>: only up to
+    /// <paramref name="limitMegabytes"/>, the user's <c>gscode.memory.compactionLimitMB</c>, and never
+    /// when that is 0. A stock-sized workspace is a few hundred MB, and the default 1 GB keeps the
+    /// pause to a few hundred ms. Raising it trades a longer stop just after Ready for a smaller
+    /// resident set: at 50,000 heavy files, about 4 s for about 1.5 GB.
+    /// </summary>
+    internal static bool ShouldCompact(long liveBytes, int limitMegabytes)
+    {
+        return limitMegabytes > 0 && liveBytes <= limitMegabytes * Megabyte;
+    }
+
+    private const long Megabyte = 1024 * 1024;
 }

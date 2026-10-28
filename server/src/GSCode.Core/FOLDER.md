@@ -118,7 +118,7 @@ Neutral foundation types. Zero dependencies — no LSP, no I/O, no game-install 
     but excluded from literal completion, which measured and rejected two tempting textual
     substitutes (dropping anything with a space loses 54 real notify/endon events; dropping anything
     single-file-only removes 73% of literals and hides exactly the case completion is wanted for).
-  - `readonly record struct FieldBinding(Field, Target, Range)` — what a `owner.field = …` write
+  - `readonly record struct FieldBinding(Field, Target, Range, TargetRange)` — what a `owner.field = …` write
     PUTS in the field, where `ReferenceKind.FieldWrite` records only where it happened. Two
     right-hand sides name one thing outright and nothing else does: `new Foo()` and a function
     reference (`&foo`, `&ns::foo`, a bare `ns::foo`) — the same two forms FlowTyper records as

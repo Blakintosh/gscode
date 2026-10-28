@@ -10,6 +10,7 @@ using GSCode.Workspace.Documents;
 using GSCode.Workspace.Resolution;
 using GSCode.Server.Configuration;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using TextRange = GSCode.Core.Text.TextRange;
 
 namespace GSCode.Server.Handlers;
 
@@ -33,7 +34,18 @@ public sealed record NavigationTarget(
     LanguageStore Store,
     ImmutableArray<LanguageStore> Stores,
     string ContextId,
-    ImmutableArray<string> Namespaces);
+    ImmutableArray<string> Namespaces)
+{
+    /// <summary>
+    /// The file a path call at <paramref name="range"/> in this document names, "" when the site there
+    /// is not a path call. Every request asked at a cursor needs it: a path call means the named file's
+    /// function, and a resolver handed "" reads it as a bare call.
+    /// </summary>
+    public string PathCallAt(TextRange range)
+    {
+        return GSCode.Parser.Extraction.PathCallReference.At(Result.Extraction.PathCalls, range);
+    }
+}
 
 /// <summary>
 /// Everything a symbol query needs about the file doing the asking, with no parse attached.
@@ -108,7 +120,7 @@ public sealed class NavigationSupport
     /// Resolves an open document, re-analysing first if the text has moved on since the last run.
     ///
     /// For features whose request carries a LIVE cursor position — completion and signature help.
-    /// Analysis is debounced by 250 ms, so mid-typing the cursor offset lands in text the user has
+    /// Analysis is debounced by up to 250 ms, so mid-typing the cursor offset lands in text the user has
     /// already replaced: at <c>#pre</c> the stale text might still read <c>#p</c>, the '#'-context
     /// check reads the wrong characters, and completion falls back to statement scope and offers
     /// `private`. That it worked whenever the user paused is exactly the tell.
@@ -291,10 +303,71 @@ public sealed class NavigationSupport
     /// namespace and no owner is written the same way by an untyped <c>[[x]]-&gt;m()</c>, a
     /// <c>sys::m()</c> builtin call and a plain unqualified call, and only the kind separates them.
     /// </param>
+    /// <param name="pathCallTarget">
+    /// The file a path call at the cursor names, "" for any other site — what
+    /// <see cref="NavigationTarget.PathCallAt"/> gives for the hit's range. A path call means the
+    /// named file's function, whatever this file declares under the same name.
+    /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
     {
-        return FindAllReferences(ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key));
+        return FindAllReferences(
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
+            IsFileLocalMacro(target, key) ? target.Path : "", pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>
+    /// The same query, asked of the hit under a cursor: its key, how the site used it, and the path
+    /// call there if it is one. The form every request at a cursor takes, so none can drop the path.
+    /// </summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(NavigationTarget target, PositionHit hit)
+    {
+        return FindAllReferences(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
+    }
+
+    /// <summary>
+    /// The same query, for a caller that keeps only the <see cref="ReferenceKind.Definition"/>
+    /// entries: go-to-definition. It may also get back other entries, which it filters as before.
+    ///
+    /// A declaration entry is written only by a file that declares the key, so for a function whose
+    /// declaring file is known, only the files declaring it are read. Asked of a stock utility every
+    /// copy calls, the full query read every reaching file's references — 100,103 of them for
+    /// flag::init at 50,000 heavy BO3 files — to keep one.
+    /// </summary>
+    /// <param name="pathCallTarget">
+    /// The file a path call at the cursor names, as for <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind, string)"/>.
+    /// Without it a path call into a file nothing includes reads as a bare call that reaches nothing.
+    /// </param>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindDefinitionSites(
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
+    {
+        return FindAllReferences(
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key),
+            IsFileLocalMacro(target, key) ? target.Path : "", definitionsOnly: true, pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>The same, asked of the hit under a cursor, as <see cref="FindAllReferences(NavigationTarget, PositionHit)"/>.</summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindDefinitionSites(NavigationTarget target, PositionHit hit)
+    {
+        return FindDefinitionSites(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
+    }
+
+    /// <summary>
+    /// A macro this script <c>#define</c>s itself, which no other file can see: the preprocessor
+    /// runs per file, and only a header reaches another one, through <c>#insert</c>. A macro key
+    /// carries no file, so asked across the workspace it gathered every OTHER script's macro of the
+    /// same name — 57,063 references on one lens, 361 ms, when 20,000 copies of a heavy BO3 script
+    /// each defined their own (PERF.md, the scale section) — and counted them as this one's.
+    ///
+    /// Not for a header: a <c>.gsh</c>'s own definitions are exactly the ones every inserting file
+    /// uses, so its macros keep the workspace-wide question.
+    /// </summary>
+    private static bool IsFileLocalMacro(NavigationTarget target, SymbolKey key)
+    {
+        return key.Kind == SymbolKind.Macro
+            && target.Language != ScriptLanguage.Gsh
+            && target.Result.Preprocessed.Macros.TryGet(key.Name, out MacroDefinition definition)
+            && definition.SourceFile is null;
     }
 
     /// <summary>
@@ -312,10 +385,17 @@ public sealed class NavigationSupport
     /// same code. <c>SameFileReferenceTests</c> requires the two to agree.
     /// </summary>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesInFile(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call)
+        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call, string pathCallTarget = "")
     {
         return FindAllReferences(
-            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path);
+            ContextOf(target), key, referenceKind, MacroSpansLanguages(target, key), target.Path,
+            pathCallTarget: pathCallTarget);
+    }
+
+    /// <summary>The same, asked of the hit under a cursor, as <see cref="FindAllReferences(NavigationTarget, PositionHit)"/>.</summary>
+    public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesInFile(NavigationTarget target, PositionHit hit)
+    {
+        return FindReferencesInFile(target, hit.Key, hit.ReferenceKind, target.PathCallAt(hit.Range));
     }
 
     /// <summary>
@@ -334,7 +414,7 @@ public sealed class NavigationSupport
     /// the peek list on the <c>.gsc</c>'s own definition both counted the <c>.csc</c>'s unrelated
     /// one — the same conflation
     /// <see cref="GSCode.Server.Handlers.DefinitionHandler.MacroDefinitionAt"/> answers for
-    /// go-to-definition, here for every OTHER caller of <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind)"/>
+    /// go-to-definition, here for every OTHER caller of <see cref="FindAllReferences(NavigationTarget, SymbolKey, ReferenceKind, string)"/>
     /// (CodeLens, Find References, Document Highlight, rename).
     ///
     /// Answered from THIS FILE's own preprocessor result, matching go-to-definition exactly: a
@@ -365,12 +445,17 @@ public sealed class NavigationSupport
     /// </param>
     /// <param name="onlyPath">
     /// See <see cref="GSCode.Workspace.Database.DatabaseQueries.FindAllReferences"/>'s parameter of
-    /// the same name, and <see cref="FindReferencesInFile"/> for the caller it exists for.
+    /// the same name, and <see cref="FindReferencesInFile(NavigationTarget, SymbolKey, ReferenceKind, string)"/> for the caller it exists for.
+    /// </param>
+    /// <param name="definitionsOnly">
+    /// The caller keeps only declaration entries — see <see cref="FindDefinitionSites(NavigationTarget, SymbolKey, ReferenceKind, string)"/>.
     /// </param>
     public ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferences(
         SymbolQueryContext target, SymbolKey key, ReferenceKind referenceKind = ReferenceKind.Call,
         bool macroSpansLanguages = true,
-        string onlyPath = "")
+        string onlyPath = "",
+        bool definitionsOnly = false,
+        string pathCallTarget = "")
     {
         // A class MEMBER has the same problem in both directions: the `var` is on one class and
         // the bare uses are keyed by whichever class's body each sits in, so the key canonicalizes
@@ -435,16 +520,43 @@ public sealed class NavigationSupport
         // When the key names one declaring file, only the files that can reach it are read — the
         // same answer, without first collecting every reference to a key that on a merge dialect
         // every `main` in the workspace shares. See FindReferencesReaching.
-        string declaring = DeclaringFile(target, key);
+        // On an include dialect the declaration is the one the call reaches through this file's own
+        // paths — see DatabaseQueries.FunctionsTheCallReaches. One that reaches nothing has no
+        // declaration to gather for, and only this file's own sites mean the same unresolved call.
+        string declaring;
+        ImmutableArray<ResolvedFunction>? reached = DatabaseQueries.IncludeScopedCallTargets(
+            target.Store, target.ContextId, target.Path, key, pathCallTarget);
+        if ( reached is ImmutableArray<ResolvedFunction> targets )
+        {
+            if ( targets.IsEmpty )
+            {
+                return DatabaseQueries.FindAllReferences(
+                    _database, target.Stores, target.ContextId, key, macroSpansLanguages, target.Path);
+            }
+
+            declaring = targets[0].Record.RelativePath;
+        }
+        else
+        {
+            declaring = DeclaringFile(target, key);
+        }
+
         if ( declaring.Length > 0 )
         {
             return DatabaseQueries.FindReferencesReaching(
-                target.Stores, target.ContextId, key, declaring, onlyPath: onlyPath);
+                target.Stores, target.ContextId, key, declaring, onlyPath: onlyPath,
+                onlyPaths: definitionsOnly ? FilesDeclaring(target.Stores, key) : default);
         }
 
+        // With no declaring file known — a copy calling a stock function its own imports do not
+        // reach — the query is workspace-wide, and only the files declaring a function can hold
+        // its declaration entries.
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> all =
-            DatabaseQueries.FindAllReferences(
-                _database, target.Stores, target.ContextId, key, macroSpansLanguages, onlyPath);
+            definitionsOnly && onlyPath.Length == 0 && key.Kind == SymbolKind.Function
+                ? DatabaseQueries.FindAllReferencesIn(
+                    _database, target.Stores, target.ContextId, key, FilesDeclaring(target.Stores, key), macroSpansLanguages)
+                : DatabaseQueries.FindAllReferences(
+                    _database, target.Stores, target.ContextId, key, macroSpansLanguages, onlyPath);
 
         return DatabaseQueries.ScopeToIncludeGraph(all, declaring);
     }
@@ -482,27 +594,41 @@ public sealed class NavigationSupport
             return true;
         }
 
-        return DatabaseQueries.LookupFunctions(
+        // Only a script function the call can reach hides the engine's: on an include dialect, one
+        // in a file this one does not include is not in play.
+        return DatabaseQueries.FunctionsTheCallReaches(
             target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true).Length == 0;
+    }
+
+    /// <summary>Every file in these stores declaring a function key.</summary>
+    private static ImmutableArray<string> FilesDeclaring(ImmutableArray<LanguageStore> stores, SymbolKey key)
+    {
+        ImmutableArray<string>.Builder paths = ImmutableArray.CreateBuilder<string>();
+        foreach ( LanguageStore store in stores )
+        {
+            // A merge dialect keys a function with no namespace, so its declarations are found by
+            // name alone: more files than declare this one, never fewer.
+            paths.AddRange(key.Namespace is null
+                ? store.FilesDeclaring(key.Name)
+                : store.FilesDeclaring(key.Namespace, key.Name));
+        }
+
+        return paths.ToImmutable();
     }
 
     /// <summary>
     /// The file whose declaration this key means FROM THIS DOCUMENT, or empty when that is not one
-    /// specific file.
+    /// specific file — for the keys <see cref="DatabaseQueries.IncludeScopedCallTargets"/> leaves to
+    /// the caller. A bare function key on an include dialect never gets here: the engine's own rule
+    /// answers it first, in <see cref="FindAllReferences(SymbolQueryContext, SymbolKey, ReferenceKind, bool, string, bool, string)"/>.
     ///
-    /// Under a merge dialect a function has no namespace, so the key alone names every same-named
-    /// function in the workspace; what disambiguates it is the asking file, which can only reach
-    /// declarations it owns, imports or path-calls. Resolving from the asking document therefore
-    /// answers both callers correctly with one rule: a CodeLens sits on a declaration and resolves
-    /// to the file it is already in, while find-references on a call resolves to the declaration
-    /// that call actually reaches.
-    ///
-    /// A namespace-driven dialect needs the same rule for a smaller reason: the namespace is in the
-    /// key, but it does not pin a FILE. Both <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and
-    /// <c>scripts\zm\gametypes\_globallogic_utils.gsc</c> declare <c>#namespace globallogic_utils</c>,
-    /// so without this a reference count on either merged both game modes' callers. The reachability
-    /// question is identical — a <c>#using</c> edge is a dependency edge like an <c>#include</c> — so
-    /// the same walk answers it.
+    /// On a namespace dialect the namespace is in the key, but it does not pin a FILE. Both
+    /// <c>scripts\mp\gametypes\_globallogic_utils.gsc</c> and <c>scripts\zm\gametypes\_globallogic_utils.gsc</c>
+    /// declare <c>#namespace globallogic_utils</c>, so without this a reference count on either merged
+    /// both game modes' callers. What disambiguates it is the asking file, which can only reach
+    /// declarations it owns, <c>#using</c>s or path-calls. Resolving from the asking document answers
+    /// both callers with one rule: a CodeLens sits on a declaration and resolves to the file it is
+    /// already in, while find-references on a call resolves to the declaration that call reaches.
     ///
     /// Empty on ambiguity — several reachable declarations, or none — because a wide answer is
     /// recoverable and a confidently wrong narrow one is not.
@@ -529,33 +655,57 @@ public sealed class NavigationSupport
         // Matched on the KEY, namespace included, not on the name: on BO3 a file routinely declares
         // a name that some other namespace also declares, and claiming those would hand every such
         // lens its own file's declaration instead of the one it names.
-        foreach ( FunctionSymbol declared in asking.Functions )
+        if ( DatabaseQueries.DeclaresKey(GameProfile.Active, asking, key) )
         {
-            if ( string.Equals(declared.KeyName, key.Name, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(
-                    GameProfile.Active.KeyNamespace(declared.Namespace), key.Namespace, StringComparison.Ordinal) )
-            {
-                return asking.RelativePath;
-            }
+            return asking.RelativePath;
         }
 
+        // The files this one REACHES, each asked what it declares — not every declaration of the name
+        // in the workspace, filtered down to the reachable ones. A file reaches a few dozen others;
+        // a name can be declared by thousands (every `main` on a merge dialect, every copy of a
+        // script at scale), and this runs once per lens on every CodeLens request. The filters are
+        // LookupFunctions' own — visibility, overlay shadowing, the name and the namespace — applied
+        // to each reachable file instead of each declaring one, so the candidates are the same.
         string only = "";
-        foreach ( ResolvedFunction candidate in DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path, key.Namespace, key.Name, includePrivate: true) )
+        foreach ( string relative in DatabaseQueries.ReachableRelativePaths(asking) )
         {
-            if ( !DatabaseQueries.Reaches(asking, candidate.Record.RelativePath) )
+            foreach ( string path in target.Store.FilesAt(relative) )
             {
-                continue;
-            }
+                if ( !target.Store.TryGet(path, out ScriptRecord candidate)
+                    || !DatabaseQueries.IsLoadedFor(target.Store, target.ContextId, candidate)
+                    || !DeclaresFunction(candidate, key) )
+                {
+                    continue;
+                }
 
-            if ( only.Length > 0 && only != candidate.Record.RelativePath )
-            {
-                return "";
-            }
+                if ( only.Length > 0 && only != candidate.RelativePath )
+                {
+                    return "";
+                }
 
-            only = candidate.Record.RelativePath;
+                only = candidate.RelativePath;
+            }
         }
 
         return only;
+    }
+
+    /// <summary>
+    /// LookupFunctions' match on one record: the key name, and the namespace when the key has one.
+    /// Not <see cref="DatabaseQueries.DeclaresKey(GameProfile, ScriptRecord, SymbolKey)"/>: a key with
+    /// no namespace means ANY namespace here, as it does to LookupFunctions, and on BO3 the two
+    /// disagree for every such key (an untyped arrow call's <c>::play</c>, say).
+    /// </summary>
+    private static bool DeclaresFunction(ScriptRecord record, SymbolKey key)
+    {
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            if ( function.KeyName == key.Name && (key.Namespace is null || function.Namespace == key.Namespace) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

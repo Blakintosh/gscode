@@ -57,12 +57,12 @@ public sealed record ResolvedClass(ClassSymbol Class, ScriptRecord Record)
 }
 
 /// <summary>
-/// The files an <c>#include</c> chain reaches, and whether the walk saw all of them.
-/// <see cref="Complete"/> is false when a hop did not resolve or was not indexed — the difference
-/// between "these are the files" and "these are the files we could see", which is the difference
-/// between a rule that may assert a name is out of scope and one that must stay quiet.
+/// The files a script <c>#include</c>s, and whether all of them resolved. <see cref="Complete"/> is
+/// false when one did not resolve or was not indexed — the difference between "these are the files"
+/// and "these are the files we could see", which is the difference between a rule that may assert a
+/// name is out of scope and one that must stay quiet.
 /// </summary>
-public readonly record struct IncludeClosure(ImmutableArray<ScriptRecord> Records, bool Complete);
+public readonly record struct IncludedFiles(ImmutableArray<ScriptRecord> Records, bool Complete);
 
 /// <summary>
 /// Shared query logic over one LanguageStore. Namespace lookup MERGES across every
@@ -110,9 +110,10 @@ public static class DatabaseQueries
         //
         // With a namespace, the files declaring the name INTO it — the subset the namespace filter
         // below would keep anyway. See DeclarationIndex for what the bare-name list costs at scale.
-        ImmutableArray<string> declaringPaths = namespaceName is null
-            ? store.FilesDeclaring(keyName)
-            : store.FilesDeclaring(namespaceName, keyName);
+        ImmutableArray<string> declaringPaths = VisibleDeclaring(
+            store,
+            askingContextId,
+            namespaceName is null ? store.FilesDeclaring(keyName) : store.FilesDeclaring(namespaceName, keyName));
 
         foreach ( string declaringPath in declaringPaths )
         {
@@ -121,18 +122,9 @@ public static class DatabaseQueries
                 continue;
             }
 
-            if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
             // Overlay shadowing, decided per RECORD rather than in a second pass over the finished
-            // list, so the walk can stop early. It is ApplyShadowing's rule with a store: a raw
-            // record is dropped when an overlay visible to the asker sits at its relative path. The
-            // rule's other half - an overlay among the matches declaring the same name - adds
-            // nothing, since such an overlay is visible, non-raw and at that path, which is exactly
-            // what HasOverlayAt counts.
-            if ( record.ContextId == "raw" && store.HasOverlayAt(record.RelativePath, askingContextId) )
+            // list, so the walk can stop early.
+            if ( !IsLoadedFor(store, askingContextId, record) )
             {
                 continue;
             }
@@ -164,6 +156,237 @@ public static class DatabaseQueries
         }
 
         return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The functions a BARE call to <paramref name="keyName"/> reaches from the asking file on an
+    /// include dialect: the asking file's own declarations if it has any, else those the files it
+    /// <c>#include</c>s declare THEMSELVES. One level: the engine merges an included file's own
+    /// functions into the including one, not those it got from its own includes. Not the files it
+    /// path-calls: a path
+    /// call reaches its one function and merges nothing. Empty when none of them declares it.
+    ///
+    /// Under <c>#include</c> every same-named function shares one key, so the wide lookup answers with
+    /// every declaration of the name in the workspace, in index order, and is slow at scale. The files
+    /// a script names are a handful. The filters are LookupFunctions' own: visibility, overlay
+    /// shadowing, privacy.
+    /// </summary>
+    private static ImmutableArray<ResolvedFunction> ReachableFunctions(
+        LanguageStore store, string askingContextId, string askingPath, string keyName)
+    {
+        string normalizedAskingPath = NormalizeAskingPath(askingPath);
+        if ( normalizedAskingPath.Length == 0 || !store.TryGet(normalizedAskingPath, out ScriptRecord asking) )
+        {
+            return [];
+        }
+
+        // A name no script declares — every builtin call — would otherwise walk the whole include
+        // chain to find nothing, once per call site the parameter hints ask about.
+        if ( store.FilesDeclaring(keyName).Length == 0 )
+        {
+            return [];
+        }
+
+        ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
+        foreach ( FunctionSymbol function in asking.Functions )
+        {
+            if ( function.KeyName == keyName )
+            {
+                matches.Add(new ResolvedFunction(function, asking));
+            }
+        }
+
+        // A file's own declaration wins outright: a bare main() inside a script means its own main,
+        // whatever the scripts it includes declare.
+        if ( matches.Count > 0 )
+        {
+            return matches.ToImmutable();
+        }
+
+        HashSet<string> visitedFiles = new(StringComparer.Ordinal) { asking.Path };
+        foreach ( string included in IncludedRelativePaths(asking) )
+        {
+            AddDeclaredAt(store, askingContextId, normalizedAskingPath, included, keyName, visitedFiles, matches);
+        }
+
+        return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The functions named <paramref name="keyName"/> that a PATH CALL — <c>maps\_utility::foo()</c> —
+    /// reaches on an include dialect: those the named file declares itself, and nothing it includes.
+    /// The path names the file outright, so the asking file's own declaration of the name does not
+    /// come into it: <c>combat.gsc</c> declares <c>main</c> and path-calls <c>cover_prone::main</c>,
+    /// which means cover_prone's. And the engine does not look through the named file's includes,
+    /// so a far call into it finds that file's own functions alone. The stock calls
+    /// that relied on more — <c>maps\_utility::trigger_off</c> in maps\_documents.gsc,
+    /// <c>maps\_utility::array_thread</c> in maps\_wood.gsc — are in scripts nothing loads.
+    ///
+    /// Public for the other thing that names a file outright: a completion row offering to add the
+    /// <c>#include</c> or <c>#using</c> that would bring the function in.
+    /// </summary>
+    public static ImmutableArray<ResolvedFunction> FunctionsDeclaredAt(
+        LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
+    {
+        ImmutableArray<ResolvedFunction>.Builder matches = ImmutableArray.CreateBuilder<ResolvedFunction>();
+        AddDeclaredAt(
+            store, askingContextId, NormalizeAskingPath(askingPath), RelativePathIndex.Normalize(writtenPath), keyName,
+            new HashSet<string>(StringComparer.Ordinal), matches);
+        return matches.ToImmutable();
+    }
+
+    /// <summary>
+    /// The declarations a function call reaches, the one it means first: what hover, signature help
+    /// and the parameter hints describe, and what go-to-definition lands on.
+    ///
+    /// On an include dialect a function is keyed by FILE: those the file a path call names declares
+    /// (<see cref="FunctionsDeclaredAt"/>), else the asking file's own, else those its direct includes
+    /// declare (<see cref="ReachableFunctions"/>), and nothing else: the engine finds a function only
+    /// through the paths a script provides, never by looking the name up across the install. Empty
+    /// when nothing the file reaches declares the name.
+    ///
+    /// On a namespace dialect, <see cref="LookupFunctions"/>' answer narrowed to the copies the asking
+    /// file reaches when it reaches any. A namespace does not pin a file: an mp and a zm copy both
+    /// declare <c>#namespace util</c>, and an mp script that <c>#using</c>s the mp copy means that one.
+    /// </summary>
+    /// <param name="includePrivate">
+    /// For a caller asking only whether a script function hides an engine one of the same name.
+    /// </param>
+    public static ImmutableArray<ResolvedFunction> FunctionsTheCallReaches(
+        LanguageStore store, string askingContextId, string askingPath, string? keyNamespace, string keyName,
+        string pathCallTarget = "", ImmutableArray<string> askingNamespaces = default, bool includePrivate = false)
+    {
+        if ( ScopedByInclude(keyNamespace) )
+        {
+            return pathCallTarget.Length > 0
+                ? FunctionsDeclaredAt(store, askingContextId, askingPath, pathCallTarget, keyName)
+                : ReachableFunctions(store, askingContextId, askingPath, keyName);
+        }
+
+        ImmutableArray<ResolvedFunction> found = LookupFunctions(
+            store, askingContextId, askingPath, keyNamespace, keyName, includePrivate, askingNamespaces);
+        return ReachedWhereAny(store, askingPath, found);
+    }
+
+    /// <summary>
+    /// What a function call reaches on an include dialect — see <see cref="FunctionsTheCallReaches"/>
+    /// — for a caller asking about a KEY rather than a call: go-to-definition narrowing its sites,
+    /// find-references choosing whose references to gather. Null where the key is not scoped by
+    /// includes (a namespace dialect, a method, a qualified key), for the caller to narrow its own way;
+    /// empty when the call reaches nothing.
+    /// </summary>
+    public static ImmutableArray<ResolvedFunction>? IncludeScopedCallTargets(
+        LanguageStore store, string askingContextId, string askingPath, SymbolKey key, string pathCallTarget)
+    {
+        if ( key.Kind != SymbolKind.Function || key.OwnerClass is not null || !ScopedByInclude(key.Namespace) )
+        {
+            return null;
+        }
+
+        return FunctionsTheCallReaches(store, askingContextId, askingPath, null, key.Name, pathCallTarget);
+    }
+
+    /// <summary>Whether a function key resolves through the file's includes and path calls rather than a namespace.</summary>
+    private static bool ScopedByInclude(string? keyNamespace)
+    {
+        return keyNamespace is null && !GameProfile.Active.ResolvesByNamespace;
+    }
+
+    /// <summary>
+    /// The declarations in <paramref name="found"/> whose files the asker reaches — itself, an import,
+    /// a path call — when there are any, else all of them. A namespace does not pin a file, and the
+    /// copies the file does not <c>#using</c> are not what it calls; go-to-definition narrows its sites
+    /// the same way (<see cref="PreferIncludeScope"/>). With none reached, every copy stays, so a
+    /// missing import still leads somewhere.
+    /// </summary>
+    private static ImmutableArray<ResolvedFunction> ReachedWhereAny(
+        LanguageStore store, string askingPath, ImmutableArray<ResolvedFunction> found)
+    {
+        if ( found.Length < 2 || !store.TryGet(NormalizeAskingPath(askingPath), out ScriptRecord asking) )
+        {
+            return found;
+        }
+
+        ImmutableArray<ResolvedFunction>.Builder reached = ImmutableArray.CreateBuilder<ResolvedFunction>();
+        foreach ( ResolvedFunction function in found )
+        {
+            if ( Reaches(asking, function.Record.RelativePath) )
+            {
+                reached.Add(function);
+            }
+        }
+
+        return reached.Count > 0 ? reached.ToImmutable() : found;
+    }
+
+    /// <summary>
+    /// The files a record <c>#include</c>s (or <c>#using</c>s), normalized: what merges another file's
+    /// functions into its scope. Not its path calls — <c>maps\_utility::foo()</c> reaches that one
+    /// function, and puts nothing of maps\_utility in scope for a bare name.
+    /// </summary>
+    private static List<string> IncludedRelativePaths(ScriptRecord record)
+    {
+        List<string> included = [];
+        foreach ( DependencyEdge edge in record.Dependencies )
+        {
+            if ( !edge.IsInsert )
+            {
+                included.Add(RelativePathIndex.Normalize(edge.RawPath));
+            }
+        }
+
+        return included;
+    }
+
+    /// <summary>
+    /// The visible, unshadowed declarations of <paramref name="keyName"/> in the records at one
+    /// normalized relative path — LookupFunctions' filters, applied to one file instead of every file
+    /// declaring the name.
+    /// </summary>
+    private static void AddDeclaredAt(
+        LanguageStore store, string askingContextId, string normalizedAskingPath, string relative, string keyName,
+        HashSet<string> visited, ImmutableArray<ResolvedFunction>.Builder matches)
+    {
+        foreach ( string path in store.FilesAt(relative) )
+        {
+            if ( !visited.Add(path) || !store.TryGet(path, out ScriptRecord record)
+                || !IsLoadedFor(store, askingContextId, record) )
+            {
+                continue;
+            }
+
+            foreach ( FunctionSymbol function in record.Functions )
+            {
+                if ( function.KeyName != keyName )
+                {
+                    continue;
+                }
+
+                if ( function.IsPrivate && !CanSeePrivate(function, record, normalizedAskingPath, default) )
+                {
+                    continue;
+                }
+
+                matches.Add(new ResolvedFunction(function, record));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the asker sees <paramref name="record"/> and the engine loads it: visible to the asking
+    /// context, and not a raw file that an overlay visible to that context replaces.
+    /// <see cref="ApplyShadowing"/>'s rule decided per record with a store. Its other half, an overlay
+    /// among the matches declaring the same name, adds nothing here, since that overlay sits at the
+    /// same path and <see cref="LanguageStore.HasOverlayAt"/> already counts it.
+    /// </summary>
+    public static bool IsLoadedFor(LanguageStore store, string askingContextId, ScriptRecord record)
+    {
+        if ( !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+        {
+            return false;
+        }
+
+        return record.ContextId != "raw" || !store.HasOverlayAt(record.RelativePath, askingContextId);
     }
 
     /// <summary>
@@ -626,36 +849,22 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// Every file an <c>#include</c> chain reaches from the asking file, transitively, with whether
-    /// the walk was COMPLETE — false when a hop did not resolve or was not indexed, so the set is
-    /// known to be short.
+    /// The files the asking file <c>#include</c>s, with whether all of them resolved and are indexed —
+    /// false when one is not, so the set is known to be short.
     ///
-    /// Transitivity is a fact about the dialect, not a policy of whichever rule asks: the compiler
-    /// flattens the chain, which the corpus settles. <c>maps\_createpath.gsc</c> includes
-    /// <c>maps\_utility</c> and nothing else, calls <c>flag_init</c>, and <c>flag_init</c> lives in
-    /// <c>common_scripts\utility</c> — which <c>maps\_utility</c> includes on its first line. The file
-    /// ships and works.
+    /// One level, never more: the engine merges an included file's OWN functions into the including
+    /// one, not those it got from its own includes. The stock scripts agree in every file the game loads;
+    /// the five that call through a second level (maps\_createpath, _guide, _leapfrog, _mortarteam,
+    /// _photosource) are named by no other script and never compiled.
     ///
-    /// It lives here rather than inside the one lint that needed it first, so the codebase has a
-    /// single place that answers the transitivity question. The direct-only helpers below
-    /// (<see cref="IncludedScriptPaths"/> and its consumers) are deliberately left as they are: for
-    /// completion and definition, offering or preferring too LITTLE is harmless, and widening them is
-    /// a behaviour change that deserves its own measurement rather than riding along with this one.
-    ///
-    /// The direct includes come from the parse in hand so a directive typed a moment ago counts;
-    /// every hop after that is read from the store's dependency edges. Each hop resolves against ITS
-    /// OWN file's context — a mod's copy of a script includes what the mod can see, and probing those
-    /// paths from the raw root would reach a different file or none at all — and resolutions are
-    /// memoized, since a diamond in the graph (everything reaches <c>common_scripts\utility</c>)
-    /// otherwise costs one filesystem probe per parent rather than per file.
+    /// The includes come from the parse in hand, so a directive typed a moment ago counts.
     /// </summary>
     /// <param name="directIncludes">
     /// The file's own <c>#include</c> targets when the caller has already resolved them, which the
     /// lint pass has: resolving the same list twice in one pass is a filesystem probe per root for
-    /// no new information. Default (uninitialized) means resolve them here, which keeps this usable
-    /// on its own.
+    /// no new information. Default (uninitialized) means resolve them here.
     /// </param>
-    public static IncludeClosure IncludeClosure(
+    public static IncludedFiles IncludedFiles(
         LanguageStore store,
         PathResolver resolver,
         ParseResult result,
@@ -663,72 +872,36 @@ public static class DatabaseQueries
         string extension,
         ImmutableArray<ScriptRecord> directIncludes = default)
     {
+        if ( !directIncludes.IsDefault )
+        {
+            return new IncludedFiles(directIncludes, Complete: true);
+        }
+
         Dictionary<(ResolutionContext Context, string Path), string?> resolved = [];
-        Queue<string> pending = new();
+        ResolutionContext askingContext = resolver.GetContext(askingPath);
+        ImmutableArray<ScriptRecord>.Builder included = ImmutableArray.CreateBuilder<ScriptRecord>();
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-        if ( directIncludes.IsDefault )
+        foreach ( AstNode element in result.Tree.Root.Elements )
         {
-            ResolutionContext askingContext = resolver.GetContext(askingPath);
-
-            foreach ( AstNode element in result.Tree.Root.Elements )
-            {
-                if ( element is not IncludeNode includeNode )
-                {
-                    continue;
-                }
-
-                if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit )
-                {
-                    return new IncludeClosure([], Complete: false);
-                }
-
-                pending.Enqueue(hit);
-            }
-        }
-        else
-        {
-            foreach ( ScriptRecord record in directIncludes )
-            {
-                pending.Enqueue(record.Path);
-            }
-        }
-
-        ImmutableArray<ScriptRecord>.Builder reached = ImmutableArray.CreateBuilder<ScriptRecord>();
-        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
-
-        while ( pending.Count > 0 )
-        {
-            string includedPath = pending.Dequeue();
-            if ( !visited.Add(includedPath) )
+            if ( element is not IncludeNode includeNode )
             {
                 continue;
             }
 
-            if ( !store.TryGet(includedPath, out ScriptRecord record) )
+            if ( Probe(resolver, resolved, askingContext, includeNode.Path, extension) is not string hit
+                || !store.TryGet(hit, out ScriptRecord record) )
             {
-                return new IncludeClosure([], Complete: false);
+                return new IncludedFiles([], Complete: false);
             }
 
-            reached.Add(record);
-            ResolutionContext hop = resolver.GetContext(record.Path);
-
-            foreach ( DependencyEdge edge in record.Dependencies )
+            if ( seen.Add(record.Path) )
             {
-                if ( edge.IsInsert )
-                {
-                    continue;
-                }
-
-                if ( Probe(resolver, resolved, hop, edge.RawPath, extension) is not string hit )
-                {
-                    return new IncludeClosure([], Complete: false);
-                }
-
-                pending.Enqueue(hit);
+                included.Add(record);
             }
         }
 
-        return new IncludeClosure(reached.ToImmutable(), Complete: true);
+        return new IncludedFiles(included.ToImmutable(), Complete: true);
     }
 
     private static string? Probe(
@@ -825,13 +998,20 @@ public static class DatabaseQueries
     /// other file's reference list — the part that costs, and the part a same-file question never
     /// wanted. See <see cref="FindAllReferences"/>'s parameter of the same name.
     /// </param>
+    /// <param name="onlyPaths">
+    /// When given, only these files are considered, each tested for reaching the declaring file
+    /// rather than the reaching files walked. For a question only a few files can answer — where a
+    /// key is DECLARED, which only the files declaring it can say — against a key every file in the
+    /// workspace reaches and mentions.
+    /// </param>
     public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindReferencesReaching(
         ImmutableArray<LanguageStore> stores,
         string askingContextId,
         SymbolKey key,
         string declaringRelativePath,
         GameProfile? profile = null,
-        string onlyPath = "")
+        string onlyPath = "",
+        ImmutableArray<string> onlyPaths = default)
     {
         GameProfile game = profile ?? GameProfile.Active;
         string declaring = RelativePathIndex.Normalize(declaringRelativePath);
@@ -841,19 +1021,53 @@ public static class DatabaseQueries
 
         foreach ( LanguageStore store in stores )
         {
-            HashSet<string> reaching = new(StringComparer.Ordinal);
-            reaching.UnionWith(store.FilesAt(declaring));
-            reaching.UnionWith(store.FilesNaming(declaring));
+            ImmutableArray<string> atDeclaring = store.FilesAt(declaring);
+            ImmutableArray<string> naming = store.FilesNaming(declaring);
 
             // A file must both reach the declaring file AND mention the key, so walk whichever of
             // the two lists is shorter and test membership in the other. A merge dialect's `main`
             // is mentioned everywhere and reached from few files; a namespace dialect's shared
             // utility is reached (#using'd) from nearly every file and one of its functions is
             // mentioned by far fewer.
+            //
+            // The reaching side is never copied into a set per call: walked, it is read straight
+            // from the index's arrays; tested against, it is the set cached for the naming array
+            // the index handed out, which stays the same array until a file's imports change.
+            // Building it per call was a set of every dependent — 50,000 files importing a stock
+            // utility at scale — per lens, per CodeLens request.
             ImmutableArray<string> mentioning = store.FilesReferencing(key);
-            IEnumerable<string> walk = mentioning.Length < reaching.Count
-                ? mentioning.Where(reaching.Contains)
-                : reaching;
+            bool walkMentioning = mentioning.Length < atDeclaring.Length + naming.Length;
+            IEnumerable<string> walk;
+            List<string>? visible = null;
+            if ( onlyPath.Length > 0 )
+            {
+                // One file: whether it reaches the declaring file is a membership test, not a walk
+                // of every file that does. Document highlight asks this on every cursor move.
+                walk = atDeclaring.Contains(onlyPath) || NamingSet(naming).Contains(onlyPath) ? [onlyPath] : [];
+            }
+            else if ( !onlyPaths.IsDefault )
+            {
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = onlyPaths.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else if ( (visible = store.VisiblePathsIfFewer(
+                askingContextId, Math.Min(mentioning.Length, atDeclaring.Length + naming.Length))) is not null )
+            {
+                // The asker sees fewer files than either list holds — the raw scripts, asking about a
+                // stock function every workspace copy calls — so walking either would mostly test
+                // and reject files it cannot see. The shorter list is still the rule; this is it.
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = visible.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else if ( walkMentioning )
+            {
+                HashSet<string> namingSet = NamingSet(naming);
+                walk = mentioning.Where(path => atDeclaring.Contains(path) || namingSet.Contains(path));
+            }
+            else
+            {
+                walk = atDeclaring.Concat(naming);
+            }
 
             HashSet<string> visited = new(StringComparer.Ordinal);
             foreach ( string path in walk )
@@ -878,9 +1092,12 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                foreach ( ReferenceEntry entry in record.References )
+                // This key's entries only: a heavy script carries ~1,550 references, and reading
+                // them all per mentioning file to keep a handful was most of what find-references
+                // and CodeLens cost at scale.
+                foreach ( ReferenceEntry entry in record.References.EntriesFor(key) )
                 {
-                    if ( entry.Key == key && MeansDeclaringFile(game, record, entry, declaring) )
+                    if ( MeansDeclaringFile(game, record, entry, declaring) )
                     {
                         kept.Add((record, entry));
                     }
@@ -889,6 +1106,75 @@ public static class DatabaseQueries
         }
 
         return kept.ToImmutable();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string[], HashSet<string>> s_namingSets = new();
+
+    /// <summary>Names declared by fewer files than this are walked as they are; filtering them first saves nothing.</summary>
+    private const int VisibleDeclaringThreshold = 64;
+
+    /// <summary>One asking context's share of a declaring list, and the context epoch it was taken at.</summary>
+    private sealed record VisibleShare(long Epoch, ImmutableArray<string> Paths);
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<string[], System.Collections.Concurrent.ConcurrentDictionary<string, VisibleShare>>
+        s_visibleDeclaring = new();
+
+    /// <summary>
+    /// The files in <paramref name="declaring"/> that <paramref name="askingContextId"/> can see, taken
+    /// once per array the declaration index hands out — the same array until a file declaring the
+    /// name is added, removed or re-indexed — and per context epoch, which moves when a file changes
+    /// context without changing what it declares. Without it, an asker that sees few of a name's
+    /// declarations paid a record lookup for each of the rest on every question.
+    /// </summary>
+    private static ImmutableArray<string> VisibleDeclaring(LanguageStore store, string askingContextId, ImmutableArray<string> declaring)
+    {
+        if ( declaring.Length < VisibleDeclaringThreshold )
+        {
+            return declaring;
+        }
+
+        string[]? array = System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(declaring);
+        if ( array is null )
+        {
+            return declaring;
+        }
+
+        System.Collections.Concurrent.ConcurrentDictionary<string, VisibleShare> byContext =
+            s_visibleDeclaring.GetValue(array, static _ => new(StringComparer.Ordinal));
+        long epoch = store.ContextEpoch;
+        if ( byContext.TryGetValue(askingContextId, out VisibleShare? cached) && cached.Epoch == epoch )
+        {
+            return cached.Paths;
+        }
+
+        ImmutableArray<string>.Builder visible = ImmutableArray.CreateBuilder<string>();
+        foreach ( string path in array )
+        {
+            if ( store.TryGet(path, out ScriptRecord record) && ScriptDatabase.CanSee(askingContextId, record.ContextId) )
+            {
+                visible.Add(path);
+            }
+        }
+
+        ImmutableArray<string> paths = visible.ToImmutable();
+        byContext[askingContextId] = new VisibleShare(epoch, paths);
+        return paths;
+    }
+
+    /// <summary>
+    /// The files naming a path, as a set to test against, built once per array the dependents index
+    /// hands out. The index returns the same array until a file naming that path is added, removed or
+    /// re-indexed, so the set lives exactly as long as the answer it was built from.
+    /// </summary>
+    private static HashSet<string> NamingSet(ImmutableArray<string> naming)
+    {
+        string[]? array = System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsArray(naming);
+        if ( array is null || array.Length == 0 )
+        {
+            return [];
+        }
+
+        return s_namingSets.GetValue(array, static paths => new HashSet<string>(paths, StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -916,12 +1202,9 @@ public static class DatabaseQueries
                     continue;
                 }
 
-                foreach ( ReferenceEntry entry in overlay.References )
+                if ( overlay.References.Contains(key) )
                 {
-                    if ( entry.Key == key )
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -945,32 +1228,34 @@ public static class DatabaseQueries
     private static bool MeansDeclaringFile(
         GameProfile game, ScriptRecord record, ReferenceEntry entry, string declaring)
     {
-        foreach ( PathCallReference pathCall in record.PathCallTargets )
+        string pathCallTarget = PathCallReference.At(record.PathCallTargets, entry.Range);
+        if ( pathCallTarget.Length > 0 )
         {
-            if ( pathCall.NameRange == entry.Range )
-            {
-                return RelativePathIndex.Normalize(pathCall.Path) == declaring;
-            }
+            return RelativePathIndex.Normalize(pathCallTarget) == declaring;
         }
 
         // A bare name in a file that declares it means THAT file's function, wherever else the name
         // also lives. This is the rule that keeps cover_prone's own main() out of combat's list.
-        bool declaresItself = false;
-        foreach ( FunctionSymbol function in record.Functions )
-        {
-            if ( DeclaresKey(game, function, entry.Key) )
-            {
-                declaresItself = true;
-                break;
-            }
-        }
-
-        if ( declaresItself )
+        if ( DeclaresKey(game, record, entry.Key) )
         {
             return RelativePathIndex.Normalize(record.RelativePath) == declaring;
         }
 
         return CanReach(record, declaring);
+    }
+
+    /// <summary>Whether any top-level function <paramref name="record"/> declares IS the symbol <paramref name="key"/> names — see the overload below.</summary>
+    public static bool DeclaresKey(GameProfile game, ScriptRecord record, SymbolKey key)
+    {
+        foreach ( FunctionSymbol function in record.Functions )
+        {
+            if ( DeclaresKey(game, function, key) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1004,6 +1289,29 @@ public static class DatabaseQueries
         return CanReach(record, RelativePathIndex.Normalize(declaringRelativePath));
     }
 
+    /// <summary>
+    /// Every relative path a file reaches, normalized: itself, what it imports, what it path-calls —
+    /// the set <see cref="Reaches"/> tests one path against. For a caller with many candidates to
+    /// test, which can instead walk these few paths and ask what each declares, rather than fetch
+    /// every declaration of a name in the workspace and keep the reachable ones.
+    /// </summary>
+    public static HashSet<string> ReachableRelativePaths(ScriptRecord record)
+    {
+        HashSet<string> reachable = new(StringComparer.Ordinal) { RelativePathIndex.Normalize(record.RelativePath) };
+        reachable.UnionWith(IncludedRelativePaths(record));
+
+        foreach ( PathCallReference pathCall in record.PathCallTargets )
+        {
+            reachable.Add(RelativePathIndex.Normalize(pathCall.Path));
+        }
+
+        return reachable;
+    }
+
+    /// <summary>
+    /// <see cref="ReachableRelativePaths"/>' set, tested against one path without building it: this
+    /// runs once per candidate declaration, so it stops at the first match and allocates nothing.
+    /// </summary>
     private static bool CanReach(ScriptRecord record, string declaring)
     {
         if ( RelativePathIndex.Normalize(record.RelativePath) == declaring )
@@ -1075,77 +1383,17 @@ public static class DatabaseQueries
     }
 
     /// <summary>
-    /// The ONE function an <c>#include</c> scope gives a bare name, or null when it gives none.
-    ///
-    /// <see cref="FunctionsInIncludeScope"/>'s answer for a single name, without building the
-    /// answer for every other name first. Signature help asks this on a merge dialect for every
-    /// keystroke inside an argument list — <c>,</c> is both a trigger and a retrigger character —
-    /// and building the full list to read one entry costs every function of the asking file and each
-    /// file it includes, shadowed and put in a dictionary: 465 of them on a CoD4 file that includes
-    /// <c>maps\_utility</c> alone.
-    ///
-    /// It must agree with the full list exactly, and does so by making the same decision per record
-    /// rather than over the set. Shadowing can be decided that way HERE, though not in
-    /// <see cref="ApplyShadowing"/>'s general case, because this scope has already dropped every
-    /// record the asker cannot see: what is left of the set rule — a non-raw record at the same
-    /// relative path — is then exactly what <see cref="LanguageStore.HasOverlayAt"/> answers on its
-    /// own. <c>IncludeScopeLookupTests</c> holds the full list as the reference implementation and
-    /// requires the two to agree across overlays, sibling mods and the same name declared twice.
-    /// </summary>
-    public static FunctionSymbol? FunctionInIncludeScope(
-        LanguageStore store,
-        string askingContextId,
-        string askingPath,
-        ImmutableArray<string> includedPaths,
-        string keyName)
-    {
-        string normalizedAskingPath = NormalizeAskingPath(askingPath);
-        List<ScriptRecord> inScope = ScopeRecords(store, normalizedAskingPath, includedPaths);
-
-        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
-        foreach ( ScriptRecord record in inScope )
-        {
-            if ( !visited.Add(record.Path) || !ScriptDatabase.CanSee(askingContextId, record.ContextId) )
-            {
-                continue;
-            }
-
-            // The engine never loads a raw file an overlay replaces, so its declarations are not in
-            // scope however early they are reached. This is the per-record half of ApplyShadowing.
-            if ( record.ContextId == "raw"
-                && record.RelativePath.Length > 0
-                && store.HasOverlayAt(record.RelativePath, askingContextId) )
-            {
-                continue;
-            }
-
-            foreach ( FunctionSymbol function in record.Functions )
-            {
-                // FIRST wins, which is what the full list's dictionary does with TryAdd over the
-                // same records in the same order.
-                if ( string.Equals(function.KeyName, keyName, StringComparison.Ordinal) )
-                {
-                    return function;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Every function reachable UNQUALIFIED under an <c>#include</c> dialect (for completion): this
     /// file's own, plus those in files it <c>#include</c>s DIRECTLY, all callable by bare name.
     /// Deduplicated by name, mirroring <see cref="AllVisibleClasses"/>, since there is no namespace
     /// to qualify with in the first place.
     ///
-    /// Direct hops only, and deliberately narrower than the truth: the compiler flattens the chain
-    /// (see <see cref="IncludeClosure"/>), so a name reached through an included file's own includes
-    /// is legal here and goes unoffered. Completion errs toward offering too little — a name it
-    /// misses is still typable — whereas widening it would offer, from a single <c>#include</c> of
-    /// <c>maps\_utility</c>, everything CoD4's utility chain transitively reaches. The rule that must
-    /// be exactly right about scope is the one that reports an Error, and that one asks
-    /// <see cref="IncludeClosure"/>.
+    /// Direct hops only, which is exactly what the compiler copies in — see
+    /// <see cref="IncludedFiles"/>.
+    ///
+    /// The same rule as <see cref="ReachableFunctions"/>, kept apart on purpose: that one answers ONE
+    /// name from the stored record, this every name from the include list completion already has.
+    /// <c>IncludeScopeLookupTests</c> requires the two to agree.
     /// </summary>
     public static ImmutableArray<FunctionSymbol> FunctionsInIncludeScope(
         LanguageStore store,
@@ -1544,6 +1792,35 @@ public static class DatabaseQueries
     }
 
     /// <summary>
+    /// <see cref="FindAllReferences"/>'s answer for only these files: each asked with its own
+    /// <c>onlyPath</c>, which that parameter's own comment shows is the full answer filtered to the
+    /// file. For a question only a few files can answer — where a key is DECLARED, which only the
+    /// files declaring it can say — about a key the whole workspace mentions.
+    /// </summary>
+    public static ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> FindAllReferencesIn(
+        ScriptDatabase database,
+        ImmutableArray<LanguageStore> stores,
+        string askingContextId,
+        SymbolKey key,
+        IEnumerable<string> paths,
+        bool macroSpansLanguages = true)
+    {
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)>.Builder results =
+            ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
+
+        HashSet<string> asked = new(StringComparer.Ordinal);
+        foreach ( string path in paths )
+        {
+            if ( asked.Add(path) )
+            {
+                results.AddRange(FindAllReferences(database, stores, askingContextId, key, macroSpansLanguages, path));
+            }
+        }
+
+        return results.ToImmutable();
+    }
+
+    /// <summary>
     /// Every call site of an ENGINE BUILTIN, which is not reachable under one key the way a script
     /// function is.
     ///
@@ -1615,7 +1892,7 @@ public static class DatabaseQueries
         }
 
         return LookupFunctions(
-            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true).Length > 0;
+            store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true, limit: 1).Length > 0;
     }
 
     /// <param name="onlyPath">See <see cref="FindAllReferences"/>'s parameter of the same name.</param>
@@ -1641,13 +1918,15 @@ public static class DatabaseQueries
         ImmutableArray<(ScriptRecord, ReferenceEntry)>.Builder results =
             ImmutableArray.CreateBuilder<(ScriptRecord, ReferenceEntry)>();
 
+        // One file: its own record answers whether it mentions the key, so the index's list of every
+        // file that does — tens of thousands for a stock function at scale — is never walked.
+        if ( onlyPath.Length > 0 )
+        {
+            paths = [onlyPath];
+        }
+
         foreach ( string path in paths )
         {
-            if ( onlyPath.Length > 0 && !string.Equals(path, onlyPath, StringComparison.Ordinal) )
-            {
-                continue;
-            }
-
             if ( !tryGet(path, out ScriptRecord record) )
             {
                 continue;
@@ -1658,12 +1937,9 @@ public static class DatabaseQueries
                 continue;
             }
 
-            foreach ( ReferenceEntry entry in record.References )
+            foreach ( ReferenceEntry entry in record.References.EntriesFor(key) )
             {
-                if ( entry.Key == key )
-                {
-                    results.Add((record, entry));
-                }
+                results.Add((record, entry));
             }
         }
 

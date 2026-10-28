@@ -58,7 +58,12 @@ public readonly record struct AssignmentSymbol(
 /// The FIELD name's range, not the target's — the binding is reported at the write, which is
 /// where a reader asking "what is in here" has their cursor.
 /// </param>
-public readonly record struct FieldBinding(SymbolKey Field, SymbolKey Target, TextRange Range);
+/// <param name="TargetRange">
+/// The bound NAME's range — <c>handler</c> in <c>maps\_util::handler</c>. On an include dialect it is
+/// how the written path is found again, among the writing file's path calls, so the target can be
+/// resolved where it was stored.
+/// </param>
+public readonly record struct FieldBinding(SymbolKey Field, SymbolKey Target, TextRange Range, TextRange TargetRange);
 
 /// <summary>One declared function (top-level or class method).</summary>
 public sealed record FunctionSymbol

@@ -49,6 +49,7 @@ public sealed class ServerSettings
         public bool FormatIndentDevBlocks { get; init; }
         public bool FormatFixCasing { get; init; } = true;
         public int FormatAlignMaxPadding { get; init; } = 20;
+        public int MemoryCompactionLimitMegabytes { get; init; } = 1024;
         public string Game { get; init; } = "bo3";
     }
 
@@ -294,6 +295,16 @@ public sealed class ServerSettings
         set { _current = _current with { FormatAlignMaxPadding = value }; }
     }
 
+    /// <summary>
+    /// The live heap, in MB, up to which the post-index compaction runs; above it a background
+    /// collection is asked for instead, and 0 never compacts. See <c>StartupIndexRunner.ShouldCompact</c>.
+    /// </summary>
+    public int MemoryCompactionLimitMegabytes
+    {
+        get { return _current.MemoryCompactionLimitMegabytes; }
+        set { _current = _current with { MemoryCompactionLimitMegabytes = value }; }
+    }
+
     /// <summary>The game whose dialect the workspace targets, by short name (e.g. "bo3", "cod4").</summary>
     public string Game
     {
@@ -412,6 +423,8 @@ public sealed class ServerSettings
             FormatIndentDevBlocks = Flag(section, "format", "indentDevBlocks") ?? current.FormatIndentDevBlocks,
             FormatFixCasing = Flag(section, "format", "fixCasing") ?? current.FormatFixCasing,
             FormatAlignMaxPadding = Math.Max(0, Number(section, "format", "alignMaxPadding") ?? current.FormatAlignMaxPadding),
+            MemoryCompactionLimitMegabytes =
+                Math.Max(0, Number(section, "memory", "compactionLimitMB") ?? current.MemoryCompactionLimitMegabytes),
         };
     }
 

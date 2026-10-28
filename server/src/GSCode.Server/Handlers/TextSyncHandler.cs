@@ -41,7 +41,8 @@ public sealed record GameMismatchParams(
     IReadOnlyList<SupportedGame> SupportedGames);
 
 /// <summary>
-/// Document lifecycle: incremental text sync, ~250 ms debounced re-analysis on typing,
+/// Document lifecycle: incremental text sync, re-analysis on typing debounced by
+/// <see cref="AnalysisTiming.DebounceFor"/> (125–250 ms),
 /// immediate analysis on open and save, diagnostic clearing on close.
 /// </summary>
 public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
@@ -54,6 +55,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     private readonly ServerSettings _settings;
     private readonly StockScripts _stockScripts;
     private readonly DocumentLinter _linter;
+
+    /// <summary>
+    /// How long each open document's last analysis took, which sets how long its next edit waits —
+    /// see <see cref="AnalysisTiming.DebounceFor"/>. Weak, so a closed document takes its entry with it.
+    /// </summary>
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<OpenDocument, System.Runtime.CompilerServices.StrongBox<double>> _lastAnalysis = new();
     private readonly ILanguageServerFacade _server;
     private readonly WorkspaceDiagnosticsPublisher _workspaceDiagnostics;
     private readonly DependentDiagnosticsRefresher _dependents;
@@ -197,7 +204,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
-        // Saves bypass the debounce: dependents and the cache (P5/P6) key off saved state.
+        // Saves bypass the debounce: dependents and the cache key off saved state.
         if ( _documents.TryGet(request.TextDocument.Uri.GetFileSystemPath(), out OpenDocument document) )
         {
             // Scheduled like every other analysis rather than run right here: inline it would be a
@@ -332,7 +339,10 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
     {
         try
         {
-            await Task.Delay(AnalysisTiming.DebounceMilliseconds, cancellationToken);
+            double last = _lastAnalysis.TryGetValue(document, out System.Runtime.CompilerServices.StrongBox<double>? measured)
+                ? measured.Value
+                : 0;
+            await Task.Delay(AnalysisTiming.DebounceFor(last), cancellationToken);
         }
         catch ( OperationCanceledException )
         {
@@ -372,6 +382,7 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         CommitAndScheduleDependents(document, result, diagnostics);
 
         double elapsedMilliseconds = Stopwatch.GetElapsedTime(startedTicks).TotalMilliseconds;
+        _lastAnalysis.AddOrUpdate(document, new System.Runtime.CompilerServices.StrongBox<double>(elapsedMilliseconds));
 
         // The single most useful verbose line there is: it says whether the server reacted to a
         // keystroke at all, how long it took, and what it decided — which is most of what anyone
@@ -417,9 +428,8 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
 
         // Read BEFORE the commit replaces it. A file first opened has no prior record, and its
         // exports are new to the world, so treat that as a change too.
-        ulong exportsBefore = _database.TryGetAnyRecord(document.Path, out ScriptRecord previous)
-            ? ExportSignature.Of(previous)
-            : 0;
+        ScriptRecord? before = _database.TryGetAnyRecord(document.Path, out ScriptRecord previous) ? previous : null;
+        ulong exportsBefore = before is not null ? ExportSignature.Of(before) : 0;
 
         ScriptRecord committed = _database.Commit(
             result, context, isDirty: true, _resolver.Current.GetScriptRelativePath(document.Path, context));
@@ -435,9 +445,12 @@ public sealed class TextSyncHandler : TextDocumentSyncHandlerBase
         // Other open files' diagnostics are computed against this one, and nothing else republishes
         // them. Only when something they can actually SEE moved — an ordinary keystroke inside a
         // function body leaves the signature alone, which is what keeps this off the edit path.
+        // With the functions the edit changed, so the closed re-lint reaches their callers and no one
+        // else's — adding one function to a shared utility used to re-parse every file that called
+        // any of the others.
         if ( ExportSignature.Of(committed) != exportsBefore )
         {
-            _dependents.Schedule(document.Path);
+            _dependents.Schedule(document.Path, ExportSignature.ChangedFunctionKeys(before, committed, GameProfile.Active));
         }
     }
 }

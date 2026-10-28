@@ -62,7 +62,9 @@ public static class CallResolution
     /// function's namespace to its FILE NAME STEM — a resolution fallback that names no scope
     /// anybody wrote. Asking by declared namespace there answers for the asking file's OWN
     /// functions and for nothing else, which is why a feature that got this wrong still looked like
-    /// it worked.
+    /// it worked. There the asking file's own declaration wins, then its direct includes' own
+    /// declarations: one level, as the engine merges them.
+    /// On a namespace dialect, each namespace the file declares, in order.
     /// </remarks>
     public static FunctionSymbol? UnqualifiedFunction(
         LanguageStore store,
@@ -73,11 +75,7 @@ public static class CallResolution
     {
         if ( !(profile ?? GameProfile.Active).ResolvesByNamespace )
         {
-            // The bounded lookup rather than the whole scope: this is asked per call site by the
-            // hints and per keystroke by signature help, and building every function the scope
-            // offers in order to read one of them is the cost, not the match.
-            return DatabaseQueries.FunctionInIncludeScope(
-                store, askingContextId, result.FilePath, DatabaseQueries.IncludedScriptPaths(result), keyName);
+            return First(DatabaseQueries.FunctionsTheCallReaches(store, askingContextId, result.FilePath, null, keyName));
         }
 
         // Each namespace the file participates in, in order, built once rather than per iteration,
@@ -87,12 +85,10 @@ public static class CallResolution
 
         foreach ( string declared in askingNamespaces )
         {
-            ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-                store, askingContextId, result.FilePath, declared, keyName, askingNamespaces: askingNamespaces);
-
-            if ( found.Length > 0 )
+            FunctionSymbol? found = QualifiedFunction(store, askingContextId, result, declared, keyName);
+            if ( found is not null )
             {
-                return found[0].Function;
+                return found;
             }
         }
 
@@ -100,17 +96,31 @@ public static class CallResolution
     }
 
     /// <summary>
-    /// The function a <c>maps\_utility::set_ambient( ... )</c> reference names — the Infinity Ward
-    /// path form, which only the merge dialects have.
-    ///
-    /// The path names the FILE rather than a namespace, so this is a lookup by name scoped to that
-    /// one file. Asked with an EMPTY asking path on purpose: the scope helper searches the asking
-    /// file first otherwise, and a path call names where it wants to go.
+    /// The function a <c>ns::name( ... )</c> call names: the copy the file reaches when the namespace
+    /// is declared by several, as BO3's mp and zm scripts both declare <c>util</c>.
+    /// </summary>
+    public static FunctionSymbol? QualifiedFunction(
+        LanguageStore store, string askingContextId, ParseResult result, string namespaceName, string keyName)
+    {
+        return First(DatabaseQueries.FunctionsTheCallReaches(
+            store, askingContextId, result.FilePath, namespaceName, keyName,
+            askingNamespaces: result.Extraction.DeclaredNamespaces));
+    }
+
+    /// <summary>
+    /// The function a <c>maps\_utility::set_ambient( ... )</c> call names — the Infinity Ward path
+    /// form, which only the merge dialects have: the named file's own declaration, and nothing that
+    /// file includes. The asking file's own declaration of the name does not come into it; the path
+    /// says where the call goes.
     /// </summary>
     public static FunctionSymbol? PathQualifiedFunction(
-        LanguageStore store, string askingContextId, string writtenPath, string keyName)
+        LanguageStore store, string askingContextId, string askingPath, string writtenPath, string keyName)
     {
-        return DatabaseQueries.FunctionInIncludeScope(
-            store, askingContextId, askingPath: "", [RelativePathIndex.Normalize(writtenPath)], keyName);
+        return First(DatabaseQueries.FunctionsTheCallReaches(store, askingContextId, askingPath, null, keyName, writtenPath));
+    }
+
+    private static FunctionSymbol? First(ImmutableArray<ResolvedFunction> found)
+    {
+        return found.Length > 0 ? found[0].Function : null;
     }
 }

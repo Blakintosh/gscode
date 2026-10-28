@@ -134,7 +134,7 @@ public sealed class HoverHandler : HoverHandlerBase
                 // name when the receiver's class is unknown. LookupFunctions alone never sees one.
                 ImmutableArray<ResolvedFunction> functions = MethodResolution.ResolveCall(
                     target.Store, target.ContextId, target.Path, key, referenceKind,
-                    askingNamespaces: target.Namespaces);
+                    askingNamespaces: target.Namespaces, pathCallTarget: target.PathCallAt(hitRange));
 
                 if ( functions.Length > 0 )
                 {

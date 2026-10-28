@@ -92,8 +92,9 @@ public static class MethodResolution
         // Written A::b(). Namespace first — see the Phalanx note above.
         if ( key.Namespace is not null )
         {
+            // Capped at one: only whether the namespace declares it is asked.
             ImmutableArray<ResolvedFunction> asNamespace = DatabaseQueries.LookupFunctions(
-                store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true);
+                store, askingContextId, askingPath: "", key.Namespace, key.Name, includePrivate: true, limit: 1);
 
             if ( asNamespace.Length > 0 )
             {
@@ -142,7 +143,8 @@ public static class MethodResolution
         SymbolKey key,
         ReferenceKind referenceKind,
         ImmutableArray<string> askingNamespaces = default,
-        string fileNamespace = "")
+        string fileNamespace = "",
+        string pathCallTarget = "")
     {
         // The explicit `sys::` form names the engine's function, so no script declaration answers it
         // and the caller falls back to the builtin library. Asked of the key as WRITTEN, because
@@ -179,14 +181,17 @@ public static class MethodResolution
             {
                 return candidates;
             }
+
+            // No class declares the name at all: the field-holding-a-function-pointer idiom —
+            // `[[self.classObj]]->onBeginUse( player )` in gameobjects_shared.gsc — which really
+            // does reach a top-level function.
+            return DatabaseQueries.LookupFunctions(
+                store, askingContextId, askingPath, canonical.Namespace, canonical.Name,
+                includePrivate: false, askingNamespaces: askingNamespaces);
         }
 
-        // No class declares the name at all. For an arrow call that means the field-holding-a
-        // -function-pointer idiom — `[[self.classObj]]->onBeginUse( player )` in
-        // gameobjects_shared.gsc — which really does reach a top-level function.
-        return DatabaseQueries.LookupFunctions(
-            store, askingContextId, askingPath, canonical.Namespace, canonical.Name,
-            includePrivate: false, askingNamespaces: askingNamespaces);
+        return DatabaseQueries.FunctionsTheCallReaches(
+            store, askingContextId, askingPath, canonical.Namespace, canonical.Name, pathCallTarget, askingNamespaces);
     }
 
     /// <summary>
@@ -636,7 +641,7 @@ public static class MethodResolution
         {
             if ( DatabaseQueries.LookupFunctions(
                 store, askingContextId, askingPath: "", qualifier, canonical.Name,
-                includePrivate: true).Length > 0 )
+                includePrivate: true, limit: 1).Length > 0 )
             {
                 continue;
             }

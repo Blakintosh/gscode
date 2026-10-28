@@ -181,4 +181,102 @@ public class ClassGraphTests
         Assert.Empty(graph.ClassesDeclaringMethod("play"));
         Assert.Empty(graph.AllDeclaringPaths());
     }
+
+    // Reads are cached on the graph and cleared by the write that changes them. The facts below ask
+    // once BEFORE the write, so the cache is filled, and once after: a stale answer is what would
+    // show if a write forgot to clear it.
+
+    [Fact]
+    public void AnAnswerAskedBeforeAWrite_IsNotWhatIsAnsweredAfterIt()
+    {
+        ClassGraph graph = new();
+        graph.Apply(@"C:\raw\a.gsc", [Class("cScene", null, "play")]);
+
+        AssertNames(graph.PathsDeclaring("cscene"), @"C:\raw\a.gsc");
+        AssertNames(graph.ClassesDeclaringMethod("play"), "cscene");
+        Assert.Contains("cscene", graph.ClassNameSet());
+
+        graph.Apply(@"C:\raw\b.gsc", [Class("cScene", null, "stop"), Class("cOther", null, "play")]);
+
+        AssertNames(graph.PathsDeclaring("cscene"), @"C:\raw\a.gsc", @"C:\raw\b.gsc");
+        AssertNames(graph.ClassesDeclaringMethod("play"), "cscene", "cother");
+        Assert.Contains("cother", graph.ClassNameSet());
+
+        graph.Apply(@"C:\raw\a.gsc", []);
+
+        AssertNames(graph.PathsDeclaring("cscene"), @"C:\raw\b.gsc");
+        AssertNames(graph.ClassesDeclaringMethod("play"), "cother");
+        Assert.Contains("cscene", graph.ClassNameSet());
+    }
+
+    [Fact]
+    public void AnEditThatKeepsTheFileInABucket_StillRefreshesTheNamesDerivedFromIt()
+    {
+        // The file stays in the "play" bucket throughout, under a different class: the derived
+        // names must follow even though the bucket's path set ends where it began.
+        ClassGraph graph = new();
+        graph.Apply(@"C:\raw\a.gsc", [Class("cScene", null, "play")]);
+        AssertNames(graph.ClassesDeclaringMethod("play"), "cscene");
+
+        graph.Apply(@"C:\raw\a.gsc", [Class("cRenamed", null, "play")]);
+
+        AssertNames(graph.ClassesDeclaringMethod("play"), "crenamed");
+        Assert.DoesNotContain("cscene", graph.ClassNameSet());
+    }
+
+    [Fact]
+    public void TheLastDeclarerRemoved_TakesTheNameOutOfTheSet()
+    {
+        ClassGraph graph = new();
+        graph.Apply(@"C:\raw\a.gsc", [Class("cScene")]);
+        Assert.Contains("cscene", graph.ClassNameSet());
+
+        graph.Apply(@"C:\raw\a.gsc", []);
+
+        Assert.DoesNotContain("cscene", graph.ClassNameSet());
+        Assert.Empty(graph.PathsDeclaring("cscene"));
+        Assert.Empty(graph.AllClassNames());
+    }
+
+    [Fact]
+    public async Task ReadsRacingWrites_NeverThrow_AndSettleOnTheFinalAnswer()
+    {
+        // Readers take no lock, so this is the test of that: readers on every core while a writer
+        // adds and removes files, then the answers once it stops.
+        ClassGraph graph = new();
+        using CancellationTokenSource stop = new();
+        List<Task> readers = [];
+        for ( int reader = 0; reader < Math.Max(2, Environment.ProcessorCount - 1); reader++ )
+        {
+            readers.Add(Task.Run(() =>
+            {
+                while ( !stop.IsCancellationRequested )
+                {
+                    _ = graph.PathsDeclaring("cscene");
+                    _ = graph.ClassesDeclaringMethod("play");
+                    _ = graph.DirectChildren("cbase");
+                    _ = graph.ClassNameSet().Contains("cscene");
+                }
+            }));
+        }
+
+        for ( int round = 0; round < 2000; round++ )
+        {
+            string path = $@"C:\raw\f{round % 50}.gsc";
+            graph.Apply(path, round % 3 == 0 ? [] : [Class("cScene", "cBase", "play")]);
+        }
+
+        stop.Cancel();
+        await Task.WhenAll(readers).WaitAsync(TimeSpan.FromSeconds(30));
+
+        for ( int file = 0; file < 50; file++ )
+        {
+            graph.Apply($@"C:\raw\f{file}.gsc", file < 10 ? [Class("cScene", "cBase", "play")] : []);
+        }
+
+        Assert.Equal(10, graph.PathsDeclaring("cscene").Length);
+        AssertNames(graph.ClassesDeclaringMethod("play"), "cscene");
+        AssertNames(graph.DirectChildren("cbase"), "cscene");
+        Assert.True(graph.ClassNameSet().SetEquals(["cscene"]));
+    }
 }

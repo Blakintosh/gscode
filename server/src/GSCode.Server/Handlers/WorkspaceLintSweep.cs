@@ -100,22 +100,15 @@ public sealed class WorkspaceLintSweep
         return _database.SetDiagnostics(committed.Path, committed.Language, committed.ContentHash, diagnostics);
     }
 
+    /// <summary>Lints the targets on <see cref="BelowNormalWorkers"/>.</summary>
     private async Task<LintSweepOutcome> SweepAsync(List<ScriptRecord> targets, CancellationToken cancellationToken)
     {
         int linted = 0;
         int skipped = 0;
 
-        ParallelOptions options = new()
+        void LintOne(int index)
         {
-            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
-            CancellationToken = cancellationToken,
-        };
-
-        await Parallel.ForEachAsync(targets, options, (record, token) =>
-        {
-            token.ThrowIfCancellationRequested();
-
-            if ( RelintOne(record) )
+            if ( RelintOne(targets[index]) )
             {
                 Interlocked.Increment(ref linted);
             }
@@ -123,10 +116,9 @@ public sealed class WorkspaceLintSweep
             {
                 Interlocked.Increment(ref skipped);
             }
+        }
 
-            return ValueTask.CompletedTask;
-        }).ConfigureAwait(false);
-
+        await BelowNormalWorkers.RunAsync("GSCode lint sweep", targets.Count, LintOne, cancellationToken).ConfigureAwait(false);
         return new LintSweepOutcome(linted, skipped, targets.Count);
     }
 

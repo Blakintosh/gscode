@@ -53,13 +53,19 @@ test class by keyword, and every environment variable: `server/tests/FOLDER.md`.
 | Corpus | `scripts\corpus.bat [all\|games…]` | `GSCODE_CORPUS_<GAME>` | minutes |
 | Diagnostic sweep | `scripts\sweep.bat [all\|games…]` | same | ~30 s for cod4 + bo3 |
 | Perf | `scripts\perf.bat [all\|games…]` | same; Release | minutes |
-| Scale | `scripts\scale.bat 10000 50000` | `GSCODE_CORPUS_BO3`; GBs of disk | minutes per size |
+| Scale | `scripts\scale.bat 10000 50000` | `GSCODE_CORPUS_BO3` (and `_COD4` with `GSCODE_SCALE_GAMES=bo3,cod4`); GBs of disk | minutes per size |
 
 **A corpus test with no corpus set passes without running.** The batch files refuse to run with no
 corpus; when running `dotnet test` yourself, check the duration and the output.
 
 Run corpus, sweep and perf on **cod4 and bo3** (the default), one per dialect family. `all` adds WaW,
 MW2 and BO1 and is for changes that touch those dialects specifically.
+
+The scale numbers in `server/PERF.md` are measured at 50,000 files with
+`GSCODE_SCALE_SOURCE=heaviest:25` (copies of the 25 largest stock scripts), on bo3 and cod4. At that
+size the harness needs a heap limit (`DOTNET_GCHeapHardLimit`) so a size that does not fit fails
+rather than paging the machine, and a Release build; when the editor's server holds `bin\Release`,
+build and run from a separate git worktree. Every scale variable is in `server/tests/FOLDER.md`.
 
 A corpus run rewrites `server/tests/GSCode.Server.Tests/harvest/*.json` and the
 `Api/<game>_stock_scripts.txt` lists. A diff there after an unrelated change means the committed

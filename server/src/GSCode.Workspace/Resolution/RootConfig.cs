@@ -14,6 +14,24 @@ public sealed record RootConfig
     /// <summary>The game raw folder (share\raw), or null when raw reading is disabled/unavailable.</summary>
     public string? RawRoot { get; init; }
 
+    /// <summary>
+    /// The devraw folder beside <see cref="RawRoot"/>, or null when there is none on disk. Another
+    /// raw: its files live in the raw context and are named by the same relative paths, but raw is
+    /// searched first, so devraw only supplies what raw lacks. That is the engine's own order on
+    /// CoD4; BO3's is assumed to match. Rarely present with anything in it in the mod tools, and
+    /// supported for the installs that use it.
+    /// </summary>
+    public string? DevRawRoot { get; init; }
+
+    /// <summary>What devraw is called. Every game keeps it beside raw: <c>share\devraw</c> on BO3, <c>devraw</c> elsewhere.</summary>
+    public const string DevRawFolderName = "devraw";
+
+    /// <summary>
+    /// The folder under raw and devraw the cold index walks, or "" for all of them — the game's
+    /// <see cref="GameProfile.RawScriptsSubfolder"/>, taken with the rest of the install layout.
+    /// </summary>
+    public string RawScriptsSubfolder { get; init; } = "";
+
     /// <summary>The mods folder, or null when unavailable. Each direct child is one isolated mod.</summary>
     public string? ModsRoot { get; init; }
 
@@ -80,9 +98,27 @@ public sealed record RootConfig
         return new RootConfig
         {
             RawRoot = rawRoot,
+            DevRawRoot = DevRawBeside(rawRoot, fileSystem),
             ModsRoot = modsRoot,
             WorkspaceFolders = normalizedFolders,
+            RawScriptsSubfolder = layout.RawScriptsSubfolder,
         };
+    }
+
+    /// <summary>
+    /// The devraw sibling of a raw folder, or null when it is not on disk. Derived rather than
+    /// configured: it sits beside raw in every install, including one whose raw was set explicitly.
+    /// </summary>
+    private static string? DevRawBeside(string? rawRoot, IFileSystem fileSystem)
+    {
+        string? install = rawRoot is null ? null : Path.GetDirectoryName(rawRoot);
+        if ( install is null )
+        {
+            return null;
+        }
+
+        string devRaw = PathUtil.NormalizeAbsolute(Path.Combine(install, DevRawFolderName));
+        return fileSystem.DirectoryExists(devRaw) ? devRaw : null;
     }
 
     /// <summary>The configured root, or null when it is unset or does not exist on disk.</summary>

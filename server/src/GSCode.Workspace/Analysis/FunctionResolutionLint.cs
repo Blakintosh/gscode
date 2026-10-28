@@ -110,6 +110,7 @@ public static class FunctionResolutionLint
 
         // Path-qualified calls name a FILE, so they are script-domain regardless of dialect. They
         // are keyed with a null namespace like everything else, and are told apart by their range.
+        // A map rather than PathCallReference.NameRanges: the rule needs the file each range names.
         Dictionary<TextRange, string> pathCallTargets = [];
         foreach ( PathCallReference pathCall in result.Extraction.PathCalls )
         {
@@ -123,19 +124,16 @@ public static class FunctionResolutionLint
         // MISSING FILE is reported once and its calls are left alone: one cause, one diagnostic.
         HashSet<string> missingTargets = new(StringComparer.OrdinalIgnoreCase);
 
-        // What each path call's TARGET FILE can run: its own functions and every function its
-        // #include chain merges into it, transitively, since the compiler flattens the chain. Stock
-        // CoD4 settles it: maps\_documents.gsc calls `maps\_utility::trigger_off()`, and trigger_off
-        // is declared in common_scripts\utility, which maps\_utility includes on its first line. The
-        // file ships and works. Neither "this file happens to declare the same name" nor "some
-        // unrelated file in the workspace declares it" make the call resolve, and the lookup below
-        // asks a NAME-only question that cannot tell those apart from the one thing that matters:
-        // can the file named on the call reach it.
+        // What each path call's TARGET FILE declares itself — all a far call can reach. The engine
+        // does not look through the named file's includes, so
+        // `maps\_utility::trigger_off()` does not compile though maps\_utility includes the
+        // common_scripts\utility that declares it; the one stock file writing that call,
+        // maps\_documents.gsc, is loaded by nothing. Neither "this file happens to declare the same
+        // name" nor "some unrelated file in the workspace declares it" make the call resolve either.
         Dictionary<string, HashSet<string>> targetFunctionNames = new(StringComparer.OrdinalIgnoreCase);
 
-        // Targets whose reach cannot be known: the file is not indexed, or something in its include
-        // chain does not resolve. A rule may only say a name is out of reach against a complete
-        // closure, the same condition IncludeUsageLint holds itself to, so calls into these stand down.
+        // Targets whose functions cannot be known: the file resolves on disk but is not indexed, so
+        // calls into it stand down.
         HashSet<string> unknowableTargets = new(StringComparer.OrdinalIgnoreCase);
         if ( resolver is not null && pathCallTargets.Count > 0 )
         {
@@ -157,26 +155,13 @@ public static class FunctionResolutionLint
                 }
                 else if ( store.TryGet(PathUtil.NormalizeAbsolute(resolved), out ScriptRecord targetRecord) )
                 {
-                    IncludeClosure reach = DatabaseQueries.IncludeClosure(
-                        store, resolver, result, askingPath, extension, directIncludes: [targetRecord]);
-
-                    if ( reach.Complete )
+                    HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+                    foreach ( FunctionSymbol function in targetRecord.Functions )
                     {
-                        HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-                        foreach ( ScriptRecord reached in reach.Records )
-                        {
-                            foreach ( FunctionSymbol function in reached.Functions )
-                            {
-                                names.Add(function.KeyName);
-                            }
-                        }
+                        names.Add(function.KeyName);
+                    }
 
-                        targetFunctionNames[call.Value] = names;
-                    }
-                    else
-                    {
-                        unknowableTargets.Add(call.Value);
-                    }
+                    targetFunctionNames[call.Value] = names;
                 }
                 else
                 {
@@ -341,12 +326,14 @@ public static class FunctionResolutionLint
                 continue;
             }
 
-            // A function reference cannot name a builtin, so an unqualified one that matched no script
-            // function is a script miss. Stands down when an import failed to resolve, since in a
-            // merge dialect the missing file may have declared it.
+            // An unqualified function reference that matched no script function. It may name an
+            // engine function — BO3's util_shared.gsc stores `&UseButtonPressed` and four more button
+            // tests in level._button_funcs — so one the library knows is clean. Anything else is a
+            // script miss. Stands down when an import failed to resolve, since in a merge dialect the
+            // missing file may have declared it.
             if ( entry.Kind == ReferenceKind.AddressOf )
             {
-                if ( !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
+                if ( builtins.Find(entry.Key.Name) is null && !ImportGate.AnyMacrosLost(result, GscDiagnosticCode.UsingNotFound) )
                 {
                     diagnostics.Add(Diagnostic.Create(
                         entry.Range,

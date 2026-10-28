@@ -150,6 +150,7 @@ public sealed class FullModeDiagnosticsTests
                     new FileEvent { Uri = DocumentUri.FromFileSystemPath(CallerPath), Type = FileChangeType.Changed }),
             },
             CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.True(ReportsUnusedUsing(workspace, CallerPath));
     }
@@ -181,6 +182,7 @@ public sealed class FullModeDiagnosticsTests
                     new FileEvent { Uri = DocumentUri.FromFileSystemPath(CallerPath), Type = FileChangeType.Changed }),
             },
             CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.False(ReportsUnusedUsing(workspace, CallerPath));
     }
@@ -219,6 +221,7 @@ public sealed class FullModeDiagnosticsTests
                 },
             },
             CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.True(
             workspace.Database.TryGetAnyRecord(added, out ScriptRecord _),

@@ -108,6 +108,16 @@ public sealed class NullIndexProgressListener : IIndexProgressListener
 /// </summary>
 public sealed class WorkspaceIndexer
 {
+    /// <summary>
+    /// How many threads background work runs on: one per core but one, so a request the editor is
+    /// waiting on always has a core to run on. The cold index, the directory walk, a header's
+    /// re-index and the server's below-normal workers all use it.
+    /// </summary>
+    public static int BackgroundParallelism
+    {
+        get { return Math.Max(1, Environment.ProcessorCount - 1); }
+    }
+
     private readonly ScriptDatabase _database;
     private readonly Func<PathResolver> _resolverProvider;
     private readonly IFileSystem _fileSystem;
@@ -298,7 +308,7 @@ public sealed class WorkspaceIndexer
         _skippedOversized = 0;
         ParallelOptions options = new()
         {
-            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+            MaxDegreeOfParallelism = BackgroundParallelism,
             CancellationToken = cancellationToken,
         };
 
@@ -456,9 +466,9 @@ public sealed class WorkspaceIndexer
     private readonly record struct FileOutcome(bool Restored, ScriptRecord? Record);
 
     /// <summary>Analyses one file from disk and commits its record (also used by the watcher).</summary>
-    public ScriptRecord? IndexFile(string path)
+    public ScriptRecord? IndexFile(string path, Func<string, bool>? ownedByEditor = null)
     {
-        return ProcessFile(path, allowRestore: false).Record;
+        return ProcessFile(path, allowRestore: false, ownedByEditor).Record;
     }
 
     /// <summary>
@@ -540,6 +550,18 @@ public sealed class WorkspaceIndexer
             headerCache: _inserts);
     }
 
+    /// <summary>
+    /// Whether the editor owns the file now: it did when this call began, or it has opened it since.
+    /// Asked again right before the store write, because the read and the analysis sit between that
+    /// first test and the write — and a document opened in that window has had its buffer committed,
+    /// which a disk record landing after it would overwrite. The watched-file pump runs in the
+    /// background, so an editor opening a file in the middle of a branch switch is not a corner case.
+    /// </summary>
+    private static bool OpenedSince(bool ownedAtStart, Func<string, bool>? ownedByEditor, string normalized)
+    {
+        return ownedAtStart || (ownedByEditor is not null && ownedByEditor(normalized));
+    }
+
     private FileOutcome ProcessFile(string path, bool allowRestore, Func<string, bool>? ownedByEditor = null)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
@@ -597,7 +619,7 @@ public sealed class WorkspaceIndexer
             {
                 // Null when the blob is corrupt, which falls through to a normal analysis below
                 // rather than failing the file — the same outcome a missing cache entry has.
-                restored = cached.Materialize();
+                restored = cached.Materialize(_names);
                 if ( restored is not null )
                 {
                     // Both are pure functions of (path, current RootConfig), same as the
@@ -620,7 +642,20 @@ public sealed class WorkspaceIndexer
                     // restore, is what keeps this call from winning a last-write race against a
                     // fresher commit the corresponding watched-file event already made (or is
                     // about to make) for this exact path.
-                    if ( !ownedByOpenDocument && DiskStillMatches(normalized, content) )
+                    // A live record of the same content, in the same place, is kept rather than replaced:
+                    // it is the same analysis, and it may carry more than the cached one — the full-mode
+                    // sweep's diagnostics, which the cache never holds. Replacing it on a workspace-folder
+                    // change left every closed file reporting its parse diagnostics alone until the
+                    // folder's sweep finished, and a refresh in that minute emptied the Problems panel.
+                    if ( _database.TryGetAnyRecord(normalized, out ScriptRecord live)
+                        && !live.IsDirty
+                        && live.ContentHash == restored.ContentHash
+                        && live.ContextId == restored.ContextId
+                        && live.RelativePath == restored.RelativePath )
+                    {
+                        restored = live;
+                    }
+                    else if ( !OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) && DiskStillMatches(normalized, content) )
                     {
                         _database.CommitRecord(restored);
                     }
@@ -667,7 +702,7 @@ public sealed class WorkspaceIndexer
         // now-stale analysis must not win a last-write race against it. Building rather than
         // committing keeps the record usable by this call's own caller without touching the
         // store the fresher event owns.
-        ScriptRecord record = ownedByOpenDocument || !DiskStillMatches(normalized, content)
+        ScriptRecord record = OpenedSince(ownedByOpenDocument, ownedByEditor, normalized) || !DiskStillMatches(normalized, content)
             ? ScriptDatabase.BuildRecord(result, context, isDirty: false, relativePath)
             : _database.Commit(result, context, isDirty: false, relativePath);
         PerfTracker.End();
@@ -750,6 +785,18 @@ public sealed class WorkspaceIndexer
     public void InvalidateResolutionCache()
     {
         _resolverProvider().InvalidateResolutionCache();
+    }
+
+    /// <summary>Whether a cold index would visit this file — see <see cref="PathResolver.IsIndexTarget"/>.</summary>
+    public bool IsIndexTarget(string path)
+    {
+        return Resolver.IsIndexTarget(path);
+    }
+
+    /// <summary>The devraw file a raw one shadows — see <see cref="PathResolver.DevRawCounterpart"/>.</summary>
+    public string? DevRawCounterpart(string path)
+    {
+        return Resolver.DevRawCounterpart(path);
     }
 
     /// <summary>Removes a deleted file from the database, persistent cache, and insert cache.</summary>

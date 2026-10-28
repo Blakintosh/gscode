@@ -145,7 +145,7 @@ public class UnassignedVariableLintTests
     public void OnADialectWithNoPackTheNameIsOrdinary()
     {
         // CoD4 has no `...`, so `vararg` there is a name like any other and gets the generic
-        // message. The rule is driven by GameProfile.VarargBindingName rather than by the spelling.
+        // message. The rule is driven by GameProfile.HasVarargBinding rather than by the spelling.
         Diagnostic diagnostic = Assert.Single(Lint("f()\n{\n\tuse( vararg );\n}\n", "cod4"));
 
         Assert.Equal(GscDiagnosticCode.VariableNeverAssigned, diagnostic.Code);

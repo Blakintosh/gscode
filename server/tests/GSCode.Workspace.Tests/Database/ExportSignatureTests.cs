@@ -203,6 +203,95 @@ public class ExportSignatureTests
             HeaderSignatureOf("#define CAP 99\n#define IS_TRUE(__a) (isdefined(__a) && __a)\n"));
     }
 
+    // --- ChangedFunctionKeys: WHICH exports moved, so only their callers are re-linted ---
+
+    private static ScriptRecord RecordOf(string source, string relativePath = @"scripts\util.gsc", GameProfile? game = null)
+    {
+        ParseResult result = TestParse.Analyze(source, TestPaths.Raw(@"scripts\util.gsc"), game);
+        return new ScriptDatabase().Commit(result, ResolutionContext.RawContext, false, relativePath);
+    }
+
+    private static SymbolKey UtilFunction(string name)
+    {
+        return new SymbolKey("util", name, SymbolKind.Function);
+    }
+
+    [Fact]
+    public void AnAddedFunction_IsTheOnlyChangedKey()
+    {
+        // The reported case: adding one function to a shared utility re-parsed every file that called
+        // any of its others. Only a call to the new name can read differently now.
+        IReadOnlySet<SymbolKey>? changed = ExportSignature.ChangedFunctionKeys(
+            RecordOf(Original), RecordOf(Original + "\nfunction added()\n{\n}\n"), GameProfile.BlackOps3);
+
+        Assert.NotNull(changed);
+        Assert.Equal([UtilFunction("added")], changed);
+    }
+
+    [Fact]
+    public void ARemovedFunction_IsAChangedKey()
+    {
+        // Its callers now call nothing, which is exactly when they must be re-linted.
+        IReadOnlySet<SymbolKey>? changed = ExportSignature.ChangedFunctionKeys(
+            RecordOf(Original + "\nfunction gone()\n{\n}\n"), RecordOf(Original), GameProfile.BlackOps3);
+
+        Assert.Equal([UtilFunction("gone")], changed);
+    }
+
+    [Fact]
+    public void AParameterAdded_ChangesThatFunctionsKey()
+    {
+        IReadOnlySet<SymbolKey>? changed = ExportSignature.ChangedFunctionKeys(
+            RecordOf(Original),
+            RecordOf("#namespace util;\n#using scripts\\other;\n\nfunction get_players( team, more )\n{\n    x = 1;\n    return x;\n}\n"),
+            GameProfile.BlackOps3);
+
+        Assert.Equal([UtilFunction("get_players")], changed);
+    }
+
+    [Fact]
+    public void AnEditInsideABody_ChangesNoKey()
+    {
+        IReadOnlySet<SymbolKey>? changed = ExportSignature.ChangedFunctionKeys(
+            RecordOf(Original),
+            RecordOf("#namespace util;\n#using scripts\\other;\n\nfunction get_players( team )\n{\n    y = 2;\n    return y;\n}\n"),
+            GameProfile.BlackOps3);
+
+        Assert.NotNull(changed);
+        Assert.Empty(changed);
+    }
+
+    [Fact]
+    public void OnAMergeDialect_TheKeyHasNoNamespace()
+    {
+        // A merge dialect keys every call with no namespace, so the changed key must match the
+        // references the callers were indexed with, not the file stem the function is declared into.
+        IReadOnlySet<SymbolKey>? changed = ExportSignature.ChangedFunctionKeys(
+            RecordOf("helper()\n{\n}\n", @"maps\_util.gsc", GameProfile.Cod4),
+            RecordOf("helper()\n{\n}\n\nadded()\n{\n}\n", @"maps\_util.gsc", GameProfile.Cod4),
+            GameProfile.Cod4);
+
+        Assert.Equal([new SymbolKey(null, "added", SymbolKind.Function)], changed);
+    }
+
+    [Theory]
+    // A #namespace changed: every function's key moved, and the callers of the old ones with them.
+    [InlineData("#namespace other_util;\n#using scripts\\other;\n\nfunction get_players( team )\n{\n    x = 1;\n    return x;\n}\n", @"scripts\util.gsc")]
+    // An import changed: what the file reaches is not one function's business.
+    [InlineData("#namespace util;\n#using scripts\\elsewhere;\n\nfunction get_players( team )\n{\n    x = 1;\n    return x;\n}\n", @"scripts\util.gsc")]
+    // The file moved: a path call or an import of it resolves differently.
+    [InlineData("#namespace util;\n#using scripts\\other;\n\nfunction get_players( team )\n{\n    x = 1;\n    return x;\n}\n", @"scripts\moved.gsc")]
+    public void AChangeBeyondTheFunctions_CannotBeNarrowed(string edited, string relativePath)
+    {
+        Assert.Null(ExportSignature.ChangedFunctionKeys(RecordOf(Original), RecordOf(edited, relativePath), GameProfile.BlackOps3));
+    }
+
+    [Fact]
+    public void AFileWithNoPreviousRecord_CannotBeNarrowed()
+    {
+        Assert.Null(ExportSignature.ChangedFunctionKeys(null, RecordOf(Original), GameProfile.BlackOps3));
+    }
+
     [Fact]
     public void EditingAHeaderComment_ChangesTheHeaderSignature()
     {

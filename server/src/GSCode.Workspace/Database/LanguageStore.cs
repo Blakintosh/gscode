@@ -14,6 +14,20 @@ namespace GSCode.Workspace.Database;
 /// </summary>
 public sealed class LanguageStore
 {
+    public LanguageStore()
+        : this(new CommitClock())
+    {
+    }
+
+    /// <param name="clock">Ticked on every write; shared with the database's other stores.</param>
+    public LanguageStore(CommitClock clock)
+    {
+        Clock = clock;
+    }
+
+    /// <summary>Counts this store's writes, with its database's other stores — see <see cref="CommitClock"/>.</summary>
+    public CommitClock Clock { get; }
+
     private readonly ConcurrentDictionary<string, ScriptRecord> _records = new(StringComparer.Ordinal);
     private readonly ReferenceIndex _referenceIndex = new();
     private readonly DeclarationIndex _declarationIndex = new();
@@ -35,6 +49,30 @@ public sealed class LanguageStore
     /// </summary>
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, int>> _overlayContextsByRelativePath =
         new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The paths each context holds — see <see cref="FileFilterFor"/> and
+    /// <see cref="VisiblePathsIfFewer"/>. A handful of contexts exist at most: raw, the workspace
+    /// folders and the mods.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ContextPaths> _pathsByContext = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// One context's paths, with their count kept beside them: a concurrent dictionary's own count
+    /// takes every one of its locks, and <see cref="VisiblePathsIfFewer"/> asks on every query.
+    /// </summary>
+    private sealed class ContextPaths
+    {
+        public ConcurrentDictionary<string, byte> Paths { get; } = new(StringComparer.Ordinal);
+
+        public int Count;
+    }
+
+    /// <summary>
+    /// The most hidden paths <see cref="FileFilterFor"/> gathers into a set per request. Past it,
+    /// copying them costs more than asking each file's record, and the walk does that instead.
+    /// </summary>
+    private const int MaximumHiddenPaths = 4096;
 
     /// <summary>
     /// Serialises writes TO ONE PATH so a record swap and the index diffs that describe it land
@@ -179,7 +217,7 @@ public sealed class LanguageStore
     private void ApplyIndexes(string path, ScriptRecord? previous, ScriptRecord? next, Contributions contributions)
     {
         PerfTracker.Begin("upsert.reference");
-        _referenceIndex.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), contributions.ReferenceKeys);
+        _referenceIndex.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? ReferenceTable.Empty), contributions.ReferenceKeys);
         PerfTracker.End();
 
         PerfTracker.Begin("upsert.declaration");
@@ -216,8 +254,10 @@ public sealed class LanguageStore
             _records.TryGetValue(record.Path, out ScriptRecord? previous);
             _records[record.Path] = record;
             AdjustOverlayCount(previous, record);
+            AdjustContextPaths(previous, record);
 
             ApplyIndexes(record.Path, previous, record, contributions);
+            Clock.Advance(record.Path);
         }
     }
 
@@ -259,7 +299,9 @@ public sealed class LanguageStore
             if ( _records.TryRemove(normalizedPath, out ScriptRecord? previous) )
             {
                 AdjustOverlayCount(previous, next: null);
+                AdjustContextPaths(previous, next: null);
                 ApplyIndexes(normalizedPath, previous, next: null, Contributions.None);
+                Clock.Advance(normalizedPath);
             }
         }
     }
@@ -275,6 +317,44 @@ public sealed class LanguageStore
         if ( next is not null && next.ContextId != "raw" && next.RelativePath.Length > 0 )
         {
             AdjustOverlayCount(next.RelativePath, next.ContextId, 1);
+        }
+    }
+
+    /// <summary>
+    /// Bumped whenever a path that stays in the store moves to another context — a workspace folder
+    /// added or removed, a raw script becoming a mod's. Every other answer about visibility is
+    /// computed per call; this is for the one cached against an index array, which does not change
+    /// when only a file's context does. See <c>DatabaseQueries.VisibleDeclaring</c>.
+    /// </summary>
+    public long ContextEpoch
+    {
+        get { return Volatile.Read(ref _contextEpoch); }
+    }
+
+    private long _contextEpoch;
+
+    /// <summary>Keeps <see cref="_pathsByContext"/> correct across an upsert or removal.</summary>
+    private void AdjustContextPaths(ScriptRecord? previous, ScriptRecord? next)
+    {
+        if ( previous is not null && next is not null && previous.ContextId != next.ContextId )
+        {
+            Interlocked.Increment(ref _contextEpoch);
+        }
+
+        if ( previous is not null && previous.ContextId != next?.ContextId
+            && _pathsByContext.TryGetValue(previous.ContextId, out ContextPaths? before)
+            && before.Paths.TryRemove(previous.Path, out _) )
+        {
+            Interlocked.Decrement(ref before.Count);
+        }
+
+        if ( next is not null )
+        {
+            ContextPaths after = _pathsByContext.GetOrAdd(next.ContextId, static _ => new ContextPaths());
+            if ( after.Paths.TryAdd(next.Path, 0) )
+            {
+                Interlocked.Increment(ref after.Count);
+            }
         }
     }
 
@@ -393,9 +473,13 @@ public sealed class LanguageStore
     /// A callback rather than a list because a string's list keeps 200 of cod4's 18,144, and building
     /// the rest only to drop them was most of what the request allocated.
     /// </summary>
-    public void VisibleLiterals(SymbolKind kind, string askingContextId, Action<VocabularyName> found)
+    /// <param name="wanted">
+    /// Asked first with how many files use a literal; false skips it without testing any of them.
+    /// </param>
+    public void VisibleLiterals(
+        SymbolKind kind, string askingContextId, Action<VocabularyName> found, Func<int, bool>? wanted = null)
     {
-        _vocabulary.Literals(kind, path => IsVisibleTo(path, askingContextId), found);
+        _vocabulary.Literals(kind, FileFilterFor(askingContextId), found, wanted);
     }
 
     /// <summary>
@@ -404,7 +488,7 @@ public sealed class LanguageStore
     /// </summary>
     public List<VocabularyName> VisibleFieldNames(string askingContextId)
     {
-        return _vocabulary.FieldNames(path => IsVisibleTo(path, askingContextId));
+        return _vocabulary.FieldNames(FileFilterFor(askingContextId));
     }
 
     /// <summary>
@@ -413,7 +497,88 @@ public sealed class LanguageStore
     /// </summary>
     public List<string> VisibleDeclaredNames(string lowercasePrefix, string askingContextId)
     {
-        return _declarationIndex.NamesStartingWith(lowercasePrefix, path => IsVisibleTo(path, askingContextId));
+        return _declarationIndex.NamesStartingWith(lowercasePrefix, FileFilterFor(askingContextId));
+    }
+
+    /// <summary>
+    /// Which files a vocabulary walk may take a name from, decided by the few files the asking
+    /// context CANNOT see rather than by asking every file's record.
+    ///
+    /// The walk tests a file for every distinct name, and asking a record means probing a map of
+    /// every record in the workspace and reading the record's context. At 25,000 of the heaviest
+    /// BO3 scripts that was 2.45 ms of a 2.86 ms walk over 37,430 string literals. The hidden files
+    /// are few: none at all for a workspace beside the raw scripts, and for a workspace beside an
+    /// install with mods, the mods' own scripts — 96 in BO3's install as the scale run found it —
+    /// so a set of those answers from memory the cache already holds.
+    ///
+    /// A path moving between contexts while the set is built can only be judged by where it was a
+    /// moment ago, as any snapshot would judge it.
+    /// </summary>
+    private Func<string, bool> FileFilterFor(string askingContextId)
+    {
+        HashSet<string>? hidden = null;
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
+        {
+            if ( context.Value.Count == 0 || ScriptDatabase.CanSee(askingContextId, context.Key) )
+            {
+                continue;
+            }
+
+            hidden ??= new HashSet<string>(StringComparer.Ordinal);
+            foreach ( KeyValuePair<string, byte> path in context.Value.Paths )
+            {
+                hidden.Add(path.Key);
+            }
+
+            if ( hidden.Count > MaximumHiddenPaths )
+            {
+                return path => IsVisibleTo(path, askingContextId);
+            }
+        }
+
+        if ( hidden is null )
+        {
+            return static _ => true;
+        }
+
+        return path => !hidden.Contains(path);
+    }
+
+    /// <summary>
+    /// Every path the asking context can see, when there are fewer than
+    /// <paramref name="fewerThan"/> of them; null when there are not. For a walk that would
+    /// otherwise test more files than this for visibility and reject most of them: the raw scripts
+    /// asking about a stock function sees 546 files, while the workspace copies that reach it
+    /// number in the tens of thousands.
+    /// </summary>
+    public List<string>? VisiblePathsIfFewer(string askingContextId, int fewerThan)
+    {
+        int visible = 0;
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
+        {
+            if ( ScriptDatabase.CanSee(askingContextId, context.Key) )
+            {
+                visible += Volatile.Read(ref context.Value.Count);
+                if ( visible >= fewerThan )
+                {
+                    return null;
+                }
+            }
+        }
+
+        List<string> paths = new(visible);
+        foreach ( KeyValuePair<string, ContextPaths> context in _pathsByContext )
+        {
+            if ( ScriptDatabase.CanSee(askingContextId, context.Key) )
+            {
+                foreach ( KeyValuePair<string, byte> path in context.Value.Paths )
+                {
+                    paths.Add(path.Key);
+                }
+            }
+        }
+
+        return paths;
     }
 
     private bool IsVisibleTo(string path, string askingContextId)

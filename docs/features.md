@@ -17,23 +17,23 @@ that pin it, so a change to a feature starts from the right file and ends at the
 
 | Feature | LSP method | Handler | Engine | Setting | Tests |
 |---|---|---|---|---|---|
-| Diagnostics while typing | `textDocument/publishDiagnostics` (push) | `TextSyncHandler`, `DocumentLinter`, `DiagnosticsPublisher` | `ScriptAnalysis.Analyze` + `WorkspaceLints.Analyze` | — | `StaleAnalysisTests`, `DiagnosticsPublishOrderTests`, every `*LintTests` |
-| Diagnostics for closed files | same, for files not open | `WorkspaceDiagnosticsPublisher`, `WorkspaceLintSweep` | stored `ScriptRecord.Diagnostics` | `gscode.diagnostics.scope`, `gscode.workspaceIndexingMode` | `DiagnosticsScopeTests`, `WorkspaceLintSweepTests`, `WorkspaceDiagnosticsRefreshTests` |
+| Diagnostics while typing | `textDocument/publishDiagnostics` (push) | `TextSyncHandler`, `DocumentLinter`, `DiagnosticsPublisher`, `AnalysisTiming` | `ScriptAnalysis.Analyze` + `WorkspaceLints.Analyze` | — | `StaleAnalysisTests`, `DiagnosticsPublishOrderTests`, `AnalysisTimingTests`, every `*LintTests` |
+| Diagnostics for closed files | same, for files not open (no Hints, paced) | `WorkspaceDiagnosticsPublisher`, `WorkspaceLintSweep`, `LintSweepCache` | stored `ScriptRecord.Diagnostics` | `gscode.diagnostics.scope`, `gscode.workspaceIndexingMode` | `DiagnosticsScopeTests`, `WorkspaceLintSweepTests`, `WorkspaceDiagnosticsRefreshTests`, `LintSweepCacheTests`, `FullModeDiagnosticsTests` |
 | Re-lint other files after an edit | (republish) | `DependentDiagnosticsRefresher` | `ExportSignature`, `LanguageStore.FilesReferencing` | — | `DependentDiagnosticsTests`, `ClosedDependentsDialectTests` |
 | Outline | `textDocument/documentSymbol` | `DocumentSymbolHandler` | extraction (`ExtractionResult`) | `gscode.outline.showAssignments` | `DocumentSymbolNamelessTests` |
 | Folding | `textDocument/foldingRange` | `FoldingRangeHandler` | `FoldingRegions.Compute` | — | `StartupRacePreAnalysisTests` |
 | Expand selection | `textDocument/selectionRange` | `SelectionRangeHandler` | `AstSearch.ChainAt` | — | `StartupRacePreAnalysisTests` |
-| Hover | `textDocument/hover` | `HoverHandler` | `SymbolAtPosition`, `DatabaseQueries`, `MarkdownDocRenderer`, `KeywordDocs`, `FlowTyper` | — | `KeywordHoverTests`, `HoverDefinitionLinkTests`, `SysQualifiedHoverTests`, `BuiltinMacroHoverTests` |
-| Go to definition | `textDocument/definition` | `DefinitionHandler` | `DatabaseQueries.PreferIncludeScope`, `LocalDefinition` | — | `DefinitionHandlerMacroScopeTests`, `FieldNavigationTests`, `LocalDefinitionTests` |
+| Hover | `textDocument/hover` | `HoverHandler` | `SymbolAtPosition`, `MethodResolution.ResolveCall` → `DatabaseQueries.FunctionsTheCallReaches`, `MarkdownDocRenderer`, `KeywordDocs`, `FlowTyper` | — | `KeywordHoverTests`, `HoverDefinitionLinkTests`, `SysQualifiedHoverTests`, `BuiltinMacroHoverTests`, `IncludeDialectCallResolutionTests`, `SharedResolverMatrixTests` |
+| Go to definition | `textDocument/definition` | `DefinitionHandler` | `NavigationSupport.FindDefinitionSites`, `DatabaseQueries.IncludeScopedCallTargets`, `PreferIncludeScope`, `LocalDefinition` | — | `DefinitionHandlerMacroScopeTests`, `FieldNavigationTests`, `LocalDefinitionTests`, `IncludeScopedNavigationTests`, `SharedResolverMatrixTests` |
 | Go to implementation | `textDocument/implementation` | `ImplementationHandler` | `ClassGraph`, `MethodResolution`, `FieldTargets` | — | `ImplementationAndTypeDefinitionTests` |
 | Go to type definition | `textDocument/typeDefinition` | `TypeDefinitionHandler` | `FlowTyper.TryGetValueAt`, `FieldTargets` | — | `ImplementationAndTypeDefinitionTests` |
-| Find references | `textDocument/references` | `ReferencesHandler` | `NavigationSupport.FindAllReferences`, `LocalReferences` | — | `ReferenceScopingTests`, `BuiltinReferenceTests`, `LocalReferencesTests` |
+| Find references | `textDocument/references` | `ReferencesHandler` | `NavigationSupport.FindAllReferences`, `LocalReferences` | — | `ReferenceScopingTests`, `BuiltinReferenceTests`, `LocalReferencesTests`, `IncludeScopedReferenceTests` |
 | Highlight occurrences | `textDocument/documentHighlight` | `DocumentHighlightHandler` | `NavigationSupport.FindReferencesInFile` | — | `DocumentHighlightSameFileTests` |
 | Clickable import paths | `textDocument/documentLink` | `DocumentLinkHandler` | `NavigationSupport.ResolveDirectivePath` | — | — |
 | Semantic highlighting | `textDocument/semanticTokens/*` | `SemanticTokensHandler` | `SemanticTokenBuilder`, `LocalReferences.SemanticTokens` | — | `SemanticTokenBuilderTests`, `LocalSemanticTokensTests` |
-| Completion | `textDocument/completion` (+ resolve) | `CompletionHandler` | `CompletionEngine`, `GscKeywords`, `GscSnippets` | `gscode.completion.*` | `CompletionEngineTests`, `RealisticKeystrokeTests`, `AutoImportCompletionTests`, `NarrowedCompletionTests` |
-| Signature help | `textDocument/signatureHelp` | `SignatureHelpHandler` | `SignatureEngine`, `CallResolution` | — | `SignatureEngineTests`, `SignatureHelpCancellationTests` |
-| Reference-count lens | `textDocument/codeLens` | `CodeLensHandler`, `CodeLensRefresh.cs` | `NavigationSupport.FindAllReferences` | `gscode.codeLens.enabled` | `CodeLensArgumentTests` |
+| Completion | `textDocument/completion` (+ resolve) | `CompletionHandler` | `CompletionEngine`, `GscKeywords`, `GscSnippets`; resolve docs via `FunctionsTheCallReaches` | `gscode.completion.*` | `CompletionEngineTests`, `RealisticKeystrokeTests`, `AutoImportCompletionTests`, `NarrowedCompletionTests`, `CompletionResolveTargetTests` |
+| Signature help | `textDocument/signatureHelp` | `SignatureHelpHandler` | `SignatureEngine`, `CallResolution` | — | `SignatureEngineTests`, `SignatureHelpCancellationTests`, `CallTargetAgreementTests` |
+| Reference-count lens | `textDocument/codeLens` (+ resolve, which counts) | `CodeLensHandler`, `LensCountCache`, `CodeLensRefresh.cs` | `NavigationSupport.FindAllReferences` | `gscode.codeLens.enabled` | `CodeLensArgumentTests`, `CodeLensResolveTests`, `CodeLensCountCacheTests` |
 | Rename symbol | `textDocument/rename`, `prepareRename` | `RenameHandler`, `PrepareRenameHandler` | `FindAllReferences`, `LocalReferences`, `GscIdentifier` | — | `RenameScopeTests`, `RenameNameValidationTests`, `MacroRenameAcrossLanguagesTests` |
 | Call hierarchy | `callHierarchy/*` | `CallHierarchyHandler` | reference index, `EnclosingFunction`, `MethodResolution` | — | `CallHierarchyGroupingTests`, `CallHierarchyDialectTests`, `CallHierarchyMethodTests` |
 | Type hierarchy | `typeHierarchy/*` | `TypeHierarchyHandler` | `ClassGraph` | — | `ResolveForQueryTests` |
@@ -44,8 +44,8 @@ that pin it, so a change to a feature starts from the right file and ends at the
 | Quick fixes | `textDocument/codeAction` | `CodeActionHandler`, `ImportEdits` | lint results + `DatabaseQueries` | — | `CodeActionHandlerTests`, `NamespaceImportFixTests`, `CodeActionLintReuseTests` |
 | Generate ScriptDoc | `gscode/generateScriptDoc` (command, not a code action) | `GenerateScriptDocHandler` | `Core/Docs/ScriptDocTemplate` | — | `GenerateScriptDocTests` |
 | Workspace symbol search | `workspace/symbol` | `WorkspaceSymbolHandler` | both language stores | — | `WorkspaceSymbolShadowingTests` |
-| Watched file changes | `workspace/didChangeWatchedFiles` | `WatchedFilesHandler` | `WatchedFileUpdater` | — | `WatchedFileUpdaterTests`, `WatcherRaceTests`, `HeaderChangeReachTests` |
-| Multi-root folders | `workspace/didChangeWorkspaceFolders` | `WorkspaceFoldersHandler` | `RootConfig`, `WorkspaceIndexer` | — | `WorkspaceFoldersHandlerTests` |
+| Watched file changes | `workspace/didChangeWatchedFiles` (queued, applied in the background) | `WatchedFilesHandler`, `BelowNormalWorkers` | `WatchedFileUpdater` | — | `WatchedFileUpdaterTests`, `WatcherRaceTests`, `HeaderChangeReachTests`, `WatchedFilesBatchTests` |
+| Multi-root folders | `workspace/didChangeWorkspaceFolders` (queued, one change at a time) | `WorkspaceFoldersHandler` | `RootConfig`, `WorkspaceIndexer` | — | `WorkspaceFoldersHandlerTests`, `FullModeDiagnosticsTests` |
 | Settings | `workspace/didChangeConfiguration` | `ConfigurationHandler` | `ServerSettings` | all | `SettingsReachTheServerTests`, `SettingsSnapshotTests`, `InlayFamiliesTests` |
 
 Quick fixes currently offered by `CodeActionHandler`:
@@ -135,6 +135,7 @@ Every `gscode.*` key the client contributes, and the server file that reads it. 
 | `gscode.rawFileWarningMode` | `stock` | `TextSyncHandler` → `RawWriteGuard` | Live |
 | `gscode.workspaceIndexingMode` | `partial` | `StartupIndexRunner`, `WorkspaceFoldersHandler` | Reload |
 | `gscode.enableWorkspaceCache` | `true` | `StartupIndexRunner` | Reload |
+| `gscode.memory.compactionLimitMB` | `1024` | `StartupIndexRunner.ShouldCompact` | Reload (read when the startup index finishes) |
 | `gscode.diagnostics.scope` | `workspace` | `WorkspaceDiagnosticsPublisher`, `ConfigurationHandler` | Live (republishes) |
 | `gscode.outline.showAssignments` | `true` | `DocumentSymbolHandler` | Live |
 | `gscode.codeLens.enabled` | `false` | `CodeLensHandler` | Live |

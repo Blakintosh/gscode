@@ -97,7 +97,7 @@ public class LintBudgetTests
 
     /// <summary>
     /// BO3 and CoD4, because the two dialects run different rules. <c>UnusedIncludeLint</c> and
-    /// <c>IncludeUsageLint</c> walk an include closure on the merge dialect and stand down entirely
+    /// <c>IncludeUsageLint</c> read the file's includes on the merge dialect and stand down entirely
     /// on the namespace one, so a BO3-only gate would leave them unbudgeted — they are among the
     /// most expensive rules that exist, on the corpus where they run.
     /// </summary>

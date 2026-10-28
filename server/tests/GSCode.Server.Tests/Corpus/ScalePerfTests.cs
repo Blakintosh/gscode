@@ -60,18 +60,52 @@ public partial class ScalePerfTests
     private sealed class ScaleRow
     {
         public string Game { get; set; } = "";
+        public string Shape { get; set; } = "";
         public int Total { get; set; }
         public double ComplexShare { get; set; }
         public double ColdSeconds { get; set; }
+
+        /// <summary>Reading every script once before the cold index — see <see cref="ReadEveryScript"/>.</summary>
+        public double DiskReadSeconds { get; set; }
+
+        public long DiskReadBytes { get; set; }
         public double EnumerateSeconds { get; set; }
         public double Parallelism { get; set; }
         public double RetainedMegabytes { get; set; }
+        public double RetainedAfterSweepMegabytes { get; set; }
+        public double HeapMegabytes { get; set; }
+        public double FragmentedMegabytes { get; set; }
+        public double PeakAfterColdMegabytes { get; set; }
+        public double PeakMegabytes { get; set; }
+        public double ColdGcPauseSeconds { get; set; }
+        public string ColdCollections { get; set; } = "";
+
+        /// <summary>The heap through the cold index — see <see cref="HeapSampler"/>.</summary>
+        public List<string> ColdHeapTimeline { get; set; } = [];
+
+        /// <summary>A sampled record's bytes by field — see ScalePerfTests.Memory.</summary>
+        public List<(string Field, double KilobytesPerRecord)> Census { get; set; } = [];
+
+        /// <summary>What the store holds beside its records, per file — see ScalePerfTests.Memory.</summary>
+        public List<(string Field, double KilobytesPerRecord)> IndexCensus { get; set; } = [];
+
+        /// <summary>Every request, the keystroke bundle and the watched-file paths — see ScalePerfTests.EveryComponent.</summary>
+        public ComponentRow? Components { get; set; }
         public double WorkingSetMegabytes { get; set; }
         public double CompactMilliseconds { get; set; }
         public double CompletionP50 { get; set; }
         public double CompletionP99 { get; set; }
         public double CompletionMax { get; set; }
+        public double LiteralP50 { get; set; }
         public double LiteralP99 { get; set; }
+
+        /// <summary>
+        /// The literal requests a garbage collection landed in, and the p99 of the rest, so a slow
+        /// tail can be told apart from a collection that happened to land in it. At 10,000 and 25,000
+        /// heavy files none did: the growth was the request's own walk (PERF.md).
+        /// </summary>
+        public int LiteralCollected { get; set; }
+        public double LiteralP99WithoutCollection { get; set; }
         public double LiteralMax { get; set; }
         public int LiteralRequests { get; set; }
         public double FieldP99 { get; set; }
@@ -104,6 +138,9 @@ public partial class ScalePerfTests
         /// <summary>The broad-list queries — see ScalePerfTests.Lookups.</summary>
         public LookupRow? Lookups { get; set; }
 
+        /// <summary>The requests whose answer grows with the workspace — see ScalePerfTests.Heavy.</summary>
+        public HeavyRow? Heavy { get; set; }
+
         /// <summary>Per lint rule: the worst single file and the p99, so a rule that grows with the workspace is named.</summary>
         public List<(string Rule, double Max, double P99)> LintRules { get; } = [];
 
@@ -125,6 +162,7 @@ public partial class ScalePerfTests
         }
 
         List<ScaleRow> rows = [];
+        string? reportSuffix = null;
         foreach ( GameProfile game in games )
         {
             foreach ( int size in sizes )
@@ -134,18 +172,107 @@ public partial class ScalePerfTests
                 generate.Stop();
                 _output.WriteLine(
                     $"########## {game.ShortName} {corpus.TotalFiles:N0} files ({corpus.CopiedFiles:N0} copied, "
-                    + $"{corpus.ComplexShare * 100:F0}% above-median size) — workspace ready in {generate.Elapsed.TotalSeconds:F1} s");
+                    + $"{corpus.ComplexShare * 100:F0}% above-median size; {corpus.Shape}) — workspace ready in {generate.Elapsed.TotalSeconds:F1} s");
+                _output.WriteLine($"     editor workspace  {corpus.CodeWorkspace}");
 
-                ScaleRow row = await MeasureAsync(corpus);
-                rows.Add(row);
-                WriteRow(row);
+                if ( corpus.Sources.Length == 1 )
+                {
+                    reportSuffix = Path.GetFileNameWithoutExtension(corpus.Sources[0]).TrimStart('_');
+                }
+                else if ( corpus.Sources.Length > 1 )
+                {
+                    reportSuffix = $"top{corpus.Sources.Length}";
+                }
+
+                ScaleRow row = new()
+                {
+                    Game = game.ShortName, Shape = corpus.Shape, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare,
+                };
+
+                // Written whatever happens: a size that fails late — out of memory under a heap limit,
+                // say — would otherwise lose every figure measured before the failure with it.
+                try
+                {
+                    await MeasureAsync(corpus, row);
+                }
+                finally
+                {
+                    rows.Add(row);
+                    WriteRow(row);
+                }
             }
         }
 
-        WriteReport(rows);
+        WriteReport(rows, reportSuffix);
     }
 
-    private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus)
+    /// <summary>
+    /// Builds the workspaces <see cref="Scale_WhereTheTimeGoes"/> would measure and prints their
+    /// <c>.code-workspace</c> files, without measuring anything — for opening one in the editor.
+    /// Its own category so it can run without the measurement; a scale run picks it up too, where
+    /// it finds the workspace already built and costs nothing.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "ScaleWorkspace")]
+    public void Scale_GenerateEditorWorkspaces()
+    {
+        IReadOnlyList<int> sizes = ScaleCorpusFixture.Sizes();
+        IReadOnlyList<GameProfile> games = ScaleCorpusFixture.Games();
+        if ( sizes.Count == 0 || games.Count == 0 )
+        {
+            _output.WriteLine("SKIPPED: set GSCODE_SCALE_SIZES (e.g. 10000,25000,50000) and a GSCODE_CORPUS_<GAME> for the game.");
+            return;
+        }
+
+        foreach ( GameProfile game in games )
+        {
+            foreach ( int size in sizes )
+            {
+                Stopwatch generate = Stopwatch.StartNew();
+                ScaleCorpus corpus = ScaleCorpusFixture.Ensure(game, size);
+                generate.Stop();
+                _output.WriteLine(
+                    $"{game.ShortName} {corpus.TotalFiles:N0} files ({corpus.Shape}), ready in {generate.Elapsed.TotalSeconds:F1} s: {corpus.CodeWorkspace}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appends the phase about to start to <c>GSCODE_SCALE_PHASE_FILE</c> when it is set, so a profiler
+    /// outside the test process can attach for one phase rather than sampling a whole run blind — the
+    /// test's own output is not seen until it ends.
+    /// </summary>
+    private static void Phase(string name)
+    {
+        string? file = Environment.GetEnvironmentVariable("GSCODE_SCALE_PHASE_FILE");
+        if ( string.IsNullOrEmpty(file) )
+        {
+            return;
+        }
+
+        File.AppendAllText(file, $"{DateTime.Now:HH:mm:ss} {Environment.ProcessId} {name}\n");
+    }
+
+    /// <summary>
+    /// Reads every script the cold index will, in parallel, so the cold index is timed from the OS
+    /// file cache. Whether the files are already there is the state of the machine, not the code:
+    /// on a 32 GB machine running two 50,000-file workspaces and a 12 GB server, the cache rarely
+    /// holds both, and the same cold index measured 34.1 s with the files cached and 75.0 s without.
+    /// Reading the cod4 workspace alone took 39.2 s from disk and 3.3 s from the cache. Reported on a
+    /// row of its own, since a first start after a reboot does pay it.
+    /// </summary>
+    private static long ReadEveryScript(ScaleCorpus corpus)
+    {
+        List<string> scripts = [.. ScaleCorpusFixture.StockScripts(corpus), .. ScaleCorpusFixture.CopiedScripts(corpus)];
+        long total = 0;
+        Parallel.ForEach(
+            scripts,
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) },
+            path => Interlocked.Add(ref total, File.ReadAllBytes(path).LongLength));
+        return total;
+    }
+
+    private async Task<ScaleRow> MeasureAsync(ScaleCorpus corpus, ScaleRow row)
     {
         GameProfile previous = GameProfile.Active;
         string databasePath = Path.Combine(Path.GetTempPath(), $"gscode-scale-{Guid.NewGuid():N}.db");
@@ -153,7 +280,6 @@ public partial class ScalePerfTests
         try
         {
             GameProfile.Select(corpus.Profile.ShortName);
-            ScaleRow row = new() { Game = corpus.Profile.ShortName, Total = corpus.TotalFiles, ComplexShare = corpus.ComplexShare };
 
             PerfReport.Memory baseline = PerfReport.Sample();
 
@@ -164,11 +290,28 @@ public partial class ScalePerfTests
             InsertCache inserts = new();
             WorkspaceIndexer indexer = new(database, () => resolver, new PhysicalFileSystem(), names, inserts);
 
+            // What the collector did DURING the cold index: PERF.md found the GC was three quarters of
+            // it at stock size, and a heap ten times larger is where that would show again.
+            TimeSpan pauseBefore = GC.GetTotalPauseDuration();
+            int gen0Before = GC.CollectionCount(0);
+            int gen1Before = GC.CollectionCount(1);
+            int gen2Before = GC.CollectionCount(2);
+
+            Stopwatch disk = Stopwatch.StartNew();
+            row.DiskReadBytes = ReadEveryScript(corpus);
+            row.DiskReadSeconds = disk.Elapsed.TotalSeconds;
+
+            Phase("cold index");
+            using HeapSampler sampler = new();
             Stopwatch cold = Stopwatch.StartNew();
             IndexOutcome coldOutcome = await indexer.IndexAsync(
                 IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
             cold.Stop();
+            row.ColdHeapTimeline = sampler.Stop();
             row.ColdSeconds = cold.Elapsed.TotalSeconds;
+            row.ColdGcPauseSeconds = (GC.GetTotalPauseDuration() - pauseBefore).TotalSeconds;
+            row.ColdCollections = $"{GC.CollectionCount(0) - gen0Before}/{GC.CollectionCount(1) - gen1Before}/{GC.CollectionCount(2) - gen2Before}";
+            row.PeakAfterColdMegabytes = Process.GetCurrentProcess().PeakWorkingSet64 / 1048576.0;
             row.EnumerateSeconds = coldOutcome.Enumerate.TotalSeconds;
             row.Parallelism = coldOutcome.Parallelism;
 
@@ -182,17 +325,54 @@ public partial class ScalePerfTests
             PerfReport.Memory afterIndex = PerfReport.Sample();
             row.RetainedMegabytes = (afterIndex.ManagedLive - baseline.ManagedLive) / 1048576.0;
             row.WorkingSetMegabytes = afterIndex.WorkingSet / 1048576.0;
+            row.Census = MeasureRecordCensus(database);
+            row.IndexCensus = MeasureIndexCensus(database);
+            GCMemoryInfo heap = GC.GetGCMemoryInfo(GCKind.Any);
+            row.HeapMegabytes = heap.HeapSizeBytes / 1048576.0;
+            row.FragmentedMegabytes = heap.FragmentedBytes / 1048576.0;
+
+            // GSCODE_SCALE_COLD_ONLY: the cold index and what it leaves behind, nothing after — for
+            // trying a GC setting or an allocation change in seconds rather than a whole run.
+            if ( Environment.GetEnvironmentVariable("GSCODE_SCALE_COLD_ONLY") == "1" )
+            {
+                GC.KeepAlive(database);
+                return row;
+            }
+
+            // GSCODE_SCALE_SAVE_ONLY: the cold index, then one save of the header every file inserts,
+            // with the heap sampled through it — the watched-file path whose memory is the question.
+            if ( Environment.GetEnvironmentVariable("GSCODE_SCALE_SAVE_ONLY") == "1" )
+            {
+                row.Components = new ComponentRow();
+                MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components, 0, saveHeader: true);
+                return row;
+            }
 
             string apiDirectory = Path.Combine(AppContext.BaseDirectory, "Api");
             BuiltinApiSet builtins = BuiltinApiSet.Load(apiDirectory);
             ObjectFields objectFields = ObjectFields.Load(apiDirectory);
 
             List<string> sample = Sample(ScaleCorpusFixture.CopiedScripts(corpus), RequestSampleFiles);
+            Phase("requests");
             MeasureRequests(row, corpus, sample, database, resolver, names, inserts, builtins, objectFields);
             await MeasureHandlersAsync(row, corpus, database, resolver, names, builtins, objectFields);
             row.Lookups = MeasureLookups(corpus, database, resolver, names, inserts, new CompletionEngine(database, builtins, objectFields));
+            row.Heavy = await MeasureHeavyAsync(corpus, database, resolver, names, builtins, objectFields);
+            Phase("every component");
+            row.Components = await MeasureEveryComponentAsync(corpus, database, resolver, names, builtins, objectFields);
 
+            Phase("lint sweep");
             row.LintSweepSeconds = await MeasureLintSweepAsync(database, indexer, resolver, builtins, objectFields);
+
+            // Again after every request and the sweep have READ the index: anything the index
+            // caches on a read, which the figure taken after the cold index cannot see.
+            Compact();
+            row.RetainedAfterSweepMegabytes = (PerfReport.Sample().ManagedLive - baseline.ManagedLive) / 1048576.0;
+
+            Phase("watched files");
+
+            // Last on this index: the header save re-indexes files and the create/delete pair adds one.
+            MeasureWatchedFiles(corpus, database, indexer, resolver, names, row.Components!, row.LintSweepSeconds, saveHeader: false);
 
             GC.KeepAlive(database);
             database = null!;
@@ -260,6 +440,7 @@ public partial class ScalePerfTests
             }
 
             row.DatabaseMegabytes = DatabaseBytes(databasePath) / 1048576.0;
+            row.PeakMegabytes = Process.GetCurrentProcess().PeakWorkingSet64 / 1048576.0;
             return row;
         }
         finally
@@ -281,9 +462,10 @@ public partial class ScalePerfTests
     /// lands inside whichever request is being timed. That put field completion's p99 at 8-11 ms on
     /// bo3 at 50K with the request itself at about 1 ms — 0.97 ms with tiered compilation switched
     /// off, which is what a server that has been running a while pays. Per-request warming alone
-    /// (<see cref="TimeCompletion"/>) cannot prevent it: the promotion is triggered by the OTHER
-    /// requests. <see cref="ScaleRow.TimedPassJitMethods"/> reports what the JIT still compiled
-    /// during the timed pass, so a run the warm-up did not settle says so.
+    /// (<see cref="TimeCompletion(CompletionEngine, ParseResult, string, Position, GameProfile)"/>)
+    /// cannot prevent it: the promotion is triggered by the OTHER requests.
+    /// <see cref="ScaleRow.TimedPassJitMethods"/> reports what the JIT still compiled during the
+    /// timed pass, so a run the warm-up did not settle says so.
     /// </remarks>
     private static void MeasureRequests(
         ScaleRow row, ScaleCorpus corpus, List<string> sample, ScriptDatabase database, PathResolver resolver,
@@ -344,7 +526,12 @@ public partial class ScalePerfTests
         row.CompletionP99 = Percentile(completions, 0.99);
         row.CompletionMax = completions.Count == 0 ? 0 : completions[^1];
         row.LiteralRequests = literals.Count;
+        row.LiteralP50 = Percentile(literals, 0.50);
         row.LiteralP99 = Percentile(literals, 0.99);
+        List<double> uncollected = timed.LiteralsWithoutCollection;
+        uncollected.Sort();
+        row.LiteralCollected = literals.Count - uncollected.Count;
+        row.LiteralP99WithoutCollection = Percentile(uncollected, 0.99);
         row.LiteralMax = literals.Count == 0 ? 0 : literals[^1];
         row.FieldRequests = fields.Count;
         row.FieldP99 = Percentile(fields, 0.99);
@@ -367,6 +554,9 @@ public partial class ScalePerfTests
         public List<double> Completions { get; } = [];
 
         public List<double> Literals { get; } = [];
+
+        /// <summary>The literal requests no garbage collection landed in.</summary>
+        public List<double> LiteralsWithoutCollection { get; } = [];
 
         public List<double> Fields { get; } = [];
 
@@ -393,7 +583,12 @@ public partial class ScalePerfTests
         Position? literal = LiteralPosition(parsed);
         if ( literal is not null )
         {
-            into.Literals.Add(TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile));
+            double milliseconds = TimeCompletion(engine, parsed, contextId, literal.Value, corpus.Profile, out bool collected);
+            into.Literals.Add(milliseconds);
+            if ( !collected )
+            {
+                into.LiteralsWithoutCollection.Add(milliseconds);
+            }
         }
 
         Position? field = FieldPosition(parsed);
@@ -479,12 +674,22 @@ public partial class ScalePerfTests
     private static double TimeCompletion(
         CompletionEngine engine, ParseResult parsed, string contextId, Position position, GameProfile profile)
     {
+        return TimeCompletion(engine, parsed, contextId, position, profile, out _);
+    }
+
+    /// <param name="collected">Whether a garbage collection ran during the timed request.</param>
+    private static double TimeCompletion(
+        CompletionEngine engine, ParseResult parsed, string contextId, Position position, GameProfile profile,
+        out bool collected)
+    {
         // Warm first, as CorpusPerfTests does, so lazily built state is not charged to the request.
         Complete(engine, parsed, contextId, position, profile);
 
+        int collections = GC.CollectionCount(0);
         Stopwatch watch = Stopwatch.StartNew();
         Complete(engine, parsed, contextId, position, profile);
         watch.Stop();
+        collected = GC.CollectionCount(0) != collections;
         return watch.Elapsed.TotalMilliseconds;
     }
 
@@ -661,13 +866,33 @@ public partial class ScalePerfTests
         double sweepBudget = BudgetAt(s_sweepBudget, row.Total);
         double memoryBudget = BudgetAt(s_memoryBudget, row.Total);
 
+        _output.WriteLine($"     disk read first   {row.DiskReadSeconds,8:F1} s   {row.DiskReadBytes / 1e9:F1} GB, so the cold index below is timed from the OS file cache");
         _output.WriteLine($"     cold index        {row.ColdSeconds,8:F1} s   budget {coldBudget,6:F1} s   {Verdict(row.ColdSeconds, coldBudget)}  (find {row.EnumerateSeconds:F1} s, {row.Parallelism:F1}x parallel)");
         _output.WriteLine($"     warm start        {row.WarmSeconds,8:F1} s   budget {warmBudget,6:F1} s   {Verdict(row.WarmSeconds, warmBudget)}  (LoadAll {row.LoadAllMilliseconds:F0} ms / {row.LoadAllMegabytes:F0} MB, index {row.WarmIndexSeconds:F1} s)");
-        _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; working set {row.WorkingSetMegabytes:F0} MB)");
+        _output.WriteLine($"     retained memory   {row.RetainedMegabytes,8:F0} MB  budget {memoryBudget,6:F0} MB  {Verdict(row.RetainedMegabytes, memoryBudget)}  (soft; {row.RetainedMegabytes * 1024 / Math.Max(1, row.Total):F0} KB a file; working set {row.WorkingSetMegabytes:F0} MB)");
+        _output.WriteLine($"     after the sweep   {row.RetainedAfterSweepMegabytes,8:F0} MB  retained once every request and the sweep have read the index");
         _output.WriteLine($"     compaction pause  {row.CompactMilliseconds,8:F0} ms");
+        _output.WriteLine($"     GC in cold index  {row.ColdGcPauseSeconds,8:F1} s paused  (collections gen0/1/2 {row.ColdCollections}); heap {row.HeapMegabytes:F0} MB, fragmented {row.FragmentedMegabytes:F0} MB");
+        _output.WriteLine($"     peak working set  {row.PeakAfterColdMegabytes,8:F0} MB after the cold index, {row.PeakMegabytes:F0} MB over the whole run");
+        foreach ( string sample in row.ColdHeapTimeline )
+        {
+            _output.WriteLine($"       cold heap {sample}");
+        }
+
+        _output.WriteLine($"     record bytes      {row.Census.Sum(field => field.KilobytesPerRecord),8:F1} KB a sampled record, by field:");
+        foreach ( (string Field, double KilobytesPerRecord) field in row.Census.Take(12) )
+        {
+            _output.WriteLine($"       {field.Field,-30} {field.KilobytesPerRecord,8:F1} KB");
+        }
+
+        _output.WriteLine($"     index bytes       {row.IndexCensus.Sum(field => field.KilobytesPerRecord),8:F1} KB a file beside the records, by field:");
+        foreach ( (string Field, double KilobytesPerRecord) field in row.IndexCensus.Take(16) )
+        {
+            _output.WriteLine($"       {field.Field,-44} {field.KilobytesPerRecord,8:F1} KB");
+        }
         _output.WriteLine($"     lint sweep        {row.LintSweepSeconds,8:F1} s   budget {sweepBudget,6:F1} s   {Verdict(row.LintSweepSeconds, sweepBudget)}");
         _output.WriteLine($"     completion p99    {row.CompletionP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.CompletionP99, CompletionBudgetMilliseconds)}  (p50 {row.CompletionP50:F2}, max {row.CompletionMax:F1})");
-        _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, max {row.LiteralMax:F1})");
+        _output.WriteLine($"     literal compl p99 {row.LiteralP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.LiteralP99, CompletionBudgetMilliseconds)}  ({row.LiteralRequests} requests, p50 {row.LiteralP50:F2}, max {row.LiteralMax:F1}; {row.LiteralCollected} hit a GC, p99 of the rest {row.LiteralP99WithoutCollection:F2})");
         _output.WriteLine($"     field compl p99   {row.FieldP99,8:F2} ms  budget {CompletionBudgetMilliseconds,6:F1} ms  {Verdict(row.FieldP99, CompletionBudgetMilliseconds)}  ({row.FieldRequests} requests, max {row.FieldMax:F1})");
         _output.WriteLine($"     codeLens p99      {row.LensP99,8:F1} ms  max {row.LensMax,7:F1} ms  ({row.HandlerFiles} files, whole file)");
         _output.WriteLine($"     references p99    {row.ReferencesP99,8:F1} ms  max {row.ReferencesMax,7:F1} ms  ({row.ReferenceResults:N0} locations returned in all)");
@@ -684,6 +909,16 @@ public partial class ScalePerfTests
         if ( row.Lookups is not null )
         {
             WriteLookups(row.Lookups, row);
+        }
+
+        if ( row.Heavy is not null )
+        {
+            WriteHeavy(row.Heavy);
+        }
+
+        if ( row.Components is not null )
+        {
+            WriteComponents(row.Components);
         }
 
         if ( row.DroppedWrites > 0 )
@@ -709,10 +944,25 @@ public partial class ScalePerfTests
         }
     }
 
-    /// <summary>A markdown table under <c>temp/</c>, ready to paste into PERF.md.</summary>
-    private void WriteReport(List<ScaleRow> rows)
+    /// <summary>
+    /// A markdown table under <c>temp/</c>, ready to paste into PERF.md. A single-source run writes
+    /// <c>gscode-scale-&lt;stem&gt;.md</c> instead, so the mixed baseline stays to compare against.
+    /// </summary>
+    private void WriteReport(List<ScaleRow> rows, string? suffix)
     {
         StringBuilder table = new();
+        if ( suffix is not null )
+        {
+            List<string> shapes = [];
+            foreach ( ScaleRow row in rows )
+            {
+                shapes.Add($"{row.Game} {row.Total:N0} = {row.Shape}");
+            }
+
+            table.AppendLine($"Shape: {string.Join("; ", shapes)}");
+            table.AppendLine();
+        }
+
         table.AppendLine("| game | files | cold s | warm s | LoadAll ms | retained MB | compact ms | sweep s | compl p99 ms | literal p99 ms | field p99 ms | lens p99 ms | refs p99 ms | rename p99 ms | lint max ms | dropped | restored |");
         table.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
         foreach ( ScaleRow row in rows )
@@ -778,10 +1028,12 @@ public partial class ScalePerfTests
             ("ArgumentCountLint", "that one rule's time on one file"),
         ]);
         table.AppendLine("Every column here is p99 ms over the sampled requests: 99% took less.");
+        AppendHeavyTable(table, rows);
+        AppendComponentTable(table, rows);
 
         string directory = ReportPage.OutputDirectory("GSCODE_PERF_REPORT");
         Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, ReportPage.ScalePage);
+        string path = Path.Combine(directory, suffix is null ? ReportPage.ScalePage : $"gscode-scale-{suffix}.md");
         File.WriteAllText(path, table.ToString());
 
         _output.WriteLine("");

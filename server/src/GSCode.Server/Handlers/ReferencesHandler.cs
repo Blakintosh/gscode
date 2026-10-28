@@ -54,10 +54,9 @@ public sealed class ReferencesHandler : ReferencesHandlerBase
 
         // On the merge dialects (#include) a function and its calls are keyed (null, name), so
         // unrelated files sharing a name share this key. FindAllReferences narrows that to the
-        // declaration this document actually reaches — see NavigationSupport.DeclaringFile — and
+        // declaration this document actually reaches — DatabaseQueries.IncludeScopedCallTargets — and
         // does it inside the SHARED query, so this list and the CodeLens count stay in step.
-        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
-            _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = _support.FindAllReferences(target, hit);
 
         // Per entry, because each builds a DocumentUri: the shared query's own comment names a
         // 1,970-reference case, and find-references is one of the requests a client re-sends.

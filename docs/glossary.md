@@ -36,8 +36,13 @@ anything.
 **CSC / GSC** — client-side and server-side script. Two separate language worlds, two
 `LanguageStore`s. WaW, BO1 and BO3 have `.csc`; CoD4 and MW2 do not.
 
-**Debounce** — the 250 ms wait after a keystroke before analysis runs
-(`AnalysisTiming.DebounceMilliseconds`). Also the unit lint budgets are stated in.
+**Debounce** — the wait after a keystroke before analysis runs: three times the document's last
+analysis, between 125 and 250 ms (`AnalysisTiming.DebounceFor`). The 250 ms ceiling
+(`DebounceMilliseconds`) is also the unit lint budgets are stated in.
+
+**Devraw** — a folder beside raw (`share\devraw` on BO3, `devraw` elsewhere) with raw's layout,
+holding development files that do not ship. Indexed as raw context and searched after raw; a devraw
+file raw also has is not indexed.
 
 **Dependents** — the files whose diagnostics may change when a file's exported surface changes.
 Re-linted by `DependentDiagnosticsRefresher`.
@@ -71,8 +76,9 @@ language worlds.
 **Harvest** — a corpus sweep that writes a list (e.g. calls resolving to nothing) as input for
 curating game data. Files in `server/tests/GSCode.Server.Tests/harvest/`.
 
-**Include / merge dialect** — the games before BO3. `#include` merges a file's functions into the
-caller's scope; functions are keyed by bare name.
+**Include / merge dialect** — the games before BO3. `#include` merges a file's OWN functions into the
+caller's scope, one level deep: not what that file itself includes. Functions are keyed by bare
+name, so a call means only what its own file provides (`DatabaseQueries.FunctionsTheCallReaches`).
 
 **Index** — two meanings. (1) The startup pass that analyses every script into records
 (`WorkspaceIndexer`). (2) One of the inverted indexes in a `LanguageStore` that answer a question
@@ -90,9 +96,12 @@ function's key includes its namespace.
 **Node lint** — a rule judging one AST node at a time, driven by the shared walk in `NodeLintPass`.
 
 **Overlay / shadowing** — a mod file at the same relative path as a raw file replaces it for that
-mod. Queries apply this per record (`HasOverlayAt`).
+mod. Queries apply this per record (`DatabaseQueries.IsLoadedFor`: a record the asker sees and the
+engine would load).
 
-**Path call** — `maps\mp\_utility::foo()`: a call naming the file directly. Pre-BO3 only.
+**Path call** — `maps\mp\_utility::foo()`: a call naming the file directly. Pre-BO3 only. It reaches
+that file's own functions and nothing the file includes, and needs no `#include`. A request at a
+cursor finds it with `NavigationTarget.PathCallAt`.
 
 **Pragma** — `// #pragma disable <code>` … `// #pragma restore <code>`: suppresses diagnostics by
 code in a region (`PragmaDirectives`).

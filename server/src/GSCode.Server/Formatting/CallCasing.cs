@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using GSCode.Core;
 using GSCode.Core.Symbols;
 using GSCode.Server.Handlers;
 using GSCode.Workspace.Api;
@@ -92,7 +93,7 @@ public sealed class CallCasing : ICasingLookup
             return _builtins.Find(nameKey)?.Name;
         }
 
-        HashSet<string> declared = FunctionSpellings(namespaceKey, nameKey);
+        HashSet<string> declared = namespaceKey is null ? BareCallSpellings(nameKey) : FunctionSpellings(namespaceKey, nameKey);
         string? script = SoleSpelling(declared);
 
         // A qualified call names a namespace or a class, never a builtin.
@@ -113,6 +114,38 @@ public sealed class CallCasing : ICasingLookup
         }
 
         return script;
+    }
+
+    /// <summary>
+    /// The spellings a bare call can mean. On a namespace dialect the engine resolves it in the
+    /// namespace governing the call, as ArgumentCountLint and FunctionResolutionLint look it up, so
+    /// it is asked of the namespaces this file declares into — usually one — rather than of every
+    /// namespace. With no position to hand, all of the file's are asked: a superset, which can only
+    /// leave a name as written where two of them disagree, never recase it wrongly.
+    ///
+    /// Asked by name alone, a call to a private helper read every other file declaring that name
+    /// and skipped each as invisible before giving up: 2,000 copies of archetype_robot.gsc at 50,000
+    /// heavy BO3 files, once per such helper, put a whole-file format at 378 ms p99.
+    /// </summary>
+    private HashSet<string> BareCallSpellings(string nameKey)
+    {
+        GameProfile game = GameProfile.Active;
+        if ( !game.ResolvesByNamespace || _target.Result.Extraction.Namespaces.IsEmpty )
+        {
+            return FunctionSpellings(null, nameKey);
+        }
+
+        HashSet<string> spellings = new(StringComparer.Ordinal);
+        HashSet<string> asked = new(StringComparer.Ordinal);
+        foreach ( NamespaceSpan span in _target.Result.Extraction.Namespaces )
+        {
+            if ( asked.Add(span.KeyName) )
+            {
+                spellings.UnionWith(FunctionSpellings(game.KeyNamespace(span.KeyName), nameKey));
+            }
+        }
+
+        return spellings;
     }
 
     /// <summary>

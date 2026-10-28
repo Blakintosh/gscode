@@ -18,6 +18,9 @@ public sealed partial class Parser
 {
     private readonly ImmutableArray<PToken> _tokens;
     private readonly GameProfile _profile;
+
+    /// <summary>Interns the strings the parser builds itself (directive and path-call paths), which no token carries whole.</summary>
+    private readonly NameTable _names;
     private readonly ImmutableArray<Diagnostic>.Builder _diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
     private int _index;
     private int _nesting;
@@ -55,18 +58,19 @@ public sealed partial class Parser
     /// </summary>
     private readonly CancellationToken _cancellation;
 
-    private Parser(ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellation)
+    private Parser(ImmutableArray<PToken> tokens, NameTable names, GameProfile profile, CancellationToken cancellation)
     {
         _tokens = tokens;
+        _names = names;
         _profile = profile;
         _cancellation = cancellation;
     }
 
     /// <summary>Parses a preprocessed token stream into a syntax tree for the given game's dialect.</summary>
     public static ParseTree Parse(
-        ImmutableArray<PToken> tokens, GameProfile profile, CancellationToken cancellationToken = default)
+        ImmutableArray<PToken> tokens, NameTable names, GameProfile profile, CancellationToken cancellationToken = default)
     {
-        Parser parser = new(tokens, profile, cancellationToken);
+        Parser parser = new(tokens, names, profile, cancellationToken);
         ScriptNode root = parser.ParseScript();
         return new ParseTree(root, parser._diagnostics.ToImmutable());
     }

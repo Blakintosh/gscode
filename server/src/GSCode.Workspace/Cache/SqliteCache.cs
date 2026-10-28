@@ -21,6 +21,7 @@ public sealed class SqliteCache : IAsyncDisposable
     private sealed record UpsertCommand(
         string Path, int Language, string ContextId, string RelativePath, ulong ContentHash, byte[] Blob) : WriteCommand;
     private sealed record DeleteCommand(string Path) : WriteCommand;
+    private sealed record SweepCommand(string Fingerprint, IReadOnlyList<SweptEntry> Entries) : WriteCommand;
 
     private readonly SqliteConnection _connection;
     private readonly Channel<WriteCommand> _writes;
@@ -112,10 +113,36 @@ public sealed class SqliteCache : IAsyncDisposable
     }
 
     /// <summary>
-    /// Opens (or creates) the cache. On any version or build-identity mismatch the file
-    /// table is wiped so cold start re-indexes from scratch.
+    /// Opens (or creates) the cache. On any version or build-identity mismatch the cache starts
+    /// empty so cold start re-indexes from scratch.
+    ///
+    /// Empty by deleting the file rather than its rows: every update is a mismatch, and deleting the
+    /// rows visits every page and leaves the file at full size until a VACUUM (PERF.md has the cost).
+    /// The rows are deleted only when the file cannot be: another server holding it open on the same
+    /// workspace.
     /// </summary>
     public static SqliteCache Open(string databasePath, string serverBuildIdentity)
+    {
+        SqliteConnection connection = Connect(databasePath);
+
+        if ( !IsCurrent(connection, serverBuildIdentity) )
+        {
+            connection.Dispose();
+            bool deleted = DeleteDatabase(databasePath);
+            connection = Connect(databasePath);
+            if ( !deleted )
+            {
+                Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM swept; DELETE FROM meta;");
+            }
+
+            WriteMeta(connection, serverBuildIdentity);
+        }
+
+        return new SqliteCache(connection);
+    }
+
+    /// <summary>Opens the database, creating it and its tables when they are missing.</summary>
+    private static SqliteConnection Connect(string databasePath)
     {
         SqliteConnection connection = new(new SqliteConnectionStringBuilder
         {
@@ -134,14 +161,7 @@ public sealed class SqliteCache : IAsyncDisposable
         Execute(connection, "PRAGMA journal_mode=WAL;");
         Execute(connection, "PRAGMA busy_timeout=5000;");
         Execute(connection, CacheSchema.CreateTables);
-
-        if ( !IsCurrent(connection, serverBuildIdentity) )
-        {
-            Execute(connection, "DROP TABLE IF EXISTS deps; DELETE FROM files; DELETE FROM meta;");
-            WriteMeta(connection, serverBuildIdentity);
-        }
-
-        return new SqliteCache(connection);
+        return connection;
     }
 
     /// <summary>
@@ -184,6 +204,47 @@ public sealed class SqliteCache : IAsyncDisposable
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// The lint sweep's stored results and the workspace fingerprint they describe, or null when no
+    /// sweep has been stored. Read up front, as <see cref="LoadAll"/> is, before the writer has
+    /// anything to do: the connection is not shared with it safely.
+    /// </summary>
+    public StoredSweep? LoadSweep()
+    {
+        string? fingerprint = ReadMeta(_connection, CacheSchema.MetaSweepFingerprint);
+        if ( fingerprint is null )
+        {
+            return null;
+        }
+
+        Dictionary<string, SweptEntry> entries = new(StringComparer.Ordinal);
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "SELECT path, content_hash, diagnostics FROM swept;";
+        using SqliteDataReader reader = command.ExecuteReader();
+        while ( reader.Read() )
+        {
+            if ( !ulong.TryParse(reader.GetString(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong contentHash) )
+            {
+                continue;
+            }
+
+            string path = reader.GetString(0);
+            entries[path] = new SweptEntry(path, contentHash, (byte[])reader[2]);
+        }
+
+        return new StoredSweep(fingerprint, entries);
+    }
+
+    /// <summary>
+    /// Replaces the stored sweep with <paramref name="entries"/>, described by
+    /// <paramref name="fingerprint"/>. The rows and the fingerprint are written in one transaction,
+    /// so a start never reads one without the other.
+    /// </summary>
+    public void SaveSweep(string fingerprint, IReadOnlyList<SweptEntry> entries)
+    {
+        Submit(new SweepCommand(fingerprint, entries));
     }
 
     /// <summary>
@@ -355,6 +416,9 @@ public sealed class SqliteCache : IAsyncDisposable
                 case DeleteCommand deleteCommand:
                     ApplyDelete(deleteCommand.Path, delete);
                     break;
+                case SweepCommand sweepCommand:
+                    ApplySweep(sweepCommand, transaction);
+                    break;
                 default:
                     break;
             }
@@ -411,6 +475,34 @@ public sealed class SqliteCache : IAsyncDisposable
         upsert.ExecuteNonQuery();
     }
 
+    private void ApplySweep(SweepCommand command, SqliteTransaction transaction)
+    {
+        using ( SqliteCommand clear = _connection.CreateCommand() )
+        {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM swept;";
+            clear.ExecuteNonQuery();
+        }
+
+        using ( SqliteCommand insert = _connection.CreateCommand() )
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO swept (path, content_hash, diagnostics) VALUES ($path, $hash, $diagnostics);";
+            insert.Parameters.AddWithValue("$path", "");
+            insert.Parameters.AddWithValue("$hash", "");
+            insert.Parameters.AddWithValue("$diagnostics", Array.Empty<byte>());
+            foreach ( SweptEntry entry in command.Entries )
+            {
+                insert.Parameters["$path"].Value = entry.Path;
+                insert.Parameters["$hash"].Value = entry.ContentHash.ToString(CultureInfo.InvariantCulture);
+                insert.Parameters["$diagnostics"].Value = entry.Diagnostics;
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        SetMeta(_connection, CacheSchema.MetaSweepFingerprint, command.Fingerprint, transaction);
+    }
+
     private static void ApplyDelete(string path, SqliteCommand command)
     {
         command.Parameters["$path"].Value = path;
@@ -443,9 +535,10 @@ public sealed class SqliteCache : IAsyncDisposable
         return command.ExecuteScalar() as string;
     }
 
-    private static void SetMeta(SqliteConnection connection, string key, string value)
+    private static void SetMeta(SqliteConnection connection, string key, string value, SqliteTransaction? transaction = null)
     {
         using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ($key, $value);";
         command.Parameters.AddWithValue("$key", key);
         command.Parameters.AddWithValue("$value", value);

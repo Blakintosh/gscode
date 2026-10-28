@@ -10,7 +10,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
-using PathCallReference = GSCode.Parser.Extraction.PathCallReference;
 using Position = GSCode.Core.Text.Position;
 using TextRange = GSCode.Core.Text.TextRange;
 
@@ -104,7 +103,7 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
         bool field = hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field;
 
         ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> sources =
-            [.. DefinitionSources(target, hit.Key, hit.ReferenceKind)
+            [.. DefinitionSources(target, hit)
                 .Where(source => field ? source.Entry.IsFieldWrite : source.Entry.Kind == ReferenceKind.Definition)];
 
         sources = ScopeToIncludes(target, hit, sources);
@@ -159,18 +158,24 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// macro keys (a macro declared in a header is recorded there rather than in either language
     /// store, and without it go-to-definition on an inserted macro finds nothing at all).
     /// </summary>
-    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(
-        NavigationTarget target, SymbolKey key, ReferenceKind referenceKind)
+    private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> DefinitionSources(NavigationTarget target, PositionHit hit)
     {
-        return _support.FindAllReferences(target, key, referenceKind);
+        // A field has no declaration; its writes are everywhere it is written.
+        if ( hit.Key.Kind == GSCode.Core.Symbols.SymbolKind.Field )
+        {
+            return _support.FindAllReferences(target, hit.Key, hit.ReferenceKind);
+        }
+
+        return _support.FindDefinitionSites(target, hit);
     }
 
     /// <summary>
-    /// Narrows definitions to the file the call actually reaches. A path call
-    /// (<c>maps\x::foo()</c>) names ONE file, so it pins to that; anything else prefers the asking
-    /// file's import scope — itself plus the files it links against. Either way it is a
-    /// PREFERENCE — the full set comes back when nothing matches, so a missing import still
-    /// resolves.
+    /// Narrows definitions to the file the call actually reaches. A function call on an include
+    /// dialect is strict: the declarations <see cref="DatabaseQueries.FunctionsTheCallReaches"/>
+    /// names (the file's own, else its direct includes' own, or the named file's own for a path
+    /// call), and none when it names none. Anything else — a namespace
+    /// dialect, a class, a macro's fallback — prefers the asking file's import scope, itself plus the
+    /// files it links against, and gets the full set back when nothing matches.
     ///
     /// Both dialect families need this, for the same reason arrived at differently. A merge
     /// dialect drops the namespace from the key outright, so every same-named function in the
@@ -182,23 +187,30 @@ public sealed class DefinitionHandler : DefinitionHandlerBase
     /// see <see cref="GSCode.Workspace.Analysis.AmbiguousFunctionLint"/>, which counts them —
     /// almost all of them one game mode's copy against another's.
     ///
-    /// Which directive spells the scope is the only difference, and
-    /// <see cref="DatabaseQueries.LinkedScriptPaths"/> owns that choice so it is made once. Both
-    /// are DIRECT-only. BO3 does not re-export what an imported file itself imports, and a merge
-    /// dialect's transitive reach is deliberately not used here (preferring too little only costs
-    /// a wider answer, which the fallback already allows).
+    /// <see cref="DatabaseQueries.LinkedScriptPaths"/> spells the preference scope, DIRECT-only:
+    /// BO3 does not re-export what an imported file itself imports.
     /// </summary>
     private ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> ScopeToIncludes(
         NavigationTarget target, PositionHit hit, ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> definitions)
     {
         // A path call names its target file explicitly — pin to it (as its own single-file scope).
         // Empty on BO3, which has no inline path calls, so the loop costs nothing there.
-        foreach ( PathCallReference pathCall in target.Result.Extraction.PathCalls )
+        string pathCallTarget = target.PathCallAt(hit.Range);
+
+        // On an include dialect a function call reaches only what the file a path call names, or
+        // the file itself and its direct includes, declare themselves: the engine never looks a name
+        // up across the install. So that set, and nothing wider when it is empty.
+        ImmutableArray<ResolvedFunction>? reached = DatabaseQueries.IncludeScopedCallTargets(
+            target.Store, target.ContextId, target.Path, hit.Key, pathCallTarget);
+        if ( reached is ImmutableArray<ResolvedFunction> targets )
         {
-            if ( pathCall.NameRange == hit.Range )
-            {
-                return DatabaseQueries.PreferIncludeScope(definitions, pathCall.Path, includedPaths: []);
-            }
+            HashSet<string> declaring = [.. targets.Select(static function => function.Record.Path)];
+            return [.. definitions.Where(definition => declaring.Contains(definition.Record.Path))];
+        }
+
+        if ( pathCallTarget.Length > 0 )
+        {
+            return DatabaseQueries.PreferIncludeScope(definitions, pathCallTarget, includedPaths: []);
         }
 
         ResolutionContext context = _support.Resolver.GetContext(target.Path);

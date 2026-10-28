@@ -467,6 +467,16 @@ public sealed partial record GameProfile
     public string ModsSubfolder { get; init; } = "mods";
 
     /// <summary>
+    /// The folder under raw (and devraw) that holds every script, or "" when scripts sit across raw's
+    /// top level. BO3 keeps all 980 of its stock scripts under <c>scripts</c>, beside six thousand
+    /// files that are not scripts; every earlier game spreads them over <c>maps</c>,
+    /// <c>animscripts</c>, <c>character</c>, <c>aitype</c>, <c>clientscripts</c> and more — BO1 adds
+    /// per-level folders — so for those the whole of raw is walked. Only the cold-index WALK reads
+    /// this; resolution probes the path a directive names, wherever it is.
+    /// </summary>
+    public string RawScriptsSubfolder { get; init; } = "";
+
+    /// <summary>
     /// The builtin-API filename for a language world (e.g. <c>t7_api_gsc.json</c>), or null when
     /// this game ships no data. The world suffix is the language's own extension, so a dialect with
     /// different extensions names its files consistently.

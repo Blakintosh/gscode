@@ -61,7 +61,7 @@ public static class ScriptAnalysis
             Preprocessor.Process(filePath, lexed.Tokens, text, insertProvider, names, game, headerCache);
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, game, cancellationToken);
+        ParseTree tree = Syntax.Parser.Parse(preprocessed.Tokens, names, game, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         ExtractionResult extraction = SymbolExtractor.Extract(filePath, tree, preprocessed, lexed.Tokens, text, names, game);

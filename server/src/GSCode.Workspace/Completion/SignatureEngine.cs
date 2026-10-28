@@ -58,6 +58,7 @@ public sealed class SignatureEngine
             ? tokens[site.Value.NamespaceIndex].GetText(result.Text).ToString().ToLowerInvariant()
             : null;
 
+        string pathCallTarget = WrittenPath(tokens, result.Text, site.Value.NamespaceIndex);
         ArrowReceiver arrow = ClassifyArrow(tokens, result.Text, site.Value.CalleeIndex);
 
         // A macro is asked BEFORE a function, because the preprocessor gets there first: where a
@@ -84,7 +85,7 @@ public sealed class SignatureEngine
         }
 
         SignatureResult? scriptSignature = TryScriptFunction(
-            result, contextId, namespaceName, calleeName, site.Value.ActiveParameter, position, arrow, game);
+            result, contextId, namespaceName, pathCallTarget, calleeName, site.Value.ActiveParameter, position, arrow, game);
         if ( scriptSignature is not null )
         {
             return scriptSignature;
@@ -210,8 +211,8 @@ public sealed class SignatureEngine
     }
 
     private SignatureResult? TryScriptFunction(
-        ParseResult result, string contextId, string? namespaceName, string calleeName, int activeParameter,
-        Position position, ArrowReceiver arrow, GameProfile game)
+        ParseResult result, string contextId, string? namespaceName, string pathCallTarget, string calleeName,
+        int activeParameter, Position position, ArrowReceiver arrow, GameProfile game)
     {
         LanguageStore store = _database.StoreFor(result.Language);
         string keyName = calleeName.ToLowerInvariant();
@@ -253,20 +254,24 @@ public sealed class SignatureEngine
             return null;
         }
 
-        if ( namespaceName is not null )
-        {
-            ImmutableArray<ResolvedFunction> qualified = DatabaseQueries.LookupFunctions(
-                store, contextId, result.FilePath, namespaceName, keyName, askingNamespaces: result.Extraction.DeclaredNamespaces);
-
-            return qualified.Length == 0 ? null : BuildSignature(qualified[0].Function, qualified[0].OwnerClass, activeParameter);
-        }
-
         // Shared with the parameter-name inlay hints, which ask the same question about the same
         // call. See CallResolution for the split and why it exists.
         //
         // A function found by namespace carries no owner class — only a method lookup sets one — so
         // nothing is lost by taking the symbol rather than the ResolvedFunction here.
-        FunctionSymbol? script = CallResolution.UnqualifiedFunction(store, contextId, result, keyName, game);
+        FunctionSymbol? script;
+        if ( pathCallTarget.Length > 0 )
+        {
+            script = CallResolution.PathQualifiedFunction(store, contextId, result.FilePath, pathCallTarget, keyName);
+        }
+        else if ( namespaceName is not null )
+        {
+            script = CallResolution.QualifiedFunction(store, contextId, result, namespaceName, keyName);
+        }
+        else
+        {
+            script = CallResolution.UnqualifiedFunction(store, contextId, result, keyName, game);
+        }
 
         return script is null ? null : BuildSignature(script, null, activeParameter);
     }
@@ -461,6 +466,41 @@ public sealed class SignatureEngine
     }
 
     private readonly record struct CallSite(int CalleeIndex, int NamespaceIndex, int ActiveParameter);
+
+    /// <summary>
+    /// The path a <c>maps\mp\_utility::foo(</c> call is written with, or "" when the qualifier is a
+    /// plain namespace. Read from the tokens, as the call site is, so it works on an argument list
+    /// the parser has not closed yet.
+    /// </summary>
+    private static string WrittenPath(ImmutableArray<Token> tokens, SourceText text, int namespaceIndex)
+    {
+        if ( namespaceIndex < 0 )
+        {
+            return "";
+        }
+
+        List<string> segments = [tokens[namespaceIndex].GetText(text).ToString()];
+        int index = namespaceIndex;
+        while ( true )
+        {
+            int separator = TokenFacts.PreviousSignificant(tokens, index);
+            if ( separator < 0 || tokens[separator].Kind != TokenKind.Backslash )
+            {
+                break;
+            }
+
+            int segment = TokenFacts.PreviousSignificant(tokens, separator);
+            if ( segment < 0 || tokens[segment].Kind != TokenKind.Identifier )
+            {
+                break;
+            }
+
+            segments.Insert(0, tokens[segment].GetText(text).ToString());
+            index = segment;
+        }
+
+        return segments.Count > 1 ? string.Join('\\', segments) : "";
+    }
 
     /// <summary>
     /// Walks back from the cursor tracking bracket depth to find the '(' that encloses it,

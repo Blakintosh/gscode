@@ -16,9 +16,37 @@ namespace GSCode.Server.Handlers;
 public static class AnalysisTiming
 {
     /// <summary>
-    /// How long a document's re-analysis waits after the last edit. Everything the editor runs on
-    /// a keystroke — the parse and every cross-file lint — has to fit inside this to keep one
-    /// analysis from overlapping the next.
+    /// The longest a document's re-analysis waits after the last edit, and the budget everything the
+    /// editor runs on a keystroke — the parse and every cross-file lint — has to fit inside to keep
+    /// one analysis from overlapping the next. A file that analyses quickly waits less: see
+    /// <see cref="DebounceFor"/>.
     /// </summary>
     public const int DebounceMilliseconds = 250;
+
+    /// <summary>
+    /// The shortest wait. Long enough that the pause between two keys of a word usually falls
+    /// inside it, so a half-typed name is not reported as unknown on its way to being typed.
+    /// </summary>
+    public const int MinimumDebounceMilliseconds = 125;
+
+    /// <summary>
+    /// How long to wait after an edit to a document whose last analysis took
+    /// <paramref name="lastAnalysisMilliseconds"/>: three times that, between
+    /// <see cref="MinimumDebounceMilliseconds"/> and <see cref="DebounceMilliseconds"/>, or the
+    /// longest when nothing has been measured yet.
+    ///
+    /// A fixed 250 ms was most of what an edit's diagnostics took to appear. Over stdio at 50,000
+    /// heavy BO3 files, _globallogic.gsc analysed in 30–33 ms and its diagnostics landed 280–307 ms
+    /// after the last change. Three times the analysis keeps the server's share of a burst of typing
+    /// to about a third, and a slow file still waits the whole budget.
+    /// </summary>
+    public static int DebounceFor(double lastAnalysisMilliseconds)
+    {
+        if ( lastAnalysisMilliseconds <= 0 )
+        {
+            return DebounceMilliseconds;
+        }
+
+        return (int)Math.Clamp(lastAnalysisMilliseconds * 3, MinimumDebounceMilliseconds, DebounceMilliseconds);
+    }
 }

@@ -25,6 +25,14 @@ The language facts that shape the whole design:
   (`util::foo()`), and a function's identity includes its namespace. Every earlier game uses
   `#include`, which **merges** the included file's functions into the caller's scope: calls are bare
   or path-qualified (`maps\mp\_utility::foo()`), and identity is the bare name.
+- **The engine finds an include-dialect function only through the paths a script provides.** A
+  bare call sees the file's own functions, then its DIRECT includes' own functions — one level: an
+  include does not bring in what that file itself includes. A path call sees the named file's own
+  functions and nothing that file includes. The engine never looks a name up across the install, so
+  neither does GSCode: `DatabaseQueries.FunctionsTheCallReaches` is that rule, every request that
+  turns a call into a declaration asks it, and the include lints (5013, 5026, 5012) apply the same
+  rule. A namespace does not pin a file either: BO3's `mp` and `zm` copies of a script share one
+  `#namespace`, so a namespaced call narrows to the copy the file `#using`s.
 - **Five dialects.** CoD4, WaW, MW2, BO1, BO3. Keywords, directives, pointer syntax, doc-comment
   style, global objects and bundled engine data all differ. All of it is data on a `GameProfile`.
 - **Names are case-insensitive**, except macro names, which are case-sensitive.
@@ -158,14 +166,24 @@ The server is concurrent in a few deliberate places and nowhere else.
 
 - **LSP handlers** run on OmniSharp's threads. Request handlers are synchronous reads over immutable
   data.
-- **Document analysis** runs on the thread pool, debounced 250 ms per edit, and is **single-flight
+- **Document analysis** runs on the thread pool, debounced per edit — three times the document's
+  last analysis, between 125 and 250 ms (`AnalysisTiming.DebounceFor`) — and is **single-flight
   per document** (`SingleFlightAnalysis`). Two analyses of one document can still overlap (the
   debounced one and a request thread re-analysing a stale document); the version compare-and-swap
   in `OpenDocument.Publish` decides which one stands, and diagnostics are stamped with the version
   that was analysed.
 - **Indexing** is a `Parallel.ForEachAsync` over every core but one. Commits to a store go through
   64 path-striped write gates; each index shards its own dictionary 64 ways. No invariant spans two
-  keys, which is what makes the sharding sound.
+  keys, which is what makes the sharding sound. Just before a write the indexer asks again whether
+  the editor has opened the file meanwhile (`WorkspaceIndexer.OpenedSince`); if so the buffer wins.
+- **Background work never runs on the message loop.** The full-mode lint sweep and the watched-file
+  pump run on threads of their own at below-normal priority (`BelowNormalWorkers`), so the scheduler
+  runs a request whenever it is ready. `didChangeWatchedFiles` and `didChangeWorkspaceFolders` queue
+  their work and return at once; a branch switch of thousands of files and a folder added at 50,000
+  files both used to freeze the editor until they finished.
+- **Closed-file diagnostics are paced.** `WorkspaceDiagnosticsPublisher` sends up to 256 files
+  inline and queues the rest, 100 at a time with a pause between batches, so a cold start's push
+  cannot hold every response behind it on the one output channel.
 - **The cache** has one background writer. Serialization happens on the indexing threads, so the
   writer does only SQL.
 - **Cancellation** is threaded everywhere a superseded result would waste work: a newer edit
@@ -195,14 +213,20 @@ Two rules carry most of it:
 
 1. **Nothing a keystroke or a request pays for may walk every record.** A query that needs "every
    file that …" gets an index in `LanguageStore`, maintained in the same diff. The scale suite
-   (10,000–50,000 generated files) proves per-request costs stay flat.
+   (10,000–50,000 copies of real stock scripts, the heaviest ones by default for the numbers in
+   `PERF.md`) proves per-request costs stay flat.
 2. **Measure before and after.** Every optimisation in `server/PERF.md` has a number, and several
    entries record an idea measured and rejected. Budgets are asserted, not hoped for: no single lint
    may take more than 40% of the debounce on its worst stock file (`LintBudgetTests`).
 
-The other levers are already pulled: string interning (`NameTable`), a binary record format for the
-cache, struct enumerators for AST walks, one shared walk for nine node rules (`NodeLintPass`), one
-flow-typer pass per document version, and Server GC with a compacting collection after indexing.
+The other levers are already pulled: string interning (`NameTable`, also for records restored from
+the cache), a binary record format for the cache, a packed per-record reference table grouped by key
+(`ReferenceTable`), struct enumerators for AST walks, one shared walk for nine node rules
+(`NodeLintPass`), one flow-typer pass per document version, and Server GC with a 2 MB large-object
+threshold and a 32 MB gen0 budget per heap (without the cap, eight heaps' budgets kept about 800 MB
+committed on a stock install after a few edits, against 58 MB of live data). After indexing the server compacts the heap once, unless the live heap is already past
+1 GB (`gscode.memory.compactionLimitMB`), where the pause would cost seconds; it then asks for a
+background collection instead.
 
 ---
 

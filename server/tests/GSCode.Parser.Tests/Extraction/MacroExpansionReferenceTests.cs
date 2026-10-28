@@ -15,7 +15,7 @@ namespace GSCode.Parser.Tests.Extraction;
 /// The parser-level contract is that those uses are recorded with ReferenceEntry.FromMacro set —
 /// the fact is kept, so the unused-import lint can see that REGISTER_SYSTEM really does call into
 /// the `system` namespace, while navigation (which skips flagged entries) still resolves the cursor
-/// to the macro. SymbolAtPositionTests covers that half.
+/// to the macro. MacroNavigationTests covers that half.
 ///
 /// The KIND stays truthful. It used to be overwritten, which cost every lint that asks
 /// `Kind == Call` its view of a call a macro expanded into.

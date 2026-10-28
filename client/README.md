@@ -96,6 +96,16 @@ build, bundled API data, or selected game invalidate old records automatically; 
 normally needed after an extension update. Set `gscode.enableWorkspaceCache` to `false` to disable
 persistent caching entirely.
 
+#### Memory after indexing
+
+When indexing finishes, the server compacts its memory once, to return what indexing used to the
+system. That stops the server for a moment, and the stop grows with the workspace: about a tenth of
+a second for a stock install, several seconds at tens of thousands of files. So it only runs while
+the server holds `gscode.memory.compactionLimitMB` or less (1024 by default); above that it starts a
+background cleanup instead, which stops nothing but leaves more memory in use. On a very large
+workspace, raise the limit if you would rather wait a few seconds once for lower memory use, or set
+it to `0` to never compact. A change applies from the next start.
+
 ### In-source pragmas
 
 Pragmas are GSCode directives carried inside comments. They suppress GSCode output; they do not

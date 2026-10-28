@@ -8,7 +8,7 @@ namespace GSCode.Server.Tests.Handlers;
 
 /// <summary>
 /// CodeLens' reference count and Find References' peek list — both driven by
-/// <see cref="NavigationSupport.FindAllReferences(NavigationTarget, GSCode.Core.Symbols.SymbolKey, GSCode.Core.Symbols.ReferenceKind)"/> —
+/// <see cref="NavigationSupport.FindAllReferences(NavigationTarget, GSCode.Core.Symbols.SymbolKey, GSCode.Core.Symbols.ReferenceKind, string)"/> —
 /// for the same bug
 /// <see cref="DefinitionHandlerMacroScopeTests"/> covers for go-to-definition: two INDEPENDENT
 /// same-named macros, one per language file, no #insert between them.
@@ -78,5 +78,44 @@ public class MacroReferenceScopeTests
             gscSource, cscSource, "MAX_FLAGS", new TestFile(@"scripts\shared\flags.gsh", headerSource));
 
         Assert.Contains(found, entry => entry.Record.Path.EndsWith(".csc", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CodeLensCount_OnTheGscsOwnMacro_DoesNotCountAnotherGscsUnrelatedOne()
+    {
+        // The same conflation within ONE language: a second script #define's its own CF_CRACKS_ALL.
+        // The preprocessor runs per file, so it is a different macro, and it used to be counted as
+        // this one's — every copy of a script with a local #define counted every other copy's.
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found = await ReferencesFromTheGscAsync(
+            GscSource, CscSource, "CF_CRACKS_ALL", new TestFile(@"scripts\shared\other.gsc", GscSource));
+
+        Assert.All(found, entry => Assert.EndsWith(@"animation_shared.gsc", entry.Record.Path, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, found.Length);
+    }
+
+    [Fact]
+    public async Task AHeadersOwnMacro_StillCountsEveryFileThatInsertsIt()
+    {
+        // Asked FROM the header, its own #define is the one every inserting file uses: the
+        // file-local narrowing must not apply to a .gsh.
+        const string headerSource = "#define MAX_FLAGS 8\n";
+        const string userSource = "#insert scripts\\shared\\flags.gsh;\nfunction f()\n{\n    x = MAX_FLAGS;\n}\n";
+        const string headerPath = @"scripts\shared\flags.gsh";
+
+        using HandlerWorkspace workspace = await HandlerWorkspace.BuildAsync(
+        [
+            new TestFile(headerPath, headerSource),
+            new TestFile(GscRelativePath, userSource),
+            new TestFile(@"scripts\shared\other.gsc", userSource),
+        ]);
+        workspace.Open(headerPath);
+
+        NavigationTarget target = workspace.Navigation.Resolve(
+            HandlerWorkspace.Identify(headerPath).Uri, CancellationToken.None)!;
+        ImmutableArray<(ScriptRecord Record, ReferenceEntry Entry)> found =
+            workspace.Navigation.FindAllReferences(target, MacroKey("MAX_FLAGS"));
+
+        Assert.Contains(found, entry => entry.Record.Path.EndsWith("animation_shared.gsc", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(found, entry => entry.Record.Path.EndsWith("other.gsc", StringComparison.OrdinalIgnoreCase));
     }
 }

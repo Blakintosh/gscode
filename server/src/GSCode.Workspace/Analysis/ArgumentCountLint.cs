@@ -135,7 +135,7 @@ public static class ArgumentCountLint
 
         if ( node is CallNode call )
         {
-            Inspect(call, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, lookups, diagnostics, ownerClass);
+            Inspect(call, result.Extraction.Namespaces, store, contextId, path, builtins, game, askingNamespaces, ownNamespace, lookups, diagnostics, ownerClass);
         }
 
         // An arrow call is a method call by construction, so its arity is judged against the class
@@ -154,6 +154,7 @@ public static class ArgumentCountLint
 
     private static void Inspect(
         CallNode call,
+        ImmutableArray<NamespaceSpan> namespaceSpans,
         LanguageStore store,
         string contextId,
         string path,
@@ -244,8 +245,15 @@ public static class ArgumentCountLint
         //
         // Capped at two: all this asks is whether there is exactly one, and a bare name can have
         // thousands of declarations at scale.
+        //
+        // A bare call on a namespace dialect is looked up in the namespace GOVERNING it, which is
+        // where the engine resolves it and how extraction keys it — FunctionResolutionLint asks the
+        // same question. It used to ask by bare name across every namespace, which read every file
+        // declaring the name and stood down whenever two did: once any other namespace declared a
+        // function of the same name, a file's calls to its own functions were never checked.
+        string lookupNamespace = namespaceName ?? GoverningNamespace(namespaceSpans, nameRange.Start, game);
         ImmutableArray<ResolvedFunction> candidates = lookups.Lookup(
-            game.KeyNamespace(namespaceName ?? ""), name.ToLowerInvariant(), includePrivate: true, limit: 2);
+            game.KeyNamespace(lookupNamespace), name.ToLowerInvariant(), includePrivate: true, limit: 2);
 
         // Nothing found, or several possibilities: 5013/5014 report the first and 5007 the second,
         // and picking one of several signatures to judge against would be a guess.
@@ -339,6 +347,32 @@ public static class ArgumentCountLint
 
         InspectAgainstMethod(
             store, contextId, canonical, name, arrow.Arguments.Length, arrow.MethodToken.RootRange, diagnostics);
+    }
+
+    /// <summary>
+    /// The namespace whose <c>#namespace</c> governs this position, or "" when none does or the
+    /// dialect has no namespaces — the empty answer keeps the bare-name lookup those cases always had.
+    /// </summary>
+    private static string GoverningNamespace(ImmutableArray<NamespaceSpan> spans, Core.Text.Position at, GameProfile game)
+    {
+        if ( !game.ResolvesByNamespace )
+        {
+            return "";
+        }
+
+        foreach ( NamespaceSpan span in spans )
+        {
+            Core.Text.Position start = span.GovernedRange.Start;
+            Core.Text.Position end = span.GovernedRange.End;
+            bool afterStart = at.Line > start.Line || (at.Line == start.Line && at.Character >= start.Character);
+            bool beforeEnd = at.Line < end.Line || (at.Line == end.Line && at.Character <= end.Character);
+            if ( afterStart && beforeEnd )
+            {
+                return span.KeyName;
+            }
+        }
+
+        return "";
     }
 
     /// <summary>

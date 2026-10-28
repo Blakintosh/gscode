@@ -6,9 +6,9 @@ namespace GSCode.Server.Handlers;
 /// Coalesces concurrent analysis requests for one document into: whichever is already running,
 /// plus at most one more queued to run immediately after against whatever text is current by then.
 ///
-/// The 250 ms debounce only guards the WAIT between an edit and analysis STARTING; once one has
-/// started, nothing stopped a second beginning 250 ms later on a file slow enough to still be
-/// running, each carrying its own token arrays and tree.
+/// The debounce only guards the WAIT between an edit and analysis STARTING; once one has started,
+/// nothing stopped a second beginning one debounce later on a file slow enough to still be running,
+/// each carrying its own token arrays and tree.
 ///
 /// <c>OpenDocument.Publish</c>'s version CAS decides which analysis's RESULT wins when two overlap
 /// anyway (a request thread's <see cref="DocumentStore.AnalyzeIfStale"/> can still run alongside

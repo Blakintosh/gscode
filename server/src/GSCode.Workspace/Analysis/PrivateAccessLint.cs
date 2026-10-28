@@ -36,7 +36,7 @@ public static class PrivateAccessLint
     {
         // Nothing to find on a dialect with no `private`: no declaration there can carry the flag,
         // so this rule cannot report — yet it would still resolve every call in the file to find
-        // that out, twice. On a merge dialect a call resolves by bare name, and at 50,000 files
+        // that out, twice. On a merge dialect a call is looked up by bare name, and at 50,000 files
         // `main` alone has thousands of declarations, which made this the most expensive rule in a
         // cod4 lint pass while reporting nothing (PERF.md, the scale section).
         GameProfile game = profile ?? GameProfile.Active;
@@ -91,7 +91,11 @@ public static class PrivateAccessLint
                 continue;
             }
 
-            ImmutableArray<ResolvedFunction> visible = visibleLookups.Lookup(entry.Key.Namespace, entry.Key.Name);
+            // Capped at one: all this asks is whether ANY declaration is visible. Uncapped it built
+            // every visible declaration first, and with a thousand files declaring into one namespace
+            // that was every one of them, for every call — 776 ms a file at 1,020 copies (PERF.md,
+            // the scale section).
+            ImmutableArray<ResolvedFunction> visible = visibleLookups.Lookup(entry.Key.Namespace, entry.Key.Name, limit: 1);
             if ( visible.Length > 0 )
             {
                 continue;

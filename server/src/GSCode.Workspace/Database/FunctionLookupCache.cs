@@ -11,8 +11,8 @@ namespace GSCode.Workspace.Database;
 /// asking for it repeatedly, including the array allocation each answer would otherwise make.
 ///
 /// Deliberately per FILE and thrown away with it. A longer-lived cache would have to be invalidated
-/// on every edit anywhere in the workspace, since an unqualified call under a merge dialect resolves
-/// by name across everything indexed — that is a subscription problem, and this is a dictionary.
+/// on every edit anywhere in the workspace, since the lookup it caches answers a bare name under a
+/// merge dialect across everything indexed — that is a subscription problem, and this is a dictionary.
 ///
 /// The key omits the asking context, path and namespaces because they are fixed for the file being
 /// analysed; construct one cache per file and per store, which is what every caller does.

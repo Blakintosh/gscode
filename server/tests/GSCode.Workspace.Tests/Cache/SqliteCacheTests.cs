@@ -1,4 +1,6 @@
+using System.Collections.Immutable;
 using GSCode.Core;
+using GSCode.Core.Diagnostics;
 using GSCode.Core.Paths;
 using GSCode.Core.Symbols;
 using GSCode.Core.Text;
@@ -126,7 +128,7 @@ public class SqliteCacheTests : IDisposable
             // reason a warm start can decide a file is stale without deserializing it.
             Assert.Equal(record.ContentHash, entry.ContentHash);
 
-            ScriptRecord? loaded = entry.Materialize();
+            ScriptRecord? loaded = entry.Materialize(new NameTable());
             Assert.NotNull(loaded);
             Assert.Equal(record.Path, loaded.Path);
             Assert.Equal(record.ContentHash, loaded.ContentHash);
@@ -173,6 +175,81 @@ public class SqliteCacheTests : IDisposable
         await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b") )
         {
             Assert.Empty(reopened.LoadAll());
+        }
+    }
+
+    [Fact]
+    public async Task IdentityMismatch_GivesTheSpaceBack()
+    {
+        // Deleting the rows left the file at its full size — 1.8 GB at 50,000 heavy files, carried
+        // from one server update to the next. A fresh file is the size of an empty schema.
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            for ( int index = 0; index < 2000; index++ )
+            {
+                cache.Enqueue(SampleRecord($@"c:\ws\scripts\sample{index}.gsc", (ulong)index));
+            }
+
+            await cache.WaitForIdleAsync(CancellationToken.None);
+        }
+
+        long filled = new FileInfo(_dbPath).Length;
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b") )
+        {
+            Assert.Empty(reopened.LoadAll());
+        }
+
+        Assert.True(new FileInfo(_dbPath).Length < filled / 4, $"{new FileInfo(_dbPath).Length} bytes left of {filled}");
+    }
+
+    [Fact]
+    public async Task IdentityMismatch_WhileAnotherServerHoldsTheFile_StillWipesIt()
+    {
+        // Two editor windows on one workspace: the file cannot be deleted, so its rows are.
+        await using SqliteCache holder = SqliteCache.Open(_dbPath, "identity-a");
+        holder.Enqueue(SampleRecord(@"c:\ws\scripts\sample.gsc", 1));
+        await holder.WaitForIdleAsync(CancellationToken.None);
+
+        await using SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-b");
+        Assert.Empty(reopened.LoadAll());
+    }
+
+    [Fact]
+    public async Task AStoredSweep_RoundTrips()
+    {
+        ImmutableArray<Diagnostic> diagnostics =
+        [
+            new Diagnostic(TextRange.FromCoordinates(4, 1, 4, 12), DiagnosticSeverity.Warning, GscDiagnosticCode.TooManyArguments, "too many"),
+        ];
+
+        await using ( SqliteCache cache = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            Assert.Null(cache.LoadSweep());
+            cache.SaveSweep("fingerprint", [new SweptEntry(@"c:\ws\scripts\caller.gsc", 7, RecordSerializer.SerializeDiagnostics(diagnostics))]);
+            await cache.WaitForIdleAsync(CancellationToken.None);
+        }
+
+        await using ( SqliteCache reopened = SqliteCache.Open(_dbPath, "identity-a") )
+        {
+            StoredSweep? stored = reopened.LoadSweep();
+            Assert.NotNull(stored);
+            Assert.Equal("fingerprint", stored!.Fingerprint);
+            SweptEntry entry = Assert.Single(stored.Entries.Values);
+            Assert.Equal(7UL, entry.ContentHash);
+            ImmutableArray<Diagnostic>? read = RecordSerializer.DeserializeDiagnostics(entry.Diagnostics, NameTable.Shared);
+            Assert.NotNull(read);
+            Diagnostic only = Assert.Single(read!.Value);
+            Assert.Equal(diagnostics[0].Range, only.Range);
+            Assert.Equal(diagnostics[0].Severity, only.Severity);
+            Assert.Equal(diagnostics[0].Code, only.Code);
+            Assert.Equal(diagnostics[0].Message, only.Message);
+        }
+
+        // A new server build describes the workspace differently: the stored sweep goes with the rest.
+        await using ( SqliteCache rebuilt = SqliteCache.Open(_dbPath, "identity-b") )
+        {
+            Assert.Null(rebuilt.LoadSweep());
         }
     }
 
@@ -291,7 +368,7 @@ public class SqliteCacheTests : IDisposable
                 // the column the freshness check reads, and the blob behind it.
                 Assert.Equal((ulong)(100 + index), entry.ContentHash);
 
-                ScriptRecord? loaded = entry.Materialize();
+                ScriptRecord? loaded = entry.Materialize(new NameTable());
                 Assert.NotNull(loaded);
                 Assert.Equal((ulong)(100 + index), loaded.ContentHash);
             }
@@ -353,6 +430,42 @@ public class ColdRestoreTests : IDisposable
         }
 
         Assert.Single(DatabaseQueries.LookupFunctions(db2.Gsc, "raw", "", null, "alpha"));
+    }
+
+    /// <summary>
+    /// A workspace-folder change re-indexes every file, restoring the unchanged ones from the cache —
+    /// whose records carry only their parse diagnostics. Restoring over a live record of the same
+    /// content threw away what the full-mode sweep had put there, and every closed file reported less
+    /// until the folder's own sweep finished, a minute at 50,000 files: any refresh in that window
+    /// took the cross-file problems out of the Problems panel and the sweep put them back.
+    /// </summary>
+    [Fact]
+    public async Task AReindexOfAnUnchangedFile_KeepsTheLiveRecordsDiagnostics()
+    {
+        FakeFileSystem files = new FakeFileSystem()
+            .AddFile(@$"{Raw}\scripts\a.gsc", "function alpha()\n{\n}\n");
+        (ScriptDatabase Db, WorkspaceIndexer Indexer, FakeFileSystem Files) built = Build(files);
+        string path = PathUtil.NormalizeAbsolute(@$"{Raw}\scripts\a.gsc");
+
+        await using SqliteCache cache = SqliteCache.Open(_dbPath, "id");
+        built.Indexer.UseCache(cache, cache.LoadAll());
+        await built.Indexer.IndexAsync(IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None);
+        await cache.WaitForIdleAsync(CancellationToken.None);
+
+        // What the sweep leaves on the record, and the cache never holds.
+        Assert.True(built.Db.TryGetAnyRecord(path, out ScriptRecord indexed));
+        ImmutableArray<Diagnostic> swept =
+        [
+            new Diagnostic(TextRange.FromCoordinates(0, 0, 0, 1), DiagnosticSeverity.Warning, GscDiagnosticCode.UnusedUsing, "swept"),
+        ];
+        Assert.True(built.Db.SetDiagnostics(path, ScriptLanguage.Gsc, indexed.ContentHash, swept));
+
+        IndexOutcome again = await built.Indexer.IndexAsync(
+            IndexingMode.Full, NullIndexProgressListener.Instance, CancellationToken.None, reloadSnapshot: true);
+
+        Assert.Equal(1, again.Restored);
+        Assert.True(built.Db.TryGetAnyRecord(path, out ScriptRecord after));
+        Assert.Contains(after.Diagnostics, diagnostic => diagnostic.Message == "swept");
     }
 
     /// <summary>

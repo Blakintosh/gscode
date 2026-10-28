@@ -67,9 +67,10 @@ public sealed class BuiltinAtHandler : IJsonRpcRequestHandler<BuiltinAtParams, B
             return Task.FromResult(none);
         }
 
-        // A script function of this name wins, exactly as it does for hover and go-to-definition.
-        // Opening the engine's page for a name the workspace has redefined would be a lie.
-        ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
+        // A script function of this name wins, exactly as it does for hover and go-to-definition —
+        // one the call can reach. Opening the engine's page for a name this file has redefined would
+        // be a lie, and hiding it for one only an unincluded file declares would be another.
+        ImmutableArray<ResolvedFunction> functions = DatabaseQueries.FunctionsTheCallReaches(
             target.Store, target.ContextId, target.Path, hit.Key.Namespace, hit.Key.Name,
             askingNamespaces: target.Namespaces);
 

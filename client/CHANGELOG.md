@@ -4,6 +4,80 @@ All notable changes to the GSCode extension are documented in this file.
 
 This project follows [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+Upgrading: the workspace cache moves to a new format and rebuilds once on the first start. On CoD4,
+WaW, MW2 and BO1, expect new `gscode-5026` and `gscode-5013` errors on calls that only worked by
+reaching through an include's own includes; the game rejects those calls too (see **Changed**).
+
+### Changed
+
+**Performance on large workspaces.** Measured at 50,000 copies of the heaviest stock scripts, the
+server now stays responsive at a size where it used to stall for minutes:
+
+- Indexing a large workspace is about four times faster (BO3 at 50,000 files: 158 s to 36 s), and
+  the server holds about 30% less memory afterwards (12.2 GB to 8.7 GB). A warm start is about three
+  times faster.
+- The `full`-mode lint sweep over every closed file is about ten times faster (855 s to 80 s), and a
+  restart with nothing changed restores its results instead of running it again.
+- In `full` mode, changing a function in a shared script re-checks only the closed files that call
+  the functions you changed. Adding one function to a mod's `util_shared.gsc` used to re-check all
+  263 stock files calling anything in it. Removing or renaming a function now re-checks the files
+  still calling it, which it previously missed.
+- An edit's diagnostics, CodeLens, Go to Definition, find-references, rename, completion, formatting,
+  code actions and workspace symbol search no longer slow down as the workspace grows. One edit end
+  to end went from 116 ms to 23 ms, Go to Definition from 296 ms to under 1 ms, and an empty
+  workspace symbol search from 1.5 s to about 1 ms.
+- Saving a header that every script inserts re-checks its dependents in parallel: about 4 minutes to
+  39 s at 50,000 files.
+- A cold start's problems for closed files arrive spread over a few seconds instead of in one burst
+  that held every other request behind it. Hints, which VS Code shows only in an open file, are no
+  longer sent for closed files at all. At 50,000 files the push went from 366 MB to 86 MB.
+
+**Code navigation and diagnostics.**
+
+- **CoD4, WaW, MW2 and BO1: a call now reaches what the game itself would find, and nothing else.**
+  A bare call sees the file's own functions and the functions its `#include`d files declare
+  themselves, one level deep: not what those files include in turn. A path call such as
+  `maps\_utility::foo()` sees only `maps\_utility`'s own functions. Hover, Go to Definition, find
+  references, signature help, inlay hints, completion docs and call hierarchy all follow this rule,
+  so they no longer pick a same-named function from elsewhere in the install. A call that only an
+  include's own include declares is now reported (`gscode-5026`), and so is a path call to a function
+  the named file only gets from one of its own includes (`gscode-5013`): the game finds neither.
+- **Black Ops III: a call into a namespace that several copies of a script declare** (the `mp`, `zm`
+  and `cp` copies share one `#namespace`) now describes and navigates to the copy the file
+  `#using`s, in every feature, not the first copy in the index.
+- A callback stored in a field (`level.cb = ::handler;`) is resolved in the file that stored it.
+- Diagnostics appear sooner after typing in a file that analyses quickly: the wait is now three times
+  the file's last analysis, between 125 and 250 ms, where it was always 250 ms.
+- Opening a game install as the workspace folder indexes only its script folders, and a `devraw`
+  folder beside raw is now indexed, searched after raw.
+- In a large workspace a branch switch, a workspace folder change and the `full`-mode lint sweep run
+  in the background at low priority, so the editor stays responsive while they finish. A restart
+  with nothing changed restores the `full`-mode results from the cache instead of linting again.
+- Reference counts above declarations are computed only for the lenses on screen.
+
+### Added
+
+- `gscode.memory.compactionLimitMB` (default 1024): the most memory, in MB, at which the server still
+  compacts once after indexing. The compaction returns indexing's memory to the system but stops the
+  server briefly, longer on bigger workspaces; above the limit a background cleanup runs instead.
+  Raise it to trade a pause for lower memory use on a very large workspace, or set 0 to never compact.
+
+### Fixed
+
+- A function reference to an engine function (`&UseButtonPressed`, which stock BO3 stores) was
+  reported as an unresolved script function (`gscode-5013`).
+- A `#define` written in a script is no longer counted, renamed or listed together with another
+  script's macro of the same name.
+- After a cache rebuild, the first start no longer spends minutes emptying the old cache.
+- Clients other than VS Code that send no completion capability got no answer to `initialize`.
+- A file opened while the server was re-indexing it from disk could have its open, unsaved text
+  replaced by the version on disk in the server's view.
+- After a branch switch, closed files whose problems had not changed were sent to the editor again.
+- On a large workspace, the server could stop for several seconds just after indexing while it
+  compacted its memory; above `gscode.memory.compactionLimitMB` it now cleans up in the background.
+
 ## 2.2.2
 
 ### Fixed

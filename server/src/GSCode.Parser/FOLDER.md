@@ -21,6 +21,10 @@ LSP types anywhere.
   — the extracted symbol surface the Workspace layer builds ScriptRecords from. `PathCalls`
   is the Infinity Ward path-qualified call sites (`maps\x::foo()`), kept alongside the
   namespace-less reference so go-to-definition can pin one to its file.
+- `PathCallReference.At(pathCalls, range)` — the file the path call at a range names, "" when the
+  site is not one. `PathCallReference.NameRanges(pathCalls)` — every path call's range, for a rule
+  asking of each reference whether it is one (the include lints), since a path call and a bare call
+  share the `(null, name)` key and only the range tells them apart.
 
 ## Extraction/PragmaDirectives.cs
 

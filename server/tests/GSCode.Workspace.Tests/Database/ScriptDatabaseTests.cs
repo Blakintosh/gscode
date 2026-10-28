@@ -12,7 +12,7 @@ using Xunit;
 namespace GSCode.Workspace.Tests.Database;
 
 /// <summary>
-/// The P5 fixture root: share\raw + mod_a + mod_b + a workspace project, indexed with
+/// The fixture root: share\raw + mod_a + mod_b + a workspace project, indexed with
 /// the real pipeline over the fake file system.
 /// </summary>
 public class ScriptDatabaseTests

@@ -112,4 +112,35 @@ public class BoundedLookupTests
 
         Assert.Equal(PathsOf(full).Take(limit), PathsOf(capped));
     }
+
+    /// <summary>
+    /// A name declared by many files the asker cannot see — the raw scripts asking about a name every
+    /// workspace copy declares — is filtered once per declaring list and kept. A file that moves to
+    /// the asker's context without declaring anything new leaves that list as it was, so the kept
+    /// answer has to notice the move some other way.
+    /// </summary>
+    [Fact]
+    public void ADeclarerThatMovesIntoTheAskersContextIsFoundWithoutItsNamesChanging()
+    {
+        LanguageStore store = new();
+        store.Upsert(Record(@"c:\raw\maps\a.gsc", "raw", @"maps\a.gsc", "main"));
+        for ( int index = 0; index < 100; index++ )
+        {
+            store.Upsert(Record($@"c:\ws\copy{index}.gsc", @"workspace:c:\ws", $@"copy{index}.gsc", "main"));
+        }
+
+        Assert.Single(DatabaseQueries.LookupFunctions(store, "raw", "", null, "main"));
+
+        // The same file, now a raw script: what it declares has not changed.
+        store.Remove(@"c:\ws\copy7.gsc");
+        store.Upsert(Record(@"c:\ws\copy7.gsc", "raw", @"maps\copy7.gsc", "main"));
+        Assert.Equal(2, DatabaseQueries.LookupFunctions(store, "raw", "", null, "main").Length);
+
+        // And a context change in place, with no removal in between.
+        store.Upsert(Record(@"c:\ws\copy8.gsc", "raw", @"maps\copy8.gsc", "main"));
+        Assert.Equal(3, DatabaseQueries.LookupFunctions(store, "raw", "", null, "main").Length);
+
+        // The workspace still sees every one of them.
+        Assert.Equal(101, DatabaseQueries.LookupFunctions(store, @"workspace:c:\ws", "", null, "main").Length);
+    }
 }

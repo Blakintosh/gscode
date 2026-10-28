@@ -67,7 +67,7 @@ public sealed class RenameHandler : RenameHandlerBase
 
         Dictionary<DocumentUri, List<TextEdit>> edits = new();
         // The full visible set: a header macro renamed in GSC alone would leave CSC broken.
-        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, hit.Key, hit.ReferenceKind) )
+        foreach ( (ScriptRecord Record, ReferenceEntry Entry) reference in _support.FindAllReferences(target, hit) )
         {
             cancellationToken.ThrowIfCancellationRequested();
 

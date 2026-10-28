@@ -26,7 +26,8 @@ public sealed record PrecacheAssetType(
 
 /// <summary>
 /// The declarative #precache asset-type table from the language reference. Extraction
-/// (P4) validates directives against it: unknown type or wrong value count → diagnostic.
+/// (<c>SymbolExtractor</c>) validates directives against it: unknown type or wrong value count →
+/// diagnostic.
 /// </summary>
 public static class PrecacheAssetTypes
 {

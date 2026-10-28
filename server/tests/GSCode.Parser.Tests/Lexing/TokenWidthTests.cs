@@ -9,7 +9,8 @@ namespace GSCode.Parser.Tests.Lexing;
 /// How WIDE the two token structs are, pinned.
 ///
 /// This is not style policing. Both structs are stored one per token in a per-file array, and the
-/// large-object-heap threshold is 85,000 bytes — so the width decides how long a script can be
+/// large-object-heap threshold is 85,000 bytes by default (the server raises it to 2 MB in its
+/// runtime config) — so the width decides how long a script can be
 /// before its token array is allocated on a heap that is collected only at gen2 and never compacted
 /// unless asked. A cold index of Black Ops 1 (2,960 files, 34 MB of source) was measured holding a
 /// 1,035 MB heap of which 887 MB was free space, and array churn at these widths is why.

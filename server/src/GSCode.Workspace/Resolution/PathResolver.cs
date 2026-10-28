@@ -8,7 +8,8 @@ namespace GSCode.Workspace.Resolution;
 /// <summary>
 /// The single authority for two questions: which context does a file live in, and which
 /// absolute file does a game-relative script path resolve to from that context.
-/// Probe order: Mod(m) → [mods\m, raw] · Raw → [raw] · Workspace → [base, other folders, raw].
+/// Probe order: Mod(m) → [mods\m, raw, devraw] · Raw → [raw, devraw] · Workspace → [base, other
+/// folders, raw, devraw].
 /// </summary>
 public sealed class PathResolver
 {
@@ -29,10 +30,23 @@ public sealed class PathResolver
     /// </summary>
     private readonly ConcurrentDictionary<(ResolutionContext Context, string Relative), string?> _resolveCache = new();
 
+    /// <summary>The configured raw roots, raw then devraw: the engine's order, see <see cref="RootConfig.DevRawRoot"/>.</summary>
+    private readonly List<string> _rawRoots = [];
+
     public PathResolver(RootConfig config, IFileSystem fileSystem)
     {
         _config = config;
         _fileSystem = fileSystem;
+
+        if ( config.RawRoot is not null )
+        {
+            _rawRoots.Add(config.RawRoot);
+        }
+
+        if ( config.DevRawRoot is not null )
+        {
+            _rawRoots.Add(config.DevRawRoot);
+        }
     }
 
     /// <summary>The configuration this resolver was built from.</summary>
@@ -58,7 +72,7 @@ public sealed class PathResolver
             return ResolutionContext.ForMod(modName);
         }
 
-        if ( _config.RawRoot is not null && PathUtil.IsUnder(normalized, _config.RawRoot) )
+        if ( IsUnderRaw(normalized) )
         {
             return ResolutionContext.RawContext;
         }
@@ -154,9 +168,12 @@ public sealed class PathResolver
         {
             case ResolutionContextKind.Raw:
             {
-                if ( _config.RawRoot is not null && PathUtil.IsUnder(normalizedAbsolutePath, _config.RawRoot) )
+                foreach ( string rawRoot in _rawRoots )
                 {
-                    return normalizedAbsolutePath[(_config.RawRoot.Length + 1)..];
+                    if ( PathUtil.IsUnder(normalizedAbsolutePath, rawRoot) )
+                    {
+                        return normalizedAbsolutePath[(rawRoot.Length + 1)..];
+                    }
                 }
 
                 return "";
@@ -187,18 +204,109 @@ public sealed class PathResolver
     }
 
     /// <summary>
-    /// Every script and header file the cold-start indexer should visit: raw, each mod,
-    /// and all workspace folders (deduplicated by normalized path).
+    /// Every script and header file the cold-start indexer should visit: the game's script folders
+    /// in raw and devraw, each mod, and the workspace folders that are not the game install
+    /// (deduplicated by normalized path). <see cref="IsIndexTarget"/> answers the same question for
+    /// one file, from the same roots.
     /// </summary>
     public IEnumerable<string> EnumerateIndexTargets()
     {
         HashSet<string> seen = new(StringComparer.Ordinal);
         ImmutableArray<string> extensions = GameProfile.Active.ScriptExtensions;
 
-        List<string> rootFolders = [];
-        if ( _config.RawRoot is not null )
+        foreach ( string rootFolder in WalkRoots() )
         {
-            rootFolders.Add(_config.RawRoot);
+            // One walk per root for ALL extensions, rather than one per extension: the tree is
+            // large (160,382 files in a Black Ops 1 install) and walking it once per script
+            // extension re-read every directory three times to find the same 2,960 files.
+            foreach ( string file in _fileSystem.EnumerateFilesWithExtensions(rootFolder, extensions) )
+            {
+                string normalized = PathUtil.NormalizeAbsolute(file);
+                if ( IsShadowedDevRaw(normalized) )
+                {
+                    continue;
+                }
+
+                if ( seen.Add(normalized) )
+                {
+                    yield return normalized;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the cold index would visit this file — the test a watched create or change asks, so a
+    /// script appearing somewhere the walk skips stays out of the index exactly as it would have
+    /// after a restart. Same roots as <see cref="EnumerateIndexTargets"/>, same tool-output prune,
+    /// same devraw shadow rule.
+    /// </summary>
+    public bool IsIndexTarget(string absolutePath)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(absolutePath);
+        if ( !HasScriptExtension(normalized) || IsShadowedDevRaw(normalized) )
+        {
+            return false;
+        }
+
+        foreach ( string root in WalkRoots() )
+        {
+            if ( !PathUtil.IsUnder(normalized, root) )
+            {
+                continue;
+            }
+
+            // EnumerateFilesWithExtensions prunes these one level below each root it walks, and
+            // nowhere deeper; this mirrors that and nothing more.
+            string remainder = normalized[(root.Length + 1)..];
+            int separator = remainder.IndexOf(Path.DirectorySeparatorChar);
+            string topFolder = separator < 0 ? "" : remainder[..separator];
+            if ( !IsToolOutputName(topFolder) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The devraw file at the same relative path as this raw one, or null when the path is not
+    /// under raw or devraw has no such file. Raw is searched first, so that file was shadowed while
+    /// this one existed and is what a lookup finds once it is gone.
+    /// </summary>
+    public string? DevRawCounterpart(string absolutePath)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(absolutePath);
+        if ( _config.RawRoot is null || _config.DevRawRoot is null || !PathUtil.IsUnder(normalized, _config.RawRoot) )
+        {
+            return null;
+        }
+
+        string counterpart = Path.Combine(_config.DevRawRoot, normalized[(_config.RawRoot.Length + 1)..]);
+        return _fileSystem.FileExists(counterpart) ? PathUtil.NormalizeAbsolute(counterpart) : null;
+    }
+
+    /// <summary>
+    /// The folders the cold index walks. Raw and devraw contribute only the game's script folder
+    /// (<see cref="RootConfig.RawScriptsSubfolder"/>; all of raw on games with none, or when raw
+    /// has no such folder). A workspace
+    /// folder that holds raw or devraw is the game install — or raw itself — opened in the editor,
+    /// and is not walked: its scripts are reached through raw, devraw and mods, and the rest is
+    /// tools and assets (295,640 files in a BO3 install, for 1,105 scripts). Everything else is
+    /// walked whole. Contained roots are dropped, see <see cref="OutermostRoots"/>.
+    /// </summary>
+    private List<string> WalkRoots()
+    {
+        string scriptsFolder = _config.RawScriptsSubfolder;
+
+        List<string> rootFolders = [];
+        foreach ( string rawRoot in _rawRoots )
+        {
+            // All of raw when it has no script folder: a rawPath set to a loose folder of BO3 scripts
+            // (server/samples/bo3 is one) would otherwise index nothing, silently.
+            string scripts = PathUtil.NormalizeAbsolute(Path.Combine(rawRoot, scriptsFolder));
+            rootFolders.Add(scriptsFolder.Length > 0 && _fileSystem.DirectoryExists(scripts) ? scripts : rawRoot);
         }
 
         if ( _config.ModsRoot is not null )
@@ -208,23 +316,89 @@ public sealed class PathResolver
 
         foreach ( string folder in _config.WorkspaceFolders )
         {
-            rootFolders.Add(folder);
-        }
-
-        foreach ( string rootFolder in OutermostRoots(rootFolders) )
-        {
-            // One walk per root for ALL extensions, rather than one per extension: the tree is
-            // large (160,382 files in a Black Ops 1 install) and walking it once per script
-            // extension re-read every directory three times to find the same 2,960 files.
-            foreach ( string file in _fileSystem.EnumerateFilesWithExtensions(rootFolder, extensions) )
+            if ( !HoldsGameRaw(folder) )
             {
-                string normalized = PathUtil.NormalizeAbsolute(file);
-                if ( seen.Add(normalized) )
-                {
-                    yield return normalized;
-                }
+                rootFolders.Add(folder);
             }
         }
+
+        List<string> outermost = [];
+        foreach ( string root in OutermostRoots(rootFolders) )
+        {
+            outermost.Add(PathUtil.NormalizeAbsolute(root));
+        }
+
+        return outermost;
+    }
+
+    /// <summary>Whether a workspace folder is raw or devraw, or contains either.</summary>
+    private bool HoldsGameRaw(string folder)
+    {
+        string normalized = PathUtil.NormalizeAbsolute(folder);
+        foreach ( string rawRoot in _rawRoots )
+        {
+            if ( string.Equals(rawRoot, normalized, StringComparison.Ordinal) || PathUtil.IsUnder(rawRoot, normalized) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsUnderRaw(string normalized)
+    {
+        foreach ( string rawRoot in _rawRoots )
+        {
+            if ( PathUtil.IsUnder(normalized, rawRoot) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A devraw file whose relative path raw also has. Raw is searched first, so the devraw copy is
+    /// never what a lookup finds; indexing it as well would give two raw-context records with one
+    /// relative path, which nothing shadows — every lookup by name would see two declarations.
+    /// </summary>
+    private bool IsShadowedDevRaw(string normalized)
+    {
+        if ( _config.RawRoot is null || _config.DevRawRoot is null || !PathUtil.IsUnder(normalized, _config.DevRawRoot) )
+        {
+            return false;
+        }
+
+        return _fileSystem.FileExists(Path.Combine(_config.RawRoot, normalized[(_config.DevRawRoot.Length + 1)..]));
+    }
+
+    private static bool HasScriptExtension(string path)
+    {
+        string extension = Path.GetExtension(path);
+        foreach ( string candidate in GameProfile.Active.ScriptExtensions )
+        {
+            if ( extension.Equals(candidate, StringComparison.OrdinalIgnoreCase) )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsToolOutputName(string name)
+    {
+        foreach ( string toolOutput in GameProfile.ToolOutputDirectories )
+        {
+            if ( string.Equals(name, toolOutput, StringComparison.OrdinalIgnoreCase) )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -281,21 +455,13 @@ public sealed class PathResolver
                 roots.Add(Path.Combine(_config.ModsRoot, context.ModName));
             }
 
-            if ( _config.RawRoot is not null )
-            {
-                roots.Add(_config.RawRoot);
-            }
-
+            roots.AddRange(_rawRoots);
             return roots;
         }
 
         if ( context.Kind == ResolutionContextKind.Raw )
         {
-            if ( _config.RawRoot is not null )
-            {
-                roots.Add(_config.RawRoot);
-            }
-
+            roots.AddRange(_rawRoots);
             return roots;
         }
 
@@ -313,11 +479,7 @@ public sealed class PathResolver
             }
         }
 
-        if ( _config.RawRoot is not null )
-        {
-            roots.Add(_config.RawRoot);
-        }
-
+        roots.AddRange(_rawRoots);
         return roots;
     }
 

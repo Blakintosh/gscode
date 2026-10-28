@@ -45,7 +45,7 @@ public partial class ScalePerfTests
         TextDocumentSelector selector = TextDocumentSelector.ForLanguage("gsc");
         ServerSettings settings = new() { CodeLensEnabled = true };
 
-        CodeLensHandler lenses = new(support, settings, selector);
+        CodeLensHandler lenses = new(support, settings, selector, LensCountCache.Disabled);
         ReferencesHandler references = new(support, selector);
         RenameHandler rename = new(support, builtins, objectFields, selector);
 
@@ -69,7 +69,7 @@ public partial class ScalePerfTests
             ParseResult parsed = documents.AnalyzeIfStale(document);
             TextDocumentIdentifier identifier = new() { Uri = DocumentUri.FromFileSystemPath(path) };
 
-            lensTimes.Add(await TimeTwiceAsync(() => lenses.Handle(new CodeLensParams { TextDocument = identifier }, CancellationToken.None)));
+            lensTimes.Add(await TimeTwiceAsync(() => lenses.HandleResolvedAsync(new CodeLensParams { TextDocument = identifier }, CancellationToken.None)));
 
             if ( parsed.Extraction.Functions.Length > 0 )
             {

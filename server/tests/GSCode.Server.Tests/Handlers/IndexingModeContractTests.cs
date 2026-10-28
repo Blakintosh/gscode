@@ -146,8 +146,9 @@ public sealed class IndexingModeContractTests
         string added = Path.Combine(AddedFolder, "addon.gsc");
         workspace.Files.AddFile(added, LibSource);
 
-        await FolderHandler(workspace, SettingsFor("off"), DiscardingDiagnosticsSink.Instance)
-            .Handle(FolderChange(AddedFolder, removed: null), CancellationToken.None);
+        WorkspaceFoldersHandler handler = FolderHandler(workspace, SettingsFor("off"), DiscardingDiagnosticsSink.Instance);
+        await handler.Handle(FolderChange(AddedFolder, removed: null), CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.False(workspace.Database.TryGetAnyRecord(added, out ScriptRecord _));
     }
@@ -190,8 +191,9 @@ public sealed class IndexingModeContractTests
         workspace.Files.AddFile(added, "#namespace addon;\nfunction go()\n{\n\tx = ;\n\tnosuch();\n}\n");
 
         RecordingDiagnosticsSink sink = new();
-        await FolderHandler(workspace, SettingsFor("partial"), sink)
-            .Handle(FolderChange(AddedFolder, removed: null), CancellationToken.None);
+        WorkspaceFoldersHandler handler = FolderHandler(workspace, SettingsFor("partial"), sink);
+        await handler.Handle(FolderChange(AddedFolder, removed: null), CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         Assert.True(workspace.Database.TryGetAnyRecord(added, out ScriptRecord record));
         Assert.NotEmpty(record.Diagnostics);
@@ -213,6 +215,7 @@ public sealed class IndexingModeContractTests
         WorkspaceFoldersHandler handler = FolderHandler(workspace, SettingsFor("partial"), sink);
         await handler.Handle(FolderChange(AddedFolder, removed: null), CancellationToken.None);
         await handler.Handle(FolderChange(added: null, AddedFolder), CancellationToken.None);
+        await handler.WhenIdleAsync();
 
         DocumentUri uri = DocumentUri.FromFileSystemPath(added);
         PublishDiagnosticsParams last = sink.Sent.Last(sent => sent.Uri == uri);

@@ -73,7 +73,7 @@ $env:GSCODE_CORPUS_BO3='...\share\raw'; dotnet test tests\GSCode.Server.Tests\..
 | `Category!=Corpus&Category!=Perf` | the unit tests. This is the everyday run, and what CI uses |
 | `Category=Corpus` | the sweep over five games' real scripts. The arbiter for any diagnostic change |
 | `Category=Perf` | per-file timing and the lex/preprocess/parse/extract split |
-| `Category=Scale` | generated 10K–50K-file workspaces: cold/warm start, memory, completion and lint against budgets. No-op unless `GSCODE_SCALE_SIZES` is set (e.g. `10000,25000,50000`) |
+| `Category=Scale` | generated 10K–50K-file workspaces: cold/warm start, memory, every request through its handler, against budgets. No-op unless `GSCODE_SCALE_SIZES` is set (e.g. `10000,25000,50000`). PERF.md's numbers use `GSCODE_SCALE_SOURCE=heaviest:25` on bo3 and cod4 |
 
 Note the everyday filter excludes BOTH. `Category!=Corpus` alone now picks up the perf sweep, which
 needs the game installs and takes a second pass over every script.
@@ -100,6 +100,15 @@ variables are usually set at user scope, so clear the ones you are not sweeping 
   which is not committed.
 - `Category=Scale` generates its workspaces under `%TEMP%\gscode-scale` (or `GSCODE_SCALE_ROOT`) —
   gigabytes at 50K, reused between runs, never cleaned up by the suite.
+
+## Running the scale harness at 50,000 files
+
+It needs Release and a heap limit. Set `DOTNET_GCHeapHardLimit` (the runs in PERF.md used
+`0x3C0000000`, 15 GB) so a size that does not fit fails with OutOfMemory instead of paging the
+machine. When the editor's server holds `bin\Release`, build and run from a separate `git worktree`
+per commit being compared, and compare before and after on the same machine in the same session. A
+run takes many minutes: start it in the background and wait for it to finish, and read the per-row
+"slowest file" and GC columns before calling a difference real.
 
 ## The encoding gate
 

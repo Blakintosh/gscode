@@ -56,11 +56,23 @@ public readonly record struct LocalUse(PToken Token, LocalUseKind Kind)
 /// </summary>
 public static class LocalUses
 {
-    public static List<LocalUse> Of(AstNode body)
+    /// <summary>
+    /// Each body's uses, walked once. Three lints ask for every function body on every keystroke —
+    /// unused locals, unassigned variables, unused bindings — and each walked it again: at 50,000
+    /// heavy BO3 files the walk was 9% of re-analysing _globallogic.gsc after an edit, nearly all of
+    /// it growing the list it built. Keyed weakly by the node, so a body goes with its parse.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AstNode, LocalUse[]> s_byBody = new();
+
+    /// <summary>The uses in a body, in source order. Shared: callers read it and never change it.</summary>
+    public static IReadOnlyList<LocalUse> Of(AstNode body)
     {
-        List<LocalUse> uses = [];
-        Collect(body, uses);
-        return uses;
+        return s_byBody.GetValue(body, static node =>
+        {
+            List<LocalUse> uses = [];
+            Collect(node, uses);
+            return [.. uses];
+        });
     }
 
     private static void Collect(AstNode node, List<LocalUse> uses)

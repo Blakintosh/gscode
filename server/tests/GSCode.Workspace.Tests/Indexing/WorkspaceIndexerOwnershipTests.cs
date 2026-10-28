@@ -55,6 +55,26 @@ public class WorkspaceIndexerOwnershipTests
     }
 
     [Fact]
+    public void AWatchedChange_ToAFileOpenedWhileItWasBeingReindexed_KeepsTheBuffer()
+    {
+        // The watched-file pump runs in the background, so a document can be opened after the
+        // re-index of its file first asked whether it was open and before that re-index commits.
+        // The buffer is committed by then; the disk record must not land on top of it. The third
+        // question is the one asked right before the store write.
+        (ScriptDatabase Database, WorkspaceIndexer Indexer, PathResolver Resolver, string OpenPath) built =
+            BuildWorkspaceWithOneOpenFile();
+        WatchedFileUpdater updater = new(built.Database, built.Indexer);
+
+        int asked = 0;
+        updater.Apply(built.OpenPath, WatchedFileChange.Changed, _ => ++asked >= 3);
+
+        Assert.True(asked >= 3, $"asked {asked} time(s)");
+        Assert.True(built.Database.Gsc.TryGet(PathUtil.NormalizeAbsolute(built.OpenPath), out ScriptRecord record));
+        Assert.True(record.IsDirty);
+        Assert.Contains(record.Functions, function => function.Name == "edited_in_buffer");
+    }
+
+    [Fact]
     public async Task IndexAsync_WithNoOwnershipPredicate_OverwritesAsBefore()
     {
         // The regression this guards against the other way: an untouched ownedByEditor (the
@@ -95,7 +115,7 @@ public class WorkspaceIndexerOwnershipTests
             IReadOnlyDictionary<string, GSCode.Workspace.Cache.CachedEntry> restored = cache.LoadAll();
             Assert.True(restored.TryGetValue(PathUtil.NormalizeAbsolute(openPath), out GSCode.Workspace.Cache.CachedEntry? entry));
 
-            ScriptRecord? cached = entry!.Materialize();
+            ScriptRecord? cached = entry!.Materialize(new NameTable());
             Assert.NotNull(cached);
             Assert.Contains(cached!.Functions, function => function.Name == "stale_disk_only");
         }

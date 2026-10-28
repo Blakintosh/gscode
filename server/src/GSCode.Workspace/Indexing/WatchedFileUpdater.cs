@@ -20,6 +20,9 @@ public enum WatchedFileChange
 /// </summary>
 public sealed class WatchedFileUpdater
 {
+    /// <summary>Files re-indexed between collections when a header save replaces many records at once.</summary>
+    private const int ReindexChunk = 6250;
+
     private readonly ScriptDatabase _database;
     private readonly WorkspaceIndexer _indexer;
 
@@ -46,7 +49,66 @@ public sealed class WatchedFileUpdater
     /// is a fact about the header, and it is what makes the skip safe — the next analysis of an
     /// open dependent's buffer reads the new header.
     /// </param>
-    public IReadOnlyList<string> Apply(string path, WatchedFileChange change, Func<string, bool>? ownedByEditor = null)
+    /// <param name="invalidateResolution">
+    /// False when the caller applying a batch has already called <see cref="NoteFilesAppearedOrVanished"/>
+    /// once for all of it, rather than once per file that appeared or vanished.
+    /// </param>
+    public IReadOnlyList<string> Apply(
+        string path, WatchedFileChange change, Func<string, bool>? ownedByEditor = null, bool invalidateResolution = true)
+    {
+        List<string> touched = [.. ApplyToFile(path, change, ownedByEditor, invalidateResolution)];
+
+        // Raw shadows devraw at the same relative path, so a raw file appearing retires the devraw
+        // copy the index held in its place, and one vanishing brings that copy back. Without this
+        // the index keeps answering from whichever existed when it was built until a restart.
+        if ( change == WatchedFileChange.Changed )
+        {
+            return touched;
+        }
+
+        string? devRaw = _indexer.DevRawCounterpart(path);
+        if ( devRaw is null )
+        {
+            return touched;
+        }
+
+        if ( change == WatchedFileChange.Created )
+        {
+            if ( _database.TryGetAnyRecord(devRaw, out _) )
+            {
+                _indexer.RemoveFile(devRaw, ScriptAnalysis.LanguageFromPath(devRaw));
+            }
+        }
+        else if ( ownedByEditor is null || !ownedByEditor(devRaw) )
+        {
+            _indexer.IndexFile(devRaw, ownedByEditor);
+            touched.Add(devRaw);
+        }
+
+        return touched;
+    }
+
+    /// <summary>
+    /// Whether a created or changed file belongs in the index: one the cold index would visit, or
+    /// one it already holds. A script appearing in a folder the walk skips — the game install outside
+    /// raw's script folder — stays out, as it would after a restart.
+    /// </summary>
+    private bool ShouldIndex(string normalizedPath)
+    {
+        return _indexer.IsIndexTarget(normalizedPath) || _database.TryGetAnyRecord(normalizedPath, out _);
+    }
+
+    /// <summary>
+    /// Drops every cached "does this exist" answer the resolver has given out, for a batch of changes
+    /// in which some file appeared or vanished — what <see cref="Apply"/> does per such file otherwise.
+    /// </summary>
+    public void NoteFilesAppearedOrVanished()
+    {
+        _indexer.InvalidateResolutionCache();
+    }
+
+    private IReadOnlyList<string> ApplyToFile(
+        string path, WatchedFileChange change, Func<string, bool>? ownedByEditor, bool invalidateResolution)
     {
         string normalized = PathUtil.NormalizeAbsolute(path);
         ScriptLanguage language = ScriptAnalysis.LanguageFromPath(normalized);
@@ -57,7 +119,7 @@ public sealed class WatchedFileUpdater
         // #using/#include resolve through the same PathResolver.Resolve the GSH-only
         // NoteHeaderSetChanged below cannot speak for. A plain content change cannot: nothing
         // about whether a target EXISTS moved. See PathResolver.InvalidateResolutionCache.
-        if ( change != WatchedFileChange.Changed )
+        if ( change != WatchedFileChange.Changed && invalidateResolution )
         {
             _indexer.InvalidateResolutionCache();
         }
@@ -101,9 +163,9 @@ public sealed class WatchedFileUpdater
         {
             // Re-analysing dependents re-reads the header, so drop the stale lexed copy first.
             _indexer.InvalidateGsh(normalized);
-            if ( !ownsChangedFile )
+            if ( !ownsChangedFile && ShouldIndex(normalized) )
             {
-                _indexer.IndexFile(normalized);
+                _indexer.IndexFile(normalized, ownedByEditor);
             }
 
             // A header that did not exist a moment ago holds nothing to invalidate, so the drop
@@ -120,12 +182,12 @@ public sealed class WatchedFileUpdater
             return ReindexInserters(normalized, HeaderRelativePath(normalized, language), ownedByEditor);
         }
 
-        if ( ownsChangedFile )
+        if ( ownsChangedFile || !ShouldIndex(normalized) )
         {
             return [];
         }
 
-        _indexer.IndexFile(normalized);
+        _indexer.IndexFile(normalized, ownedByEditor);
         return [normalized];
     }
 
@@ -141,17 +203,14 @@ public sealed class WatchedFileUpdater
     }
 
     /// <summary>
-    /// Re-indexes every closed file whose analysis this header decides — see
-    /// <see cref="DatabaseQueries.ScriptsInserting"/> for what "decides" covers — and reports them
-    /// for a diagnostics republish.
+    /// The paths of the closed files inserting a header, skipping any the editor has open. A method of
+    /// its own so the list of their RECORDS is never in scope while the re-index replaces them — a
+    /// precaution: holding every old record across that would keep the whole index alive twice.
     /// </summary>
-    /// <param name="headerRelativePath">
-    /// The header as a directive would write it, or "" to match on resolved paths alone.
-    /// </param>
-    private IReadOnlyList<string> ReindexInserters(
-        string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private List<string> PathsToReindex(string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
     {
-        List<string> touched = [];
+        List<string> paths = [];
         foreach ( ScriptRecord record in DatabaseQueries.ScriptsInserting(_database, normalizedGshPath, headerRelativePath) )
         {
             // The same test the changed file's own record gets, for the same reason: this reads
@@ -164,10 +223,51 @@ public sealed class WatchedFileUpdater
                 continue;
             }
 
-            _indexer.IndexFile(record.Path);
-            touched.Add(record.Path);
+            paths.Add(record.Path);
         }
 
-        return touched;
+        return paths;
+    }
+
+    /// <summary>
+    /// Re-indexes every closed file whose analysis this header decides — see
+    /// <see cref="DatabaseQueries.ScriptsInserting"/> for what "decides" covers — and reports them
+    /// for a diagnostics republish.
+    /// </summary>
+    /// <param name="headerRelativePath">
+    /// The header as a directive would write it, or "" to match on resolved paths alone.
+    /// </param>
+    private IReadOnlyList<string> ReindexInserters(
+        string normalizedGshPath, string headerRelativePath, Func<string, bool>? ownedByEditor)
+    {
+        List<string> toIndex = PathsToReindex(normalizedGshPath, headerRelativePath, ownedByEditor);
+
+        // In parallel, as the cold index analyses: IndexFile is the same per-file step it runs on
+        // every core. One after another, saving a header every script inserts — shared.gsh, on BO3 —
+        // re-indexed the whole workspace on one thread: 45 s projected at 10,000 heavy files.
+        //
+        // In chunks of ReindexChunk, with a blocking, non-compacting gen2 collection between them.
+        // Every record this replaces has long since reached gen2, so each becomes gen2 garbage the
+        // moment its replacement is committed, and gen2 runs on its own schedule. Saving shared.gsh
+        // at 50,000 heavy files (49,863 inserters), measured with the heap sampled through the save:
+        //   one pass, no collections asked for       46.4 s, 15.2 GB peak (gen2 8.5 -> 13.2 GB)
+        //   4,096 a chunk, background gen2 between   41.4 s, 13.9 GB — only 3 of 11 requests ran,
+        //                                            the rest landing while one was already going
+        //   12,500 a chunk, blocking gen2 between    37.5 s, 12.7 GB
+        //   6,250 a chunk, blocking gen2 between     39.3 s, 12.4 GB, against the cold index's 12.2
+        // A save then needs no more memory than indexing the workspace did in the first place.
+        ParallelOptions options = new() { MaxDegreeOfParallelism = WorkspaceIndexer.BackgroundParallelism };
+        for ( int start = 0; start < toIndex.Count; start += ReindexChunk )
+        {
+            int end = Math.Min(start + ReindexChunk, toIndex.Count);
+            Parallel.For(start, end, options, index => _indexer.IndexFile(toIndex[index], ownedByEditor));
+
+            if ( end < toIndex.Count )
+            {
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: false);
+            }
+        }
+
+        return toIndex;
     }
 }

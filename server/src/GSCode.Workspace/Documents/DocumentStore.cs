@@ -180,7 +180,7 @@ public sealed class DocumentStore
     /// indexer's own thread-pool work (see <c>TextSyncHandler.ScheduleImmediateAnalysis</c>), so a
     /// request routinely arrives before ANY analysis has published. The cached snapshot is null
     /// then, and for document symbols, folding and selection ranges the client has no "ask again":
-    /// the outline would stay empty until the next edit. Analysis is also debounced 250 ms behind the
+    /// the outline would stay empty until the next edit. Analysis is also debounced up to 250 ms behind the
     /// keystrokes, so a cached parse describes text the user has already replaced — which for
     /// semantic tokens lands the colouring on the wrong characters.
     /// </summary>

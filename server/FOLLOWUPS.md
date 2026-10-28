@@ -439,18 +439,17 @@ run.
 
 ### 4. The scale levers measured and parked
 
-The 10K–50K pass (PERF.md, the scale section) brought every row inside its budget and left four
+The 10K–50K pass (PERF.md, the scale section) brought every row inside its budget and left three
 levers measured but unpulled, each with the condition that would change that:
 
 - **Stat-first freshness on a warm start** — skip reading and hashing a file whose size and mtime
   match the cache. `index.read` is now 40% of warm thread-time, the largest share; the warm start is
   4 s at 50K against a 10 s budget. Worth doing when that row moves. A cache-schema change.
 - **Streaming `LoadAll`** — 305 ms and 333 MB at 50K, transient. Only if memory at startup matters.
-- **The post-index compaction pause** — 1.8 s at 50K, once, blocking. Requests arriving in that
-  window wait for it.
 - **bo3 find-references and rename** grow with the size of their ANSWER (406,326 locations in the
-  sampled requests at 50K), not with a walk. A lazier location list is the only lever, and nothing
-  has asked for it.
+  sampled requests at 50K), not with a walk. A lazier location list is the only lever. Decided: the
+  answer stays uncapped. The largest answers come from the synthetic shape the harness builds,
+  thousands of copies calling one stock function, which no real workspace has.
 
 ### 5. What the 2026-09-23 audit found and did not take
 
@@ -479,40 +478,21 @@ shape rather than re-deriving it.
   changes a shipped answer. Measured on BO3: 3 names collide (`phalanx`, `robotphalanx`,
   `throttle`) against 427 namespaces and 37 classes, so the decision is cheap to make and cheap to
   defer — but it is a decision, not an oversight.
-- **The scale sweep does not time inlay hints.** `ScalePerfTests.Handlers` covers codeLens,
-  references and rename; this handler runs per keystroke and has no row, so the flat-between-10K-
-  and-50K property is argued from the code rather than measured. It holds by construction today:
-  the merge-dialect route is scoped to the asking file and its direct includes, and the path route
-  asks `FilesAt` for one path — neither touches `AllRecords`. Adding the row is what would keep
-  it true.
 
 **Reads still wider than their answer.**
 
-- **Workspace symbol search** walks every record and every declaration in both stores, and an EMPTY
-  query matches all of them — which is what VS Code sends when the symbol picker opens.
-  `MaxResults = 256` is applied after the full collection AND after shadowing. **An early exit is not
-  available without changing the answer**, and that is the finding rather than a detail:
-  `ApplyShadowing` decides over the SET, so a raw match kept early can still be shadowed by an
-  overlay found later, and a walk that stopped cannot know that. The real fix is the prefix or
-  trigram index PERF.md parks — or its cheaper form, matching against `DeclarationIndex`'s distinct
-  key set through `CollectKeys`, which completion already uses, and resolving to records afterwards.
-- **`DatabaseQueries.FindReferences`** narrows the FILES by index and then scans each candidate
-  file's entire reference list for the key. Affects references, rename, CodeLens and call hierarchy.
+- **Workspace symbol search on a query that matches little** still reads every name in both stores
+  before it can say so. A query matching many now stops at the 256 cap, with shadowing decided per
+  match (an empty query went from 646 ms to 0.5 ms at 25K). What is left needs the prefix or trigram
+  index PERF.md parks, or its cheaper form: matching against `DeclarationIndex`'s distinct key set
+  through `CollectKeys`, which completion already uses, and resolving to records afterwards.
 - **`WorkspaceDiagnosticsPublisher.Refresh()`** walks every record in the database, and
   `DependentDiagnosticsRefresher` calls it after re-linting a handful of closed dependents. Off the
   request path and debounced, so not a keystroke cost — but the caller already knows which paths
   changed.
 
-**Memory, and the measurement that does not exist yet.**
+**Memory.**
 
-- **The warm arm's retained memory has never been measured at scale.** Every figure in the scale
-  table is a COLD index, and `RecordSerializer`'s reader builds strings straight from UTF-8 with a
-  per-BLOB string table that never touches `NameTable` — so a warm start at 50,000 files may hold
-  private copies of every name, namespace and path per record. PERF.md closed this concern in 2026-07
-  on a 1,105-file corpus, where the warm live set came in 3.9 MB LOWER; that is not the same question
-  at 50K, where every generated copy imports the same stock utilities. **Add the warm-arm row to
-  `ScalePerfTests` first** — it is worth having whatever it says — and intern on restore only if it
-  shows a gap, re-checking that the CPU cost does not move the 4 s warm start.
 - **Single-entry collections allocated per file or per path segment.**
   `LanguageStore._overlayContextsByRelativePath` allocates an inner `ConcurrentDictionary` per
   distinct relative path with any non-raw record — roughly one per file in a mod-rooted tree, almost
@@ -543,12 +523,13 @@ shape rather than re-deriving it.
   not part of the stat-first trade above — it was never measured separately. A streaming byte compare
   would keep the guarantee exactly and drop a file-sized string per file; a stat compare would drop
   the read but weaken the guard.
-- **Enumeration is serial and blocks every worker** (`WorkspaceIndexer`'s own doc: 295,640 files to
-  find 1,105). PERF.md measures 0.1 s at 50K with a WARM OS cache, which is the best case and not a
-  user's first start. Feeding `Parallel.ForEachAsync` from the enumerable through a channel is the
-  change — but **measure a cold-OS-cache, game-install-rooted workspace first**, and do not make it
-  if the gap is not there: it is the most structural item here and the only one that touches indexing
-  order.
+- **Enumeration is serial and blocks every worker.** A BO3 install opened as a workspace folder no
+  longer walks its 295,640 files (raw's `scripts` folder, devraw and the mods only: 11 ms), but the
+  earlier games walk all of raw, which is 160,382 files on BO1. PERF.md measures 0.1 s at 50K with a
+  WARM OS cache, which is the best case and not a user's first start. Feeding `Parallel.ForEachAsync`
+  from the enumerable through a channel is the change — but **measure a cold-OS-cache BO1 install
+  first**, and do not make it if the gap is not there: it is the most structural item here and the
+  only one that touches indexing order.
 
 ### 6. Dialect-to-dialect transpiler — groundwork removed, and how to bring it back
 

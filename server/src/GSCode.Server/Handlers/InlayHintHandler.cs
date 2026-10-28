@@ -590,12 +590,11 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         string qualifierKey = NameTable.Shared.InternLower(qualifier);
         string nameKey = NameTable.Shared.InternLower(name);
 
-        ImmutableArray<ResolvedFunction> found = DatabaseQueries.LookupFunctions(
-            target.Store, target.ContextId, target.Path,
-            qualifierKey, nameKey, askingNamespaces: target.Namespaces);
-        if ( found.Length > 0 )
+        FunctionSymbol? found = CallResolution.QualifiedFunction(
+            target.Store, target.ContextId, target.Result, qualifierKey, nameKey);
+        if ( found is not null )
         {
-            return [.. found[0].Function.Parameters.Select(static p => p.Name)];
+            return [.. found.Parameters.Select(static p => p.Name)];
         }
 
         // The qualifier may name a CLASS rather than a namespace — Class::method(). Tried second
@@ -610,9 +609,8 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
     /// A <c>maps\_utility::set_ambient( ... )</c> reference - the Infinity Ward path form, which
     /// only the merge dialects have.
     ///
-    /// The path names the FILE the function is in rather than a namespace, so this is a lookup by
-    /// name scoped to that one file. Asked with an EMPTY asking path on purpose: the scope helper
-    /// searches the asking file first otherwise, and a path call names where it wants to go.
+    /// The path names the FILE the function is in rather than a namespace — see
+    /// <see cref="CallResolution.PathQualifiedFunction"/>.
     ///
     /// These were silent, and on these games that is most cross-file calls - CoD4's shipped scripts
     /// write <c>maps\_utility::createOneshotEffect</c> alone 3,147 times.
@@ -627,7 +625,7 @@ public sealed class InlayHintHandler : InlayHintsHandlerBase
         }
 
         FunctionSymbol? found = CallResolution.PathQualifiedFunction(
-            target.Store, target.ContextId, path.Path, NameTable.Shared.InternLower(path.NameToken.Text));
+            target.Store, target.ContextId, target.Path, path.Path, NameTable.Shared.InternLower(path.NameToken.Text));
 
         return found is null ? default : [.. found.Parameters.Select(static p => p.Name)];
     }

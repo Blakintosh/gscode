@@ -59,18 +59,7 @@ public sealed class VocabularyIndex
             }
         }
 
-        HashSet<string> fields = new(StringComparer.Ordinal);
-        foreach ( FunctionSymbol function in record.Functions )
-        {
-            foreach ( AssignmentSymbol assignment in function.Assignments )
-            {
-                // An empty owner marks a plain local, which is not a field at all.
-                if ( assignment.OwnerName.Length > 0 )
-                {
-                    fields.Add(assignment.Name);
-                }
-            }
-        }
+        HashSet<string> fields = new(record.WrittenFields, StringComparer.Ordinal);
 
         if ( literals.Count == 0 && fields.Count == 0 )
         {
@@ -91,9 +80,10 @@ public sealed class VocabularyIndex
     /// The distinct literals of one kind used by at least one file <paramref name="visible"/> accepts,
     /// each handed to <paramref name="found"/> — see <see cref="PackedInvertedIndex{TKey}.ForEachKey"/>.
     /// </summary>
-    public void Literals(SymbolKind kind, Func<string, bool> visible, Action<VocabularyName> found)
+    public void Literals(
+        SymbolKind kind, Func<string, bool> visible, Action<VocabularyName> found, Func<int, bool>? wanted = null)
     {
-        _literals.ForEachKey(key => key.Kind == kind, visible, (key, files) => found(new VocabularyName(key.Name, files)));
+        _literals.ForEachKey(key => key.Kind == kind, visible, (key, files) => found(new VocabularyName(key.Name, files)), wanted);
     }
 
     /// <summary>

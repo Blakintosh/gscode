@@ -131,6 +131,7 @@ public sealed partial record GameProfile
         HasReliableBuiltinSignatures = true,
         // The only game that buries raw a level down; every earlier one sits at <install>\raw.
         RawSubfolder = @"share\raw",
+        RawScriptsSubfolder = "scripts",
         HasClientScripts = true,
         HasHeaders = true,
         HasWorldObject = true,

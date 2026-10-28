@@ -20,6 +20,10 @@ namespace GSCode.Server.Tests.Corpus;
 /// the same query with a path, so the thing worth proving is that narrowing it returns exactly the
 /// entries filtering the wide answer would have kept — over every declaration a real workspace has,
 /// rather than over the handful a fixture can spell.
+///
+/// And the narrowing go-to-definition uses: the same queries limited to the files DECLARING the
+/// key — the reaching one, and the workspace-wide one for a call whose file reaches no declaration —
+/// must find every declaration entry the full queries find.
 /// </summary>
 [Trait("Category", "Corpus")]
 [Collection(GameProfileCollection.Name)]
@@ -73,6 +77,7 @@ public class ReferenceScopeCorpusTests
             int references = 0;
             List<string> differing = [];
             List<string> differingInFile = [];
+            List<string> differingDeclarations = [];
 
             foreach ( LanguageStore store in new[] { database.Gsc, database.Csc } )
             {
@@ -119,14 +124,45 @@ public class ReferenceScopeCorpusTests
                             differingInFile.Add(
                                 $"{record.RelativePath} {function.Name}: {expectedInFile.Count} vs {inFile.Length}");
                         }
+
+                        // The narrowing behind go-to-definition.
+                        ImmutableArray<string> declaring = key.Namespace is null
+                            ? store.FilesDeclaring(key.Name)
+                            : store.FilesDeclaring(key.Namespace, key.Name);
+                        List<string> expectedDeclarations = Describe(
+                            [.. scoped.Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+                        List<string> declarations = Describe(
+                            [.. DatabaseQueries.FindReferencesReaching(
+                                    stores, record.ContextId, key, record.RelativePath, profile, onlyPaths: declaring)
+                                .Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+
+                        if ( !expectedDeclarations.SequenceEqual(declarations) )
+                        {
+                            differingDeclarations.Add(
+                                $"{record.RelativePath} {function.Name}: {expectedDeclarations.Count} vs {declarations.Count}");
+                        }
+
+                        List<string> expectedWide = Describe(
+                            [.. DatabaseQueries.FindAllReferences(database, stores, record.ContextId, key)
+                                .Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+                        List<string> wide = Describe(
+                            [.. DatabaseQueries.FindAllReferencesIn(database, stores, record.ContextId, key, declaring)
+                                .Where(static hit => hit.Entry.Kind == ReferenceKind.Definition)]);
+
+                        if ( !expectedWide.SequenceEqual(wide) )
+                        {
+                            differingDeclarations.Add(
+                                $"{record.RelativePath} {function.Name} (workspace-wide): {expectedWide.Count} vs {wide.Count}");
+                        }
                     }
                 }
             }
 
             _output.WriteLine(
                 $"{profile.ShortName}: {asked:N0} declarations, {references:N0} references, "
-                + $"{differing.Count} differing, {differingInFile.Count} differing same-file");
-            foreach ( string line in differing.Concat(differingInFile).Take(20) )
+                + $"{differing.Count} differing, {differingInFile.Count} differing same-file, "
+                + $"{differingDeclarations.Count} differing declarations");
+            foreach ( string line in differing.Concat(differingInFile).Concat(differingDeclarations).Take(20) )
             {
                 _output.WriteLine("  " + line);
             }
@@ -134,6 +170,7 @@ public class ReferenceScopeCorpusTests
             Assert.True(asked > 0, "The index produced no declarations, so nothing was compared.");
             Assert.Empty(differing);
             Assert.Empty(differingInFile);
+            Assert.Empty(differingDeclarations);
         }
         finally
         {

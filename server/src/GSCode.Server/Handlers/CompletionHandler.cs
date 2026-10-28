@@ -68,7 +68,9 @@ public sealed class CompletionHandler : CompletionHandlerBase
 
     protected override CompletionRegistrationOptions CreateRegistrationOptions(CompletionCapability capability, ClientCapabilities clientCapabilities)
     {
-        _labelDetailsSupported = capability.CompletionItem?.LabelDetailsSupport ?? false;
+        // Null when the client sends textDocument capabilities without a completion one; reading through
+        // it threw inside initialize, which then never answered.
+        _labelDetailsSupported = capability?.CompletionItem?.LabelDetailsSupport ?? false;
 
         return new CompletionRegistrationOptions
         {
@@ -87,7 +89,7 @@ public sealed class CompletionHandler : CompletionHandlerBase
     ///
     /// The cancellation checks are here because this is a read path with no debounce in front of it
     /// — as are <see cref="SignatureHelpHandler"/> and <see cref="WorkspaceSymbolHandler"/>, which
-    /// check for the same reason. Diagnostics wait ~250 ms behind <c>TextSyncHandler</c>, so a burst
+    /// check for the same reason. Diagnostics wait up to 250 ms behind <c>TextSyncHandler</c>, so a burst
     /// of keystrokes produces one analysis; completion answers the keystroke that asked, and a
     /// client that types through its own request cancels it and sends another. Without a check,
     /// every superseded request is built in full and its result thrown away by the client.
@@ -173,7 +175,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
             data.Value<string>("kind") ?? "",
             data.Value<string>("name") ?? "",
             data.Value<string>("ns") ?? "",
-            string.Equals(data.Value<string>("builtin"), "true", StringComparison.Ordinal));
+            string.Equals(data.Value<string>("builtin"), "true", StringComparison.Ordinal),
+            data.Value<string>("import") ?? "");
 
         if ( markdown is null )
         {
@@ -215,7 +218,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
     /// engine <c>SpawnSpectator</c> and three scripts declaring one, so the builtin row rendered
     /// <c>globallogic_spawn::spawnSpectator</c> beneath a header reading "builtin".
     /// </summary>
-    private string? RenderDocumentation(NavigationTarget target, string kind, string name, string ns, bool isBuiltin)
+    private string? RenderDocumentation(
+        NavigationTarget target, string kind, string name, string ns, bool isBuiltin, string importPath)
     {
         if ( name.Length == 0 )
         {
@@ -232,13 +236,21 @@ public sealed class CompletionHandler : CompletionHandlerBase
                     return engine is not null ? MarkdownDocRenderer.RenderBuiltin(engine) : null;
                 }
 
-                ImmutableArray<ResolvedFunction> functions = DatabaseQueries.LookupFunctions(
-                    target.Store,
-                    target.ContextId,
-                    target.Path,
-                    ns.Length > 0 ? ns : null,
-                    NameTable.Shared.InternLower(name),
-                    askingNamespaces: target.Namespaces);
+                // The declaration the name would reach from this file, as hover finds it once written,
+                // or for a row offering the import, the one in the file it would import. The row's
+                // namespace is the one its declaration was found under, which on an include dialect is
+                // the file stem — every *\_utility.gsc answers to `_utility` — so it is keyed through
+                // KeyNamespace, which drops it there.
+                string keyName = NameTable.Shared.InternLower(name);
+                ImmutableArray<ResolvedFunction> functions = importPath.Length > 0
+                    ? DatabaseQueries.FunctionsDeclaredAt(target.Store, target.ContextId, target.Path, importPath, keyName)
+                    : DatabaseQueries.FunctionsTheCallReaches(
+                        target.Store,
+                        target.ContextId,
+                        target.Path,
+                        ns.Length > 0 ? GameProfile.Active.KeyNamespace(ns) : null,
+                        keyName,
+                        askingNamespaces: target.Namespaces);
 
                 if ( functions.Length > 0 )
                 {
@@ -416,6 +428,10 @@ public sealed class CompletionHandler : CompletionHandlerBase
             // A STRING, like everything else here: Data round-trips through the client untouched, so
             // a bool would be one more thing with a serializer opinion about shape.
             ["builtin"] = entry.IsBuiltin ? "true" : "false",
+
+            // The script a row offering an import would add, "" for a name already in scope. The
+            // file itself cannot reach the function yet, so this is the only route to its docs.
+            ["import"] = entry.ImportPath,
         };
     }
 

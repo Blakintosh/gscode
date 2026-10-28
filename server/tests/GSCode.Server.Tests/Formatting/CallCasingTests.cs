@@ -90,6 +90,19 @@ public sealed class CallCasingTests
     }
 
     [Fact]
+    public async Task ABareCallIsSpelledFromItsOwnNamespaceOnly()
+    {
+        // BO3 resolves a bare call in the namespace governing it, so lib_mixed's Helper_Thing is not
+        // what `helper_thing()` in caller means, and its spelling is not offered; caller's own
+        // run() is.
+        using Fixture fixture = await BuildAsync();
+        CallCasing casing = fixture.Casing;
+
+        Assert.Null(casing.Function(null, "HELPER_THING", preferScript: false));
+        Assert.Equal("run", casing.Function(null, "RUN", preferScript: false));
+    }
+
+    [Fact]
     public async Task AQualifiedNameIsNeverABuiltin()
     {
         using Fixture fixture = await BuildAsync();

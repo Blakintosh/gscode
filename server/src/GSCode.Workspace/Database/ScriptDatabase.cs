@@ -67,10 +67,16 @@ public sealed class ScriptDatabase
         _hasCompletedLintSweep = true;
     }
 
-    public LanguageStore Gsc { get; } = new();
+    /// <summary>
+    /// Every record write in the database, from either script store or the header store — see
+    /// <see cref="CommitClock"/>.
+    /// </summary>
+    public CommitClock Clock { get; } = new();
+
+    public LanguageStore Gsc { get; }
 
     /// <summary>The CSC world.</summary>
-    public LanguageStore Csc { get; } = new();
+    public LanguageStore Csc { get; }
 
     /// <summary>GSH records (macros/dependencies), shared by both languages.</summary>
     private readonly ConcurrentDictionary<string, ScriptRecord> _gshRecords = new(StringComparer.Ordinal);
@@ -121,6 +127,8 @@ public sealed class ScriptDatabase
 
     public ScriptDatabase()
     {
+        Gsc = new LanguageStore(Clock);
+        Csc = new LanguageStore(Clock);
         BothLanguageStores = [Gsc, Csc];
     }
 
@@ -159,6 +167,7 @@ public sealed class ScriptDatabase
             _gshRecords.TryGetValue(record.Path, out ScriptRecord? previous);
             _gshRecords[record.Path] = record;
             ApplyGshIndexes(record.Path, previous, record, newDirectives, newReferenceKeys);
+            Clock.Advance(record.Path);
         }
     }
 
@@ -177,7 +186,7 @@ public sealed class ScriptDatabase
     {
         _gshDirectives.Apply(path, DirectiveIndex.Of(previous), directives);
         _gshPathTree.Apply(previous, next);
-        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? []), referenceKeys);
+        _gshReferences.Apply(path, ReferenceIndex.KeysOf(previous?.References ?? ReferenceTable.Empty), referenceKeys);
     }
 
     /// <summary>
@@ -207,6 +216,7 @@ public sealed class ScriptDatabase
             {
                 ApplyGshIndexes(
                     normalizedPath, previous, next: null, DirectiveIndex.Contribution.None, []);
+                Clock.Advance(normalizedPath);
             }
         }
     }
@@ -372,19 +382,80 @@ public sealed class ScriptDatabase
             ContentHash = ComputeContentHash(result.Text.Text),
             Namespaces = result.Extraction.Namespaces,
             DeclaredNamespaces = result.Extraction.DeclaredNamespaces,
-            Functions = result.Extraction.Functions,
-            Classes = result.Extraction.Classes,
+            Functions = WithoutAssignments(result.Extraction.Functions),
+            Classes = WithoutAssignments(result.Extraction.Classes),
             Macros = macros.ToImmutable(),
             Dependencies = dependencies.ToImmutable(),
             // Records do not keep the ParseResult, so these are lifted out here or they are
             // lost — reference scoping on the merge dialects needs them: a path call reaches
             // another file's function without importing it.
             PathCallTargets = result.Extraction.PathCalls,
-            References = result.Extraction.References,
+            References = ReferenceTable.From(result.Extraction.References),
             FieldBindings = result.Extraction.FieldBindings,
+            WrittenFields = WrittenFieldsOf(result.Extraction.Functions),
             Diagnostics = result.AllDiagnostics,
             IsDirty = isDirty,
         };
+    }
+
+    /// <summary>
+    /// The distinct field names the functions assign on any owner, in first-written order — what
+    /// <see cref="ScriptRecord.WrittenFields"/> keeps of the assignments the record drops.
+    /// </summary>
+    internal static ImmutableArray<string> WrittenFieldsOf(ImmutableArray<FunctionSymbol> functions)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        ImmutableArray<string>.Builder fields = ImmutableArray.CreateBuilder<string>();
+        foreach ( FunctionSymbol function in functions )
+        {
+            foreach ( AssignmentSymbol assignment in function.Assignments )
+            {
+                // An empty owner marks a plain local, which is not a field at all.
+                if ( assignment.OwnerName.Length > 0 && seen.Add(assignment.Name) )
+                {
+                    fields.Add(assignment.Name);
+                }
+            }
+        }
+
+        return fields.ToImmutable();
+    }
+
+    private static ImmutableArray<FunctionSymbol> WithoutAssignments(ImmutableArray<FunctionSymbol> functions)
+    {
+        ImmutableArray<FunctionSymbol>.Builder stored = ImmutableArray.CreateBuilder<FunctionSymbol>(functions.Length);
+        foreach ( FunctionSymbol function in functions )
+        {
+            stored.Add(WithoutAssignments(function));
+        }
+
+        return stored.MoveToImmutable();
+    }
+
+    private static ImmutableArray<ClassSymbol> WithoutAssignments(ImmutableArray<ClassSymbol> classes)
+    {
+        ImmutableArray<ClassSymbol>.Builder stored = ImmutableArray.CreateBuilder<ClassSymbol>(classes.Length);
+        foreach ( ClassSymbol symbol in classes )
+        {
+            stored.Add(symbol with
+            {
+                Methods = WithoutAssignments(symbol.Methods),
+                Constructor = symbol.Constructor is null ? null : WithoutAssignments(symbol.Constructor),
+                Destructor = symbol.Destructor is null ? null : WithoutAssignments(symbol.Destructor),
+            });
+        }
+
+        return stored.MoveToImmutable();
+    }
+
+    private static FunctionSymbol WithoutAssignments(FunctionSymbol function)
+    {
+        if ( function.Assignments.IsEmpty )
+        {
+            return function;
+        }
+
+        return function with { Assignments = [] };
     }
 
     /// <summary>The content-hash function used for cache invalidation (xxHash64 of the UTF-8 text).</summary>
@@ -393,8 +464,9 @@ public sealed class ScriptDatabase
         PerfTracker.Begin("commit.hash");
 
         // Hashed in CHUNKS through a pooled buffer rather than by materialising the whole file as
-        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over
-        // ~85 KB lands on the large-object heap, which is not compacted by default — on BO1,
+        // UTF-8 first: that allocates a file-sized byte array per file indexed, and anything over the
+        // large-object threshold (85 KB by default; the server raises it to 2 MB) lands on the
+        // large-object heap, which is not compacted by default — measured at the default on BO1,
         // thousands of holes, and a fragmented figure after an index that dwarfs the live one.
         //
         // An Encoder, not repeated GetBytes calls: a chunk boundary can fall between the two halves
@@ -433,8 +505,8 @@ public sealed class ScriptDatabase
     }
 
     /// <summary>
-    /// Characters hashed per chunk. Sized so both pooled buffers stay well under the 85 KB
-    /// large-object threshold — the entire point of chunking.
+    /// Characters hashed per chunk. Sized so both pooled buffers stay well under the default 85 KB
+    /// large-object threshold, whatever a host sets it to — the entire point of chunking.
     /// </summary>
     private const int ChunkChars = 8 * 1024;
 

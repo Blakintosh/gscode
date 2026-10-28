@@ -213,13 +213,17 @@ public sealed partial class CompletionEngine
         // reference of every record — see VocabularyIndex for what that walk cost at scale.
         string detail = LiteralDetail(literalKind);
         VocabularyCut cut = new(typed);
-        store.VisibleLiterals(literalKind, contextId, name =>
-        {
-            if ( IsNameLike(name.Name) && !seen.Contains(name.Name) )
+        store.VisibleLiterals(
+            literalKind,
+            contextId,
+            name =>
             {
-                cut.Offer(new VocabularyCandidate(name.Name, name.Files, detail));
-            }
-        });
+                if ( IsNameLike(name.Name) && !seen.Contains(name.Name) )
+                {
+                    cut.Offer(new VocabularyCandidate(name.Name, name.Files, detail));
+                }
+            },
+            cut.Admits);
 
         foreach ( VocabularyCandidate candidate in cut.Best() )
         {
@@ -266,6 +270,31 @@ public sealed partial class CompletionEngine
         public VocabularyCut(string typed)
         {
             _typed = typed;
+        }
+
+        /// <summary>
+        /// False when no name written in <paramref name="files"/> files could be kept, whatever it
+        /// is — asked before the walk tests a name's files at all.
+        ///
+        /// Once the list is full, a name written in fewer files than the worst one kept can only
+        /// displace it by matching the typed text at its start where the worst does not. Most of a
+        /// large workspace's literals are written in one file: 32,874 of 37,430 at 25,000 of the
+        /// heaviest BO3 scripts, where testing each one's file and ranking it was most of the request.
+        /// </summary>
+        public bool Admits(int files)
+        {
+            if ( _best.Count < MaximumVocabularyCandidates )
+            {
+                return true;
+            }
+
+            _best.TryPeek(out _, out RankKey worst);
+            if ( _typed.Length > 0 && !worst.Prefix )
+            {
+                return true;
+            }
+
+            return files >= worst.Files;
         }
 
         public void Offer(VocabularyCandidate candidate)
@@ -601,15 +630,20 @@ public sealed partial class CompletionEngine
             return entries.ToImmutable();
         }
 
-        // The store's classes plus this file's own, which may not be indexed yet.
-        HashSet<string> classNames = new(store.Classes.AllClassNames(), StringComparer.Ordinal);
+        // The store's classes plus this file's own, which may not be indexed yet. The store's set is
+        // walked in place rather than copied; only this file's names it lacks are added beside it.
+        IReadOnlySet<string> storeClassNames = store.Classes.ClassNameSet();
+        HashSet<string> ownClassNames = new(StringComparer.Ordinal);
         foreach ( ClassSymbol classSymbol in result.Extraction.Classes )
         {
-            classNames.Add(classSymbol.KeyName);
+            if ( !storeClassNames.Contains(classSymbol.KeyName) )
+            {
+                ownClassNames.Add(classSymbol.KeyName);
+            }
         }
 
         HashSet<string> seen = new(StringComparer.Ordinal);
-        foreach ( string className in classNames )
+        foreach ( string className in storeClassNames.Concat(ownClassNames) )
         {
             foreach ( ClassMethod method in MethodResolution.MethodsOf(
                 store, contextId, className, result.Extraction.Classes) )
